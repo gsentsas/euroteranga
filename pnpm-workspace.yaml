@@ -1,0 +1,64 @@
+packages:
+  - apps/*
+  - packages/*
+  - tests/browser
+
+# Direct dependencies are pinned to exact versions. Shared versions live in the
+# catalog so every workspace package uses the same release.
+saveExact: true
+
+catalog:
+  '@eslint/js': 10.0.1
+  '@nestjs/cli': 12.0.8
+  '@nestjs/common': 12.1.2
+  '@nestjs/core': 12.1.2
+  '@nestjs/platform-express': 12.1.2
+  '@nestjs/swagger': 12.0.2
+  '@nestjs/testing': 12.1.2
+  '@next/env': 16.3.8
+  '@next/eslint-plugin-next': 16.3.8
+  '@playwright/test': 1.63.0
+  '@prisma/adapter-pg': 7.10.0
+  '@prisma/client': 7.10.0
+  '@refinedev/core': 5.0.12
+  '@refinedev/nextjs-router': 7.0.5
+  '@swc/core': 1.16.13
+  '@tanstack/react-query': 5.104.1
+  '@types/express': 5.0.6
+  '@types/node': 24.19.2
+  '@types/react': 19.3.0
+  '@types/react-dom': 19.3.0
+  '@types/supertest': 7.2.1
+  eslint: 10.12.0
+  helmet: 8.3.0
+  next: 16.3.8
+  prettier: 3.9.9
+  prisma: 7.10.0
+  react: 19.3.0
+  react-dom: 19.3.0
+  reflect-metadata: 0.2.2
+  rxjs: 7.8.2
+  supertest: 7.3.1
+  typescript: 6.0.3
+  typescript-eslint: 8.71.1
+  unplugin-swc: 2.0.0
+  vitest: 5.0.3
+  zod: 4.6.5
+
+allowBuilds:
+  '@prisma/engines': true
+  '@scarf/scarf': false
+  '@swc/core': true
+  prisma: true
+
+# Security overrides for vulnerable transitive dependencies of the Prisma CLI
+# (development tooling). See docs/security/dependency-audit.md.
+overrides:
+  deepmerge-ts: 8.0.2
+  mysql2: 3.24.5
+
+# Advisories accepted after analysis (no patched version exists). One entry per
+# advisory, never a blanket rule. See docs/security/dependency-audit.md.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm

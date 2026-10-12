@@ -73,3 +73,6 @@ Thumbs.db
 .vscode/
 *.swp
 *~
+
+# Next.js generated type references
+next-env.d.ts
