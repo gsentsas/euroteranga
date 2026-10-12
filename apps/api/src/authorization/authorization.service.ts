@@ -1,8 +1,10 @@
-import { AuthRealm, Prisma } from '@euroteranga/database';
+import { Prisma } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
+import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { DatabaseService } from '../database/database.service.js';
+import { AuditService } from './audit.service.js';
 import { AuthorizationErrors } from './authorization.errors.js';
-import type { PermissionKey } from './permissions.js';
+import { expectedRealmForRole } from './permissions.js';
 
 export interface AuthorizationSnapshot {
   roles: string[];
@@ -11,7 +13,10 @@ export interface AuthorizationSnapshot {
 
 @Injectable()
 export class AuthorizationService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly audit: AuditService,
+  ) {}
 
   async snapshot(identityId: string): Promise<AuthorizationSnapshot> {
     const assignments = await this.database.client.authorizationRoleAssignment.findMany({
@@ -64,7 +69,7 @@ export class AuthorizationService {
   async grantRole(
     identityId: string,
     roleKey: string,
-    actorIdentityId: string,
+    actor: AuthPrincipal,
     reason?: string,
   ) {
     const [identity, role] = await Promise.all([
@@ -78,24 +83,37 @@ export class AuthorizationService {
       }),
     ]);
     if (!identity) throw AuthorizationErrors.identityNotFound();
-    if (identity.realm !== AuthRealm.STAFF) throw AuthorizationErrors.invalidStaffTarget();
     if (!role) throw AuthorizationErrors.roleNotFound();
+    if (identity.realm !== expectedRealmForRole(roleKey)) {
+      throw AuthorizationErrors.invalidStaffTarget();
+    }
 
     try {
-      return await this.database.client.authorizationRoleAssignment.create({
-        data: {
-          identityId,
-          roleKey,
-          grantedByIdentityId: actorIdentityId,
-          ...(reason ? { reason } : {}),
-        },
-        select: { id: true, identityId: true, roleKey: true, grantedAt: true },
+      return await this.database.client.$transaction(async (tx) => {
+        const assignment = await tx.authorizationRoleAssignment.create({
+          data: {
+            identityId,
+            roleKey,
+            grantedByIdentityId: actor.identityId,
+            ...(reason ? { reason } : {}),
+          },
+          select: { id: true, identityId: true, roleKey: true, grantedAt: true },
+        });
+        await this.audit.record(
+          {
+            actor,
+            action: 'ROLE_GRANTED',
+            resourceType: 'auth_identity',
+            resourceId: identityId,
+            after: { roleKey },
+            metadata: reason ? { reason } : undefined,
+          },
+          tx,
+        );
+        return assignment;
       });
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw AuthorizationErrors.roleAlreadyAssigned();
       }
       throw error;
@@ -105,17 +123,30 @@ export class AuthorizationService {
   async revokeRole(
     identityId: string,
     roleKey: string,
-    actorIdentityId: string,
+    actor: AuthPrincipal,
     reason?: string,
   ): Promise<void> {
-    const result = await this.database.client.authorizationRoleAssignment.updateMany({
-      where: { identityId, roleKey, revokedAt: null },
-      data: {
-        revokedAt: new Date(),
-        revokedByIdentityId: actorIdentityId,
-        ...(reason ? { reason } : {}),
-      },
+    await this.database.client.$transaction(async (tx) => {
+      const result = await tx.authorizationRoleAssignment.updateMany({
+        where: { identityId, roleKey, revokedAt: null },
+        data: {
+          revokedAt: new Date(),
+          revokedByIdentityId: actor.identityId,
+          ...(reason ? { reason } : {}),
+        },
+      });
+      if (result.count !== 1) throw AuthorizationErrors.roleNotAssigned();
+      await this.audit.record(
+        {
+          actor,
+          action: 'ROLE_REVOKED',
+          resourceType: 'auth_identity',
+          resourceId: identityId,
+          before: { roleKey },
+          metadata: reason ? { reason } : undefined,
+        },
+        tx,
+      );
     });
-    if (result.count !== 1) throw AuthorizationErrors.roleNotAssigned();
   }
 }

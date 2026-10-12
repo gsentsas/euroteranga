@@ -1,3 +1,5 @@
+import { AuthRealm } from '@euroteranga/database';
+
 export const PERMISSIONS = {
   IDENTITY_READ: 'identity.read',
   STAFF_PROVISION: 'identity.staff.provision',
@@ -26,3 +28,9 @@ export const SYSTEM_ROLES = {
 } as const;
 
 export type SystemRoleKey = (typeof SYSTEM_ROLES)[keyof typeof SYSTEM_ROLES];
+
+const CREW_ROLES = new Set<string>([SYSTEM_ROLES.DRIVER, SYSTEM_ROLES.CREW]);
+
+export function expectedRealmForRole(roleKey: string): AuthRealm {
+  return CREW_ROLES.has(roleKey) ? AuthRealm.CREW : AuthRealm.STAFF;
+}
