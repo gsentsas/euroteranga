@@ -1,9 +1,16 @@
 # Runbook — authentication incident
 
-Scope: suspected credential leak, secret exposure or MFA compromise. There is
-no admin console yet (PR-03): the actions below are database operations run
-by an authorised operator on the production database, with a backup taken
-first and every action recorded in the incident log.
+Scope: suspected credential leak, secret exposure or MFA compromise.
+
+**STAFF and CREW accounts: use OPS administration first** (PR-03). In
+**Utilisateurs**, an administrator with the matching permission can suspend
+an account (closes every session), close all sessions, or revoke a role.
+Each action is recorded in the audit trail with its request id. The database
+operations below remain for customers, for resetting an enabled TOTP, and
+for situations where OPS is unavailable. An authorised operator runs them on
+the production database, takes a backup first and records every action in
+the incident log. They bypass the audit trail, so reference them in the
+incident log.
 
 > Never paste tokens, passwords, codes or key values into tickets, chats or
 > logs. Refer to identities by their internal id.
@@ -75,4 +82,4 @@ COMMIT;
 
 - Keep the incident log (who, what, when, identity ids — no secrets).
 - Check `AUTH_RATE_LIMITED` and `AUTH_MFA_FAILURE` trends.
-- File follow-ups (e.g. admin tooling in PR-03, key rotation tooling).
+- File follow-ups (e.g. administrative TOTP reset, key rotation tooling).

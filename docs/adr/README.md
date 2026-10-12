@@ -17,7 +17,12 @@ written yet.
 | [ADR-014](ADR-014-password-security.md)                | Password security                    | Accepted |
 | [ADR-015](ADR-015-staff-mfa.md)                        | Staff MFA                            | Accepted |
 | [ADR-016](ADR-016-csrf-cross-origin-authentication.md) | CSRF and cross-origin authentication | Accepted |
+| [ADR-017](ADR-017-server-side-rbac.md)                 | Server-side RBAC                     | Accepted |
+| [ADR-018](ADR-018-privileged-audit-trail.md)           | Privileged audit trail               | Accepted |
+| [ADR-019](ADR-019-controlled-staff-provisioning.md)    | Controlled STAFF provisioning        | Accepted |
+| [ADR-020](ADR-020-initial-super-admin-bootstrap.md)    | Initial SUPER_ADMIN bootstrap        | Accepted |
 
 Planned: ADR-005 Object Storage, ADR-007 Offline Crew,
 ADR-008 Payment Abstraction, ADR-009 Regulatory Versioning. ADR-006
-(Authentication) is covered in detail by ADR-012 to ADR-016.
+(Authentication) is covered in detail by ADR-012 to ADR-016; authorization
+by ADR-017 to ADR-020.

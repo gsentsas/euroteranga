@@ -11,7 +11,6 @@
  * Exit codes: 0 done, 2 refused (e.g. an active SUPER_ADMIN exists), 1 error.
  * The token is never written to the structured logs.
  */
-import { parseArgs } from 'node:util';
 import { ConfigValidationError, loadApiEnv } from '@euroteranga/config';
 import { createDatabaseClient } from '@euroteranga/database';
 import { createLogger, redactString } from '@euroteranga/logger';
@@ -22,16 +21,14 @@ import {
   BootstrapRefusedError,
   bootstrapSuperAdmin,
 } from '../authorization/bootstrap/bootstrap-super-admin.js';
+import { parseBootstrapArgs } from './bootstrap-args.js';
 
 const out = (line: string) => process.stdout.write(`${line}\n`);
 const err = (line: string) => process.stderr.write(`${line}\n`);
 
 async function main(): Promise<number> {
-  const { values } = parseArgs({
-    options: { email: { type: 'string' }, delivery: { type: 'string' } },
-    strict: true,
-  });
-  if (!values.email || (values.delivery !== 'mail' && values.delivery !== 'print')) {
+  const values = parseBootstrapArgs(process.argv.slice(2));
+  if (!values) {
     err('Usage: auth:bootstrap-super-admin --email <address> --delivery mail|print');
     return 1;
   }

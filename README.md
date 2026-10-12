@@ -1,12 +1,14 @@
 # EURO TERANGA
 
-> **Status: Foundation + Identity/Authentication — RBAC / authorization not
-> yet implemented.**
+> **Status: Foundation / Identity-Authentication / Authorization-RBAC-Audit —
+> NOT PRODUCTION DEPLOYED.**
 >
-> The repository contains the technical foundation and authentication for three
-> realms (customer, staff with mandatory TOTP, crew). There are no roles or
-> permissions yet (PR-03), no booking, payment, passenger or operations
-> feature, and nothing is deployed. This is not production-ready.
+> The repository contains the technical foundation, authentication for three
+> realms (customer, staff with mandatory TOTP, crew) and server-side
+> authorization: roles and permissions, controlled STAFF provisioning by
+> invitation, an append-only audit trail and the OPS administration pages.
+> There is no booking, payment, passenger or operations feature yet, and
+> nothing is deployed. This is not production-ready.
 
 EURO TERANGA is a future digital platform for operating international road
 passenger transport services between Europe and Africa.
@@ -105,6 +107,13 @@ Authentication adds `AUTH_CSRF_KEY`, `AUTH_HMAC_KEY`,
 and mail settings (`AUTH_MAIL_PROVIDER`, `SMTP_*`, `AUTH_EMAIL_FROM`,
 `CLIENT_PUBLIC_URL`). The example keys in `.env.example` are refused in
 staging and production. Details: [`docs/security/authentication.md`](docs/security/authentication.md).
+
+Authorization adds `OPS_PUBLIC_URL` (base of STAFF invitation links, HTTPS in
+staging and production), `AUTH_STAFF_INVITATION_TTL_SECONDS` and
+`AUTH_STAFF_ENROLLMENT_GRANT_TTL_SECONDS`. The first SUPER_ADMIN is created
+with `pnpm auth:bootstrap-super-admin` (CLI only): see
+[`docs/security/authorization.md`](docs/security/authorization.md) and
+[`docs/runbooks/bootstrap-super-admin.md`](docs/runbooks/bootstrap-super-admin.md).
 
 `NEXT_PUBLIC_*` values are embedded in browser code: builds fail when a
 sensitive-looking variable uses this prefix.

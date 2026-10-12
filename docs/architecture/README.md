@@ -87,8 +87,21 @@ errors  → { code, message, requestId } (fixed public messages, details only in
 passwords, opaque sessions in host-only HttpOnly cookies (only SHA-256 stored),
 session-bound CSRF tokens, staff TOTP with recovery codes, PostgreSQL-backed
 rate limits, security event logging. Frontends use `@euroteranga/auth-client`
-and never store authentication secrets in the browser. No authorization yet.
+and never store authentication secrets in the browser.
 See [`docs/security/authentication.md`](../security/authentication.md).
+
+## Authorization, RBAC & audit (PR-03)
+
+`apps/api/src/authorization` (AuthorizationModule): permissions and roles
+seeded in PostgreSQL (single source of truth), a deny-by-default
+`AuthorizationGuard` evaluated from the database on every request,
+anti-escalation and last-privileged-admin rules serialized by an advisory
+lock, an append-only audit trail written in the same transaction as each
+privileged change, STAFF provisioning by invitation with a one-time MFA
+enrollment grant, and a CLI-only SUPER_ADMIN bootstrap. The OPS app shows
+`/admin/utilisateurs`, `/admin/roles` and `/admin/audit` according to
+`GET /v1/admin/access/me`, but the API remains the authority.
+See [`docs/security/authorization.md`](../security/authorization.md).
 
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
@@ -97,7 +110,8 @@ Health probes: `/health` (basic), `/health/live` (process alive),
 
 Recorded in [`docs/adr/`](../adr/README.md): modular monolith (ADR-001),
 PostgreSQL and Prisma (ADR-002), NestJS (ADR-003), Refine (ADR-004), Plesk
-deployment target — not yet decided (ADR-010), monorepo tooling (ADR-011).
+deployment target — not yet decided (ADR-010), monorepo tooling (ADR-011),
+authentication (ADR-012 to ADR-016) and authorization (ADR-017 to ADR-020).
 
 Still open: object storage provider, offline crew
 synchronisation, payment provider abstraction, regulatory rule versioning, and
