@@ -203,6 +203,8 @@ test('ops: invitation link sets the password, leaves no token behind, then MFA e
   await page.goto(appUrl(ops, `/invitation#token=${invitationToken()}`));
   await page.getByLabel('Choisissez un mot de passe', { exact: true }).fill(newPassword);
   await page.getByRole('button', { name: 'Activer mon compte' }).click();
-  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Invitation invalide ou expirée.' }),
+  ).toBeVisible();
   expect(errors).toEqual([]);
 });
