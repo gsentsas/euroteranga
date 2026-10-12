@@ -1,0 +1,142 @@
+/*
+ * EURO TERANGA — foundation design tokens and base styles.
+ * Provisional palette; not a definitive brand identity. All text/background
+ * pairs below meet WCAG 2.2 AA contrast (4.5:1) or better.
+ */
+:root {
+  --et-color-surface: #fbfaf6;
+  --et-color-surface-raised: #ffffff;
+  --et-color-ink: #1b1d1c;
+  --et-color-ink-muted: #4a4f4c;
+  --et-color-brand: #0b5d4b;
+  --et-color-brand-contrast: #ffffff;
+  --et-color-border: #d9d6cc;
+  --et-color-focus: #1d4ed8;
+
+  --et-font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --et-space-1: 0.25rem;
+  --et-space-2: 0.5rem;
+  --et-space-3: 1rem;
+  --et-space-4: 1.5rem;
+  --et-space-5: 2.5rem;
+  --et-radius: 0.375rem;
+  --et-content-width: 60rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--et-color-surface);
+  color: var(--et-color-ink);
+  font-family: var(--et-font-sans);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+:focus-visible {
+  outline: 3px solid var(--et-color-focus);
+  outline-offset: 2px;
+}
+
+a {
+  color: var(--et-color-brand);
+}
+
+.et-skip-link {
+  position: absolute;
+  left: var(--et-space-3);
+  top: -100%;
+  padding: var(--et-space-2) var(--et-space-3);
+  background: var(--et-color-brand);
+  color: var(--et-color-brand-contrast);
+  border-radius: var(--et-radius);
+  z-index: 10;
+}
+
+.et-skip-link:focus {
+  top: var(--et-space-3);
+}
+
+.et-header,
+.et-main,
+.et-footer {
+  width: 100%;
+  max-width: var(--et-content-width);
+  margin: 0 auto;
+  padding: var(--et-space-3) var(--et-space-4);
+}
+
+.et-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--et-space-3);
+  border-bottom: 1px solid var(--et-color-border);
+}
+
+.et-brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--et-space-2);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.et-brand__name {
+  color: var(--et-color-brand);
+}
+
+.et-brand__product {
+  color: var(--et-color-ink-muted);
+  font-weight: 600;
+  letter-spacing: normal;
+}
+
+.et-main {
+  flex: 1;
+  padding-block: var(--et-space-5);
+}
+
+.et-main h1 {
+  margin: 0 0 var(--et-space-2);
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  line-height: 1.2;
+}
+
+.et-subtitle {
+  margin: 0 0 var(--et-space-4);
+  font-size: 1.25rem;
+  color: var(--et-color-ink-muted);
+}
+
+.et-footer {
+  border-top: 1px solid var(--et-color-border);
+  color: var(--et-color-ink-muted);
+  font-size: 0.875rem;
+}
+
+.et-status {
+  color: var(--et-color-ink);
+}
+
+.et-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--et-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
