@@ -42,6 +42,12 @@ describe('auth client', () => {
     });
   });
 
+  it('normalizes repeated trailing slashes without a regular expression', async () => {
+    const calls = mockFetch([{ status: 200, body: { id: 'x' } }]);
+    await createAuthClient('http://api.test////').me('customer');
+    expect(calls[0]?.url).toBe('http://api.test/v1/auth/customer/me');
+  });
+
   it('fetches a CSRF token in memory and sends it in X-CSRF-Token', async () => {
     const calls = mockFetch([{ status: 200, body: { csrfToken: 'v1.1.n.m' } }, { status: 204 }]);
     const result = await createAuthClient('http://api.test').logout('staff');
