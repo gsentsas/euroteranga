@@ -18,6 +18,13 @@ import { generateTotpSecret, matchTotpStep, totpEnrollmentDetails } from './totp
 
 export type MfaProof = { code: string } | { recoveryCode: string };
 
+class EnrollmentAuthorizationLostError extends Error {
+  constructor() {
+    super('STAFF MFA enrollment authorization is missing, expired or already consumed');
+    this.name = 'EnrollmentAuthorizationLostError';
+  }
+}
+
 /**
  * STAFF second factor (TOTP, RFC 6238) and recovery codes. A STAFF session
  * only exists after one of these succeeds on a valid challenge.
@@ -44,9 +51,17 @@ export class StaffMfaService {
 
     const identity = await this.database.client.authIdentity.findUniqueOrThrow({
       where: { id: challenge.identityId },
-      select: { email: true, mfaTotpCredential: { select: { enabledAt: true } } },
+      select: {
+        email: true,
+        mfaTotpCredential: { select: { enabledAt: true } },
+        staffEnrollmentGrant: { select: { expiresAt: true, consumedAt: true } },
+      },
     });
     if (identity.mfaTotpCredential?.enabledAt) throw AuthErrors.mfaAlreadyEnabled();
+    const grant = identity.staffEnrollmentGrant;
+    if (!grant || grant.consumedAt !== null || grant.expiresAt <= new Date()) {
+      throw AuthErrors.challengeInvalid();
+    }
 
     const secret = generateTotpSecret();
     const encrypted = this.cipher.encrypt(secret, challenge.identityId);
@@ -81,18 +96,42 @@ export class StaffMfaService {
     const step = await this.matchCode(challenge.identityId, code, { enabled: false });
     if (step === null) this.fail(ip, challenge.identityId);
 
-    const result = await this.database.client.$transaction(async (tx) => {
-      if (!(await this.acceptStep(tx, challenge.identityId, step, { enabled: false }))) return null;
-      const enabled = await tx.mfaTotpCredential.updateMany({
-        where: { identityId: challenge.identityId, enabledAt: null },
-        data: { enabledAt: new Date() },
+    let result: { session: IssuedSession; recoveryCodes: string[] };
+    try {
+      result = await this.database.client.$transaction(async (tx) => {
+        if (!(await this.acceptStep(tx, challenge.identityId, step, { enabled: false }))) {
+          throw new EnrollmentAuthorizationLostError();
+        }
+
+        // Consume the one-time administrative authorization in the same
+        // transaction as enabling TOTP and creating the STAFF session.
+        const grant = await tx.staffEnrollmentGrant.updateMany({
+          where: {
+            identityId: challenge.identityId,
+            consumedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+          data: { consumedAt: new Date() },
+        });
+        if (grant.count !== 1) throw new EnrollmentAuthorizationLostError();
+
+        const enabled = await tx.mfaTotpCredential.updateMany({
+          where: { identityId: challenge.identityId, enabledAt: null },
+          data: { enabledAt: new Date() },
+        });
+        if (enabled.count !== 1) throw new EnrollmentAuthorizationLostError();
+
+        const recoveryCodes = await replaceRecoveryCodes(tx, challenge.identityId);
+        const session = await this.finishChallenge(tx, challenge);
+        if (!session) throw new EnrollmentAuthorizationLostError();
+        return { session, recoveryCodes };
       });
-      if (enabled.count !== 1) return null;
-      const recoveryCodes = await replaceRecoveryCodes(tx, challenge.identityId);
-      const session = await this.finishChallenge(tx, challenge);
-      return session ? { session, recoveryCodes } : null;
-    });
-    if (!result) this.fail(ip, challenge.identityId);
+    } catch (error) {
+      if (error instanceof EnrollmentAuthorizationLostError) {
+        this.fail(ip, challenge.identityId);
+      }
+      throw error;
+    }
 
     this.securityLog.record('AUTH_MFA_ENROLLED', {
       realm: 'staff',
