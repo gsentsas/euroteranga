@@ -2,6 +2,22 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from './generated/prisma/client.js';
 
 export { PrismaClient };
+// Generated enums, model types and the Prisma namespace (error classes,
+// transaction types) for consumers of the database layer.
+export {
+  AuthChallengeType,
+  AuthIdentityStatus,
+  AuthRealm,
+  AuthSessionRevocationReason,
+  Prisma,
+} from './generated/prisma/client.js';
+export type { AuthIdentity, AuthSession } from './generated/prisma/client.js';
+
+/** Interactive transaction client, as passed to `$transaction(async (tx) => ...)`. */
+export type DatabaseTransaction = Omit<
+  PrismaClient,
+  '$connect' | '$disconnect' | '$on' | '$transaction' | '$extends'
+>;
 
 export interface DatabaseClientOptions {
   /** PostgreSQL connection string. Never log it: it contains credentials. */

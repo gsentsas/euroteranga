@@ -1,11 +1,12 @@
 # EURO TERANGA
 
-> **Status: Foundation implemented — product features not yet implemented.**
+> **Status: Foundation + Identity/Authentication — RBAC / authorization not
+> yet implemented.**
 >
-> The repository contains the technical foundation (monorepo, applications
-> skeletons, Core API with health checks, database tooling, tests and CI). No
-> booking, payment, passenger or operations feature exists yet, and nothing is
-> deployed.
+> The repository contains the technical foundation and authentication for three
+> realms (customer, staff with mandatory TOTP, crew). There are no roles or
+> permissions yet (PR-03), no booking, payment, passenger or operations
+> feature, and nothing is deployed. This is not production-ready.
 
 EURO TERANGA is a future digital platform for operating international road
 passenger transport services between Europe and Africa.
@@ -33,20 +34,21 @@ database. The backend is a modular monolith. Details:
 
 ## Monorepo
 
-| Path                | Package                      | What it is today                        | Local port |
-| ------------------- | ---------------------------- | --------------------------------------- | ---------- |
-| `apps/web`          | `@euroteranga/web`           | Next.js public site skeleton            | 3000       |
-| `apps/booking`      | `@euroteranga/booking`       | Next.js booking skeleton (no booking)   | 3001       |
-| `apps/client`       | `@euroteranga/client`        | Next.js customer portal skeleton        | 3002       |
-| `apps/tracking`     | `@euroteranga/tracking`      | Next.js tracking skeleton (no tracking) | 3003       |
-| `apps/ops`          | `@euroteranga/ops`           | Next.js + Refine back-office skeleton   | 3004       |
-| `apps/crew`         | `@euroteranga/crew`          | Next.js crew app skeleton (not offline) | 3005       |
-| `apps/api`          | `@euroteranga/api`           | NestJS Core API — health checks only    | 4000       |
-| `packages/config`   | `@euroteranga/config`        | Validated environment configuration     | —          |
-| `packages/logger`   | `@euroteranga/logger`        | Structured JSON logs with redaction     | —          |
-| `packages/database` | `@euroteranga/database`      | Prisma schema, migrations, client       | —          |
-| `packages/ui`       | `@euroteranga/ui`            | Brand mark, page shell, design tokens   | —          |
-| `tests/browser`     | `@euroteranga/browser-tests` | Playwright foundation tests             | —          |
+| Path                   | Package                      | What it is today                         | Local port |
+| ---------------------- | ---------------------------- | ---------------------------------------- | ---------- |
+| `apps/web`             | `@euroteranga/web`           | Next.js public site skeleton             | 3000       |
+| `apps/booking`         | `@euroteranga/booking`       | Next.js booking skeleton (no booking)    | 3001       |
+| `apps/client`          | `@euroteranga/client`        | Customer sign-in, registration, account  | 3002       |
+| `apps/tracking`        | `@euroteranga/tracking`      | Next.js tracking skeleton (no tracking)  | 3003       |
+| `apps/ops`             | `@euroteranga/ops`           | Refine back-office, staff sign-in + TOTP | 3004       |
+| `apps/crew`            | `@euroteranga/crew`          | Crew sign-in (not offline yet)           | 3005       |
+| `apps/api`             | `@euroteranga/api`           | NestJS Core API — health + auth          | 4000       |
+| `packages/config`      | `@euroteranga/config`        | Validated environment configuration      | —          |
+| `packages/logger`      | `@euroteranga/logger`        | Structured JSON logs with redaction      | —          |
+| `packages/database`    | `@euroteranga/database`      | Prisma schema, migrations, client        | —          |
+| `packages/ui`          | `@euroteranga/ui`            | Brand mark, page shell, forms, tokens    | —          |
+| `packages/auth-client` | `@euroteranga/auth-client`   | Typed browser client for auth endpoints  | —          |
+| `tests/browser`        | `@euroteranga/browser-tests` | Playwright foundation tests              | —          |
 
 Ports are a local development convention only; production does not depend on
 them.
@@ -67,6 +69,11 @@ docker compose -f infrastructure/dev/docker-compose.yml up -d
 pnpm db:migrate
 pnpm dev
 ```
+
+Mailpit (started by the same compose file) catches authentication mail at
+<http://localhost:8025>. STAFF and CREW identities have no self-registration:
+create local ones directly in the development database (see
+`apps/api/test/support/auth-helpers.ts` for the fixture approach).
 
 `pnpm dev` builds the shared packages, then starts the six frontends and the API
 in watch mode. Open <http://localhost:3000> (web) to <http://localhost:3005>
@@ -91,6 +98,13 @@ All configuration comes from environment variables, validated at startup.
 | `LOG_LEVEL`                | API         | `debug`, `info`, `warn` or `error`                         |
 | `NEXT_PUBLIC_APP_ENV`      | Frontends   | Environment label shown in the UI                          |
 | `NEXT_PUBLIC_API_BASE_URL` | Frontends   | Core API base URL                                          |
+
+Authentication adds `AUTH_CSRF_KEY`, `AUTH_HMAC_KEY`,
+`AUTH_TOTP_ENCRYPTION_KEY` (secrets, base64), per-realm origins
+(`AUTH_*_ORIGINS`) and session lifetimes, token lifetimes, `API_TRUST_PROXY`,
+and mail settings (`AUTH_MAIL_PROVIDER`, `SMTP_*`, `AUTH_EMAIL_FROM`,
+`CLIENT_PUBLIC_URL`). The example keys in `.env.example` are refused in
+staging and production. Details: [`docs/security/authentication.md`](docs/security/authentication.md).
 
 `NEXT_PUBLIC_*` values are embedded in browser code: builds fail when a
 sensitive-looking variable uses this prefix.
@@ -126,16 +140,17 @@ pnpm test:e2e
 `.github/workflows/ci.yml` runs on every pull request and on `main`, with
 read-only permissions and actions pinned to commit SHAs:
 
-| Job        | Proves                                                                    |
-| ---------- | ------------------------------------------------------------------------- |
-| `quality`  | Frozen-lockfile install, lint, format, typecheck                          |
-| `database` | Prisma validate, migration deploy (twice), status, `SELECT 1`             |
-| `test`     | Unit and integration tests against an ephemeral PostgreSQL                |
-| `build`    | All seven applications build                                              |
-| `browser`  | Playwright tests on the six frontends                                     |
-| `security` | Forbidden files and bypass markers, gitleaks (full history), `pnpm audit` |
+| Job        | Proves                                                                     |
+| ---------- | -------------------------------------------------------------------------- |
+| `quality`  | Frozen-lockfile install, lint, format, typecheck                           |
+| `database` | Prisma validate, migration deploy (twice), status, `SELECT 1`              |
+| `test`     | Unit and integration tests against an ephemeral PostgreSQL                 |
+| `build`    | All seven applications build                                               |
+| `browser`  | Playwright: six frontends + auth flows against the real API and PostgreSQL |
+| `security` | Forbidden files and bypass markers, gitleaks (full history), `pnpm audit`  |
 
-Dependabot proposes grouped weekly updates (npm, GitHub Actions) and monthly
+`.github/workflows/codeql.yml` runs CodeQL (security-extended) on pull
+requests, on `main` and weekly. Dependabot proposes grouped weekly updates (npm, GitHub Actions) and monthly
 Docker updates.
 
 ## Contributing

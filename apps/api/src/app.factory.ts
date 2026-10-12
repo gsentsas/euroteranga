@@ -6,6 +6,8 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
+import { buildAuthConfig } from './auth/auth.config.js';
+import type { AuthMailProvider } from './auth/mail/auth-mail.provider.js';
 import { FoundationExceptionFilter } from './common/exception.filter.js';
 import { NestJsonLogger } from './common/logging.js';
 import { requestIdMiddleware } from './common/request-id.js';
@@ -16,6 +18,8 @@ export interface CreateAppOptions {
   logger: Logger;
   /** Test-only controllers; production code never passes any. */
   extraControllers?: Type<unknown>[];
+  /** Test-only mail transport override; production uses the configured one. */
+  mailProvider?: AuthMailProvider;
 }
 
 export async function createApp(options: CreateAppOptions): Promise<NestExpressApplication> {
@@ -30,17 +34,35 @@ export async function createApp(options: CreateAppOptions): Promise<NestExpressA
 
 function configureApp(app: NestExpressApplication, { env, logger }: CreateAppOptions): void {
   app.disable('x-powered-by');
+  // X-Forwarded-For is ignored unless a proxy is explicitly trusted.
+  app.set('trust proxy', env.API_TRUST_PROXY === 'loopback' ? 'loopback' : false);
+  app.useBodyParser('json', { limit: '32kb' });
 
   // First middleware: every later log line and error response carries the id.
   app.use(requestIdMiddleware(logger));
   app.use(helmet());
 
-  // Explicit allow-list only. Credentials stay disabled until authentication
-  // exists and its cookie strategy is decided.
+  // Authentication responses (sessions, CSRF tokens, MFA secrets) are never cached.
+  app.use(
+    '/v1/auth',
+    (
+      _request: unknown,
+      response: { setHeader(name: string, value: string): void },
+      next: () => void,
+    ) => {
+      response.setHeader('Cache-Control', 'no-store');
+      next();
+    },
+  );
+
+  // Credentialed CORS for exact origins only (configuration rejects "*").
+  // Which realm an origin may use is enforced per route by AuthRequestGuard.
   app.enableCors({
-    origin: env.API_CORS_ORIGINS,
-    credentials: false,
-    exposedHeaders: ['X-Request-Id'],
+    origin: [...buildAuthConfig(env).corsOrigins],
+    credentials: true,
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'X-Request-Id'],
+    exposedHeaders: ['X-Request-Id', 'Retry-After'],
   });
 
   // Business endpoints will live under /v1/...; health checks are version neutral.

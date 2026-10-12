@@ -63,7 +63,8 @@ describe('health endpoints (real PostgreSQL)', () => {
       .get('/health')
       .set('Origin', 'http://localhost:3000');
     expect(allowed.headers['access-control-allow-origin']).toBe('http://localhost:3000');
-    expect(allowed.headers['access-control-allow-credentials']).toBeUndefined();
+    // Credentialed CORS (session cookies) is enabled for exact origins only.
+    expect(allowed.headers['access-control-allow-credentials']).toBe('true');
 
     const denied = await request(app.getHttpServer())
       .get('/health')

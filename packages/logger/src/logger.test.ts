@@ -101,6 +101,36 @@ describe('redact', () => {
   });
 });
 
+describe('authentication material', () => {
+  it('masks TOTP, recovery codes, CSRF and challenge tokens by key', () => {
+    expect(
+      redact({
+        totpCode: '123456',
+        otp: '654321',
+        recoveryCodes: ['AAAA-BBBB'],
+        csrfToken: 'v1.x.y.z',
+        challengeToken: 'abc',
+        sessionToken: 'def',
+        realm: 'STAFF',
+      }),
+    ).toEqual({
+      totpCode: REDACTED,
+      otp: REDACTED,
+      recoveryCodes: REDACTED,
+      csrfToken: REDACTED,
+      challengeToken: REDACTED,
+      sessionToken: REDACTED,
+      realm: 'STAFF',
+    });
+  });
+
+  it('removes the secret from otpauth URIs found in free text', () => {
+    expect(
+      redactString('uri otpauth://totp/EURO%20TERANGA:x?secret=JBSWY3DPEHPK3PXP&issuer=EURO'),
+    ).toBe(`uri otpauth://totp/EURO%20TERANGA:x?secret=${REDACTED}&issuer=EURO`);
+  });
+});
+
 describe('redactString', () => {
   it('removes user info from connection strings and bearer tokens', () => {
     expect(redactString('postgresql://user:pass@host:5432/db')).toBe(
@@ -111,7 +141,18 @@ describe('redactString', () => {
     );
   });
 
+  it('redacts Basic credentials too', () => {
+    expect(redactString('Authorization: Basic dXNlcjpwYXNz')).toBe(
+      `Authorization: Basic ${REDACTED}`,
+    );
+  });
+
   it('leaves ordinary URLs untouched', () => {
     expect(redactString('see https://euroteranga.com/faq')).toBe('see https://euroteranga.com/faq');
+  });
+
+  it('handles long attacker-controlled text in linear scanners', () => {
+    const value = 'a'.repeat(100_000);
+    expect(redactString(value)).toBe(value);
   });
 });

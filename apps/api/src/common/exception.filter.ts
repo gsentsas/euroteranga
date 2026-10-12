@@ -1,6 +1,7 @@
 import type { Logger } from '@euroteranga/logger';
 import { Catch, HttpException, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { PublicApiError } from '../auth/http/public-api-error.js';
 import { currentRequestId } from './request-context.js';
 
 export interface ErrorResponse {
@@ -42,20 +43,33 @@ export class FoundationExceptionFilter implements ExceptionFilter {
     const request = http.getRequest<Request>();
 
     const status = exception instanceof HttpException ? exception.getStatus() : 500;
+    // PublicApiError carries a code and message written for clients; any
+    // other error gets the fixed message of its status.
     const publicError =
-      PUBLIC_ERRORS[status] ??
-      (status >= 500 ? INTERNAL_ERROR : { code: 'HTTP_ERROR', message: 'Request failed' });
+      exception instanceof PublicApiError
+        ? { code: exception.code, message: exception.publicMessage }
+        : (PUBLIC_ERRORS[status] ??
+          (status >= 500 ? INTERNAL_ERROR : { code: 'HTTP_ERROR', message: 'Request failed' }));
 
     const logFields = {
       method: request.method,
       route: request.originalUrl.split('?')[0],
       status,
-      error: exception,
+      // Client errors are logged by name only: messages of body-parsing errors
+      // can quote the submitted payload (e.g. a password in malformed JSON).
+      error:
+        status >= 500
+          ? exception
+          : { name: exception instanceof Error ? exception.name : 'unknown' },
     };
     if (status >= 500) this.logger.error('request failed', logFields);
     else this.logger.debug('request rejected', logFields);
 
     if (response.headersSent) return;
+    if (exception instanceof PublicApiError) {
+      for (const [name, value] of Object.entries(exception.headers))
+        response.setHeader(name, value);
+    }
 
     const body: ErrorResponse = { ...publicError, requestId: currentRequestId() ?? null };
     response.status(status).json(body);

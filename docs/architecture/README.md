@@ -81,6 +81,15 @@ request → X-Request-Id (accepted or generated) → Helmet headers → CORS all
 errors  → { code, message, requestId } (fixed public messages, details only in redacted logs)
 ```
 
+## Identity & authentication (PR-02)
+
+`apps/api/src/auth` (AuthModule): realms CUSTOMER / STAFF / CREW, Argon2id
+passwords, opaque sessions in host-only HttpOnly cookies (only SHA-256 stored),
+session-bound CSRF tokens, staff TOTP with recovery codes, PostgreSQL-backed
+rate limits, security event logging. Frontends use `@euroteranga/auth-client`
+and never store authentication secrets in the browser. No authorization yet.
+See [`docs/security/authentication.md`](../security/authentication.md).
+
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
 
@@ -90,6 +99,6 @@ Recorded in [`docs/adr/`](../adr/README.md): modular monolith (ADR-001),
 PostgreSQL and Prisma (ADR-002), NestJS (ADR-003), Refine (ADR-004), Plesk
 deployment target — not yet decided (ADR-010), monorepo tooling (ADR-011).
 
-Still open: object storage provider, authentication and sessions, offline crew
+Still open: object storage provider, offline crew
 synchronisation, payment provider abstraction, regulatory rule versioning, and
 the production deployment model.

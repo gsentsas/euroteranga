@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   ConfigValidationError,
@@ -7,9 +8,17 @@ import {
   loadPublicEnv,
 } from './index.js';
 
+// Keys are generated per run: no static secret-looking value in the repository.
+const key = () => randomBytes(32).toString('base64');
+
 const validApiEnv = {
   APP_ENV: 'local',
   DATABASE_URL: 'postgresql://user:placeholder@localhost:5432/euroteranga_test',
+  AUTH_CSRF_KEY: key(),
+  AUTH_HMAC_KEY: key(),
+  AUTH_TOTP_ENCRYPTION_KEY: key(),
+  AUTH_MAIL_PROVIDER: 'disabled',
+  CLIENT_PUBLIC_URL: 'http://localhost:3002',
 };
 
 describe('loadApiEnv', () => {
@@ -34,6 +43,8 @@ describe('loadApiEnv', () => {
       const message = (error as Error).message;
       expect(message).toContain('DATABASE_URL');
       expect(message).toContain('APP_ENV');
+      expect(message).toContain('AUTH_CSRF_KEY');
+      expect(message).toContain('AUTH_TOTP_ENCRYPTION_KEY');
     }
   });
 
