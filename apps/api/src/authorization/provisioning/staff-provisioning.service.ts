@@ -296,6 +296,7 @@ export async function ensureRole(
   identityId: string,
   roleKey: string,
   grantedByIdentityId: string | null,
+  grantReason = 'staff provisioning',
 ): Promise<boolean> {
   const active = await tx.authorizationRoleAssignment.findFirst({
     where: { identityId, roleKey, revokedAt: null },
@@ -303,7 +304,7 @@ export async function ensureRole(
   });
   if (active) return false;
   await tx.authorizationRoleAssignment.create({
-    data: { identityId, roleKey, grantedByIdentityId, grantReason: 'staff provisioning' },
+    data: { identityId, roleKey, grantedByIdentityId, grantReason },
   });
   return true;
 }

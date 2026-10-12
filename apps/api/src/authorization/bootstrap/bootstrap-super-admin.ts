@@ -113,7 +113,13 @@ export async function bootstrapSuperAdmin(
           },
           select: { id: true, email: true },
         }));
-      const roleAdded = await ensureRole(tx, identity.id, SYSTEM_ROLES.SUPER_ADMIN, null);
+      const roleAdded = await ensureRole(
+        tx,
+        identity.id,
+        SYSTEM_ROLES.SUPER_ADMIN,
+        null,
+        'super-admin bootstrap',
+      );
       const token = secureRandomToken();
       const expiresAt = new Date(Date.now() + input.invitationTtlMs);
       await issueInvitation(tx, identity.id, token, expiresAt, null);
@@ -126,7 +132,7 @@ export async function bootstrapSuperAdmin(
         regenerated: Boolean(existing) && !roleAdded,
       };
     } else if (existing.status === AuthIdentityStatus.ACTIVE && existing.passwordCredential) {
-      await ensureRole(tx, existing.id, SYSTEM_ROLES.SUPER_ADMIN, null);
+      await ensureRole(tx, existing.id, SYSTEM_ROLES.SUPER_ADMIN, null, 'super-admin bootstrap');
       if (existing.mfaTotpCredential?.enabledAt) {
         outcome = { kind: 'role-granted', identityId: existing.id };
       } else {

@@ -11,7 +11,8 @@
     "start": "node --enable-source-maps dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:unit": "vitest run test/unit",
-    "test:integration": "vitest run test/integration"
+    "test:integration": "vitest run test/integration",
+    "auth:bootstrap-super-admin": "node --enable-source-maps --env-file-if-exists=../../.env dist/cli/bootstrap-super-admin.js"
   },
   "dependencies": {
     "@euroteranga/config": "workspace:*",

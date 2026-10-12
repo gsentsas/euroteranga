@@ -26,7 +26,8 @@
     "db:migrate": "pnpm --filter @euroteranga/database run db:migrate:deploy",
     "db:migrate:status": "pnpm --filter @euroteranga/database run db:migrate:status",
     "check:forbidden-files": "bash scripts/check-forbidden-files.sh",
-    "audit:dependencies": "pnpm audit --audit-level high"
+    "audit:dependencies": "pnpm audit --audit-level high",
+    "auth:bootstrap-super-admin": "pnpm --filter @euroteranga/api run auth:bootstrap-super-admin"
   },
   "devDependencies": {
     "@eslint/js": "catalog:",
