@@ -254,3 +254,53 @@ a {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* --- Back-office tables and actions -------------------------------------- */
+
+.et-table-wrap {
+  overflow-x: auto;
+}
+
+.et-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.et-table caption {
+  text-align: left;
+  font-weight: 600;
+  padding-block: var(--et-space-2);
+}
+
+.et-table th,
+.et-table td {
+  padding: var(--et-space-2);
+  border-bottom: 1px solid var(--et-color-ink-muted);
+  text-align: left;
+  vertical-align: top;
+}
+
+.et-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--et-space-2);
+  align-items: center;
+}
+
+.et-tag {
+  display: inline-block;
+  padding: 0 var(--et-space-2);
+  border: 1px solid var(--et-color-ink-muted);
+  border-radius: var(--et-radius);
+  font-size: 0.875rem;
+}
+
+.et-select {
+  min-height: 2.75rem;
+  padding: var(--et-space-2);
+  border: 1px solid var(--et-color-ink-muted);
+  border-radius: var(--et-radius);
+  background: var(--et-color-surface-raised);
+  color: var(--et-color-ink);
+  font: inherit;
+}

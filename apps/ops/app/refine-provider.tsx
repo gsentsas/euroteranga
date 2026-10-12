@@ -20,7 +20,25 @@ export function RefineProvider({ children }: { children: ReactNode }) {
       <Refine
         routerProvider={routerProvider}
         authProvider={authProvider}
-        resources={[{ name: 'foundation', list: '/', meta: { label: 'Foundation' } }]}
+        resources={[
+          { name: 'foundation', list: '/', meta: { label: 'Foundation' } },
+          // `permission` only filters the navigation; the API authorizes every call.
+          {
+            name: 'admin-identities',
+            list: '/admin/utilisateurs',
+            meta: { label: 'Utilisateurs', permission: 'identity.read' },
+          },
+          {
+            name: 'admin-roles',
+            list: '/admin/roles',
+            meta: { label: 'Rôles', permission: 'role.read' },
+          },
+          {
+            name: 'admin-audit',
+            list: '/admin/audit',
+            meta: { label: 'Journal d’audit', permission: 'audit.read' },
+          },
+        ]}
         options={{
           // Refine reports usage telemetry unless explicitly disabled.
           disableTelemetry: true,
