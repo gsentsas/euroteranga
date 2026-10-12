@@ -1,8 +1,10 @@
 // EURO TERANGA — database schema.
 //
-// PR-01 Foundation intentionally defines no models: business tables are
-// introduced by the pull requests that own each domain. The connection URL is
-// provided by prisma.config.ts from the DATABASE_URL environment variable.
+// Business tables are introduced by the pull requests that own each domain.
+// PR-02 adds authentication only: identities able to authenticate, their
+// credentials, sessions and single-use tokens. No role or permission exists
+// yet (PR-03). Tables and columns use snake_case; all timestamps are
+// timestamptz (UTC). The connection URL comes from prisma.config.ts.
 
 generator client {
   provider            = "prisma-client"
@@ -13,4 +15,203 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+/// Authentication realm. Not a business role: STAFF is not yet DIRECTOR etc.
+enum AuthRealm {
+  CUSTOMER
+  STAFF
+  CREW
+
+  @@map("auth_realm")
+}
+
+enum AuthIdentityStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DISABLED
+
+  @@map("auth_identity_status")
+}
+
+enum AuthChallengeType {
+  MFA_LOGIN
+  MFA_ENROLLMENT
+
+  @@map("auth_challenge_type")
+}
+
+enum AuthSessionRevocationReason {
+  LOGOUT
+  LOGOUT_ALL
+  PASSWORD_CHANGED
+  PASSWORD_RESET
+
+  @@map("auth_session_revocation_reason")
+}
+
+/// An identity able to authenticate in exactly one realm. It is not a
+/// customer, passenger, staff profile or crew member: those business objects
+/// will reference it later and stay independent.
+model AuthIdentity {
+  id              String             @id @default(uuid(7)) @db.Uuid
+  realm           AuthRealm
+  /// Address as entered (display only).
+  email           String             @db.VarChar(254)
+  /// trim + lowercase; used for lookup and uniqueness (docs/security/authentication.md).
+  normalizedEmail String             @map("normalized_email") @db.VarChar(254)
+  status          AuthIdentityStatus
+  emailVerifiedAt DateTime?          @map("email_verified_at") @db.Timestamptz(3)
+  /// Incremented to invalidate every session at once (password change/reset...).
+  authVersion     Int                @default(1) @map("auth_version")
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  passwordCredential      PasswordCredential?
+  sessions                AuthSession[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  challenges              AuthChallenge[]
+  mfaTotpCredential       MfaTotpCredential?
+  mfaRecoveryCodes        MfaRecoveryCode[]
+
+  // The same address may exist in two realms as two unrelated identities.
+  @@unique([realm, normalizedEmail])
+  @@map("auth_identity")
+}
+
+model PasswordCredential {
+  identityId   String   @id @map("identity_id") @db.Uuid
+  /// PHC-encoded Argon2id hash (algorithm and parameters included).
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  identity AuthIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@map("password_credential")
+}
+
+/// Opaque, revocable browser session. Only SHA-256(token) is stored.
+model AuthSession {
+  id                String                       @id @default(uuid(7)) @db.Uuid
+  identityId        String                       @map("identity_id") @db.Uuid
+  tokenHash         Bytes                        @unique @map("token_hash")
+  /// Copy of AuthIdentity.authVersion at creation; a mismatch invalidates the session.
+  authVersion       Int                          @map("auth_version")
+  createdAt         DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt        DateTime                     @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  idleExpiresAt     DateTime                     @map("idle_expires_at") @db.Timestamptz(3)
+  absoluteExpiresAt DateTime                     @map("absolute_expires_at") @db.Timestamptz(3)
+  revokedAt         DateTime?                    @map("revoked_at") @db.Timestamptz(3)
+  revocationReason  AuthSessionRevocationReason? @map("revocation_reason")
+
+  identity AuthIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([identityId])
+  @@index([absoluteExpiresAt])
+  @@map("auth_session")
+}
+
+/// Single-use email verification token (hash only). It carries the password
+/// hash chosen at registration, applied only when the token is verified.
+model EmailVerificationToken {
+  id                  String    @id @default(uuid(7)) @db.Uuid
+  identityId          String    @map("identity_id") @db.Uuid
+  tokenHash           Bytes     @unique @map("token_hash")
+  pendingPasswordHash String?   @map("pending_password_hash")
+  expiresAt           DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt          DateTime? @map("consumed_at") @db.Timestamptz(3)
+  invalidatedAt       DateTime? @map("invalidated_at") @db.Timestamptz(3)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  identity AuthIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([identityId])
+  @@index([expiresAt])
+  @@map("email_verification_token")
+}
+
+/// Single-use password reset token (hash only).
+model PasswordResetToken {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  identityId    String    @map("identity_id") @db.Uuid
+  tokenHash     Bytes     @unique @map("token_hash")
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt    DateTime? @map("consumed_at") @db.Timestamptz(3)
+  invalidatedAt DateTime? @map("invalidated_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  identity AuthIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([identityId])
+  @@index([expiresAt])
+  @@map("password_reset_token")
+}
+
+/// Short-lived, attempt-limited step between password and second factor.
+model AuthChallenge {
+  id         String            @id @default(uuid(7)) @db.Uuid
+  identityId String            @map("identity_id") @db.Uuid
+  type       AuthChallengeType
+  tokenHash  Bytes             @unique @map("token_hash")
+  attempts   Int               @default(0)
+  expiresAt  DateTime          @map("expires_at") @db.Timestamptz(3)
+  consumedAt DateTime?         @map("consumed_at") @db.Timestamptz(3)
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  identity AuthIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([identityId])
+  @@index([expiresAt])
+  @@map("auth_challenge")
+}
+
+/// TOTP secret, encrypted with AES-256-GCM (key outside the database).
+/// enabledAt is null while enrollment is pending.
+model MfaTotpCredential {
+  identityId       String    @id @map("identity_id") @db.Uuid
+  /// Ciphertext followed by the 16-byte GCM authentication tag.
+  secretCiphertext Bytes     @map("secret_ciphertext")
+  secretNonce      Bytes     @map("secret_nonce")
+  keyVersion       Int       @map("key_version")
+  enabledAt        DateTime? @map("enabled_at") @db.Timestamptz(3)
+  /// Highest accepted 30-second time step; codes at or below it are replays.
+  lastAcceptedStep BigInt?   @map("last_accepted_step")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  identity AuthIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@map("mfa_totp_credential")
+}
+
+/// Single-use recovery code (SHA-256 of a high-entropy code; shown once).
+model MfaRecoveryCode {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  identityId String    @map("identity_id") @db.Uuid
+  codeHash   Bytes     @unique @map("code_hash")
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  identity AuthIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([identityId])
+  @@map("mfa_recovery_code")
+}
+
+/// Fixed-window rate-limit counter. The key is an HMAC of the action and of
+/// the limited signal (IP, identity hint): no raw email or IP is stored.
+model AuthRateLimitBucket {
+  key         Bytes
+  windowStart DateTime @map("window_start") @db.Timestamptz(3)
+  action      String   @db.VarChar(64)
+  count       Int
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
+
+  @@id([key, windowStart])
+  @@index([expiresAt])
+  @@map("auth_rate_limit_bucket")
 }

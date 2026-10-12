@@ -1,4 +1,4 @@
-# Local development and test database ONLY.
+# Local development services ONLY (database and mail catcher).
 # Not used for staging or production; contains no production credential.
 #
 #   docker compose -f infrastructure/dev/docker-compose.yml up -d
@@ -25,6 +25,14 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  mailpit:
+    # Catches authentication mail locally (UI: http://localhost:8025). Nothing
+    # is delivered to real mailboxes.
+    image: axllent/mailpit:v1.31.4@sha256:b68349e3a014b90c5610bfb26b2ae36f3892d7b8cf25ee140c6c71c98d2fcf48
+    ports:
+      - '127.0.0.1:1025:1025'
+      - '127.0.0.1:8025:8025'
 
 volumes:
   euroteranga-dev-postgres:

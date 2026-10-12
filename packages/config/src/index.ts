@@ -1,5 +1,6 @@
 export { ConfigValidationError } from './errors.js';
 export { apiEnvSchema, loadApiEnv, type ApiEnv } from './api-env.js';
+export { EXAMPLE_AUTH_SECRETS, decodeSecretKey } from './auth-env.js';
 export {
   assertNoSensitivePublicEnv,
   loadPublicEnv,
