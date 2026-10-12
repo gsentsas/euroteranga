@@ -1,7 +1,7 @@
 import type { ApiEnv } from '@euroteranga/config';
 import type { Logger } from '@euroteranga/logger';
 import { Module, type DynamicModule, type Type } from '@nestjs/common';
-import { AuthModule } from './auth/auth.module.js';
+import { AuthorizationModule } from './authorization/authorization.module.js';
 import type { AuthMailProvider } from './auth/mail/auth-mail.provider.js';
 import { ConfigModule } from './config/config.module.js';
 import { DatabaseModule } from './database/database.module.js';
@@ -23,7 +23,10 @@ export class AppModule {
         ConfigModule.forRoot(options.env, options.logger),
         DatabaseModule,
         HealthModule,
-        AuthModule.register(options.mailProvider ? { mailProvider: options.mailProvider } : {}),
+        // AuthorizationModule registers AuthModule (single instance).
+        AuthorizationModule.register(
+          options.mailProvider ? { mailProvider: options.mailProvider } : {},
+        ),
       ],
       controllers: options.extraControllers ?? [],
     };

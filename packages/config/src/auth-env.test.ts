@@ -14,6 +14,7 @@ function localEnv(overrides: Record<string, string> = {}) {
     AUTH_TOTP_ENCRYPTION_KEY: key(),
     AUTH_MAIL_PROVIDER: 'disabled',
     CLIENT_PUBLIC_URL: 'http://localhost:3002',
+    OPS_PUBLIC_URL: 'http://localhost:3004',
     ...overrides,
   };
 }
@@ -26,6 +27,7 @@ function productionEnv(overrides: Record<string, string> = {}) {
     SMTP_HOST: 'smtp.example.test',
     AUTH_EMAIL_FROM: 'no-reply@example.test',
     CLIENT_PUBLIC_URL: 'https://client.example.test',
+    OPS_PUBLIC_URL: 'https://ops.example.test',
     AUTH_CUSTOMER_ORIGINS: 'https://client.example.test',
     AUTH_STAFF_ORIGINS: 'https://ops.example.test',
     AUTH_CREW_ORIGINS: 'https://crew.example.test',
@@ -54,6 +56,8 @@ describe('authentication configuration', () => {
       AUTH_EMAIL_VERIFICATION_TTL_SECONDS: 86400,
       AUTH_PASSWORD_RESET_TTL_SECONDS: 1800,
       AUTH_MFA_CHALLENGE_TTL_SECONDS: 300,
+      AUTH_STAFF_INVITATION_TTL_SECONDS: 3 * 86400,
+      AUTH_STAFF_ENROLLMENT_GRANT_TTL_SECONDS: 86400,
       AUTH_TOTP_ENCRYPTION_KEY_VERSION: 1,
       API_TRUST_PROXY: 'none',
     });
@@ -128,6 +132,7 @@ describe('production configuration', () => {
   it.each([
     ['disabled mail provider', { AUTH_MAIL_PROVIDER: 'disabled' }, 'AUTH_MAIL_PROVIDER'],
     ['http client URL', { CLIENT_PUBLIC_URL: 'http://client.example.test' }, 'CLIENT_PUBLIC_URL'],
+    ['http ops URL', { OPS_PUBLIC_URL: 'http://ops.example.test' }, 'OPS_PUBLIC_URL'],
     ['missing staff origins', { AUTH_STAFF_ORIGINS: '' }, 'AUTH_STAFF_ORIGINS'],
     ['http crew origin', { AUTH_CREW_ORIGINS: 'http://crew.example.test' }, 'AUTH_CREW_ORIGINS'],
     ['non-production NODE_ENV', { NODE_ENV: 'development' }, 'NODE_ENV'],

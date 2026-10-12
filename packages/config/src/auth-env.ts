@@ -72,6 +72,8 @@ export const authEnvShape = {
   AUTH_EMAIL_VERIFICATION_TTL_SECONDS: seconds(DAY),
   AUTH_PASSWORD_RESET_TTL_SECONDS: seconds(30 * 60),
   AUTH_MFA_CHALLENGE_TTL_SECONDS: seconds(5 * 60),
+  AUTH_STAFF_INVITATION_TTL_SECONDS: seconds(3 * DAY),
+  AUTH_STAFF_ENROLLMENT_GRANT_TTL_SECONDS: seconds(DAY),
 
   // "disabled" drops auth mail (local/CI without a mail catcher); it is
   // refused in staging and production.
@@ -80,6 +82,8 @@ export const authEnvShape = {
     .default('smtp'),
   AUTH_EMAIL_FROM: z.email({ error: 'must be an email address' }).optional(),
   CLIENT_PUBLIC_URL: httpUrlSchema,
+  /** Public URL of the operations back-office (staff invitation links). */
+  OPS_PUBLIC_URL: httpUrlSchema,
   SMTP_HOST: z
     .string()
     .regex(/^[A-Za-z0-9.-]+$/, 'must be a hostname')
@@ -137,6 +141,7 @@ export function refineAuthEnv(env: AuthEnvInput, ctx: z.RefinementCtx): void {
   if (env.AUTH_MAIL_PROVIDER !== 'smtp')
     issue('AUTH_MAIL_PROVIDER', 'must be smtp in staging and production');
   if (!env.CLIENT_PUBLIC_URL.startsWith('https://')) issue('CLIENT_PUBLIC_URL', 'must use https');
+  if (!env.OPS_PUBLIC_URL.startsWith('https://')) issue('OPS_PUBLIC_URL', 'must use https');
   for (const realm of REALMS) {
     const origins = env[`AUTH_${realm}_ORIGINS`];
     if (origins.length === 0) issue(`AUTH_${realm}_ORIGINS`, 'must list at least one origin');

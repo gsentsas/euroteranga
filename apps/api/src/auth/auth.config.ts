@@ -46,6 +46,9 @@ export interface AuthConfig {
   totpKey: Buffer;
   totpKeyVersion: number;
   clientPublicUrl: string;
+  opsPublicUrl: string;
+  staffInvitationTtlMs: number;
+  staffEnrollmentGrantTtlMs: number;
   /** Exact origins accepted by CORS (all realms plus API_CORS_ORIGINS). */
   corsOrigins: readonly string[];
 }
@@ -112,6 +115,9 @@ export function buildAuthConfig(env: ApiEnv): AuthConfig {
     totpKey: decodeSecretKey(env.AUTH_TOTP_ENCRYPTION_KEY),
     totpKeyVersion: env.AUTH_TOTP_ENCRYPTION_KEY_VERSION,
     clientPublicUrl: env.CLIENT_PUBLIC_URL.replace(/\/+$/, ''),
+    opsPublicUrl: env.OPS_PUBLIC_URL.replace(/\/+$/, ''),
+    staffInvitationTtlMs: env.AUTH_STAFF_INVITATION_TTL_SECONDS * SECOND,
+    staffEnrollmentGrantTtlMs: env.AUTH_STAFF_ENROLLMENT_GRANT_TTL_SECONDS * SECOND,
     corsOrigins: [
       ...new Set([
         ...env.API_CORS_ORIGINS,

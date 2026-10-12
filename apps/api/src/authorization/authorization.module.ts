@@ -1,12 +1,37 @@
-import { Module } from '@nestjs/common';
+import { Module, type DynamicModule } from '@nestjs/common';
+import { AuthModule, type AuthModuleOptions } from '../auth/auth.module.js';
 import { DatabaseModule } from '../database/database.module.js';
+import {
+  AdminAccessController,
+  AdminAuthorizationController,
+} from './admin-authorization.controller.js';
 import { AuditService } from './audit.service.js';
 import { AuthorizationGuard } from './authorization.guard.js';
 import { AuthorizationService } from './authorization.service.js';
+import { IdentityAdministrationService } from './identity-administration.service.js';
+import { StaffInvitationController } from './provisioning/staff-invitation.controller.js';
+import { StaffProvisioningService } from './provisioning/staff-provisioning.service.js';
 
-@Module({
-  imports: [DatabaseModule],
-  providers: [AuthorizationService, AuthorizationGuard, AuditService],
-  exports: [AuthorizationService, AuthorizationGuard, AuditService],
-})
-export class AuthorizationModule {}
+/**
+ * Authorization (RBAC), privileged audit trail and STAFF provisioning.
+ * Depends on AuthModule (sessions, guards, mail, rate limits); AuthModule
+ * does not depend on it.
+ */
+@Module({})
+export class AuthorizationModule {
+  static register(authOptions: AuthModuleOptions = {}): DynamicModule {
+    return {
+      module: AuthorizationModule,
+      imports: [DatabaseModule, AuthModule.register(authOptions)],
+      controllers: [AdminAuthorizationController, AdminAccessController, StaffInvitationController],
+      providers: [
+        AuthorizationService,
+        AuthorizationGuard,
+        AuditService,
+        IdentityAdministrationService,
+        StaffProvisioningService,
+      ],
+      exports: [AuthorizationService, AuditService],
+    };
+  }
+}

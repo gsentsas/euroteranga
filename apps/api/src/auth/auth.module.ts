@@ -67,7 +67,19 @@ export class AuthModule {
         SessionGuard,
         CsrfGuard,
       ],
-      exports: [AUTH_CONFIG, SessionService],
+      // Shared with AuthorizationModule (admin API, STAFF provisioning).
+      exports: [
+        AUTH_CONFIG,
+        SessionService,
+        AuthCookies,
+        CsrfService,
+        AuthMailer,
+        RateLimitService,
+        SecurityEventLogger,
+        AuthRequestGuard,
+        SessionGuard,
+        CsrfGuard,
+      ],
     };
   }
 }

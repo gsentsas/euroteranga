@@ -1,11 +1,19 @@
-import { AuthRealm } from '@euroteranga/database';
-
+/**
+ * Stable keys of the permissions and system roles seeded by the PR-03
+ * migration. The database catalogue (authorization_permission,
+ * authorization_role, authorization_role_permission) is the single source of
+ * truth for which role holds which permission and in which realm; these
+ * constants only give type-safe references to the keys, and a test checks
+ * they match the database.
+ */
 export const PERMISSIONS = {
+  OPS_ACCESS: 'ops.access',
   IDENTITY_READ: 'identity.read',
   STAFF_PROVISION: 'identity.staff.provision',
   IDENTITY_STATUS_MANAGE: 'identity.status.manage',
   ROLE_READ: 'role.read',
   ROLE_ASSIGN: 'role.assign',
+  PRIVILEGED_MANAGE: 'privileged.manage',
   AUDIT_READ: 'audit.read',
   SESSION_REVOKE_ANY: 'session.revoke.any',
   MFA_ENROLLMENT_AUTHORIZE: 'mfa.enrollment.authorize',
@@ -22,15 +30,9 @@ export const SYSTEM_ROLES = {
   COMPLIANCE_AGENT: 'COMPLIANCE_AGENT',
   FINANCE: 'FINANCE',
   CUSTOMER_SUPPORT: 'CUSTOMER_SUPPORT',
+  AUDITOR: 'AUDITOR',
   DRIVER: 'DRIVER',
   CREW: 'CREW',
-  AUDITOR: 'AUDITOR',
 } as const;
 
 export type SystemRoleKey = (typeof SYSTEM_ROLES)[keyof typeof SYSTEM_ROLES];
-
-const CREW_ROLES = new Set<string>([SYSTEM_ROLES.DRIVER, SYSTEM_ROLES.CREW]);
-
-export function expectedRealmForRole(roleKey: string): AuthRealm {
-  return CREW_ROLES.has(roleKey) ? AuthRealm.CREW : AuthRealm.STAFF;
-}

@@ -1,28 +1,35 @@
-import { AuthIdentityStatus, AuthSessionRevocationReason } from '@euroteranga/database';
+import { AuthIdentityStatus } from '@euroteranga/database';
 import {
   Body,
   Controller,
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiForbiddenResponse,
+  ApiOkResponse,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import type { z } from 'zod';
-import { CsrfGuard, AuthRequestGuard, SessionGuard } from '../auth/http/auth.guards.js';
+import { ErrorBody } from '../auth/dto/auth.dto.js';
+import { AuthRequestGuard, CsrfGuard, SessionGuard } from '../auth/http/auth.guards.js';
 import { AuthRealmRoute, CurrentPrincipal } from '../auth/http/request-context.js';
 import { ZodValidationPipe } from '../auth/http/zod-validation.pipe.js';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
-import { SessionService } from '../auth/session/session.service.js';
-import { StaffProvisioningService } from '../auth/staff-provisioning/staff-provisioning.service.js';
-import { DatabaseService } from '../database/database.service.js';
 import { AuditService } from './audit.service.js';
 import { AuthorizationGuard, RequirePermissions } from './authorization.guard.js';
-import { AuthorizationErrors } from './authorization.errors.js';
 import {
+  AccessResponse,
+  auditListQuerySchema,
   IdentityStatusBody,
+  identityListQuerySchema,
   identityStatusSchema,
   ReasonBody,
   reasonSchema,
@@ -32,35 +39,51 @@ import {
   staffInvitationSchema,
 } from './authorization.dto.js';
 import { AuthorizationService } from './authorization.service.js';
+import { IdentityAdministrationService } from './identity-administration.service.js';
 import { PERMISSIONS } from './permissions.js';
+import { StaffProvisioningService } from './provisioning/staff-provisioning.service.js';
 
+const uuid = new ParseUUIDPipe({ version: '7' });
+
+/**
+ * Administration API (STAFF realm). Every action requires a STAFF session
+ * plus ops.access plus its own permission(s), checked against the database;
+ * every mutation also requires a CSRF token and is audited transactionally.
+ */
 @ApiTags('admin: authorization')
+@ApiUnauthorizedResponse({ type: ErrorBody })
+@ApiForbiddenResponse({ type: ErrorBody, description: 'Missing permission, origin or CSRF token' })
 @Controller({ path: 'admin', version: '1' })
 @AuthRealmRoute('staff')
 @UseGuards(AuthRequestGuard, SessionGuard, AuthorizationGuard)
+@RequirePermissions(PERMISSIONS.OPS_ACCESS)
 export class AdminAuthorizationController {
   constructor(
     private readonly authorization: AuthorizationService,
-    private readonly audit: AuditService,
+    private readonly identities: IdentityAdministrationService,
     private readonly provisioning: StaffProvisioningService,
-    private readonly database: DatabaseService,
-    private readonly sessions: SessionService,
+    private readonly audit: AuditService,
   ) {}
-
-  @Get('access/me')
-  @RequirePermissions(PERMISSIONS.ROLE_READ)
-  async myAccess(@CurrentPrincipal() principal: AuthPrincipal) {
-    return this.authorization.snapshot(principal.identityId);
-  }
 
   @Get('roles')
   @RequirePermissions(PERMISSIONS.ROLE_READ)
-  async roles() {
-    const roles = await this.authorization.listRoles();
-    return roles.map((role) => ({
-      ...role,
-      permissions: role.permissions.map((permission) => permission.permissionKey),
-    }));
+  roles() {
+    return this.authorization.listRoles();
+  }
+
+  @Get('identities')
+  @RequirePermissions(PERMISSIONS.IDENTITY_READ)
+  listIdentities(
+    @Query(new ZodValidationPipe(identityListQuerySchema))
+    query: z.infer<typeof identityListQuerySchema>,
+  ) {
+    return this.identities.list(query);
+  }
+
+  @Get('identities/:identityId/access')
+  @RequirePermissions(PERMISSIONS.IDENTITY_READ, PERMISSIONS.ROLE_READ)
+  identityAccess(@Param('identityId', uuid) identityId: string) {
+    return this.identities.access(identityId);
   }
 
   @Post('identities/:identityId/roles')
@@ -68,11 +91,10 @@ export class AdminAuthorizationController {
   @UseGuards(CsrfGuard)
   @RequirePermissions(PERMISSIONS.ROLE_ASSIGN)
   @ApiBody({ type: RoleMutationBody })
-  async grantRole(
-    @Param('identityId') identityId: string,
+  grantRole(
+    @Param('identityId', uuid) identityId: string,
     @CurrentPrincipal() principal: AuthPrincipal,
-    @Body(new ZodValidationPipe(roleMutationSchema))
-    body: z.infer<typeof roleMutationSchema>,
+    @Body(new ZodValidationPipe(roleMutationSchema)) body: z.infer<typeof roleMutationSchema>,
   ) {
     return this.authorization.grantRole(identityId, body.roleKey, principal, body.reason);
   }
@@ -83,12 +105,42 @@ export class AdminAuthorizationController {
   @RequirePermissions(PERMISSIONS.ROLE_ASSIGN)
   @ApiBody({ type: RoleMutationBody })
   async revokeRole(
-    @Param('identityId') identityId: string,
+    @Param('identityId', uuid) identityId: string,
     @CurrentPrincipal() principal: AuthPrincipal,
-    @Body(new ZodValidationPipe(roleMutationSchema))
-    body: z.infer<typeof roleMutationSchema>,
+    @Body(new ZodValidationPipe(roleMutationSchema)) body: z.infer<typeof roleMutationSchema>,
   ): Promise<void> {
     await this.authorization.revokeRole(identityId, body.roleKey, principal, body.reason);
+  }
+
+  @Post('identities/:identityId/status')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.IDENTITY_STATUS_MANAGE)
+  @ApiBody({ type: IdentityStatusBody })
+  setStatus(
+    @Param('identityId', uuid) identityId: string,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body(new ZodValidationPipe(identityStatusSchema)) body: z.infer<typeof identityStatusSchema>,
+  ) {
+    return this.identities.setStatus(
+      identityId,
+      AuthIdentityStatus[body.status],
+      principal,
+      body.reason,
+    );
+  }
+
+  @Post('identities/:identityId/sessions/revoke-all')
+  @HttpCode(204)
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.SESSION_REVOKE_ANY)
+  @ApiBody({ type: ReasonBody })
+  async revokeSessions(
+    @Param('identityId', uuid) identityId: string,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body(new ZodValidationPipe(reasonSchema)) body: z.infer<typeof reasonSchema>,
+  ): Promise<void> {
+    await this.identities.revokeSessions(identityId, principal, body.reason);
   }
 
   @Post('staff/invitations')
@@ -98,8 +150,7 @@ export class AdminAuthorizationController {
   @ApiBody({ type: StaffInvitationBody })
   async inviteStaff(
     @CurrentPrincipal() principal: AuthPrincipal,
-    @Body(new ZodValidationPipe(staffInvitationSchema))
-    body: z.infer<typeof staffInvitationSchema>,
+    @Body(new ZodValidationPipe(staffInvitationSchema)) body: z.infer<typeof staffInvitationSchema>,
   ) {
     const result = await this.provisioning.invite(body.email, body.roleKey, principal);
     return {
@@ -114,99 +165,39 @@ export class AdminAuthorizationController {
   @UseGuards(CsrfGuard)
   @RequirePermissions(PERMISSIONS.MFA_ENROLLMENT_AUTHORIZE)
   async authorizeMfa(
-    @Param('identityId') identityId: string,
+    @Param('identityId', uuid) identityId: string,
     @CurrentPrincipal() principal: AuthPrincipal,
   ) {
     const result = await this.provisioning.authorizeMfaEnrollment(identityId, principal);
     return { expiresAt: result.expiresAt.toISOString() };
   }
 
-  @Post('identities/:identityId/status')
-  @HttpCode(200)
-  @UseGuards(CsrfGuard)
-  @RequirePermissions(PERMISSIONS.IDENTITY_STATUS_MANAGE)
-  @ApiBody({ type: IdentityStatusBody })
-  async setStatus(
-    @Param('identityId') identityId: string,
-    @CurrentPrincipal() principal: AuthPrincipal,
-    @Body(new ZodValidationPipe(identityStatusSchema))
-    body: z.infer<typeof identityStatusSchema>,
-  ) {
-    const existing = await this.database.client.authIdentity.findUnique({
-      where: { id: identityId },
-      select: { id: true, status: true },
-    });
-    if (!existing) throw AuthorizationErrors.identityNotFound();
-
-    await this.database.client.$transaction(async (tx) => {
-      await tx.authIdentity.update({
-        where: { id: identityId },
-        data: { status: body.status as AuthIdentityStatus },
-      });
-      if (body.status !== 'ACTIVE') {
-        await this.sessions.revokeAllForIdentity(
-          tx,
-          identityId,
-          AuthSessionRevocationReason.ADMIN_ACTION,
-        );
-      }
-      await this.audit.record(
-        {
-          actor: principal,
-          action: 'IDENTITY_STATUS_CHANGED',
-          resourceType: 'auth_identity',
-          resourceId: identityId,
-          before: { status: existing.status },
-          after: { status: body.status },
-          metadata: body.reason ? { reason: body.reason } : undefined,
-        },
-        tx,
-      );
-    });
-    return { status: body.status };
-  }
-
-  @Post('identities/:identityId/sessions/revoke-all')
-  @HttpCode(204)
-  @UseGuards(CsrfGuard)
-  @RequirePermissions(PERMISSIONS.SESSION_REVOKE_ANY)
-  @ApiBody({ type: ReasonBody })
-  async revokeSessions(
-    @Param('identityId') identityId: string,
-    @CurrentPrincipal() principal: AuthPrincipal,
-    @Body(new ZodValidationPipe(reasonSchema))
-    body: z.infer<typeof reasonSchema>,
-  ): Promise<void> {
-    const exists = await this.database.client.authIdentity.findUnique({
-      where: { id: identityId },
-      select: { id: true },
-    });
-    if (!exists) throw AuthorizationErrors.identityNotFound();
-
-    await this.database.client.$transaction(async (tx) => {
-      await this.sessions.revokeAllForIdentity(
-        tx,
-        identityId,
-        AuthSessionRevocationReason.ADMIN_ACTION,
-      );
-      await this.audit.record(
-        {
-          actor: principal,
-          action: 'SESSIONS_REVOKED_BY_ADMIN',
-          resourceType: 'auth_identity',
-          resourceId: identityId,
-          metadata: body.reason ? { reason: body.reason } : undefined,
-        },
-        tx,
-      );
-    });
-  }
-
   @Get('audit')
   @RequirePermissions(PERMISSIONS.AUDIT_READ)
-  @ApiOkResponse({ description: 'Newest privileged audit events first.' })
-  auditEvents(@Query('limit') limit?: string) {
-    const parsed = limit === undefined ? 50 : Number.parseInt(limit, 10);
-    return this.audit.list(Number.isFinite(parsed) ? parsed : 50);
+  @ApiOkResponse({ description: 'Newest privileged audit events first (keyset pagination).' })
+  auditEvents(
+    @Query(new ZodValidationPipe(auditListQuerySchema)) query: z.infer<typeof auditListQuerySchema>,
+  ) {
+    return this.audit.list(query);
+  }
+}
+
+/**
+ * The caller's own roles and permissions, read from the database. Any STAFF
+ * session may read its own access (the OPS UI uses it for display only; the
+ * API re-checks every action).
+ */
+@ApiTags('admin: authorization')
+@ApiUnauthorizedResponse({ type: ErrorBody })
+@Controller({ path: 'admin/access', version: '1' })
+@AuthRealmRoute('staff')
+@UseGuards(AuthRequestGuard, SessionGuard)
+export class AdminAccessController {
+  constructor(private readonly authorization: AuthorizationService) {}
+
+  @Get('me')
+  @ApiOkResponse({ type: AccessResponse })
+  myAccess(@CurrentPrincipal() principal: AuthPrincipal): Promise<AccessResponse> {
+    return this.authorization.snapshot(principal.identityId);
   }
 }

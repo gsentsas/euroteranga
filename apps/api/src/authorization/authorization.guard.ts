@@ -7,12 +7,21 @@ import type { PermissionKey } from './permissions.js';
 
 export const REQUIRED_PERMISSIONS_KEY = 'euroteranga:required-permissions';
 
+/**
+ * Declares the permissions an action requires. Class- and method-level
+ * declarations add up (a method cannot drop a class requirement).
+ */
 export const RequirePermissions = (...permissions: PermissionKey[]) =>
   SetMetadata(REQUIRED_PERMISSIONS_KEY, permissions);
 
 /**
- * Server-side permission enforcement. Navigation visibility is never treated
- * as authorization: every protected controller action goes through this guard.
+ * Server-side permission enforcement, deny by default:
+ * - no authenticated principal → 403;
+ * - guard applied without any declared permission → 403 (a forgotten
+ *   decorator must not open an endpoint);
+ * - missing any required permission → 403.
+ * Permissions are read from the database on every request. Hiding a menu in
+ * the UI is never a substitute.
  */
 @Injectable()
 export class AuthorizationGuard implements CanActivate {
@@ -22,16 +31,16 @@ export class AuthorizationGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const required =
-      this.reflector.getAllAndOverride<readonly PermissionKey[]>(
-        REQUIRED_PERMISSIONS_KEY,
-        [context.getHandler(), context.getClass()],
-      ) ?? [];
-    if (required.length === 0) return true;
-
-    const request = context.switchToHttp().getRequest<AuthRequest>();
-    const principal = request.authPrincipal;
-    if (!principal) throw AuthorizationErrors.forbidden();
+    const required = [
+      ...new Set(
+        this.reflector.getAllAndMerge<PermissionKey[]>(REQUIRED_PERMISSIONS_KEY, [
+          context.getClass(),
+          context.getHandler(),
+        ]),
+      ),
+    ];
+    const principal = context.switchToHttp().getRequest<AuthRequest>().authPrincipal;
+    if (!principal || required.length === 0) throw AuthorizationErrors.forbidden();
     if (!(await this.authorization.hasAll(principal.identityId, required))) {
       throw AuthorizationErrors.forbidden();
     }
