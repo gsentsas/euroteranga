@@ -15,6 +15,7 @@ function env(overrides: Record<string, string> = {}) {
     AUTH_TOTP_ENCRYPTION_KEY: key(),
     AUTH_MAIL_PROVIDER: 'disabled',
     CLIENT_PUBLIC_URL: 'http://localhost:3002',
+    OPS_PUBLIC_URL: 'http://localhost:3004',
     AUTH_CUSTOMER_ORIGINS: 'http://localhost:3002',
     ...overrides,
   });
@@ -28,6 +29,7 @@ function productionEnv() {
     SMTP_HOST: 'smtp.example.test',
     AUTH_EMAIL_FROM: 'no-reply@example.test',
     CLIENT_PUBLIC_URL: 'https://client.example.test',
+    OPS_PUBLIC_URL: 'https://ops.example.test',
     AUTH_CUSTOMER_ORIGINS: 'https://client.example.test',
     AUTH_STAFF_ORIGINS: 'https://ops.example.test',
     AUTH_CREW_ORIGINS: 'https://crew.example.test',

@@ -47,6 +47,7 @@ export function integrationEnv(overrides: Record<string, string> = {}): ApiEnv {
     AUTH_CREW_ORIGINS: TEST_ORIGINS.crew,
     AUTH_MAIL_PROVIDER: 'disabled',
     CLIENT_PUBLIC_URL: TEST_ORIGINS.customer,
+    OPS_PUBLIC_URL: TEST_ORIGINS.staff,
     ...overrides,
   });
 }
@@ -64,6 +65,7 @@ export function productionLikeEnv(overrides: Record<string, string> = {}): ApiEn
     SMTP_HOST: 'smtp.example.test',
     AUTH_EMAIL_FROM: 'no-reply@example.test',
     CLIENT_PUBLIC_URL: 'https://client.example.test',
+    OPS_PUBLIC_URL: 'https://ops.example.test',
     ...overrides,
   });
 }

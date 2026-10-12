@@ -48,7 +48,7 @@ describe('authentication security controls', () => {
     });
 
     it('rejects an unknown origin and a customer origin on the staff realm', async () => {
-      const staff = await createIdentity(t.app, { realm: 'staff' });
+      const staff = await createIdentity(t.app, { realm: 'staff', enrollmentGrant: true });
       const body = JSON.stringify({ email: staff.email, password: staff.password });
       const send = (origin: string) =>
         request(t.app.getHttpServer())
@@ -185,7 +185,7 @@ describe('authentication security controls', () => {
         expect(attributes.some((attribute) => /^domain=/i.test(attribute))).toBe(false);
         expect(cookiesOf(response).et_customer_session).toBeUndefined();
 
-        const staff = await createIdentity(prod.app, { realm: 'staff' });
+        const staff = await createIdentity(prod.app, { realm: 'staff', enrollmentGrant: true });
         const challenge = await request(prod.app.getHttpServer())
           .post('/v1/auth/staff/login')
           .set('Origin', 'https://ops.example.test')

@@ -42,6 +42,11 @@ export async function createIdentity(
     email?: string;
     password?: string;
     status?: AuthIdentityStatus;
+    /**
+     * STAFF only: an administrator's first-MFA-enrollment authorization
+     * (PR-03). Without it, a STAFF identity without TOTP cannot enroll.
+     */
+    enrollmentGrant?: boolean | { expiresAt?: Date; consumedAt?: Date | null };
   },
 ): Promise<{ id: string; email: string; password: string }> {
   const email = options.email ?? uniqueEmail(options.realm);
@@ -58,6 +63,17 @@ export async function createIdentity(
     },
     select: { id: true },
   });
+  if (options.enrollmentGrant) {
+    const grant = options.enrollmentGrant === true ? {} : options.enrollmentGrant;
+    await db(app).staffEnrollmentGrant.create({
+      data: {
+        identityId: identity.id,
+        issuedAt: new Date(Date.now() - 60_000),
+        expiresAt: grant.expiresAt ?? new Date(Date.now() + 3_600_000),
+        consumedAt: grant.consumedAt ?? null,
+      },
+    });
+  }
   return { id: identity.id, email, password };
 }
 

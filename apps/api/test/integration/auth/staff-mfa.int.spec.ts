@@ -39,7 +39,7 @@ describe('staff MFA (TOTP)', () => {
 
   /** Full enrollment; returns the TOTP secret, recovery codes and session cookie. */
   async function enroll() {
-    const staff = await createIdentity(t.app, { realm: 'staff' });
+    const staff = await createIdentity(t.app, { realm: 'staff', enrollmentGrant: true });
     const step = await passwordStep(staff.email, staff.password);
     expect(step.status).toBe('MFA_ENROLLMENT_REQUIRED');
     const http = client(t.app, 'staff', step.ip);
@@ -67,7 +67,7 @@ describe('staff MFA (TOTP)', () => {
   }
 
   it('enrolls: wrong code gives no session, right code enables MFA and shows recovery codes once', async () => {
-    const staff = await createIdentity(t.app, { realm: 'staff' });
+    const staff = await createIdentity(t.app, { realm: 'staff', enrollmentGrant: true });
     const step = await passwordStep(staff.email, staff.password);
     const http = client(t.app, 'staff', step.ip);
     const start = await http.post('/v1/auth/staff/mfa/enrollment/start', {}, step.cookie);
