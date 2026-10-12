@@ -319,7 +319,7 @@ function IdentityRow({
 export function UsersAdmin() {
   const { data: me } = useGetIdentity<{ id: string }>();
   const canReadRoles = useCan('role.read');
-  const canInvite = useCan('staff.provision', 'role.assign');
+  const canInvite = useCan('identity.staff.provision', 'role.assign');
   const { run, busy, feedback, setError } = useAdminFeedback();
   const [realm, setRealm] = useState<'staff' | 'crew'>('staff');
   const [items, setItems] = useState<AdminIdentity[] | null>(null);
