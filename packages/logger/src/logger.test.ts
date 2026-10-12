@@ -141,7 +141,18 @@ describe('redactString', () => {
     );
   });
 
+  it('redacts Basic credentials too', () => {
+    expect(redactString('Authorization: Basic dXNlcjpwYXNz')).toBe(
+      `Authorization: Basic ${REDACTED}`,
+    );
+  });
+
   it('leaves ordinary URLs untouched', () => {
     expect(redactString('see https://euroteranga.com/faq')).toBe('see https://euroteranga.com/faq');
+  });
+
+  it('handles long attacker-controlled text in linear scanners', () => {
+    const value = 'a'.repeat(100_000);
+    expect(redactString(value)).toBe(value);
   });
 });
