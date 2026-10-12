@@ -23,6 +23,13 @@ const SENSITIVE_KEYS = [
   'connectionstring',
   'privatekey',
   'totpsecret',
+  // PR-02 authentication material.
+  'totp',
+  'otp',
+  'recoverycode',
+  'csrf',
+  'challenge',
+  'sessiontoken',
 ];
 
 const MAX_DEPTH = 8;
@@ -42,9 +49,13 @@ function isSensitiveKey(key: string): boolean {
  * "postgresql://[REDACTED]@host/db". Bearer tokens are masked as well.
  */
 export function redactString(value: string): string {
-  return value
-    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+(:[^\s/@]*)?@/gi, `$1${REDACTED}@`)
-    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/g, `$1 ${REDACTED}`);
+  return (
+    value
+      .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+(:[^\s/@]*)?@/gi, `$1${REDACTED}@`)
+      .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/g, `$1 ${REDACTED}`)
+      // otpauth:// URIs carry the TOTP secret as a query parameter.
+      .replace(/([?&]secret=)[^&\s"']+/gi, `$1${REDACTED}`)
+  );
 }
 
 export interface RedactOptions {

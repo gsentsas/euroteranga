@@ -21,9 +21,14 @@
     "@nestjs/core": "catalog:",
     "@nestjs/platform-express": "catalog:",
     "@nestjs/swagger": "catalog:",
+    "@node-rs/argon2": "catalog:",
+    "cookie": "catalog:",
     "helmet": "catalog:",
+    "nodemailer": "catalog:",
+    "otpauth": "catalog:",
     "reflect-metadata": "catalog:",
-    "rxjs": "catalog:"
+    "rxjs": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@nestjs/testing": "catalog:",
