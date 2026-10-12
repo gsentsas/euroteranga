@@ -47,6 +47,7 @@ enum AuthSessionRevocationReason {
   LOGOUT_ALL
   PASSWORD_CHANGED
   PASSWORD_RESET
+  ADMIN_ACTION
 
   @@map("auth_session_revocation_reason")
 }
