@@ -27,7 +27,7 @@ export class PasswordChangeService {
     private readonly securityLog: SecurityEventLogger,
   ) {}
 
-  async changePassword(
+  async rotateCredential(
     principal: AuthPrincipal,
     currentPassword: string,
     newPassword: string,
