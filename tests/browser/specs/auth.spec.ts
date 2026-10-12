@@ -57,7 +57,7 @@ test('client: wrong password shows a generic, focused error', async ({ page }) =
     .getByLabel('Mot de passe', { exact: true })
     .fill('definitely not the right passphrase');
   await page.getByRole('button', { name: 'Se connecter' }).click();
-  const alert = page.getByRole('alert');
+  const alert = page.getByRole('alert').filter({ hasText: 'Email ou mot de passe incorrect.' });
   await expect(alert).toHaveText('Email ou mot de passe incorrect.');
   await expect(alert).toBeFocused();
 });
