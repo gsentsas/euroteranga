@@ -1,0 +1,17 @@
+{
+  "name": "@euroteranga/browser-tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Foundation browser tests (Playwright) for the six frontends",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

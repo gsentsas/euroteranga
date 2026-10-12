@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Same policy as manual upgrades: let new releases age before adoption.
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      nestjs:
+        patterns: ['@nestjs/*']
+      nextjs-react:
+        patterns: ['next', '@next/*', 'react', 'react-dom', '@types/react', '@types/react-dom']
+      prisma:
+        patterns: ['prisma', '@prisma/*']
+      refine:
+        patterns: ['@refinedev/*', '@tanstack/react-query']
+      dev-tooling:
+        dependency-type: development
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: docker
+    directory: /infrastructure/dev
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1

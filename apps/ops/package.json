@@ -1,0 +1,30 @@
+{
+  "name": "@euroteranga/ops",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3004",
+    "build": "next build",
+    "start": "next start --port 3004",
+    "typecheck": "next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@euroteranga/config": "workspace:*",
+    "@euroteranga/ui": "workspace:*",
+    "@next/env": "catalog:",
+    "@refinedev/core": "catalog:",
+    "@refinedev/nextjs-router": "catalog:",
+    "@tanstack/react-query": "catalog:",
+    "next": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:"
+  }
+}

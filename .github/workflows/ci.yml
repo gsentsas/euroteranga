@@ -1,0 +1,181 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Least privilege: jobs only read the repository. No job uses secrets, so pull
+# requests from forks run with the same (empty) secret set.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+  CHECKPOINT_DISABLE: '1'
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+  # Public frontend configuration for CI builds (no secret involved).
+  NEXT_PUBLIC_APP_ENV: ci
+  NEXT_PUBLIC_API_BASE_URL: http://localhost:4000
+
+jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-workspace
+      - name: Build shared packages (type declarations)
+        run: pnpm build:packages
+      - name: Lint
+        run: pnpm lint
+      - name: Format
+        run: pnpm format:check
+      - name: Typecheck
+        run: pnpm typecheck
+
+  database:
+    name: database
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16.15-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+        env:
+          POSTGRES_USER: euroteranga
+          # Throwaway credential for the ephemeral CI container only.
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: euroteranga_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U euroteranga -d euroteranga_ci"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://euroteranga:ci-only-password@localhost:5432/euroteranga_ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-workspace
+      - name: Prisma validate
+        run: pnpm db:validate
+      - name: Migration deploy
+        run: pnpm db:migrate
+      - name: Migration deploy is idempotent
+        run: pnpm db:migrate
+      - name: Migration status is up to date
+        run: pnpm db:migrate:status
+      - name: Database connectivity (SELECT 1 through Prisma)
+        run: echo 'SELECT 1;' | pnpm --filter @euroteranga/database exec prisma db execute --stdin
+
+  test:
+    name: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16.15-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+        env:
+          POSTGRES_USER: euroteranga
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: euroteranga_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U euroteranga -d euroteranga_ci"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://euroteranga:ci-only-password@localhost:5432/euroteranga_ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-workspace
+      - name: Build shared packages
+        run: pnpm build:packages
+      - name: Apply migrations
+        run: pnpm db:migrate
+      - name: Unit tests
+        run: pnpm test:unit
+      - name: Integration tests (real PostgreSQL)
+        run: pnpm test:integration
+
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-workspace
+      - name: Build packages and all seven applications
+        run: pnpm build
+      - name: Verify every application produced a build
+        run: |
+          for app in web booking client tracking ops crew; do
+            test -f "apps/$app/.next/BUILD_ID" || { echo "::error::apps/$app was not built"; exit 1; }
+            echo "apps/$app: built"
+          done
+          test -f apps/api/dist/main.js || { echo "::error::apps/api was not built"; exit 1; }
+          echo "apps/api: built"
+
+  browser:
+    name: browser
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-workspace
+      - name: Build packages and frontends
+        run: |
+          pnpm build:packages
+          pnpm build:frontends
+      - name: Install Chromium for Playwright
+        run: pnpm --filter @euroteranga/browser-tests exec playwright install --with-deps chromium
+      - name: Browser tests
+        run: pnpm test:e2e
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: tests/browser/playwright-report/
+          retention-days: 7
+
+  security:
+    name: security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # scan the full history, not only the last commit
+      - name: Forbidden files and quality-gate bypass markers
+        run: bash scripts/check-forbidden-files.sh
+      - name: Secret detection (gitleaks, checksum-verified binary)
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git --redact --verbose --config .gitleaks.toml .
+      - uses: ./.github/actions/setup-workspace
+      - name: Dependency audit (fails on high or critical)
+        # Documented exceptions: docs/security/dependency-audit.md
+        run: pnpm audit:dependencies

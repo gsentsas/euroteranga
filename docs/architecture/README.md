@@ -3,10 +3,9 @@
 > These are target architectural decisions.
 > Implementation starts in PR-01 Foundation.
 >
-> Nothing described in this document is implemented yet. Exact versions of
-> runtimes, frameworks and tools are intentionally not specified: they will be
-> selected and pinned during PR-01 after verifying current stable releases,
-> mutual compatibility and compatibility with the target environment.
+> PR-01 implements the technical foundation only (see below). No business
+> feature is implemented yet. Pinned toolchain versions are recorded in
+> `package.json`, `.node-version` and the catalog in `pnpm-workspace.yaml`.
 
 ## Vision
 
@@ -32,15 +31,15 @@ Web / Booking / Client / Tracking
 
 ## Validated target decisions
 
-| Area           | Decision                                        |
-| -------------- | ----------------------------------------------- |
-| Style          | Modular Monolith                                |
-| Frontend       | Next.js / React / TypeScript                    |
-| Back-office    | Refine Community                                |
-| Backend        | NestJS / TypeScript / REST / OpenAPI            |
-| Database       | PostgreSQL                                      |
-| Files          | S3-compatible object storage                    |
-| Infrastructure | Plesk target environment                        |
+| Area           | Decision                             |
+| -------------- | ------------------------------------ |
+| Style          | Modular Monolith                     |
+| Frontend       | Next.js / React / TypeScript         |
+| Back-office    | Refine Community                     |
+| Backend        | NestJS / TypeScript / REST / OpenAPI |
+| Database       | PostgreSQL                           |
+| Files          | S3-compatible object storage         |
+| Infrastructure | Plesk target environment             |
 
 ## Core principles
 
@@ -58,16 +57,39 @@ Web / Booking / Client / Tracking
 - **No microservices at launch.** Modules are separated inside one deployable
   backend; extraction is considered only when a proven need exists.
 
-## Decisions still open
+## Foundation (PR-01)
 
-To be documented as Architecture Decision Records (`docs/adr/`) during PR-01
-and later:
+```
+apps/
+  web, booking, client, tracking, crew   Next.js (App Router) skeletons
+  ops                                    Next.js + Refine Community skeleton
+  api                                    NestJS Core API: config, database, health
+packages/
+  config     Zod-validated environment (API and NEXT_PUBLIC_*), Next.js defaults
+  logger     Structured JSON logger with redaction
+  database   Prisma 7 schema (no models yet), migrations, client factory
+  ui         Text brand mark, foundation page shell, design tokens
+tests/browser   Playwright tests for the six frontends
+infrastructure/dev   PostgreSQL for local development only
+```
 
-- deployment model on Plesk (Passenger, systemd services or Docker Compose);
-- monorepo tooling;
-- ORM and migration strategy;
-- object storage provider;
-- authentication and session architecture;
-- offline crew synchronisation;
-- payment provider abstraction;
-- regulatory rule versioning.
+Request path in the API:
+
+```
+request → X-Request-Id (accepted or generated) → Helmet headers → CORS allow-list
+        → controller → service → Prisma (PostgreSQL)
+errors  → { code, message, requestId } (fixed public messages, details only in redacted logs)
+```
+
+Health probes: `/health` (basic), `/health/live` (process alive),
+`/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
+
+## Decisions
+
+Recorded in [`docs/adr/`](../adr/README.md): modular monolith (ADR-001),
+PostgreSQL and Prisma (ADR-002), NestJS (ADR-003), Refine (ADR-004), Plesk
+deployment target — not yet decided (ADR-010), monorepo tooling (ADR-011).
+
+Still open: object storage provider, authentication and sessions, offline crew
+synchronisation, payment provider abstraction, regulatory rule versioning, and
+the production deployment model.

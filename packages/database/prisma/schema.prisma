@@ -1,0 +1,16 @@
+// EURO TERANGA — database schema.
+//
+// PR-01 Foundation intentionally defines no models: business tables are
+// introduced by the pull requests that own each domain. The connection URL is
+// provided by prisma.config.ts from the DATABASE_URL environment variable.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}

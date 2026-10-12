@@ -31,13 +31,13 @@ merge
 
 ## Branch naming
 
-| Prefix      | Use                                   |
-| ----------- | ------------------------------------- |
-| `feat/`     | New functionality                     |
-| `fix/`      | Bug fix                               |
-| `security/` | Security fix or hardening             |
-| `chore/`    | Tooling, maintenance                  |
-| `docs/`     | Documentation only                    |
+| Prefix      | Use                       |
+| ----------- | ------------------------- |
+| `feat/`     | New functionality         |
+| `fix/`      | Bug fix                   |
+| `security/` | Security fix or hardening |
+| `chore/`    | Tooling, maintenance      |
+| `docs/`     | Documentation only        |
 
 Examples:
 
@@ -52,15 +52,15 @@ security/private-file-access
 
 Use [Conventional Commits](https://www.conventionalcommits.org/) prefixes:
 
-| Prefix      | Use                                             |
-| ----------- | ----------------------------------------------- |
-| `feat:`     | New functionality                               |
-| `fix:`      | Bug fix                                         |
-| `chore:`    | Tooling, dependencies, maintenance              |
-| `docs:`     | Documentation                                   |
-| `test:`     | Tests only                                      |
-| `security:` | Security fix or hardening                       |
-| `refactor:` | Code change without behaviour change            |
+| Prefix      | Use                                  |
+| ----------- | ------------------------------------ |
+| `feat:`     | New functionality                    |
+| `fix:`      | Bug fix                              |
+| `chore:`    | Tooling, dependencies, maintenance   |
+| `docs:`     | Documentation                        |
+| `test:`     | Tests only                           |
+| `security:` | Security fix or hardening            |
+| `refactor:` | Code change without behaviour change |
 
 Example: `fix: reject duplicate payment webhook events`
 
