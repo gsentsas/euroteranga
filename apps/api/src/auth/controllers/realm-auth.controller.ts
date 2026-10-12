@@ -170,7 +170,7 @@ export class RealmAuthController {
     @Body(new ZodValidationPipe(changePasswordSchema)) body: z.infer<typeof changePasswordSchema>,
     @Res({ passthrough: true }) response: Response,
   ): Promise<AuthStatusResponse> {
-    const session = await this.passwordChange.changePassword(
+    const session = await this.passwordChange.rotateCredential(
       principal,
       body.currentPassword,
       body.newPassword,
