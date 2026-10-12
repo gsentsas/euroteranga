@@ -14,7 +14,7 @@ must be bound to an explicit administrative decision.
 ## Decision
 
 - No public STAFF/CREW registration. STAFF accounts are created by
-  **invitation** from an administrator holding `staff.provision` and
+  **invitation** from an administrator holding `identity.staff.provision` and
   `role.assign`, with an initial role subject to anti-escalation.
 - The invitation is a single-use random token (only its SHA-256 is stored),
   delivered as `OPS_PUBLIC_URL/invitation#token=…` (fragment: never sent to

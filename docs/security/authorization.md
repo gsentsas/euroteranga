@@ -32,7 +32,7 @@ ADR-017 to ADR-020. This document contains no secret value.
 | `session.revoke.any`       | Closing every session of another identity                  |
 | `role.read`                | Reading the role catalogue                                 |
 | `role.assign`              | Granting and revoking roles (subject to anti-escalation)   |
-| `staff.provision`          | Inviting STAFF members                                     |
+| `identity.staff.provision` | Inviting STAFF members                                     |
 | `mfa.enrollment.authorize` | Authorizing a first TOTP enrollment again                  |
 | `audit.read`               | Reading the audit trail                                    |
 | `privileged.manage`        | Acting on privileged roles and on their holders            |
@@ -95,7 +95,7 @@ same transaction; reactivation creates no session.
 
 There is **no public STAFF or CREW registration** and no bootstrap endpoint.
 
-1. An administrator with `staff.provision` and `role.assign` invites an
+1. An administrator with `identity.staff.provision` and `role.assign` invites an
    address with an initial STAFF role (anti-escalation applies). The API
    creates a PENDING identity, stores only the SHA-256 of a random token and
    sends `OPS_PUBLIC_URL/invitation#token=…` (3 days by default,
@@ -135,19 +135,19 @@ There is **no public STAFF or CREW registration** and no bootstrap endpoint.
 
 All under `/v1/admin`, STAFF session, `ops.access` plus:
 
-| Method | Path                                         | Permission(s)                     |
-| ------ | -------------------------------------------- | --------------------------------- |
-| GET    | `/access/me`                                 | session only (own access)         |
-| GET    | `/roles`                                     | `role.read`                       |
-| GET    | `/identities?realm=staff\|crew&cursor&limit` | `identity.read`                   |
-| GET    | `/identities/:id/access`                     | `identity.read`, `role.read`      |
-| POST   | `/identities/:id/roles`                      | `role.assign` (+ CSRF)            |
-| POST   | `/identities/:id/roles/revoke`               | `role.assign` (+ CSRF)            |
-| POST   | `/identities/:id/status`                     | `identity.status.manage` (+ CSRF) |
-| POST   | `/identities/:id/sessions/revoke-all`        | `session.revoke.any` (+ CSRF)     |
-| POST   | `/staff/invitations`                         | `staff.provision`, `role.assign`  |
-| POST   | `/staff/:id/mfa/enrollment-authorization`    | `mfa.enrollment.authorize`        |
-| GET    | `/audit?cursor&limit`                        | `audit.read`                      |
+| Method | Path                                         | Permission(s)                             |
+| ------ | -------------------------------------------- | ----------------------------------------- |
+| GET    | `/access/me`                                 | session only (own access)                 |
+| GET    | `/roles`                                     | `role.read`                               |
+| GET    | `/identities?realm=staff\|crew&cursor&limit` | `identity.read`                           |
+| GET    | `/identities/:id/access`                     | `identity.read`, `role.read`              |
+| POST   | `/identities/:id/roles`                      | `role.assign` (+ CSRF)                    |
+| POST   | `/identities/:id/roles/revoke`               | `role.assign` (+ CSRF)                    |
+| POST   | `/identities/:id/status`                     | `identity.status.manage` (+ CSRF)         |
+| POST   | `/identities/:id/sessions/revoke-all`        | `session.revoke.any` (+ CSRF)             |
+| POST   | `/staff/invitations`                         | `identity.staff.provision`, `role.assign` |
+| POST   | `/staff/:id/mfa/enrollment-authorization`    | `mfa.enrollment.authorize`                |
+| GET    | `/audit?cursor&limit`                        | `audit.read`                              |
 
 Public: `POST /v1/auth/staff/invitation/accept` (rate limited per IP).
 
