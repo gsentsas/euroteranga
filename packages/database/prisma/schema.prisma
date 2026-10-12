@@ -1,10 +1,8 @@
 // EURO TERANGA — database schema.
 //
 // Business tables are introduced by the pull requests that own each domain.
-// PR-02 adds authentication only: identities able to authenticate, their
-// credentials, sessions and single-use tokens. No role or permission exists
-// yet (PR-03). Tables and columns use snake_case; all timestamps are
-// timestamptz (UTC). The connection URL comes from prisma.config.ts.
+// Tables and columns use snake_case; all timestamps are timestamptz (UTC).
+// The connection URL comes from prisma.config.ts.
 
 generator client {
   provider            = "prisma-client"
@@ -50,6 +48,23 @@ enum AuthSessionRevocationReason {
   ADMIN_ACTION
 
   @@map("auth_session_revocation_reason")
+}
+
+enum CheckpointType {
+  BORDER
+  FERRY_TERMINAL
+  PORT
+  TECHNICAL
+
+  @@map("checkpoint_type")
+}
+
+enum RouteVersionStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+
+  @@map("route_version_status")
 }
 
 /// An identity able to authenticate in exactly one realm. It is not a
@@ -354,4 +369,125 @@ model StaffEnrollmentGrant {
 
   @@index([expiresAt])
   @@map("staff_enrollment_grant")
+}
+
+/// ISO country catalogue used by the transport network. Countries are
+/// deactivated rather than physically deleted through the API.
+model Country {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  iso2      String   @unique @db.VarChar(2)
+  iso3      String   @unique @db.VarChar(3)
+  name      String   @db.VarChar(160)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  stops       Stop[]
+  checkpoints Checkpoint[]
+
+  @@index([active, id])
+  @@map("country")
+}
+
+/// A passenger-facing point at which boarding or alighting may be allowed.
+model Stop {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  code      String   @unique @db.VarChar(32)
+  name      String   @db.VarChar(160)
+  countryId String   @map("country_id") @db.Uuid
+  locality  String   @db.VarChar(128)
+  latitude  Decimal  @db.Decimal(9, 6)
+  longitude Decimal  @db.Decimal(9, 6)
+  timezone  String   @db.VarChar(64)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  country   Country         @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  waypoints RouteWaypoint[]
+
+  @@index([countryId])
+  @@index([active, id])
+  @@map("stop")
+}
+
+/// An operational network point. Regulatory and customs rules deliberately
+/// do not live on this record.
+model Checkpoint {
+  id        String         @id @default(uuid(7)) @db.Uuid
+  code      String         @unique @db.VarChar(32)
+  name      String         @db.VarChar(160)
+  countryId String         @map("country_id") @db.Uuid
+  type      CheckpointType
+  locality  String         @db.VarChar(128)
+  latitude  Decimal        @db.Decimal(9, 6)
+  longitude Decimal        @db.Decimal(9, 6)
+  timezone  String         @db.VarChar(64)
+  active    Boolean        @default(true)
+  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  country   Country         @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  waypoints RouteWaypoint[]
+
+  @@index([countryId])
+  @@index([type])
+  @@index([active, id])
+  @@map("checkpoint")
+}
+
+/// Stable commercial route identity. Its geography belongs to versions.
+model Route {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  code      String   @unique @db.VarChar(32)
+  name      String   @db.VarChar(160)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  versions RouteVersion[]
+
+  @@index([active, id])
+  @@map("route")
+}
+
+/// Ordered, immutable-once-published definition of a commercial route.
+/// Partial unique indexes and lifecycle triggers live in the PR-04 migration.
+model RouteVersion {
+  id          String             @id @default(uuid(7)) @db.Uuid
+  routeId     String             @map("route_id") @db.Uuid
+  version     Int
+  status      RouteVersionStatus @default(DRAFT)
+  publishedAt DateTime?          @map("published_at") @db.Timestamptz(3)
+  retiredAt   DateTime?          @map("retired_at") @db.Timestamptz(3)
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  route     Route           @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  waypoints RouteWaypoint[]
+
+  @@unique([routeId, version])
+  @@index([status])
+  @@map("route_version")
+}
+
+/// One position in a route version. Exactly one of stop/checkpoint is set;
+/// the database also forbids passenger activity at checkpoint waypoints.
+model RouteWaypoint {
+  id                String  @id @default(uuid(7)) @db.Uuid
+  routeVersionId    String  @map("route_version_id") @db.Uuid
+  sequence          Int
+  stopId            String? @map("stop_id") @db.Uuid
+  checkpointId      String? @map("checkpoint_id") @db.Uuid
+  boardingAllowed   Boolean @default(false) @map("boarding_allowed")
+  alightingAllowed  Boolean @default(false) @map("alighting_allowed")
+
+  routeVersion RouteVersion @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  stop         Stop?        @relation(fields: [stopId], references: [id], onDelete: Restrict)
+  checkpoint   Checkpoint?  @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
+
+  @@unique([routeVersionId, sequence])
+  @@index([stopId])
+  @@index([checkpointId])
+  @@map("route_waypoint")
 }

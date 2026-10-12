@@ -39,6 +39,16 @@ export const FIXTURES = {
   get superAdmin(): Fixture {
     return { realm: 'STAFF', email: runScoped('super-admin'), roles: ['SUPER_ADMIN'] };
   },
+  /** Dedicated identities keep fully-parallel network scenarios independent. */
+  get networkAdmin(): Fixture {
+    return { realm: 'STAFF', email: runScoped('network-admin'), roles: ['SUPER_ADMIN'] };
+  },
+  get networkReader(): Fixture {
+    return { realm: 'STAFF', email: runScoped('network-reader'), roles: ['DISPATCHER'] };
+  },
+  get networkDenied(): Fixture {
+    return { realm: 'STAFF', email: runScoped('network-denied'), roles: ['FINANCE'] };
+  },
   get auditor(): Fixture {
     return { realm: 'STAFF', email: runScoped('auditor'), roles: ['AUDITOR'] };
   },

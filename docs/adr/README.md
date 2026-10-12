@@ -21,8 +21,12 @@ written yet.
 | [ADR-018](ADR-018-privileged-audit-trail.md)           | Privileged audit trail               | Accepted |
 | [ADR-019](ADR-019-controlled-staff-provisioning.md)    | Controlled STAFF provisioning        | Accepted |
 | [ADR-020](ADR-020-initial-super-admin-bootstrap.md)    | Initial SUPER_ADMIN bootstrap        | Accepted |
+| [ADR-021](ADR-021-route-versioning.md)                 | Versioned, immutable route geometry  | Accepted |
 
 Planned: ADR-005 Object Storage, ADR-007 Offline Crew,
 ADR-008 Payment Abstraction, ADR-009 Regulatory Versioning. ADR-006
 (Authentication) is covered in detail by ADR-012 to ADR-016; authorization
 by ADR-017 to ADR-020.
+
+The first business-domain decision is ADR-021 (route versioning and immutable
+published geometry).

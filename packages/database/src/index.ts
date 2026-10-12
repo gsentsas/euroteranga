@@ -9,9 +9,20 @@ export {
   AuthIdentityStatus,
   AuthRealm,
   AuthSessionRevocationReason,
+  CheckpointType,
   Prisma,
+  RouteVersionStatus,
 } from './generated/prisma/client.js';
-export type { AuthIdentity, AuthSession } from './generated/prisma/client.js';
+export type {
+  AuthIdentity,
+  AuthSession,
+  Checkpoint,
+  Country,
+  Route,
+  RouteVersion,
+  RouteWaypoint,
+  Stop,
+} from './generated/prisma/client.js';
 
 /** Interactive transaction client, as passed to `$transaction(async (tx) => ...)`. */
 export type DatabaseTransaction = Omit<
