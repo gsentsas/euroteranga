@@ -1,0 +1,27 @@
+{
+  "name": "@euroteranga/tracking",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3003",
+    "build": "next build",
+    "start": "next start --port 3003",
+    "typecheck": "next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@euroteranga/config": "workspace:*",
+    "@euroteranga/ui": "workspace:*",
+    "@next/env": "catalog:",
+    "next": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:"
+  }
+}
