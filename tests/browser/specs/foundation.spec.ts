@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { appByName, appUrl, frontendApps } from '../apps.js';
 
-// OPS is intentionally auth-protected in PR-02; its unauthenticated redirect and\n// authenticated runtime are covered in auth.spec.ts.\nfor (const app of frontendApps.filter((candidate) => candidate.name !== 'ops')) {
+// OPS is intentionally auth-protected in PR-02; its unauthenticated redirect and
+// authenticated runtime are covered in auth.spec.ts.
+for (const app of frontendApps.filter((candidate) => candidate.name !== 'ops')) {
   test(`${app.name}: foundation page renders without runtime errors`, async ({ page }) => {
     const runtimeErrors: string[] = [];
     page.on('pageerror', (error) => runtimeErrors.push(`pageerror: ${error.message}`));
