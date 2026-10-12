@@ -1,0 +1,75 @@
+# ---------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------
+node_modules/
+.pnpm-store/
+
+# ---------------------------------------------------------------
+# Build output and caches
+# ---------------------------------------------------------------
+.next/
+out/
+dist/
+build/
+coverage/
+.turbo/
+*.tsbuildinfo
+.eslintcache
+.cache/
+
+# Test and browser automation artifacts
+playwright-report/
+test-results/
+blob-report/
+
+# ---------------------------------------------------------------
+# Environment files — never commit real values
+# Only .env.example files (placeholders) are tracked.
+# ---------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# ---------------------------------------------------------------
+# Logs
+# ---------------------------------------------------------------
+*.log
+logs/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---------------------------------------------------------------
+# Secrets, keys and certificates
+# ---------------------------------------------------------------
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.csr
+id_rsa*
+id_ed25519*
+
+# ---------------------------------------------------------------
+# Data that must never reach the repository
+# ---------------------------------------------------------------
+backups/
+dumps/
+uploads/
+private/
+*.dump
+*.sql.gz
+*.backup
+
+# ---------------------------------------------------------------
+# OS and editor files
+# ---------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
