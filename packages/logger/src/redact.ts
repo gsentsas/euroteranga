@@ -74,10 +74,7 @@ function redactUriCredentials(value: string): string {
 
     const authorityStart = marker + 3;
     let authorityEnd = authorityStart;
-    while (
-      authorityEnd < value.length &&
-      !isAuthorityTerminator(value.charCodeAt(authorityEnd))
-    ) {
+    while (authorityEnd < value.length && !isAuthorityTerminator(value.charCodeAt(authorityEnd))) {
       authorityEnd += 1;
     }
 
@@ -192,10 +189,7 @@ function redactTotpSecretQuery(value: string): string {
 
     const secretStart = index + 8;
     let secretEnd = secretStart;
-    while (
-      secretEnd < value.length &&
-      !isQueryValueTerminator(value.charCodeAt(secretEnd))
-    ) {
+    while (secretEnd < value.length && !isQueryValueTerminator(value.charCodeAt(secretEnd))) {
       secretEnd += 1;
     }
 
@@ -219,9 +213,7 @@ function redactTotpSecretQuery(value: string): string {
  * linear in the input length.
  */
 export function redactString(value: string): string {
-  return redactTotpSecretQuery(
-    redactAuthorizationCredentials(redactUriCredentials(value)),
-  );
+  return redactTotpSecretQuery(redactAuthorizationCredentials(redactUriCredentials(value)));
 }
 
 export interface RedactOptions {
