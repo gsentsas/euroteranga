@@ -28,6 +28,8 @@ export const RATE_LIMITS = {
   tokenSubmissionIp: { action: 'token:ip', limit: 30, windowMs: 15 * MINUTE },
   /** MFA verification per client address (challenges also cap attempts). */
   mfaIp: { action: 'mfa:ip', limit: 30, windowMs: 15 * MINUTE },
+  /** STAFF invitation acceptance per client address (PR-03). */
+  staffInvitationIp: { action: 'staff-invitation:ip', limit: 20, windowMs: 15 * MINUTE },
   /** Wrong current passwords per authenticated identity. */
   passwordChangeIdentity: { action: 'password-change:identity', limit: 5, windowMs: 15 * MINUTE },
 } as const satisfies Record<string, RateLimitRule>;

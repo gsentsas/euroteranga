@@ -174,7 +174,18 @@ describe('login, sessions and realm isolation', () => {
     });
 
     it('refuses a staff session obtained from a password alone', async () => {
-      const staff = await createIdentity(t.app, { realm: 'staff' });
+      // Without an enrollment grant: indistinguishable from a wrong password.
+      const unauthorized = await createIdentity(t.app, { realm: 'staff' });
+      const refused = await client(t.app, 'staff').post('/v1/auth/staff/login', {
+        email: unauthorized.email,
+        password: unauthorized.password,
+      });
+      expect(refused.status).toBe(401);
+      expect(refused.body.code).toBe('INVALID_CREDENTIALS');
+      expect(cookiesOf(refused)).toEqual({});
+
+      // With a grant: an enrollment challenge, still never a session.
+      const staff = await createIdentity(t.app, { realm: 'staff', enrollmentGrant: true });
       const response = await client(t.app, 'staff').post('/v1/auth/staff/login', {
         email: staff.email,
         password: staff.password,

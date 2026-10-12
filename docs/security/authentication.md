@@ -1,7 +1,8 @@
 # Authentication
 
 Identity and authentication for EURO TERANGA (PR-02). Authorization (roles,
-permissions) is **not** implemented yet (PR-03). Decisions are recorded in
+permissions, audit, STAFF provisioning) is described in
+[authorization.md](authorization.md) (PR-03). Decisions are recorded in
 ADR-012 to ADR-016. This document contains no secret value.
 
 ## Realms
@@ -74,7 +75,8 @@ JSON. The OpenAPI document marks passwords, tokens and codes as write-only.
 - `reset` checks the policy before consuming the token, then in one
   transaction: consume token, replace password, increment `auth_version`,
   revoke every session. The user signs in again; a notice mail is sent.
-- STAFF and CREW have no public reset flow (administrative process, PR-03).
+- STAFF and CREW have no public reset flow (administrative process; not
+  implemented yet).
 
 ## Sessions
 
@@ -90,8 +92,10 @@ JSON. The OpenAPI document marks passwords, tokens and codes as write-only.
 
 ## Staff MFA
 
-- Password correct → `MFA_REQUIRED` or `MFA_ENROLLMENT_REQUIRED` + challenge
-  cookie (5 min, single use, 5 attempts). No session yet.
+- Password correct → `MFA_REQUIRED` (TOTP enabled) or, only with a valid
+  enrollment grant, `MFA_ENROLLMENT_REQUIRED` + challenge cookie (5 min,
+  single use, 5 attempts). No session yet. Without TOTP and without a grant,
+  the answer is the generic 401 (see [authorization.md](authorization.md)).
 - TOTP RFC 6238 (SHA-1, 6 digits, 30 s, ±1 step); replay blocked by the stored
   last accepted step.
 - Secret: 160 bits, AES-256-GCM encrypted (`AUTH_TOTP_ENCRYPTION_KEY`, identity
@@ -182,12 +186,14 @@ A scheduled purge job will be added with the worker infrastructure.
 
 ## Known limitations
 
-- **Staff TOTP enrollment is trust-on-first-use**: whoever holds the password
-  of a STAFF identity that has not enrolled yet can enroll their own
-  authenticator. Until administrator-initiated enrollment exists (PR-03),
-  provision staff identities only immediately before their owner's first
-  login, over a trusted channel.
-- No authorization (RBAC) yet; no admin console (suspend, MFA reset).
+- ~~Staff TOTP enrollment is trust-on-first-use~~ — **closed in PR-03**: a
+  STAFF identity without TOTP can enroll only with a one-time enrollment
+  grant issued by an accepted invitation, the bootstrap CLI or an
+  administrator holding `mfa.enrollment.authorize` (ADR-019). Without a
+  grant, login answers the generic 401 and logs
+  `AUTH_MFA_ENROLLMENT_BLOCKED`.
+- Suspension and session revocation are available in OPS (PR-03); an
+  administrative reset of an **enabled** TOTP is not.
 - Requests rejected by the JSON body parser (malformed JSON) carry no request
   id: the parser runs before the request-id middleware.
 - The "forgot password" path for an existing account performs a few database

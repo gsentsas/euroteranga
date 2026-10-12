@@ -19,6 +19,7 @@ const validApiEnv = {
   AUTH_TOTP_ENCRYPTION_KEY: key(),
   AUTH_MAIL_PROVIDER: 'disabled',
   CLIENT_PUBLIC_URL: 'http://localhost:3002',
+  OPS_PUBLIC_URL: 'http://localhost:3004',
 };
 
 describe('loadApiEnv', () => {

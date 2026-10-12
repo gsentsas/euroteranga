@@ -8,7 +8,11 @@ import {
 } from './auth-mail.provider.js';
 
 export type AuthMailKind =
-  'email-verification' | 'password-reset' | 'account-exists' | 'password-changed';
+  | 'email-verification'
+  | 'password-reset'
+  | 'account-exists'
+  | 'password-changed'
+  | 'staff-invitation';
 
 /**
  * Composes and dispatches authentication mail.
@@ -65,6 +69,14 @@ export class AuthMailer {
     });
   }
 
+  /** STAFF invitation: the link opens the OPS back-office, token in the fragment. */
+  sendStaffInvitation(to: string, token: string, ttlMs: number): void {
+    this.dispatch(
+      'staff-invitation',
+      staffInvitationMail(this.config.opsPublicUrl, to, token, ttlMs),
+    );
+  }
+
   sendAccountExists(to: string): void {
     this.dispatch('account-exists', {
       to,
@@ -102,4 +114,31 @@ export class AuthMailer {
       });
     });
   }
+}
+
+/**
+ * STAFF invitation message. Shared by the API and the bootstrap CLI; the
+ * token travels in the URL fragment of the OPS invitation page.
+ */
+export function staffInvitationMail(
+  opsPublicUrl: string,
+  to: string,
+  token: string,
+  ttlMs: number,
+): AuthMailMessage {
+  const link = `${opsPublicUrl}/invitation#token=${token}`;
+  return {
+    to,
+    subject: 'EURO TERANGA — invitation à l’espace opérations',
+    text: [
+      'Bonjour,',
+      '',
+      'Un compte vous a été ouvert sur l’espace opérations EURO TERANGA. Pour choisir votre mot de passe, ouvrez le lien ci-dessous :',
+      link,
+      '',
+      `Ce lien est valable ${Math.round(ttlMs / 3_600_000)} heures et ne peut être utilisé qu'une fois.`,
+      'À votre première connexion, vous configurerez la double authentification (application TOTP).',
+      "Si vous n'attendiez pas cette invitation, ignorez ce message.",
+    ].join('\n'),
+  };
 }

@@ -1,13 +1,21 @@
 'use client';
 
-import { FormAlert, PasswordField, SubmitButton, TextField, useFormSubmit } from '@euroteranga/ui';
-import { useRouter } from 'next/navigation';
+import {
+  FormAlert,
+  FormStatus,
+  PasswordField,
+  SubmitButton,
+  TextField,
+  useFormSubmit,
+} from '@euroteranga/ui';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { auth } from '../lib/auth';
 
 /** Step 1 of 2: a correct password only leads to the second factor. */
 export function StaffLoginForm() {
   const router = useRouter();
+  const activated = useSearchParams().get('compte') === 'active';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +32,13 @@ export function StaffLoginForm() {
 
   return (
     <form className="et-form" onSubmit={submit} aria-label="Connexion opérations">
+      {activated ? (
+        <FormStatus>
+          <p>
+            Votre compte est activé. Connectez-vous pour configurer la vérification en deux étapes.
+          </p>
+        </FormStatus>
+      ) : null}
       <FormAlert message={error} />
       <TextField
         label="Adresse e-mail"

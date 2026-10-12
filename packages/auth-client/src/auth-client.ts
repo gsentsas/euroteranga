@@ -23,6 +23,55 @@ export interface SessionInfo {
 
 export type StaffMfaProof = { code: string } | { recoveryCode: string };
 
+export interface AccessInfo {
+  roles: string[];
+  permissions: string[];
+}
+
+export interface AdminRole {
+  key: string;
+  name: string;
+  description: string;
+  realm: string;
+  privileged: boolean;
+  system: boolean;
+  permissions: string[];
+}
+
+export interface AdminIdentity {
+  id: string;
+  realm: string;
+  email: string;
+  status: 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'DISABLED';
+  emailVerifiedAt: string | null;
+  roles: string[];
+  mfaEnabled: boolean;
+  createdAt: string;
+}
+
+export interface AdminAuditEvent {
+  id: string;
+  occurredAt: string;
+  actor: { id: string; email: string; realm: string } | null;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  requestId: string | null;
+}
+
+export interface Page<T> {
+  items: T[];
+  nextCursor: string | null;
+}
+
+function query(values: Record<string, string | number | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined) params.set(key, String(value));
+  }
+  return params.toString();
+}
+
 const NETWORK_ERROR: ApiError = {
   status: 0,
   code: 'NETWORK_ERROR',
@@ -150,6 +199,73 @@ export function createAuthClient(baseUrl: string) {
         '/v1/auth/staff/mfa/enrollment/confirm',
         { body: { code } },
       ),
+
+    acceptStaffInvitation: (token: string, newPassword: string) =>
+      call<{ status: 'STAFF_INVITATION_ACCEPTED' }>('POST', '/v1/auth/staff/invitation/accept', {
+        body: { token, newPassword },
+      }),
+
+    /**
+     * Administration API (STAFF session). Permissions returned by `access`
+     * are for display only: the API re-checks every call.
+     */
+    admin: {
+      access: () => call<AccessInfo>('GET', '/v1/admin/access/me'),
+      roles: () => call<AdminRole[]>('GET', '/v1/admin/roles'),
+      identities: (options: { realm: 'staff' | 'crew'; cursor?: string; limit?: number }) =>
+        call<Page<AdminIdentity>>(
+          'GET',
+          `/v1/admin/identities?${query({ realm: options.realm, cursor: options.cursor, limit: options.limit })}`,
+        ),
+      audit: (options: { cursor?: string; limit?: number } = {}) =>
+        call<Page<AdminAuditEvent>>('GET', `/v1/admin/audit?${query(options)}`),
+      grantRole: (identityId: string, roleKey: string, reason?: string) =>
+        withCsrf<unknown>('staff', `/v1/admin/identities/${encodeURIComponent(identityId)}/roles`, {
+          roleKey,
+          ...(reason ? { reason } : {}),
+        }),
+      revokeRole: (identityId: string, roleKey: string, reason?: string) =>
+        withCsrf<void>(
+          'staff',
+          `/v1/admin/identities/${encodeURIComponent(identityId)}/roles/revoke`,
+          {
+            roleKey,
+            ...(reason ? { reason } : {}),
+          },
+        ),
+      setStatus: (
+        identityId: string,
+        status: 'ACTIVE' | 'SUSPENDED' | 'DISABLED',
+        reason?: string,
+      ) =>
+        withCsrf<{ status: string }>(
+          'staff',
+          `/v1/admin/identities/${encodeURIComponent(identityId)}/status`,
+          {
+            status,
+            ...(reason ? { reason } : {}),
+          },
+        ),
+      revokeSessions: (identityId: string) =>
+        withCsrf<void>(
+          'staff',
+          `/v1/admin/identities/${encodeURIComponent(identityId)}/sessions/revoke-all`,
+        ),
+      inviteStaff: (email: string, roleKey: string) =>
+        withCsrf<{ status: string; identityId: string; expiresAt: string }>(
+          'staff',
+          '/v1/admin/staff/invitations',
+          {
+            email,
+            roleKey,
+          },
+        ),
+      authorizeMfaEnrollment: (identityId: string) =>
+        withCsrf<{ expiresAt: string }>(
+          'staff',
+          `/v1/admin/staff/${encodeURIComponent(identityId)}/mfa/enrollment-authorization`,
+        ),
+    },
   };
 }
 

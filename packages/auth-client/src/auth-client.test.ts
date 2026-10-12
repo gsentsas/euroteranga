@@ -105,3 +105,22 @@ describe('auth client', () => {
     expect(storage.getItem).not.toHaveBeenCalled();
   });
 });
+
+describe('admin client', () => {
+  it('sends admin mutations with an in-memory CSRF token and encodes path parameters', async () => {
+    const calls = mockFetch([{ status: 200, body: { csrfToken: 'v1.1.n.m' } }, { status: 204 }]);
+    const result = await createAuthClient('http://api.test').admin.revokeSessions('id/../x');
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.url).toBe('http://api.test/v1/auth/staff/csrf');
+    expect(calls[1]?.url).toBe(
+      'http://api.test/v1/admin/identities/id%2F..%2Fx/sessions/revoke-all',
+    );
+    expect((calls[1]?.init.headers as Record<string, string>)['X-CSRF-Token']).toBe('v1.1.n.m');
+  });
+
+  it('builds paginated queries without undefined values', async () => {
+    const calls = mockFetch([{ status: 200, body: { items: [], nextCursor: null } }]);
+    await createAuthClient('http://api.test').admin.identities({ realm: 'crew', limit: 20 });
+    expect(calls[0]?.url).toBe('http://api.test/v1/admin/identities?realm=crew&limit=20');
+  });
+});

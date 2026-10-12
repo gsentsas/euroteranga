@@ -158,6 +158,7 @@ jobs:
       AUTH_CREW_ORIGINS: http://localhost:3005
       AUTH_MAIL_PROVIDER: disabled
       CLIENT_PUBLIC_URL: http://localhost:3002
+      OPS_PUBLIC_URL: http://localhost:3004
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

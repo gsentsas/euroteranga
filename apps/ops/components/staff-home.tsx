@@ -1,15 +1,22 @@
 'use client';
 
-import { Authenticated, useGetIdentity, useLogout } from '@refinedev/core';
+import { useGetIdentity, useLogout } from '@refinedev/core';
+import { useAccess } from './staff-access';
 
-function StaffSession() {
+/** Shown inside OpsShell, i.e. for a STAFF session holding `ops.access`. */
+export function StaffHome() {
   const { data: identity } = useGetIdentity<{ id: string; email: string }>();
   const { mutate: logout, isPending } = useLogout();
+  const state = useAccess();
+  const roles = state.status === 'ready' ? state.access.roles : [];
   return (
     <section aria-labelledby="staff-session-title">
       <h2 id="staff-session-title">Session</h2>
       <p>
         Connecté en tant que <strong data-testid="session-email">{identity?.email ?? '…'}</strong>.
+      </p>
+      <p>
+        Rôles : <span data-testid="session-roles">{roles.length ? roles.join(', ') : 'aucun'}</span>
       </p>
       <p>
         Le back-office des opérations n’est pas encore disponible. Aucune donnée opérationnelle
@@ -19,18 +26,5 @@ function StaffSession() {
         Se déconnecter
       </button>
     </section>
-  );
-}
-
-/** Rendered only for a valid STAFF session (checked by the API). */
-export function StaffHome() {
-  return (
-    <Authenticated
-      key="ops-home"
-      redirectOnFail="/connexion"
-      loading={<p role="status">Vérification de la session…</p>}
-    >
-      <StaffSession />
-    </Authenticated>
   );
 }

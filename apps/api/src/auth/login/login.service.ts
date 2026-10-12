@@ -52,6 +52,7 @@ export class LoginService {
         authVersion: true,
         passwordCredential: { select: { passwordHash: true } },
         mfaTotpCredential: { select: { enabledAt: true } },
+        staffEnrollmentGrant: { select: { expiresAt: true, consumedAt: true } },
       },
     });
 
@@ -74,6 +75,22 @@ export class LoginService {
 
     if (this.config.realms[realm].mfaRequired) {
       const enrolled = Boolean(identity.mfaTotpCredential?.enabledAt);
+      if (!enrolled) {
+        const grant = identity.staffEnrollmentGrant;
+        const enrollmentAuthorized =
+          Boolean(grant) && grant?.consumedAt === null && grant.expiresAt > new Date();
+        if (!enrollmentAuthorized) {
+          await this.rateLimits.increment(RATE_LIMITS.loginIdentity, subject);
+          this.securityLog.record('AUTH_MFA_ENROLLMENT_BLOCKED', {
+            realm,
+            identityId: identity.id,
+            ip,
+          });
+          // Keep the public result indistinguishable from invalid credentials:
+          // password knowledge alone must never reveal or create MFA enrollment authority.
+          throw AuthErrors.invalidCredentials();
+        }
+      }
       const type = enrolled ? AuthChallengeType.MFA_LOGIN : AuthChallengeType.MFA_ENROLLMENT;
       const challenge = await this.challenges.create(identity.id, type);
       this.securityLog.record('AUTH_MFA_CHALLENGE_ISSUED', {
