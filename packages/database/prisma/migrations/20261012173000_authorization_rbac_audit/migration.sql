@@ -1,5 +1,7 @@
 -- PR-03 Authorization, audit and controlled STAFF provisioning.
 
+ALTER TYPE "auth_session_revocation_reason" ADD VALUE 'ADMIN_ACTION';
+
 CREATE TABLE "authorization_permission" (
   "key" VARCHAR(96) NOT NULL,
   "description" VARCHAR(255) NOT NULL,
