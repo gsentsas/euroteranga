@@ -76,6 +76,15 @@ model AuthIdentity {
   mfaTotpCredential       MfaTotpCredential?
   mfaRecoveryCodes        MfaRecoveryCode[]
 
+  roleAssignments         AuthorizationRoleAssignment[] @relation("RoleAssignmentIdentity")
+  roleGrantsIssued        AuthorizationRoleAssignment[] @relation("RoleAssignmentGrantedBy")
+  roleRevocationsIssued   AuthorizationRoleAssignment[] @relation("RoleAssignmentRevokedBy")
+  auditEvents             AuditEvent[]                  @relation("AuditActor")
+  staffInvitations        StaffInvitation[]             @relation("StaffInvitationIdentity")
+  staffInvitationsCreated StaffInvitation[]             @relation("StaffInvitationCreatedBy")
+  staffEnrollmentGrant    StaffEnrollmentGrant?         @relation("StaffEnrollmentIdentity")
+  staffEnrollmentGrantsIssued StaffEnrollmentGrant[]    @relation("StaffEnrollmentIssuedBy")
+
   // The same address may exist in two realms as two unrelated identities.
   @@unique([realm, normalizedEmail])
   @@map("auth_identity")
@@ -214,4 +223,126 @@ model AuthRateLimitBucket {
   @@id([key, windowStart])
   @@index([expiresAt])
   @@map("auth_rate_limit_bucket")
+}
+
+
+/// Atomic permission enforced by the API. Permissions are seeded by migration
+/// and referenced by stable machine keys, never by display labels.
+model AuthorizationPermission {
+  key         String   @id @db.VarChar(96)
+  description String   @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  roles AuthorizationRolePermission[]
+
+  @@map("authorization_permission")
+}
+
+/// Named collection of permissions. System roles are seeded and immutable
+/// through PR-03 APIs; later custom-role support can build on this model.
+model AuthorizationRole {
+  key         String   @id @db.VarChar(64)
+  name        String   @db.VarChar(96)
+  description String   @db.VarChar(255)
+  system      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  permissions AuthorizationRolePermission[]
+  assignments AuthorizationRoleAssignment[]
+
+  @@map("authorization_role")
+}
+
+model AuthorizationRolePermission {
+  roleKey       String @map("role_key") @db.VarChar(64)
+  permissionKey String @map("permission_key") @db.VarChar(96)
+
+  role       AuthorizationRole       @relation(fields: [roleKey], references: [key], onDelete: Cascade)
+  permission AuthorizationPermission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  @@id([roleKey, permissionKey])
+  @@map("authorization_role_permission")
+}
+
+/// Revocable role grant. Historical grants are never overwritten or deleted:
+/// revocation timestamps close the grant and preserve who did what.
+model AuthorizationRoleAssignment {
+  id                  String    @id @default(uuid(7)) @db.Uuid
+  identityId          String    @map("identity_id") @db.Uuid
+  roleKey             String    @map("role_key") @db.VarChar(64)
+  grantedByIdentityId String?   @map("granted_by_identity_id") @db.Uuid
+  grantedAt           DateTime  @default(now()) @map("granted_at") @db.Timestamptz(3)
+  revokedAt           DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revokedByIdentityId String?   @map("revoked_by_identity_id") @db.Uuid
+  reason              String?   @db.VarChar(255)
+
+  identity  AuthIdentity  @relation("RoleAssignmentIdentity", fields: [identityId], references: [id], onDelete: Cascade)
+  role      AuthorizationRole @relation(fields: [roleKey], references: [key], onDelete: Restrict)
+  grantedBy AuthIdentity? @relation("RoleAssignmentGrantedBy", fields: [grantedByIdentityId], references: [id], onDelete: SetNull)
+  revokedBy AuthIdentity? @relation("RoleAssignmentRevokedBy", fields: [revokedByIdentityId], references: [id], onDelete: SetNull)
+
+  @@index([identityId, revokedAt])
+  @@index([roleKey, revokedAt])
+  @@map("authorization_role_assignment")
+}
+
+/// Append-only security/business audit record for privileged actions.
+/// Application code has no update/delete operation for this model.
+model AuditEvent {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  occurredAt      DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  actorIdentityId String?   @map("actor_identity_id") @db.Uuid
+  actorRealm      AuthRealm? @map("actor_realm")
+  action          String    @db.VarChar(96)
+  resourceType    String    @map("resource_type") @db.VarChar(64)
+  resourceId      String?   @map("resource_id") @db.VarChar(128)
+  sessionId       String?   @map("session_id") @db.Uuid
+  requestId       String?   @map("request_id") @db.VarChar(128)
+  before          Json?
+  after           Json?
+  metadata        Json?
+
+  actor AuthIdentity? @relation("AuditActor", fields: [actorIdentityId], references: [id], onDelete: SetNull)
+
+  @@index([occurredAt])
+  @@index([actorIdentityId, occurredAt])
+  @@index([resourceType, resourceId, occurredAt])
+  @@map("audit_event")
+}
+
+/// Hash-only, single-use invitation that lets an administrator provision a
+/// STAFF identity without exposing a public staff-registration endpoint.
+model StaffInvitation {
+  id                  String    @id @default(uuid(7)) @db.Uuid
+  identityId          String    @map("identity_id") @db.Uuid
+  tokenHash           Bytes     @unique @map("token_hash")
+  expiresAt           DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt          DateTime? @map("consumed_at") @db.Timestamptz(3)
+  invalidatedAt       DateTime? @map("invalidated_at") @db.Timestamptz(3)
+  createdByIdentityId String?   @map("created_by_identity_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  identity  AuthIdentity  @relation("StaffInvitationIdentity", fields: [identityId], references: [id], onDelete: Cascade)
+  createdBy AuthIdentity? @relation("StaffInvitationCreatedBy", fields: [createdByIdentityId], references: [id], onDelete: SetNull)
+
+  @@index([identityId])
+  @@index([expiresAt])
+  @@map("staff_invitation")
+}
+
+/// Explicit administrator authorization to perform first-time STAFF TOTP
+/// enrollment. Password knowledge alone is not enough to enroll MFA.
+model StaffEnrollmentGrant {
+  identityId          String    @id @map("identity_id") @db.Uuid
+  issuedByIdentityId  String?   @map("issued_by_identity_id") @db.Uuid
+  issuedAt            DateTime  @default(now()) @map("issued_at") @db.Timestamptz(3)
+  expiresAt           DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt          DateTime? @map("consumed_at") @db.Timestamptz(3)
+
+  identity AuthIdentity  @relation("StaffEnrollmentIdentity", fields: [identityId], references: [id], onDelete: Cascade)
+  issuedBy AuthIdentity? @relation("StaffEnrollmentIssuedBy", fields: [issuedByIdentityId], references: [id], onDelete: SetNull)
+
+  @@index([expiresAt])
+  @@map("staff_enrollment_grant")
 }
