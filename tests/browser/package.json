@@ -2,7 +2,7 @@
   "name": "@euroteranga/browser-tests",
   "version": "0.0.0",
   "private": true,
-  "description": "Foundation browser tests (Playwright) for the six frontends",
+  "description": "Browser tests (Playwright): foundation pages and authentication flows",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
@@ -13,5 +13,10 @@
     "@playwright/test": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:"
+  },
+  "dependencies": {
+    "@euroteranga/database": "workspace:*",
+    "@node-rs/argon2": "catalog:",
+    "otpauth": "catalog:"
   }
 }

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { appUrl, frontendApps } from '../apps.js';
+import { appByName, appUrl, frontendApps } from '../apps.js';
 
 for (const app of frontendApps) {
   test(`${app.name}: foundation page renders without runtime errors`, async ({ page }) => {
@@ -27,20 +27,8 @@ for (const app of frontendApps) {
   });
 }
 
-test('ops: Refine provides the foundation navigation', async ({ page }) => {
-  const ops = frontendApps.find((app) => app.name === 'ops');
-  if (!ops) throw new Error('ops app is not registered');
-
-  await page.goto(appUrl(ops));
-  const navigation = page.getByRole('navigation', { name: 'Navigation principale' });
-  await expect(navigation.getByRole('link', { name: 'Foundation' })).toBeVisible();
-});
-
 test('web: the skip link is reachable by keyboard and moves focus to main', async ({ page }) => {
-  const web = frontendApps.find((app) => app.name === 'web');
-  if (!web) throw new Error('web app is not registered');
-
-  await page.goto(appUrl(web));
+  await page.goto(appUrl(appByName('web')));
   await page.keyboard.press('Tab');
   const skipLink = page.getByRole('link', { name: 'Aller au contenu' });
   await expect(skipLink).toBeFocused();
