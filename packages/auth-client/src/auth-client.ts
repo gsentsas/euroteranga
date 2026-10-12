@@ -40,8 +40,14 @@ const UNEXPECTED_ERROR = 'Une erreur est survenue. Réessayez plus tard.';
  *   in memory only — never in localStorage, sessionStorage or IndexedDB.
  * - Whether the user is signed in is always asked to the server (`me`).
  */
+function stripTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+}
+
 export function createAuthClient(baseUrl: string) {
-  const root = baseUrl.replace(/\/+$/, '');
+  const root = stripTrailingSlashes(baseUrl);
 
   async function call<T>(
     method: 'GET' | 'POST',
