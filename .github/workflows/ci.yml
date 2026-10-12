@@ -131,19 +131,52 @@ jobs:
   browser:
     name: browser
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16.15-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+        env:
+          POSTGRES_USER: euroteranga
+          # Throwaway credential for the ephemeral CI container only.
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: euroteranga_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U euroteranga -d euroteranga_ci"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      # Core API started by Playwright (production build, loopback only).
+      # NODE_ENV is deliberately not set here: NODE_ENV=production would make
+      # `pnpm install` skip devDependencies needed to build and test.
+      APP_ENV: ci
+      DATABASE_URL: postgresql://euroteranga:ci-only-password@localhost:5432/euroteranga_ci
+      API_HOST: 127.0.0.1
+      API_PORT: '4000'
+      AUTH_CUSTOMER_ORIGINS: http://localhost:3002
+      AUTH_STAFF_ORIGINS: http://localhost:3004
+      AUTH_CREW_ORIGINS: http://localhost:3005
+      AUTH_MAIL_PROVIDER: disabled
+      CLIENT_PUBLIC_URL: http://localhost:3002
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-workspace
-      - name: Build packages and frontends
+      - name: Generate ephemeral authentication keys (never stored)
         run: |
-          pnpm build:packages
-          pnpm build:frontends
+          {
+            echo "AUTH_CSRF_KEY=$(openssl rand -base64 32)"
+            echo "AUTH_HMAC_KEY=$(openssl rand -base64 32)"
+            echo "AUTH_TOTP_ENCRYPTION_KEY=$(openssl rand -base64 32)"
+          } >> "$GITHUB_ENV"
+      - name: Build packages and all applications
+        run: pnpm build
+      - name: Apply migrations
+        run: pnpm db:migrate
       - name: Install Chromium for Playwright
         run: pnpm --filter @euroteranga/browser-tests exec playwright install --with-deps chromium
-      - name: Browser tests
+      - name: Browser tests (frontends + Core API + PostgreSQL)
         run: pnpm test:e2e
       - name: Upload Playwright report
         if: failure()

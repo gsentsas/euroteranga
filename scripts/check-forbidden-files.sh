@@ -33,7 +33,20 @@ if matches="$(git grep -nE "$bypass_pattern" -- ':!scripts/check-forbidden-files
   status=1
 fi
 
+# Authentication hygiene (PR-02):
+# - browser code never persists secrets in web storage (sessions are HttpOnly cookies);
+# - the API never uses Math.random (not a CSPRNG) nor console.log (unredacted output).
+storage_pattern='\b(localStorage|sessionStorage|indexedDB)[[:space:]]*[.[]'
+if matches="$(git grep -nE "$storage_pattern" -- 'apps/*/app/**' 'apps/*/components/**' 'apps/*/lib/**' 'packages/auth-client/src/**' 'packages/ui/src/**' ':!**/*.test.ts')"; then
+  echo "$matches" | while IFS= read -r line; do echo "::error::Browser storage used in application code: $line"; done
+  status=1
+fi
+if matches="$(git grep -nE '\bMath\.random\(|\bconsole\.(log|info|debug)\(' -- 'apps/api/src/**')"; then
+  echo "$matches" | while IFS= read -r line; do echo "::error::Insecure randomness or raw console output in the API: $line"; done
+  status=1
+fi
+
 if [[ "$status" -eq 0 ]]; then
-  echo "Forbidden files and bypass markers: none found."
+  echo "Forbidden files, bypass markers and auth hygiene: none found."
 fi
 exit "$status"
