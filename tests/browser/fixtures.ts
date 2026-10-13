@@ -82,6 +82,17 @@ export const FIXTURES = {
   get seatMapDenied(): Fixture {
     return { realm: 'STAFF', email: runScoped('seat-map-denied'), roles: ['FINANCE'] };
   },
+  get pricingAdmin(): Fixture {
+    return { realm: 'STAFF', email: runScoped('pricing-admin'), roles: ['SUPER_ADMIN'] };
+  },
+  /** pricing.read only (no pricing.manage, no trip or network permission). */
+  get pricingReader(): Fixture {
+    return { realm: 'STAFF', email: runScoped('pricing-reader'), roles: ['FINANCE'] };
+  },
+  /** trip.read but no pricing permission. */
+  get pricingDenied(): Fixture {
+    return { realm: 'STAFF', email: runScoped('pricing-denied'), roles: ['COMPLIANCE_AGENT'] };
+  },
   get auditor(): Fixture {
     return { realm: 'STAFF', email: runScoped('auditor'), roles: ['AUDITOR'] };
   },
@@ -149,5 +160,21 @@ export function seatMapSeed() {
     seededSeatMapCode: `SM_SEED_${run}`,
     vehicleCode: `VH_SEAT_${run}`,
     tripReference: `ET-TEST-SEAT-${run}`,
+  };
+}
+
+/**
+ * Synthetic data for the pricing scenarios: a published XOF fare table on the
+ * trip-seed route for the read-only profile, and a DRAFT trip (complete
+ * timetable) on the same route for the SUPER_ADMIN scenario.
+ */
+export function pricingSeed() {
+  const raw = process.env.E2E_RUN_ID;
+  if (!raw) throw new Error('E2E_RUN_ID is set by global-setup.ts');
+  const run = raw.toUpperCase();
+  return {
+    run,
+    seededFareTableCode: `FT_SEED_${run}`,
+    tripReference: `ET-TEST-FARE-${run}`,
   };
 }

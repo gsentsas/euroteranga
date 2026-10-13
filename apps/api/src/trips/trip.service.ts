@@ -11,6 +11,14 @@ import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import {
+  fareTableLabel,
+  fareTableVersionIdentity,
+  fareTableVersionSummarySelect,
+  fareTableVersionView,
+  type FareTableVersionIdentity,
+  lockAssignableFareTableVersion,
+} from '../pricing/fare-assignment.js';
+import {
   lockAssignableSeatMapVersion,
   seatMapLabel,
   seatMapVersionSummarySelect,
@@ -20,6 +28,7 @@ import { checkTimetable, type TimetableEntry } from './trip-timetable.js';
 import type {
   tripCancelSchema,
   tripCreateSchema,
+  tripFareTableSchema,
   tripListQuerySchema,
   tripSeatMapSchema,
   tripTimetableSchema,
@@ -33,6 +42,7 @@ type TripTimetable = z.infer<typeof tripTimetableSchema>;
 type TripCancel = z.infer<typeof tripCancelSchema>;
 type TripVehicle = z.infer<typeof tripVehicleSchema>;
 type TripSeatMap = z.infer<typeof tripSeatMapSchema>;
+type TripFareTable = z.infer<typeof tripFareTableSchema>;
 
 const placeSummary = { select: { id: true, code: true, name: true, timezone: true } } as const;
 
@@ -58,22 +68,35 @@ const tripSummaryInclude = {
     },
   },
   seatMapVersion: { select: seatMapVersionSummarySelect },
+  fareTableVersion: { select: fareTableVersionSummarySelect },
 } as const;
 
 /** Public view: seat map summaries carry their computed capacity. */
 function tripView<
   T extends {
     seatMapVersion: { _count: { cells: number } } | null;
+    fareTableVersion: { _count: { entries: number } } | null;
     vehicle: { seatMapVersion: { _count: { cells: number } } | null } | null;
   },
 >(trip: T) {
   return {
     ...trip,
     seatMapVersion: seatMapVersionView(trip.seatMapVersion),
+    fareTableVersion: fareTableVersionView(trip.fareTableVersion),
     vehicle: trip.vehicle
       ? { ...trip.vehicle, seatMapVersion: seatMapVersionView(trip.vehicle.seatMapVersion) }
       : null,
   };
+}
+
+/**
+ * Trip view for a caller without pricing.read: the fare-table version is
+ * reduced to its identity (id, version, code, currency, number of pairs).
+ */
+export function withFareTableIdentityOnly<
+  T extends { fareTableVersion: FareTableVersionIdentity | null },
+>(trip: T): Omit<T, 'fareTableVersion'> & { fareTableVersion: FareTableVersionIdentity | null } {
+  return { ...trip, fareTableVersion: fareTableVersionIdentity(trip.fareTableVersion) };
 }
 
 export interface TripHistoryEntry {
@@ -86,6 +109,8 @@ export interface TripHistoryEntry {
   toVehicleCode: string | null;
   fromSeatMap: string | null;
   toSeatMap: string | null;
+  fromFareTable: string | null;
+  toFareTable: string | null;
 }
 
 interface LockedTrip {
@@ -94,6 +119,7 @@ interface LockedTrip {
   routeVersionId: string;
   vehicleId: string | null;
   seatMapVersionId: string | null;
+  fareTableVersionId: string | null;
 }
 
 /** Convert expected database failures to stable public errors. */
@@ -127,9 +153,11 @@ async function lockTrip(tx: DatabaseTransaction, id: string): Promise<LockedTrip
       route_version_id: string;
       vehicle_id: string | null;
       seat_map_version_id: string | null;
+      fare_table_version_id: string | null;
     }>
   >`
-    SELECT "id", "status", "route_version_id", "vehicle_id", "seat_map_version_id"
+    SELECT "id", "status", "route_version_id", "vehicle_id", "seat_map_version_id",
+      "fare_table_version_id"
     FROM "trip" WHERE "id" = ${id}::uuid FOR UPDATE
   `;
   const row = rows[0];
@@ -140,6 +168,7 @@ async function lockTrip(tx: DatabaseTransaction, id: string): Promise<LockedTrip
     routeVersionId: row.route_version_id,
     vehicleId: row.vehicle_id,
     seatMapVersionId: row.seat_map_version_id,
+    fareTableVersionId: row.fare_table_version_id,
   };
 }
 
@@ -305,6 +334,8 @@ export class TripService {
       toVehicleCode: fieldOf(event.after, 'vehicleCode'),
       fromSeatMap: fieldOf(event.before, 'seatMap'),
       toSeatMap: fieldOf(event.after, 'seatMap'),
+      fromFareTable: fieldOf(event.before, 'fareTable'),
+      toFareTable: fieldOf(event.after, 'fareTable'),
     }));
     return { ...tripView(trip), history };
   }
@@ -558,6 +589,67 @@ export class TripService {
             after: {
               seatMapVersionId: next?.id ?? null,
               seatMap: next ? seatMapLabel(next.seatMapCode, next.version) : null,
+            },
+          },
+          tx,
+        );
+      }),
+    );
+    return this.trip(id);
+  }
+
+  /**
+   * Assign, replace or remove the historical pricing of a DRAFT trip. A new
+   * assignment needs a currently PUBLISHED version of an active fare table
+   * pricing exactly the trip's route version. Nothing is assigned implicitly.
+   * Lock order: trip FOR UPDATE, fare_table then fare_table_version FOR SHARE.
+   */
+  async assignFareTable(id: string, input: TripFareTable, actor: AuthPrincipal) {
+    await mutation(() =>
+      this.database.client.$transaction(async (tx) => {
+        const trip = await lockTrip(tx, id);
+        if (trip.status === 'CANCELLED') throw TripErrors.cancelled();
+        if (trip.status !== 'DRAFT') throw TripErrors.notDraft();
+        if (
+          input.expectedFareTableVersionId !== undefined &&
+          input.expectedFareTableVersionId !== trip.fareTableVersionId
+        ) {
+          throw TripErrors.fareTableConflict();
+        }
+        if (input.fareTableVersionId === trip.fareTableVersionId) return;
+
+        const next = input.fareTableVersionId
+          ? await lockAssignableFareTableVersion(tx, input.fareTableVersionId)
+          : null;
+        if (next && next.routeVersionId !== trip.routeVersionId) {
+          throw TripErrors.fareTableIncompatible();
+        }
+        const previous = trip.fareTableVersionId
+          ? await tx.fareTableVersion.findUnique({
+              where: { id: trip.fareTableVersionId },
+              select: { version: true, fareTable: { select: { code: true, currencyCode: true } } },
+            })
+          : null;
+        await tx.trip.update({ where: { id }, data: { fareTableVersionId: next?.id ?? null } });
+        await this.audit.record(
+          {
+            actor,
+            action: 'TRIP_FARE_TABLE_CHANGED',
+            resourceType: 'trip',
+            resourceId: id,
+            before: {
+              fareTableVersionId: trip.fareTableVersionId,
+              fareTable: previous
+                ? fareTableLabel(
+                    previous.fareTable.code,
+                    previous.version,
+                    previous.fareTable.currencyCode,
+                  )
+                : null,
+            },
+            after: {
+              fareTableVersionId: next?.id ?? null,
+              fareTable: next ? fareTableLabel(next.code, next.version, next.currencyCode) : null,
             },
           },
           tx,

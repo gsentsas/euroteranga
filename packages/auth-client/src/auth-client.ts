@@ -225,6 +225,43 @@ export type NetworkWaypointInput =
     }
   | { kind: 'CHECKPOINT'; checkpointId: string };
 
+export type FareTableVersionStatus = 'DRAFT' | 'PUBLISHED' | 'RETIRED';
+
+/**
+ * Identity of a trip's fare table version: all a trip.read holder without
+ * pricing.read receives.
+ */
+export interface TripFareTableIdentity {
+  id: string;
+  version: number;
+  fareTable: { code: string; currencyCode: string };
+  /** Number of priced origin/destination pairs. */
+  entryCount: number;
+}
+
+/** Fare table version as embedded in trips, for pricing.read holders. */
+export interface AssignedFareTableVersion extends TripFareTableIdentity {
+  status: FareTableVersionStatus;
+  publishedAt: string | null;
+  retiredAt: string | null;
+  routeVersionId: string;
+  fareTable: {
+    id: string;
+    code: string;
+    name: string;
+    currencyCode: string;
+    currencyMinorUnit: number;
+    active: boolean;
+  };
+}
+
+/** True when the caller received the full fare-table summary (pricing.read). */
+export function hasFareTableDetails(
+  version: AssignedFareTableVersion | TripFareTableIdentity,
+): version is AssignedFareTableVersion {
+  return 'status' in version;
+}
+
 export type SeatMapVersionStatus = 'DRAFT' | 'PUBLISHED' | 'RETIRED';
 
 /** Physical kind of a cell; an absent coordinate is an empty area. */
@@ -343,6 +380,10 @@ export interface AdminTripSummary {
   /** Historical seat map of the trip; frozen once SCHEDULED. */
   seatMapVersionId: string | null;
   seatMapVersion: AssignedSeatMapVersion | null;
+  /** Historical pricing of the trip; frozen once SCHEDULED. */
+  fareTableVersionId: string | null;
+  /** Full summary with pricing.read; its identity only otherwise. */
+  fareTableVersion: AssignedFareTableVersion | TripFareTableIdentity | null;
 }
 
 export interface AdminTripPlace {
@@ -381,6 +422,8 @@ export interface TripHistoryEntry {
   toVehicleCode: string | null;
   fromSeatMap: string | null;
   toSeatMap: string | null;
+  fromFareTable: string | null;
+  toFareTable: string | null;
 }
 
 export interface AdminTrip extends Omit<AdminTripSummary, 'routeVersion'> {
@@ -507,6 +550,134 @@ export interface VehicleSeatMapInput {
 }
 
 export type TripSeatMapInput = VehicleSeatMapInput;
+
+export interface AdminFareWaypoint {
+  id: string;
+  sequence: number;
+  boardingAllowed: boolean;
+  alightingAllowed: boolean;
+  stop: { id: string; code: string; name: string } | null;
+  checkpoint: { id: string; code: string; name: string } | null;
+}
+
+export interface AdminFareEntry {
+  id: string;
+  originRouteWaypointId: string;
+  destinationRouteWaypointId: string;
+  /** Exact amount in the fare table's currency minor unit. */
+  amountMinor: number;
+}
+
+export interface AdminFareTableVersionSummary {
+  id: string;
+  fareTableId: string;
+  routeVersionId: string;
+  version: number;
+  status: FareTableVersionStatus;
+  publishedAt: string | null;
+  retiredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  routeVersion: { id: string; version: number; status: NetworkRouteVersionStatus };
+  entryCount: number;
+}
+
+export interface AdminFareTableVersion extends Omit<AdminFareTableVersionSummary, 'routeVersion'> {
+  routeVersion: {
+    id: string;
+    version: number;
+    status: NetworkRouteVersionStatus;
+    waypoints: AdminFareWaypoint[];
+  };
+  entries: AdminFareEntry[];
+  /** Trips priced with this version. */
+  tripCount: number;
+}
+
+export interface AdminFareTableSummary {
+  id: string;
+  code: string;
+  name: string;
+  routeId: string;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  route: { id: string; code: string; name: string };
+  versions: AdminFareTableVersionSummary[];
+}
+
+export interface AdminFareTable extends Omit<AdminFareTableSummary, 'route' | 'versions'> {
+  route: {
+    id: string;
+    code: string;
+    name: string;
+    /** Route versions that have been published (the only priceable ones). */
+    versions: Array<{
+      id: string;
+      version: number;
+      status: NetworkRouteVersionStatus;
+      publishedAt: string | null;
+    }>;
+  };
+  versions: AdminFareTableVersion[];
+}
+
+export interface FareTableListOptions {
+  cursor?: string;
+  limit?: number;
+  active?: boolean;
+  routeId?: string;
+}
+
+export interface FareTableCreateInput {
+  code: string;
+  name: string;
+  routeId: string;
+  /** Three letters, e.g. EUR or XOF. Immutable. */
+  currencyCode: string;
+  /** 0-3 (EUR 2, XOF 0). Immutable. */
+  currencyMinorUnit: number;
+  active: boolean;
+}
+
+/** Name and active state only: route and currency never change. */
+export interface FareTableUpdateInput {
+  name?: string;
+  active?: boolean;
+}
+
+export interface FareTableFaresInput {
+  /** The complete (possibly partial) matrix of the draft. */
+  fares: Array<{
+    originRouteWaypointId: string;
+    destinationRouteWaypointId: string;
+    amountMinor: number;
+  }>;
+}
+
+export interface TripFareTableInput {
+  /** A PUBLISHED version pricing the trip's route version; null removes it. */
+  fareTableVersionId: string | null;
+  /** Pricing the decision was based on (null: none); refused if it moved. */
+  expectedFareTableVersionId?: string | null;
+}
+
+/** Server-side resolution of one base fare (not a booking or a quote). */
+export interface ResolvedTripFare {
+  tripId: string;
+  fareTableId: string;
+  fareTableCode: string;
+  fareTableVersionId: string;
+  fareTableVersion: number;
+  fareEntryId: string;
+  originRouteWaypointId: string;
+  destinationRouteWaypointId: string;
+  amountMinor: number;
+  currencyCode: string;
+  currencyMinorUnit: number;
+}
 
 function query(values: Record<string, string | number | undefined>): string {
   const params = new URLSearchParams();
@@ -860,6 +1031,24 @@ export function createAuthClient(baseUrl: string) {
             `/v1/admin/trips/${encodeURIComponent(tripId)}/seat-map`,
             input,
           ),
+        assignTripFareTable: (tripId: string, input: TripFareTableInput) =>
+          withCsrf<AdminTrip>(
+            'staff',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/fare-table`,
+            input,
+          ),
+        resolveTripFare: (
+          tripId: string,
+          originRouteWaypointId: string,
+          destinationRouteWaypointId: string,
+        ) =>
+          call<ResolvedTripFare>(
+            'GET',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/fare?${query({
+              originRouteWaypointId,
+              destinationRouteWaypointId,
+            })}`,
+          ),
       },
       seatMaps: {
         seatMaps: (options: SeatMapListOptions = {}) =>
@@ -896,6 +1085,48 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<AdminSeatMap>(
             'staff',
             `/v1/admin/seat-maps/${encodeURIComponent(seatMapId)}/versions/${encodeURIComponent(versionId)}/publish`,
+          ),
+      },
+      pricing: {
+        fareTables: (options: FareTableListOptions = {}) =>
+          call<Page<AdminFareTableSummary>>(
+            'GET',
+            `/v1/admin/pricing/fare-tables?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              active: options.active === undefined ? undefined : String(options.active),
+              routeId: options.routeId,
+            })}`,
+          ),
+        fareTable: (fareTableId: string) =>
+          call<AdminFareTable>(
+            'GET',
+            `/v1/admin/pricing/fare-tables/${encodeURIComponent(fareTableId)}`,
+          ),
+        createFareTable: (input: FareTableCreateInput) =>
+          withCsrf<AdminFareTable>('staff', '/v1/admin/pricing/fare-tables', input),
+        updateFareTable: (fareTableId: string, input: FareTableUpdateInput) =>
+          withCsrf<AdminFareTable>(
+            'staff',
+            `/v1/admin/pricing/fare-tables/${encodeURIComponent(fareTableId)}`,
+            input,
+          ),
+        createVersion: (fareTableId: string, routeVersionId: string) =>
+          withCsrf<AdminFareTable>(
+            'staff',
+            `/v1/admin/pricing/fare-tables/${encodeURIComponent(fareTableId)}/versions`,
+            { routeVersionId },
+          ),
+        replaceFares: (fareTableId: string, versionId: string, input: FareTableFaresInput) =>
+          withCsrf<AdminFareTable>(
+            'staff',
+            `/v1/admin/pricing/fare-tables/${encodeURIComponent(fareTableId)}/versions/${encodeURIComponent(versionId)}/fares`,
+            input,
+          ),
+        publishVersion: (fareTableId: string, versionId: string) =>
+          withCsrf<AdminFareTable>(
+            'staff',
+            `/v1/admin/pricing/fare-tables/${encodeURIComponent(fareTableId)}/versions/${encodeURIComponent(versionId)}/publish`,
           ),
       },
     },

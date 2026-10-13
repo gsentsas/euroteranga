@@ -57,6 +57,18 @@ export const TripErrors = {
       'TRIP_SEAT_MAP_INCOMPATIBLE',
       'Le plan de sièges du véhicule ne correspond pas à celui du voyage.',
     ),
+  fareTableConflict: () =>
+    new PublicApiError(
+      409,
+      'TRIP_FARE_TABLE_CONFLICT',
+      'La grille tarifaire du voyage a changé entre-temps. Rechargez la fiche.',
+    ),
+  fareTableIncompatible: () =>
+    new PublicApiError(
+      422,
+      'TRIP_FARE_TABLE_INCOMPATIBLE',
+      'Cette grille tarifaire ne porte pas sur la version de route du voyage.',
+    ),
   reasonRequired: () =>
     new PublicApiError(
       422,
