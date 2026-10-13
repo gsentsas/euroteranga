@@ -34,6 +34,8 @@ describe('customer booking holds (isolated database)', () => {
         DATABASE_URL: database.url,
         BOOKING_MAX_SEATS_PER_HOLD: String(MAX_SEATS),
         BOOKING_HOLD_TTL_SECONDS: '900',
+        // The booking app is a CUSTOMER origin, as in .env.example and CI.
+        AUTH_CUSTOMER_ORIGINS: 'http://localhost:3002,http://localhost:3001',
       }),
     );
     countryId = await syntheticCountry(t.app);
@@ -81,6 +83,23 @@ describe('customer booking holds (isolated database)', () => {
       expect(fromOps.status).toBe(403);
       expect(fromOps.body.code).toBe('ORIGIN_NOT_ALLOWED');
       expect(await db(t.app).booking.count({ where: { tripId: f.tripId } })).toBe(0);
+    });
+
+    it('accepts the booking app origin and refuses any other origin', async () => {
+      const f = await fixture();
+      const csrf = await alice.csrf();
+      const from = (origin: string) =>
+        request(t.app.getHttpServer())
+          .post('/v1/booking/bookings')
+          .set('Origin', origin)
+          .set('Cookie', alice.cookie)
+          .set('X-CSRF-Token', csrf)
+          .set('Content-Type', 'application/json')
+          .send(JSON.stringify(holdBody(f, 1, 2, ['1A'])));
+      const foreign = await from('http://localhost:3003');
+      expect(foreign.status).toBe(403);
+      expect(foreign.body.code).toBe('ORIGIN_NOT_ALLOWED');
+      expect((await from('http://localhost:3001')).status).toBe(201);
     });
 
     it('accepts no price, currency, fare, label or identity from the client', async () => {
