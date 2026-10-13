@@ -3,6 +3,10 @@ import {
   createAuthClient,
   hasFareTableDetails,
   type AdminBooking,
+  type AdminPaymentDetail,
+  type CreatePaymentResult,
+  type CustomerPayment,
+  type PaymentPage,
   type AdminFareTable,
   type BookingAvailability,
   type CustomerBooking,
@@ -539,7 +543,10 @@ describe('admin client', () => {
       ApiResult<AdminBooking>
     >();
     expectTypeOf<CustomerBooking['totalAmountMinor']>().toEqualTypeOf<number>();
-    expectTypeOf<CustomerBooking['status']>().toEqualTypeOf<'HELD' | 'EXPIRED' | 'CANCELLED'>();
+    // PR-10 adds CONFIRMED (a succeeded payment) to the derived statuses.
+    expectTypeOf<CustomerBooking['status']>().toEqualTypeOf<
+      'HELD' | 'CONFIRMED' | 'EXPIRED' | 'CANCELLED'
+    >();
     // The client never sends a price, a currency or an identity.
     expectTypeOf(client.booking.customer.createHold)
       .parameter(0)
@@ -548,5 +555,115 @@ describe('admin client', () => {
       .parameter(0)
       .not.toHaveProperty('customerIdentityId');
     expectTypeOf<CustomerBooking>().not.toHaveProperty('customerIdentityId');
+  });
+
+  it('starts, lists and cancels payments with CSRF and an optional Idempotency-Key', async () => {
+    // A synthetic, low-entropy key (as a browser would send a random UUID).
+    const intentKey = 'i'.repeat(20);
+    const payment = {
+      reference: 'ETP-AAAAAAAAAAAA',
+      status: 'PENDING',
+      amountMinor: 6_000_000_000,
+      currencyCode: 'EUR',
+      currencyMinorUnit: 2,
+      createdAt: '2030-01-01T00:00:00.000Z',
+      succeededAt: null,
+      failedAt: null,
+      cancelledAt: null,
+    };
+    const calls = mockFetch([
+      { status: 200, body: { csrfToken: 'c' } },
+      {
+        status: 201,
+        body: { payment, checkout: { provider: 'SANDBOX', testMode: true, redirectUrl: null } },
+      },
+      { status: 200, body: { csrfToken: 'c2' } },
+      {
+        status: 200,
+        body: { payment, checkout: { provider: 'SANDBOX', testMode: true, redirectUrl: null } },
+      },
+      { status: 200, body: { items: [payment] } },
+      { status: 200, body: { csrfToken: 'c3' } },
+      { status: 200, body: { ...payment, status: 'CANCELLED' } },
+      { status: 200, body: { items: [], nextCursor: null } },
+      { status: 200, body: { ...payment, id: 'p', events: [] } },
+      { status: 200, body: { csrfToken: 's' } },
+      { status: 200, body: { ...payment, id: 'p', status: 'CANCELLED', events: [] } },
+    ]);
+    const client = createAuthClient('http://api.test/');
+    const created = await client.booking.customer.createPayment('ETB-AAAAAAAAAAAA');
+    expect(calls[0]?.url).toBe('http://api.test/v1/auth/customer/csrf');
+    expect(calls[1]).toMatchObject({
+      url: 'http://api.test/v1/booking/bookings/ETB-AAAAAAAAAAAA/payments',
+    });
+    expect(calls[1]?.init.method).toBe('POST');
+    // No business field: amount, currency and provider come from the server.
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({});
+    expect(calls[1]?.init.headers).toEqual({
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': 'c',
+    });
+    expect(created.ok && created.data.payment.amountMinor).toBe(6_000_000_000);
+
+    await client.booking.customer.createPayment('ETB-AAAAAAAAAAAA', intentKey);
+    expect(calls[3]?.init.headers).toEqual({
+      'Idempotency-Key': intentKey,
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': 'c2',
+    });
+    await client.booking.customer.listPayments('ETB-AAAAAAAAAAAA');
+    expect(calls[4]?.url).toBe('http://api.test/v1/booking/bookings/ETB-AAAAAAAAAAAA/payments');
+    expect(calls[4]?.init.headers).toEqual({});
+    await client.booking.customer.cancelPayment('ETP-AAAAAAAAAAAA');
+    expect(calls[6]?.url).toBe('http://api.test/v1/booking/payments/ETP-AAAAAAAAAAAA/cancel');
+    expect(calls[6]?.init.headers).toMatchObject({ 'X-CSRF-Token': 'c3' });
+
+    await client.admin.payments.listPayments({
+      status: 'SUCCEEDED',
+      bookingReference: 'ETB-X',
+      limit: 10,
+    });
+    expect(calls[7]?.url).toBe(
+      'http://api.test/v1/admin/payments?limit=10&status=SUCCEEDED&bookingReference=ETB-X',
+    );
+    await client.admin.payments.getPayment('p/1');
+    expect(calls[8]?.url).toBe('http://api.test/v1/admin/payments/p%2F1');
+    await client.admin.payments.cancelPayment('p', 'Bloqué');
+    expect(calls[9]?.url).toBe('http://api.test/v1/auth/staff/csrf');
+    expect(calls[10]?.url).toBe('http://api.test/v1/admin/payments/p/cancel');
+    expect(JSON.parse(String(calls[10]?.init.body))).toEqual({ reason: 'Bloqué' });
+  });
+
+  it('types payments explicitly: exact amounts, no provider detail for customers', () => {
+    const client = createAuthClient('http://api.test');
+    expectTypeOf(client.booking.customer.createPayment).returns.resolves.toEqualTypeOf<
+      ApiResult<CreatePaymentResult>
+    >();
+    // Only the booking reference (and an optional key): never an amount.
+    expectTypeOf(client.booking.customer.createPayment).parameter(0).toEqualTypeOf<string>();
+    expectTypeOf(client.booking.customer.createPayment)
+      .parameter(1)
+      .toEqualTypeOf<string | undefined>();
+    expectTypeOf(client.booking.customer.listPayments).returns.resolves.toEqualTypeOf<
+      ApiResult<{ items: CustomerPayment[] }>
+    >();
+    expectTypeOf(client.admin.payments.listPayments).returns.resolves.toEqualTypeOf<
+      ApiResult<PaymentPage>
+    >();
+    expectTypeOf(client.admin.payments.getPayment).returns.resolves.toEqualTypeOf<
+      ApiResult<AdminPaymentDetail>
+    >();
+    expectTypeOf<CustomerPayment['amountMinor']>().toEqualTypeOf<number>();
+    expectTypeOf<CustomerPayment['status']>().toEqualTypeOf<
+      'PENDING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
+    >();
+    expectTypeOf<CustomerPayment>().not.toHaveProperty('providerPaymentId');
+    expectTypeOf<CustomerPayment>().not.toHaveProperty('failureCode');
+    expectTypeOf<CustomerBooking['payment']>().toEqualTypeOf<CustomerPayment | null>();
+    // STAFF booking details carry payments only with payment.read.
+    expectTypeOf<AdminBooking>().toHaveProperty('payments');
+    // No STAFF method can make an attempt succeed.
+    expectTypeOf(client.admin.payments).not.toHaveProperty('markPaid');
+    expectTypeOf(client.admin.payments).toHaveProperty('cancelPayment');
   });
 });
