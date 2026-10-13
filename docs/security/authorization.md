@@ -36,17 +36,20 @@ ADR-017 to ADR-020. This document contains no secret value.
 | `mfa.enrollment.authorize` | Authorizing a first TOTP enrollment again                  |
 | `audit.read`               | Reading the audit trail                                    |
 | `privileged.manage`        | Acting on privileged roles and on their holders            |
+| `network.read`             | Reading countries, stops, checkpoints and routes (PR-04)   |
+| `network.manage`           | Managing them, drafting and publishing route versions      |
 
 ### Role matrix
 
-| Role                                                                             | Realm | Privileged | Permissions                                              |
-| -------------------------------------------------------------------------------- | ----- | ---------- | -------------------------------------------------------- |
-| `SUPER_ADMIN`                                                                    | STAFF | yes        | all ten                                                  |
-| `DIRECTOR`                                                                       | STAFF | no         | all except `privileged.manage`                           |
-| `OPS_MANAGER`                                                                    | STAFF | no         | `ops.access`, `identity.read`, `role.read`               |
-| `AUDITOR`                                                                        | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read` |
-| `DISPATCHER`, `BOOKING_AGENT`, `COMPLIANCE_AGENT`, `FINANCE`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access` (business permissions come with their PRs)  |
-| `DRIVER`, `CREW`                                                                 | CREW  | no         | none yet                                                 |
+| Role                                                                  | Realm | Privileged | Permissions                                                                  |
+| --------------------------------------------------------------------- | ----- | ---------- | ---------------------------------------------------------------------------- |
+| `SUPER_ADMIN`                                                         | STAFF | yes        | all twelve                                                                   |
+| `DIRECTOR`                                                            | STAFF | no         | all except `privileged.manage`                                               |
+| `OPS_MANAGER`                                                         | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage` |
+| `AUDITOR`                                                             | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`     |
+| `DISPATCHER`, `BOOKING_AGENT`, `COMPLIANCE_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`                                                 |
+| `FINANCE`                                                             | STAFF | no         | `ops.access` (no network permission by default)                              |
+| `DRIVER`, `CREW`                                                      | CREW  | no         | none yet                                                                     |
 
 A STAFF identity without any role, or with roles lacking `ops.access`, can
 sign in (password + TOTP) but gets **Accès refusé** in OPS and 403 from every

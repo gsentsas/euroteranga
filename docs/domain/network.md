@@ -52,8 +52,10 @@ validation or authorization.
 
 Only a `DRAFT` can have its complete waypoint order replaced. OPS sends the
 whole ordered list in one request; the server derives contiguous sequences
-`1..N`. The interface uses accessible **Monter** and **Descendre** controls and
-does not require drag-and-drop.
+`1..N`. An invalid reference rejects the whole request: the stored order is
+left unchanged. The interface uses accessible **Monter** and **Descendre**
+controls and does not require drag-and-drop. Publication publishes the
+stored order, so OPS disables **Publier** while edits are unsaved.
 
 Before publication, the Core API verifies that:
 
@@ -63,9 +65,11 @@ Before publication, the Core API verifies that:
 4. the first and last waypoints are stops; and
 5. every referenced country, stop and checkpoint is active.
 
-Publication is one database transaction. It locks the stable route, retires
-the previous published version when present, publishes the draft and writes
-the audit event. An audit failure rolls back the complete operation. Database
+Publication is one database transaction. It locks the stable route then the
+version (waypoint replacement takes the same locks in the same order, so the
+two are serialized), re-validates inside the transaction, retires the
+previous published version when present, publishes the draft and writes the
+audit events (`ROUTE_VERSION_RETIRED`, `ROUTE_VERSION_PUBLISHED`). An audit failure rolls back the complete operation. Database
 triggers then protect the published or retired geometry even if code bypasses
 the domain service. See
 [ADR-021](../adr/ADR-021-route-versioning.md).
@@ -85,9 +89,19 @@ All endpoints are below `/v1/admin/network`. They require a STAFF session and
 | Route versions | included in route detail                      | `POST /routes/:id/versions`, `POST /routes/:id/versions/:versionId/publish`                 |
 | Waypoints      | included in route-version detail, in sequence | `POST /routes/:id/versions/:versionId/waypoints` (atomic replacement of the complete draft) |
 
-List endpoints use bounded keyset pagination and return `items` plus
-`nextCursor`. Inputs and query strings are validated with Zod. Prisma and
-PostgreSQL errors are mapped to fixed public errors.
+List endpoints use bounded keyset pagination (`limit` 1–100, default 50,
+UUIDv7 `cursor`) and return `items` plus `nextCursor`. Inputs and query
+strings are validated with Zod (400 `VALIDATION_FAILED`). Expected failures
+use fixed public errors:
+
+| Code                                                                                                        | HTTP | When                                                |
+| ----------------------------------------------------------------------------------------------------------- | ---- | --------------------------------------------------- |
+| `COUNTRY_NOT_FOUND`, `STOP_NOT_FOUND`, `CHECKPOINT_NOT_FOUND`, `ROUTE_NOT_FOUND`, `ROUTE_VERSION_NOT_FOUND` | 404  | unknown id, or a version of another route           |
+| `NETWORK_IDENTIFIER_CONFLICT`                                                                               | 409  | duplicate ISO code or stop/checkpoint/route code    |
+| `NETWORK_REFERENCE_INVALID`                                                                                 | 422  | a waypoint references an unknown stop or checkpoint |
+| `ROUTE_DRAFT_ALREADY_EXISTS`                                                                                | 409  | a second draft for the same route                   |
+| `ROUTE_VERSION_NOT_DRAFT`                                                                                   | 409  | editing or publishing a published/retired version   |
+| `ROUTE_VERSION_NOT_PUBLISHABLE`                                                                             | 422  | a publication rule is not met                       |
 
 ## Permissions
 
@@ -117,6 +131,18 @@ same transaction as the change. Actions include country, stop, checkpoint and
 route creation/update, version creation, atomic waypoint replacement,
 publication and retirement. The request id is retained and before/after data
 passes through the existing redaction mechanism.
+
+## Tests
+
+- Direct database tests (Prisma, bypassing the service) for every constraint,
+  partial index and trigger above.
+- HTTP integration tests for permissions, CSRF, CRUD, atomic replacement,
+  publication rules, supersession, audit and request id, pagination.
+- Concurrency tests: two simultaneous publications, publication racing a
+  waypoint replacement, two simultaneous drafts. Exactly one valid state.
+- A forced audit failure rolls the whole publication back.
+- Browser tests with synthetic data for a manager, a read-only profile and a
+  profile without `network.read`.
 
 ## Data policy and limitations
 
