@@ -1,4 +1,3 @@
-import type { ApiEnv } from '@euroteranga/config';
 import { Module } from '@nestjs/common';
 import { API_ENV } from '../config/config.module.js';
 import { DatabaseModule } from '../database/database.module.js';

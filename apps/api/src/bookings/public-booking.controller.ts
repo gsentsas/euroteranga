@@ -16,8 +16,6 @@ import {
 } from './booking.dto.js';
 import { PublicBookingService } from './public-booking.service.js';
 
-const uuidV7 = new ParseUUIDPipe({ version: '7' });
-
 /**
  * Public booking reads: no session. They expose only what a traveller needs
  * to choose a trip and seats; creating a hold requires a CUSTOMER session.
@@ -76,7 +74,7 @@ export class PublicBookingController {
   @ApiQuery({ name: 'originRouteWaypointId', required: true, type: String, format: 'uuid' })
   @ApiQuery({ name: 'destinationRouteWaypointId', required: true, type: String, format: 'uuid' })
   availability(
-    @Param('tripId', uuidV7) tripId: string,
+    @Param('tripId', new ParseUUIDPipe({ version: '7' })) tripId: string,
     @Query(new ZodValidationPipe(availabilityQuerySchema))
     query: z.infer<typeof availabilityQuerySchema>,
   ) {
