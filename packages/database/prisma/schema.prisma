@@ -105,6 +105,33 @@ enum VehicleStatus {
   @@map("vehicle_status")
 }
 
+/// PR-10: payment service providers. SANDBOX is local and test-only: it calls
+/// no external service and is refused in staging and production.
+enum PaymentProvider {
+  SANDBOX
+
+  @@map("payment_provider")
+}
+
+/// PR-10: lifecycle of one payment attempt. PENDING -> SUCCEEDED | FAILED |
+/// CANCELLED; the three terminal states are final (database trigger).
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+
+  @@map("payment_status")
+}
+
+/// PR-10: normalized type of a provider event (whatever the provider's names).
+enum PaymentEventType {
+  PAYMENT_SUCCEEDED
+  PAYMENT_FAILED
+
+  @@map("payment_event_type")
+}
+
 enum RouteVersionStatus {
   DRAFT
   PUBLISHED
@@ -150,6 +177,8 @@ model AuthIdentity {
 
   // PR-09: holds created by this CUSTOMER identity (the booker, not a passenger).
   bookings Booking[] @relation("BookingCustomer")
+  // PR-10: payment attempts of this CUSTOMER (always the booking owner).
+  payments Payment[] @relation("PaymentCustomer")
 
   // The same address may exist in two realms as two unrelated identities.
   @@unique([realm, normalizedEmail])
@@ -795,6 +824,9 @@ model Booking {
   holdExpiresAt              DateTime  @map("hold_expires_at") @db.Timestamptz(3)
   cancelledAt                DateTime? @map("cancelled_at") @db.Timestamptz(3)
   cancellationReason         String?   @map("cancellation_reason") @db.VarChar(500)
+  /// PR-10: set once, by a succeeded payment, while the hold is active. A
+  /// confirmed booking keeps its seats after holdExpiresAt.
+  confirmedAt                DateTime? @map("confirmed_at") @db.Timestamptz(3)
   createdAt                  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -804,6 +836,7 @@ model Booking {
   destinationRouteWaypoint RouteWaypoint @relation("BookingDestination", fields: [destinationRouteWaypointId], references: [id], onDelete: Restrict)
   fareEntry                FareEntry     @relation(fields: [fareEntryId], references: [id], onDelete: Restrict)
   seats                    BookingSeat[]
+  payments                 Payment[]
 
   @@index([customerIdentityId, id])
   @@index([tripId, id])
@@ -852,4 +885,72 @@ model SeatInventoryLock {
   @@unique([bookingSeatId, segmentSequence])
   @@index([seatMapCellId])
   @@map("seat_inventory_lock")
+}
+
+/// PR-10: one payment attempt for a booking. The amount is derived by the
+/// server from the booking (unit fare x seats) and checked by PostgreSQL;
+/// no card or bank data is ever stored. History is kept: a new attempt is a
+/// new row, and at most one attempt per booking is PENDING or SUCCEEDED.
+model Payment {
+  id                 String          @id @default(uuid(7)) @db.Uuid
+  /// Public, immutable, unpredictable reference: ETP- + 12 CSPRNG Crockford base32 characters.
+  reference          String          @unique @db.VarChar(16)
+  bookingId          String          @map("booking_id") @db.Uuid
+  /// The paying CUSTOMER: always the owner of the booking (trigger).
+  customerIdentityId String          @map("customer_identity_id") @db.Uuid
+  provider           PaymentProvider
+  /// Opaque id of the attempt at the provider (never a secret).
+  providerPaymentId  String?         @map("provider_payment_id") @db.VarChar(128)
+  status             PaymentStatus   @default(PENDING)
+  /// Exact amount in the currency's minor unit (BIGINT: seats x fare can exceed 2^31).
+  amountMinor        BigInt          @map("amount_minor")
+  currencyCode       String          @map("currency_code") @db.VarChar(3)
+  currencyMinorUnit  Int             @map("currency_minor_unit")
+  /// Client-chosen key making the initiation idempotent for this customer.
+  idempotencyKey     String?         @map("idempotency_key") @db.VarChar(64)
+  /// Normalized, bounded code (never raw provider text); set when FAILED.
+  failureCode        String?         @map("failure_code") @db.VarChar(48)
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  succeededAt        DateTime?       @map("succeeded_at") @db.Timestamptz(3)
+  failedAt           DateTime?       @map("failed_at") @db.Timestamptz(3)
+  cancelledAt        DateTime?       @map("cancelled_at") @db.Timestamptz(3)
+
+  booking          Booking        @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  customerIdentity AuthIdentity   @relation("PaymentCustomer", fields: [customerIdentityId], references: [id], onDelete: Restrict)
+  events           PaymentEvent[]
+
+  // At most one PENDING and one SUCCEEDED attempt per booking: partial unique
+  // indexes created in the PR-10 migration (like the earlier partial indexes,
+  // they are not expressible here without a preview feature, see ADR-027).
+  @@unique([provider, providerPaymentId])
+  @@unique([customerIdentityId, idempotencyKey])
+  @@index([bookingId, id])
+  @@index([status, id])
+  @@map("payment")
+}
+
+/// PR-10: one provider event received through a signed webhook. Immutable:
+/// recorded once (unique provider event id: replay protection), with the
+/// SHA-256 of its raw payload instead of the payload itself.
+model PaymentEvent {
+  id              String           @id @default(uuid(7)) @db.Uuid
+  paymentId       String           @map("payment_id") @db.Uuid
+  provider        PaymentProvider
+  providerEventId String           @map("provider_event_id") @db.VarChar(128)
+  type            PaymentEventType
+  /// Hex SHA-256 of the raw signed payload.
+  payloadHash     String           @map("payload_hash") @db.Char(64)
+  receivedAt      DateTime         @map("received_at") @db.Timestamptz(3)
+  /// Set when the event moved the payment out of PENDING.
+  processedAt     DateTime?        @map("processed_at") @db.Timestamptz(3)
+  /// Stable reason why a recorded event changed nothing (null when processed).
+  rejectionCode   String?          @map("rejection_code") @db.VarChar(48)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerEventId])
+  @@index([paymentId, id])
+  @@map("payment_event")
 }
