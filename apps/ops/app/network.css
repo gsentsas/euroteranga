@@ -35,3 +35,38 @@
   border-radius: var(--et-radius);
   background: var(--et-color-surface-raised);
 }
+
+/* Seat-map preview (PR-07): a visual aid next to the accessible table. */
+.et-seatmap-deck {
+  display: grid;
+  gap: var(--et-space-1);
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: var(--et-space-2);
+  border: 1px solid var(--et-color-border);
+  border-radius: var(--et-radius);
+}
+
+.et-seatmap-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.25rem;
+  min-height: 2.5rem;
+  padding: 0 var(--et-space-1);
+  border: 1px solid var(--et-color-border);
+  border-radius: var(--et-radius);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.et-seatmap-cell--seat {
+  border-width: 2px;
+  border-color: var(--et-color-brand);
+  font-weight: 700;
+}
+
+.et-seatmap-cell--aisle {
+  border-style: dashed;
+}
