@@ -29,7 +29,7 @@ export default defineConfig({
       timeout: 60_000,
     },
     ...frontendApps.map((app) => ({
-      command: `pnpm --filter @euroteranga/${app.name} start`,
+      command: `pnpm --filter @euroteranga/${app.name} exec next start --port ${app.port}`,
       url: appUrl(app, '/'),
       reuseExistingServer: !isCI,
       timeout: 60_000,

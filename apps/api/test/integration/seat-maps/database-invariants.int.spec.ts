@@ -330,9 +330,15 @@ describe('seat map database invariants (isolated database)', () => {
           data: { seatMapVersionId: published.id },
         }),
       ).rejects.toThrow(/identity and version are immutable/);
+      // Since PR-09, booking seats and seat locks reference cells: a plain
+      // TRUNCATE stops at the foreign key, a CASCADE still reaches the cell
+      // trigger (the named table's trigger fires first).
       await expect(db(t.app).$executeRawUnsafe('TRUNCATE TABLE "seat_map_cell"')).rejects.toThrow(
-        /seat map history cannot be truncated/,
+        /referenced in a foreign key constraint/,
       );
+      await expect(
+        db(t.app).$executeRawUnsafe('TRUNCATE TABLE "seat_map_cell" CASCADE'),
+      ).rejects.toThrow(/seat map history cannot be truncated/);
       // seat_map_version is referenced by cells, vehicles and trips: a plain
       // TRUNCATE stops at the foreign key, a CASCADE reaches its trigger.
       await expect(

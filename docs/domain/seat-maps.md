@@ -11,11 +11,12 @@ carries its **historical** seat map. PR-07 sells no seat.
 
 ## Deferred domains
 
-Not in PR-07, and not anticipated: pricing and fare classes (PR-08), booking,
-availability, holds, seat inventory and allocation (PR-09), passengers,
-tickets, payments, baggage, check-in, boarding, crew, reduced-mobility rules,
-documents and maintenance. There is deliberately **no seat class** (VIP,
-business, premium…); Pricing will decide if it needs one.
+Pricing was added in PR-08 and provisional booking holds use historical seat
+maps in PR-09. Still deferred: fare classes, passengers, tickets, payments,
+baggage, check-in, boarding, crew, reduced-mobility rules, documents and
+maintenance. There is deliberately **no seat class** (VIP, business,
+premium…). PR-09 assigns a held seat to a booking, not to a passenger, and
+sells nothing.
 
 ## Model
 
@@ -93,7 +94,8 @@ optional `expectedSeatMapVersionId`), and **only while the trip is DRAFT**.
 Scheduling freezes it; cancellation keeps it.
 
 - A seat map is **not required** to schedule a trip. PR-06 trips stay valid,
-  and some services may sell no seats. Booking will require one later.
+  and some services may sell no seats. PR-09 public booking therefore exposes
+  only trips that do carry a historical seat map.
 - A version retired later stays valid on historical trips. The trip detail
   shows its historical capacity.
 - **No silent assignment.** OPS offers an explicit button, _Utiliser le plan
@@ -121,6 +123,19 @@ trip may later be configured with another seat map (or go out of service).
 The trip keeps its historical layout. That operational incompatibility will
 be handled by Dispatch, like a vehicle becoming unavailable after
 scheduling.
+
+## Booking availability (PR-09)
+
+Availability always renders `Trip.seatMapVersionId`, never the vehicle's
+current layout. Only cells of kind `SEAT` can be selected; their labels,
+coordinates and physical kinds come from that immutable version. Segment
+locks refer to those same historical cell ids.
+
+`BookingSeat` retains its seat-map cell reference and physical coordinates
+after cancellation or expiry. Operational inventory locks can be deleted
+without losing the historical seat shown on the booking. A later vehicle or
+catalogue change cannot rewrite an existing booking. See
+[bookings.md](bookings.md).
 
 ## Lock hierarchy
 

@@ -148,6 +148,9 @@ model AuthIdentity {
   staffEnrollmentGrant        StaffEnrollmentGrant?         @relation("StaffEnrollmentIdentity")
   staffEnrollmentGrantsIssued StaffEnrollmentGrant[]        @relation("StaffEnrollmentIssuedBy")
 
+  // PR-09: holds created by this CUSTOMER identity (the booker, not a passenger).
+  bookings Booking[] @relation("BookingCustomer")
+
   // The same address may exist in two realms as two unrelated identities.
   @@unique([realm, normalizedEmail])
   @@map("auth_identity")
@@ -538,6 +541,8 @@ model RouteWaypoint {
   timings      TripWaypointTiming[]
   faresFrom    FareEntry[]          @relation("FareOrigin")
   faresTo      FareEntry[]          @relation("FareDestination")
+  bookingsFrom Booking[]            @relation("BookingOrigin")
+  bookingsTo   Booking[]            @relation("BookingDestination")
 
   @@unique([routeVersionId, sequence])
   @@index([stopId])
@@ -606,6 +611,8 @@ model Trip {
   seatMapVersion   SeatMapVersion?      @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
   fareTableVersion FareTableVersion?    @relation(fields: [fareTableVersionId], references: [id], onDelete: Restrict)
   timings          TripWaypointTiming[]
+  bookings         Booking[]
+  seatLocks        SeatInventoryLock[]
 
   @@index([status, id])
   @@index([routeVersionId, id])
@@ -684,7 +691,9 @@ model SeatMapCell {
   kind             SeatMapCellKind
   seatLabel        String?         @map("seat_label") @db.VarChar(8)
 
-  seatMapVersion SeatMapVersion @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
+  seatMapVersion SeatMapVersion      @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
+  bookingSeats   BookingSeat[]
+  seatLocks      SeatInventoryLock[]
 
   @@unique([seatMapVersionId, deck, row, column])
   @@unique([seatMapVersionId, seatLabel])
@@ -755,9 +764,92 @@ model FareEntry {
   fareTableVersion         FareTableVersion @relation(fields: [fareTableVersionId], references: [id], onDelete: Restrict)
   originRouteWaypoint      RouteWaypoint    @relation("FareOrigin", fields: [originRouteWaypointId], references: [id], onDelete: Restrict)
   destinationRouteWaypoint RouteWaypoint    @relation("FareDestination", fields: [destinationRouteWaypointId], references: [id], onDelete: Restrict)
+  bookings                 Booking[]
 
   @@unique([fareTableVersionId, originRouteWaypointId, destinationRouteWaypointId])
   @@index([originRouteWaypointId])
   @@index([destinationRouteWaypointId])
   @@map("fare_entry")
+}
+
+/// PR-09: a CUSTOMER's provisional hold on seats of one trip, for one
+/// origin/destination pair. The customer is the booker, not a passenger: no
+/// passenger data is stored. Not paid, not a ticket. Its state is derived:
+/// CANCELLED (cancelledAt set), EXPIRED (holdExpiresAt <= now) or HELD.
+model Booking {
+  id                         String    @id @default(uuid(7)) @db.Uuid
+  /// Public, immutable, unpredictable reference: ETB- + 12 CSPRNG Crockford base32 characters.
+  reference                  String    @unique @db.VarChar(16)
+  customerIdentityId         String    @map("customer_identity_id") @db.Uuid
+  tripId                     String    @map("trip_id") @db.Uuid
+  originRouteWaypointId      String    @map("origin_route_waypoint_id") @db.Uuid
+  destinationRouteWaypointId String    @map("destination_route_waypoint_id") @db.Uuid
+  originSequence             Int       @map("origin_sequence")
+  destinationSequence        Int       @map("destination_sequence")
+  /// Fare entry of the trip's historical fare table version (PR-08).
+  fareEntryId                String    @map("fare_entry_id") @db.Uuid
+  /// Exact snapshot of the base fare per seat, in the currency's minor unit.
+  unitAmountMinor            Int       @map("unit_amount_minor")
+  currencyCode               String    @map("currency_code") @db.VarChar(3)
+  currencyMinorUnit          Int       @map("currency_minor_unit")
+  holdExpiresAt              DateTime  @map("hold_expires_at") @db.Timestamptz(3)
+  cancelledAt                DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  cancellationReason         String?   @map("cancellation_reason") @db.VarChar(500)
+  createdAt                  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  customerIdentity         AuthIdentity  @relation("BookingCustomer", fields: [customerIdentityId], references: [id], onDelete: Restrict)
+  trip                     Trip          @relation(fields: [tripId], references: [id], onDelete: Restrict)
+  originRouteWaypoint      RouteWaypoint @relation("BookingOrigin", fields: [originRouteWaypointId], references: [id], onDelete: Restrict)
+  destinationRouteWaypoint RouteWaypoint @relation("BookingDestination", fields: [destinationRouteWaypointId], references: [id], onDelete: Restrict)
+  fareEntry                FareEntry     @relation(fields: [fareEntryId], references: [id], onDelete: Restrict)
+  seats                    BookingSeat[]
+
+  @@index([customerIdentityId, id])
+  @@index([tripId, id])
+  @@index([holdExpiresAt, id])
+  @@index([originRouteWaypointId])
+  @@index([destinationRouteWaypointId])
+  @@index([fareEntryId])
+  @@map("booking")
+}
+
+/// PR-09: one seat chosen by a booking. Historical: never deleted; released
+/// (releasedAt) when the hold is cancelled or has expired.
+model BookingSeat {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  bookingId     String    @map("booking_id") @db.Uuid
+  seatMapCellId String    @map("seat_map_cell_id") @db.Uuid
+  releasedAt    DateTime? @map("released_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  booking     Booking             @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  seatMapCell SeatMapCell         @relation(fields: [seatMapCellId], references: [id], onDelete: Restrict)
+  locks       SeatInventoryLock[]
+
+  @@unique([bookingId, seatMapCellId])
+  @@index([seatMapCellId])
+  @@map("booking_seat")
+}
+
+/// PR-09: operational occupancy of one seat on one segment of a trip
+/// (segment n = from waypoint sequence n to n + 1). The unique index on
+/// (trip, seat, segment) physically prevents overbooking. Ephemeral: deleted
+/// once its booking is cancelled or expired.
+model SeatInventoryLock {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  bookingSeatId   String   @map("booking_seat_id") @db.Uuid
+  tripId          String   @map("trip_id") @db.Uuid
+  seatMapCellId   String   @map("seat_map_cell_id") @db.Uuid
+  segmentSequence Int      @map("segment_sequence")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  bookingSeat BookingSeat @relation(fields: [bookingSeatId], references: [id], onDelete: Restrict)
+  trip        Trip        @relation(fields: [tripId], references: [id], onDelete: Restrict)
+  seatMapCell SeatMapCell @relation(fields: [seatMapCellId], references: [id], onDelete: Restrict)
+
+  @@unique([tripId, seatMapCellId, segmentSequence])
+  @@unique([bookingSeatId, segmentSequence])
+  @@index([seatMapCellId])
+  @@map("seat_inventory_lock")
 }

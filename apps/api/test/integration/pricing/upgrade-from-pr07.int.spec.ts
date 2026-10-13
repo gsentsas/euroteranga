@@ -74,7 +74,9 @@ function deploy(config: string | null, url: string) {
 /**
  * Upgrade of an existing PR-07 database: the pricing migration is applied by
  * `prisma migrate deploy` on top of the seven earlier migrations, with a
- * SCHEDULED trip (vehicle, seat map, timetable) already present.
+ * SCHEDULED trip (vehicle, seat map, timetable) already present. The PR-08
+ * state is measured right after that step; later migrations (PR-09 and on)
+ * are then applied, as a deployment would, before the API starts.
  */
 describe('upgrade from a PR-07 database (isolated database)', () => {
   let t: TestApp;
@@ -85,6 +87,12 @@ describe('upgrade from a PR-07 database (isolated database)', () => {
   let raw: ReturnType<typeof createDatabaseClient>;
   const name = `et_upg_${randomBytes(6).toString('hex')}`;
   const before: Record<string, string> = {};
+  const afterPricing: {
+    applied: string[];
+    fareColumn: boolean;
+    snapshot: Record<string, string>;
+    trip: unknown;
+  } = { applied: [], fareColumn: false, snapshot: {}, trip: null };
 
   const snapshot = async (client: ReturnType<typeof createDatabaseClient>) =>
     Object.fromEntries(
@@ -117,23 +125,29 @@ describe('upgrade from a PR-07 database (isolated database)', () => {
     target.pathname = `/${name}`;
     url = target.toString();
 
-    // The PR-07 migration set: every migration before the pricing one.
+    // A migration set: every migration of the real directory up to a bound.
     workDir = mkdtempSync(join(tmpdir(), 'et-upgrade-'));
-    const pr07 = join(workDir, 'migrations');
-    for (const entry of readdirSync(MIGRATIONS)) {
-      if (entry < PRICING_MIGRATION)
-        cpSync(join(MIGRATIONS, entry), join(pr07, entry), { recursive: true });
-    }
-    const config = join(workDir, 'prisma.config.mjs');
-    writeFileSync(
-      config,
-      `export default ${JSON.stringify({
-        schema: join(DATABASE_PACKAGE, 'prisma', 'schema.prisma'),
-        migrations: { path: pr07 },
-        datasource: { url },
-      })};\n`,
+    const migrationSet = (label: string, include: (entry: string) => boolean) => {
+      const path = join(workDir, label, 'migrations');
+      for (const entry of readdirSync(MIGRATIONS)) {
+        if (include(entry)) cpSync(join(MIGRATIONS, entry), join(path, entry), { recursive: true });
+      }
+      const config = join(workDir, label, 'prisma.config.mjs');
+      writeFileSync(
+        config,
+        `export default ${JSON.stringify({
+          schema: join(DATABASE_PACKAGE, 'prisma', 'schema.prisma'),
+          migrations: { path },
+          datasource: { url },
+        })};\n`,
+      );
+      return config;
+    };
+    // The PR-07 migration set: every migration before the pricing one.
+    deploy(
+      migrationSet('pr07', (entry) => entry < PRICING_MIGRATION),
+      url,
     );
-    deploy(config, url);
 
     raw = createDatabaseClient({ databaseUrl: url });
     expect(await appliedMigrations(raw)).toHaveLength(7);
@@ -141,11 +155,25 @@ describe('upgrade from a PR-07 database (isolated database)', () => {
     for (const statement of PR07_DATA) await raw.$executeRawUnsafe(statement);
     Object.assign(before, await snapshot(raw));
 
-    // The real migration directory: only the pricing migration is pending.
+    // The PR-08 migration set: only the pricing migration is pending.
+    deploy(
+      migrationSet('pr08', (entry) => entry <= PRICING_MIGRATION),
+      url,
+    );
+    afterPricing.applied = await appliedMigrations(raw);
+    afterPricing.fareColumn = await hasFareColumn(raw);
+    afterPricing.snapshot = await snapshot(raw);
+    [afterPricing.trip] = await raw.$queryRawUnsafe<unknown[]>(
+      `SELECT status, fare_table_version_id FROM trip WHERE id = '${TRIP}'`,
+    );
+    // The real directory: later migrations (PR-09 and on), as deployed.
     deploy(null, url);
     t = await startTestApp(integrationEnv({ DATABASE_URL: url }));
     admin = await staffActor(t.app, ['SUPER_ADMIN']);
-  });
+    // Budget for three `prisma migrate deploy` processes (~2.5 s each when
+    // idle, measured; several times that under the parallel integration
+    // load), the API start and a STAFF enrollment (Argon2 + TOTP).
+  }, 60_000);
 
   afterAll(async () => {
     await t?.app.close();
@@ -156,9 +184,13 @@ describe('upgrade from a PR-07 database (isolated database)', () => {
   });
 
   it('applies only the pricing migration and leaves PR-07 history untouched', async () => {
-    const applied = await appliedMigrations(raw);
+    const applied = afterPricing.applied;
     expect(applied).toHaveLength(8);
     expect(applied.at(-1)).toBe(PRICING_MIGRATION);
+    expect(afterPricing.fareColumn).toBe(true);
+    expect(afterPricing.snapshot).toEqual(before);
+    expect(afterPricing.trip).toEqual({ status: 'SCHEDULED', fare_table_version_id: null });
+    // Still true once the later migrations are applied.
     expect(await hasFareColumn(raw)).toBe(true);
     expect(await snapshot(raw)).toEqual(before);
     const [trip] = await raw.$queryRawUnsafe<

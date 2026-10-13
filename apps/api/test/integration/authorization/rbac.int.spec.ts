@@ -14,6 +14,8 @@ const EXPECTED_MATRIX: Record<
     privileged: true,
     permissions: [
       'audit.read',
+      'booking.manage',
+      'booking.read',
       'fleet.manage',
       'fleet.read',
       'identity.read',
@@ -40,6 +42,8 @@ const EXPECTED_MATRIX: Record<
     privileged: false,
     permissions: [
       'audit.read',
+      'booking.manage',
+      'booking.read',
       'fleet.manage',
       'fleet.read',
       'identity.read',
@@ -64,6 +68,8 @@ const EXPECTED_MATRIX: Record<
     realm: 'STAFF',
     privileged: false,
     permissions: [
+      'booking.manage',
+      'booking.read',
       'fleet.manage',
       'fleet.read',
       'identity.read',
@@ -79,6 +85,8 @@ const EXPECTED_MATRIX: Record<
       'trip.read',
     ],
   },
+  // DISPATCHER, COMPLIANCE_AGENT, FINANCE and AUDITOR have no booking
+  // permission by default (PR-09; AUDITOR keeps audit.read).
   DISPATCHER: {
     realm: 'STAFF',
     privileged: false,
@@ -92,11 +100,20 @@ const EXPECTED_MATRIX: Record<
       'trip.read',
     ],
   },
-  // BOOKING_AGENT and CUSTOMER_SUPPORT have no fleet permission (PR-05 matrix).
+  // BOOKING_AGENT and CUSTOMER_SUPPORT have no fleet permission (PR-05 matrix);
+  // they read and cancel customer holds (PR-09).
   BOOKING_AGENT: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['network.read', 'ops.access', 'pricing.read', 'seatmap.read', 'trip.read'],
+    permissions: [
+      'booking.manage',
+      'booking.read',
+      'network.read',
+      'ops.access',
+      'pricing.read',
+      'seatmap.read',
+      'trip.read',
+    ],
   },
   // COMPLIANCE_AGENT has no pricing permission by default (PR-08 matrix).
   COMPLIANCE_AGENT: {
@@ -110,7 +127,15 @@ const EXPECTED_MATRIX: Record<
   CUSTOMER_SUPPORT: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['network.read', 'ops.access', 'pricing.read', 'seatmap.read', 'trip.read'],
+    permissions: [
+      'booking.manage',
+      'booking.read',
+      'network.read',
+      'ops.access',
+      'pricing.read',
+      'seatmap.read',
+      'trip.read',
+    ],
   },
   AUDITOR: {
     realm: 'STAFF',
@@ -195,6 +220,9 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
     'POST',
     '/v1/admin/pricing/fare-tables/01900000-0000-7000-8000-000000000000/versions/01900000-0000-7000-8000-000000000001/publish',
   ],
+  ['GET', '/v1/admin/bookings'],
+  ['GET', '/v1/admin/bookings/01900000-0000-7000-8000-000000000000'],
+  ['POST', '/v1/admin/bookings/01900000-0000-7000-8000-000000000000/cancel'],
 ];
 
 describe('server-side RBAC', () => {
@@ -287,6 +315,7 @@ describe('server-side RBAC', () => {
       expect((await api.get('/pricing/fare-tables')).status).toBe(
         allowed('pricing.read') ? 200 : 403,
       );
+      expect((await api.get('/bookings')).status).toBe(allowed('booking.read') ? 200 : 403);
     },
   );
 

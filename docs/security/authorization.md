@@ -46,20 +46,22 @@ ADR-017 to ADR-020. This document contains no secret value.
 | `seatmap.manage`           | Creating seat maps, editing drafts, publishing versions    |
 | `pricing.read`             | Reading fare tables, versions and fares (PR-08)            |
 | `pricing.manage`           | Creating fare tables, editing drafts, publishing versions  |
+| `booking.read`             | Reading customer holds, journeys, seats and prices (PR-09) |
+| `booking.manage`           | Cancelling active customer holds with a reason             |
 
 ### Role matrix
 
-| Role                                | Realm | Privileged | Permissions                                                                                                                                                                                                |
-| ----------------------------------- | ----- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SUPER_ADMIN`                       | STAFF | yes        | all twenty                                                                                                                                                                                                 |
-| `DIRECTOR`                          | STAFF | no         | all except `privileged.manage`                                                                                                                                                                             |
-| `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage`, `trip.read`, `trip.manage`, `seatmap.read`, `seatmap.manage`, `pricing.read`, `pricing.manage` |
-| `DISPATCHER`                        | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `trip.manage`, `seatmap.read`, `pricing.read`                                                                                                     |
-| `AUDITOR`                           | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `pricing.read`                                                                        |
-| `COMPLIANCE_AGENT`                  | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read` (no pricing permission)                                                                                                            |
-| `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`, `trip.read`, `seatmap.read`, `pricing.read` (no fleet permission by default)                                                                                                 |
-| `FINANCE`                           | STAFF | no         | `ops.access`, `pricing.read` (no network, fleet, trip or seat-map permission by default)                                                                                                                   |
-| `DRIVER`, `CREW`                    | CREW  | no         | none yet                                                                                                                                                                                                   |
+| Role                                | Realm | Privileged | Permissions                                                                                                                                                                                                                                  |
+| ----------------------------------- | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPER_ADMIN`                       | STAFF | yes        | all twenty-two                                                                                                                                                                                                                               |
+| `DIRECTOR`                          | STAFF | no         | all except `privileged.manage`                                                                                                                                                                                                               |
+| `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage`, `trip.read`, `trip.manage`, `seatmap.read`, `seatmap.manage`, `pricing.read`, `pricing.manage`, `booking.read`, `booking.manage` |
+| `DISPATCHER`                        | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `trip.manage`, `seatmap.read`, `pricing.read`                                                                                                                                       |
+| `AUDITOR`                           | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `pricing.read`                                                                                                          |
+| `COMPLIANCE_AGENT`                  | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read` (no pricing permission)                                                                                                                                              |
+| `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`, `trip.read`, `seatmap.read`, `pricing.read`, `booking.read`, `booking.manage` (no fleet permission by default)                                                                                                 |
+| `FINANCE`                           | STAFF | no         | `ops.access`, `pricing.read` (no network, fleet, trip or seat-map permission by default)                                                                                                                                                     |
+| `DRIVER`, `CREW`                    | CREW  | no         | none yet                                                                                                                                                                                                                                     |
 
 A STAFF identity without any role, or with roles lacking `ops.access`, can
 sign in (password + TOTP) but gets **Accès refusé** in OPS and 403 from every
@@ -139,6 +141,9 @@ There is **no public STAFF or CREW registration** and no bootstrap endpoint.
   `STAFF_MFA_ENROLLMENT_AUTHORIZED`, `SUPER_ADMIN_BOOTSTRAPPED`. Each carries
   the actor (null for system/CLI events), actor realm, resource,
   before/after, reason and the request id.
+- Booking adds `BOOKING_HELD`, `BOOKING_CANCELLED` and
+  `BOOKING_CANCELLED_BY_TRIP`. Each event shares the business transaction; an
+  audit failure rolls back the hold/cancellation and inventory changes.
 - `before`, `after` and `metadata` go through the same redaction as logs:
   tokens, passwords, TOTP secrets and recovery codes are never written.
 - Read through `GET /v1/admin/audit` (`audit.read`), newest first, keyset
@@ -148,19 +153,22 @@ There is **no public STAFF or CREW registration** and no bootstrap endpoint.
 
 All under `/v1/admin`, STAFF session, `ops.access` plus:
 
-| Method | Path                                         | Permission(s)                             |
-| ------ | -------------------------------------------- | ----------------------------------------- |
-| GET    | `/access/me`                                 | session only (own access)                 |
-| GET    | `/roles`                                     | `role.read`                               |
-| GET    | `/identities?realm=staff\|crew&cursor&limit` | `identity.read`                           |
-| GET    | `/identities/:id/access`                     | `identity.read`, `role.read`              |
-| POST   | `/identities/:id/roles`                      | `role.assign` (+ CSRF)                    |
-| POST   | `/identities/:id/roles/revoke`               | `role.assign` (+ CSRF)                    |
-| POST   | `/identities/:id/status`                     | `identity.status.manage` (+ CSRF)         |
-| POST   | `/identities/:id/sessions/revoke-all`        | `session.revoke.any` (+ CSRF)             |
-| POST   | `/staff/invitations`                         | `identity.staff.provision`, `role.assign` |
-| POST   | `/staff/:id/mfa/enrollment-authorization`    | `mfa.enrollment.authorize`                |
-| GET    | `/audit?cursor&limit`                        | `audit.read`                              |
+| Method | Path                                             | Permission(s)                             |
+| ------ | ------------------------------------------------ | ----------------------------------------- |
+| GET    | `/access/me`                                     | session only (own access)                 |
+| GET    | `/roles`                                         | `role.read`                               |
+| GET    | `/identities?realm=staff\|crew&cursor&limit`     | `identity.read`                           |
+| GET    | `/identities/:id/access`                         | `identity.read`, `role.read`              |
+| POST   | `/identities/:id/roles`                          | `role.assign` (+ CSRF)                    |
+| POST   | `/identities/:id/roles/revoke`                   | `role.assign` (+ CSRF)                    |
+| POST   | `/identities/:id/status`                         | `identity.status.manage` (+ CSRF)         |
+| POST   | `/identities/:id/sessions/revoke-all`            | `session.revoke.any` (+ CSRF)             |
+| POST   | `/staff/invitations`                             | `identity.staff.provision`, `role.assign` |
+| POST   | `/staff/:id/mfa/enrollment-authorization`        | `mfa.enrollment.authorize`                |
+| GET    | `/audit?cursor&limit`                            | `audit.read`                              |
+| GET    | `/bookings?cursor&limit&status&tripId&reference` | `booking.read`                            |
+| GET    | `/bookings/:id`                                  | `booking.read`                            |
+| POST   | `/bookings/:id/cancel`                           | `booking.manage` (+ CSRF, reason)         |
 
 Public: `POST /v1/auth/staff/invitation/accept` (rate limited per IP).
 
@@ -176,5 +184,5 @@ See ADR-020 and [the runbook](../runbooks/bootstrap-super-admin.md).
   ([authentication incident runbook](../runbooks/authentication-incident.md)).
 - No STAFF/CREW password reset flow; no CREW provisioning UI yet.
 - Roles and permissions are managed by migrations, not editable at runtime.
-- Business permissions (bookings, dispatch, finance…) arrive with their PRs.
+- Dispatch and later finance/payment permissions arrive with their domains.
 - Not deployed; nothing has been validated against production.

@@ -8,15 +8,16 @@ A **fare table** gives the **base fare** of a journey between two stops of a
 route version, as an exact integer amount in the minor unit of one explicit
 currency. Its versions are published, historical and immutable. A trip
 carries its **historical pricing**: the fare-table version chosen while it was
-DRAFT, frozen by scheduling. PR-08 sells nothing.
+DRAFT, frozen by scheduling. PR-09 can snapshot that base fare into a
+provisional booking hold; neither release sells anything.
 
 ## Deferred domains
 
-Not in PR-08, and not anticipated: booking, seat reservation, availability,
-holds, passengers (PR-09 and later), per-seat prices, seat classes and seat
-supplements, child/student/senior fares, round trips, promotions, coupons and
-discounts, yield or dynamic pricing, detailed taxes, commissions, payments,
-refunds and tickets. A resolved fare is **not a quote or a booking**.
+PR-09 adds segment seat holds at the existing base fare. Still deferred:
+passengers, per-seat prices, seat classes and seat supplements,
+child/student/senior fares, round trips, promotions, coupons and discounts,
+yield or dynamic pricing, detailed taxes, commissions, payments, refunds and
+tickets. A resolved fare alone is **not a quote or a booking**.
 
 ## Model
 
@@ -46,7 +47,9 @@ refunds and tickets. A resolved fare is **not a quote or a booking**.
   4217 list**: the operator states the currency and its minor unit
   explicitly when creating the table.
 - The API returns `amountMinor`, `currencyCode` and `currencyMinorUnit`
-  together. Clients never compute prices.
+  together. Clients never choose or authoritatively compute a price; they may
+  multiply the returned unit amount for an exact display summary, while the
+  booking response supplies the authoritative snapshot and total.
 - `@euroteranga/auth-client` ships tested helpers:
   - `formatMoney(amountMinor, currencyCode, minorUnit)` builds an exact
     decimal string with `BigInt`, then formats it with `Intl.NumberFormat`
@@ -55,6 +58,21 @@ refunds and tickets. A resolved fare is **not a quote or a booking**.
     units **without rounding**: more decimals than the minor unit, zero,
     negative or out-of-range amounts are refused (`null`). `toFixed` is never
     the calculation authority.
+  - `multiplyAmountMinor(amountMinor, count)` uses `BigInt` and refuses unsafe
+    integers. Booking uses it for the pre-hold multi-seat summary (including
+    currencies with minor unit 0), then displays the server total after
+    creation.
+
+## Booking snapshot (PR-09)
+
+Hold creation resolves the `FareEntry` from the trip's own historical
+`fareTableVersionId` for the exact origin/destination route-waypoint ids. The
+request cannot provide price, currency or fare id. The booking snapshots
+`fareEntryId`, `unitAmountMinor`, `currencyCode` and `currencyMinorUnit`, and
+computes `totalAmountMinor` with exact integer arithmetic.
+
+Retiring the fare-table version or changing later catalogue prices does not
+change an existing hold. See [bookings.md](bookings.md).
 
 ## Fare matrix
 

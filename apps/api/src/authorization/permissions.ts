@@ -27,6 +27,8 @@ export const PERMISSIONS = {
   SEATMAP_MANAGE: 'seatmap.manage',
   PRICING_READ: 'pricing.read',
   PRICING_MANAGE: 'pricing.manage',
+  BOOKING_READ: 'booking.read',
+  BOOKING_MANAGE: 'booking.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

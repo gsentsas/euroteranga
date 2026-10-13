@@ -1,4 +1,5 @@
 import { FoundationShell } from '@euroteranga/ui';
+import { BookingFlow } from '../components/booking-flow';
 import { publicEnv } from '../lib/env';
 
 export default function HomePage() {
@@ -6,13 +7,10 @@ export default function HomePage() {
     <FoundationShell
       product="Booking"
       title="EURO TERANGA Booking"
-      subtitle="Foundation environment"
+      subtitle="Choisissez votre trajet et retenez vos sièges"
       environment={publicEnv.NEXT_PUBLIC_APP_ENV}
     >
-      <p>
-        Le moteur de réservation n’est pas encore disponible. Aucune réservation ne peut être
-        effectuée.
-      </p>
+      <BookingFlow />
     </FoundationShell>
   );
 }

@@ -14,8 +14,9 @@ optional vehicle. It does not sell seats or run on the road.
 
 PR-06 deliberately leaves these to later pull requests:
 
-- Booking, passengers, payments, baggage, check-in and boarding.
-  (Seat maps: added in PR-07; pricing: added in PR-08, see below.)
+- Passengers, payments, baggage, check-in and boarding. (Seat maps were added
+  in PR-07, pricing in PR-08 and provisional booking holds in PR-09; see
+  below.)
 - **Crew and driver assignment.**
 - **Dispatch**: operational follow-up, actual departure/arrival times,
   `IN_PROGRESS`/`COMPLETED` states, handling of vehicles that become
@@ -148,6 +149,23 @@ fare-table version whose base fares apply to its journeys.
   (`CREATE OR REPLACE`) and keeps every PR-06 and PR-07 rule.
 
 See [pricing.md](pricing.md).
+
+## Booking holds (PR-09)
+
+Only a `SCHEDULED`, future trip with both a historical seat map and historical
+pricing is publicly bookable. Search returns an exact origin/destination
+route-waypoint pair; availability and hold creation revalidate that pair on
+the server.
+
+Cancelling a trip locks and cancels every active hold of that trip, releases
+its segment inventory and writes `BOOKING_CANCELLED_BY_TRIP` audit events in
+the same transaction as `TRIP_CANCELLED`. A concurrent hold creation is
+serialized by the trip lock: it either commits before and is included in the
+cascade, or sees the cancelled trip and fails. No active booking survives a
+cancelled trip.
+
+Trip history itself remains independent of the booking list. See
+[bookings.md](bookings.md).
 
 ## Enforcement in PostgreSQL
 

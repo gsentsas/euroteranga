@@ -9,6 +9,7 @@ import type { z } from 'zod';
 import { PublicApiError } from '../auth/http/public-api-error.js';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
+import { cancelTripHolds } from '../bookings/booking-inventory.js';
 import { DatabaseService } from '../database/database.service.js';
 import {
   fareTableLabel,
@@ -495,6 +496,17 @@ export class TripService {
           throw TripErrors.statusConflict();
         }
         if (trip.status === 'CANCELLED') throw TripErrors.cancelled();
+        // PR-09: release every active hold first (trip already FOR UPDATE).
+        const reference = await tx.trip.findUniqueOrThrow({
+          where: { id },
+          select: { reference: true },
+        });
+        const cancelledBookingCount = await cancelTripHolds(tx, this.audit, {
+          tripId: id,
+          tripReference: reference.reference,
+          actor,
+          reason: input.reason,
+        });
         const cancelledAt = new Date();
         await tx.trip.update({ where: { id }, data: { status: 'CANCELLED', cancelledAt } });
         await this.audit.record(
@@ -505,7 +517,7 @@ export class TripService {
             resourceId: id,
             before: { status: trip.status },
             after: { status: 'CANCELLED', cancelledAt },
-            metadata: { reason: input.reason },
+            metadata: { reason: input.reason, cancelledBookingCount },
           },
           tx,
         );
