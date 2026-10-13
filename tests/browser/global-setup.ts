@@ -1,7 +1,13 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { createDatabaseClient } from '@euroteranga/database';
 import { hash } from '@node-rs/argon2';
-import { FIXTURE_PASSWORD, FIXTURES, seededVehicleCode, type Fixture } from './fixtures.js';
+import {
+  FIXTURE_PASSWORD,
+  FIXTURES,
+  seededVehicleCode,
+  tripSeed,
+  type Fixture,
+} from './fixtures.js';
 
 const DAY_MS = 24 * 3_600_000;
 
@@ -76,7 +82,56 @@ export default async function globalSetup(): Promise<void> {
         model: 'Lecture',
       },
     });
+    await seedTripData(db);
   } finally {
     await db.$disconnect();
   }
+}
+
+/**
+ * Synthetic geography and vehicle for the trip scenarios (no real place,
+ * route, plate or reference), written directly like the identities above.
+ */
+async function seedTripData(db: ReturnType<typeof createDatabaseClient>): Promise<void> {
+  const seed = tripSeed();
+  const country = await db.country.create({
+    data: { iso2: seed.iso2, iso3: seed.iso3, name: seed.countryName },
+  });
+  const place = (code: string, name: string) =>
+    db.stop.create({
+      data: {
+        code,
+        name,
+        countryId: country.id,
+        locality: 'Localité synthétique',
+        latitude: 1,
+        longitude: 1,
+        timezone: 'Etc/UTC',
+      },
+    });
+  const origin = await place(seed.originCode, 'Arrêt départ synthétique');
+  const destination = await place(seed.destinationCode, 'Arrêt arrivée synthétique');
+  const route = await db.route.create({ data: { code: seed.routeCode, name: seed.routeName } });
+  const version = await db.routeVersion.create({ data: { routeId: route.id, version: 1 } });
+  await db.routeWaypoint.createMany({
+    data: [
+      { routeVersionId: version.id, sequence: 1, stopId: origin.id, boardingAllowed: true },
+      { routeVersionId: version.id, sequence: 2, stopId: destination.id, alightingAllowed: true },
+    ],
+  });
+  await db.routeVersion.update({
+    where: { id: version.id },
+    data: { status: 'PUBLISHED', publishedAt: new Date() },
+  });
+  const vehicle = await db.vehicle.create({
+    data: {
+      code: seed.vehicleCode,
+      manufacturer: 'Constructeur synthétique',
+      model: 'Autocar voyages',
+    },
+  });
+  await db.vehicle.update({ where: { id: vehicle.id }, data: { status: 'ACTIVE' } });
+  await db.trip.create({
+    data: { reference: seed.seededTripReference, routeVersionId: version.id },
+  });
 }

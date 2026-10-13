@@ -27,6 +27,8 @@ const EXPECTED_MATRIX: Record<
       'role.assign',
       'role.read',
       'session.revoke.any',
+      'trip.manage',
+      'trip.read',
     ],
   },
   DIRECTOR: {
@@ -46,6 +48,8 @@ const EXPECTED_MATRIX: Record<
       'role.assign',
       'role.read',
       'session.revoke.any',
+      'trip.manage',
+      'trip.read',
     ],
   },
   OPS_MANAGER: {
@@ -59,26 +63,32 @@ const EXPECTED_MATRIX: Record<
       'network.read',
       'ops.access',
       'role.read',
+      'trip.manage',
+      'trip.read',
     ],
   },
   DISPATCHER: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['fleet.read', 'network.read', 'ops.access'],
+    permissions: ['fleet.read', 'network.read', 'ops.access', 'trip.manage', 'trip.read'],
   },
   // BOOKING_AGENT and CUSTOMER_SUPPORT have no fleet permission (PR-05 matrix).
-  BOOKING_AGENT: { realm: 'STAFF', privileged: false, permissions: ['network.read', 'ops.access'] },
+  BOOKING_AGENT: {
+    realm: 'STAFF',
+    privileged: false,
+    permissions: ['network.read', 'ops.access', 'trip.read'],
+  },
   COMPLIANCE_AGENT: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['fleet.read', 'network.read', 'ops.access'],
+    permissions: ['fleet.read', 'network.read', 'ops.access', 'trip.read'],
   },
-  // FINANCE has no network (PR-04) nor fleet (PR-05) permission by default.
+  // FINANCE has no network (PR-04), fleet (PR-05) nor trip (PR-06) permission by default.
   FINANCE: { realm: 'STAFF', privileged: false, permissions: ['ops.access'] },
   CUSTOMER_SUPPORT: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['network.read', 'ops.access'],
+    permissions: ['network.read', 'ops.access', 'trip.read'],
   },
   AUDITOR: {
     realm: 'STAFF',
@@ -90,6 +100,7 @@ const EXPECTED_MATRIX: Record<
       'network.read',
       'ops.access',
       'role.read',
+      'trip.read',
     ],
   },
   DRIVER: { realm: 'CREW', privileged: false, permissions: [] },
@@ -120,6 +131,13 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['POST', '/v1/admin/fleet/vehicles'],
   ['POST', '/v1/admin/fleet/vehicles/01900000-0000-7000-8000-000000000000'],
   ['POST', '/v1/admin/fleet/vehicles/01900000-0000-7000-8000-000000000000/status'],
+  ['GET', '/v1/admin/trips'],
+  ['GET', '/v1/admin/trips/01900000-0000-7000-8000-000000000000'],
+  ['POST', '/v1/admin/trips'],
+  ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/timetable'],
+  ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/schedule'],
+  ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/cancel'],
+  ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/vehicle'],
 ];
 
 describe('server-side RBAC', () => {
@@ -207,6 +225,7 @@ describe('server-side RBAC', () => {
         allowed('network.read') ? 200 : 403,
       );
       expect((await api.get('/fleet/vehicles')).status).toBe(allowed('fleet.read') ? 200 : 403);
+      expect((await api.get('/trips')).status).toBe(allowed('trip.read') ? 200 : 403);
     },
   );
 

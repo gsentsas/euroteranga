@@ -288,6 +288,120 @@ export interface VehicleStatusTransitionInput {
   expectedStatus?: VehicleStatus;
 }
 
+export type TripStatus = 'DRAFT' | 'SCHEDULED' | 'CANCELLED';
+
+export interface AdminTripSummary {
+  id: string;
+  reference: string;
+  routeVersionId: string;
+  vehicleId: string | null;
+  status: TripStatus;
+  /** UTC instants (ISO 8601). */
+  plannedDepartureAt: string | null;
+  plannedArrivalAt: string | null;
+  scheduledAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  routeVersion: {
+    id: string;
+    version: number;
+    status: NetworkRouteVersionStatus;
+    publishedAt: string | null;
+    retiredAt: string | null;
+    route: { id: string; code: string; name: string };
+  };
+  vehicle: {
+    id: string;
+    code: string;
+    status: VehicleStatus;
+    manufacturer: string;
+    model: string;
+  } | null;
+}
+
+export interface AdminTripPlace {
+  id: string;
+  code: string;
+  name: string;
+  /** IANA timezone, for presentation only (times are stored in UTC). */
+  timezone: string;
+}
+
+export interface AdminTripRouteWaypoint {
+  id: string;
+  sequence: number;
+  boardingAllowed: boolean;
+  alightingAllowed: boolean;
+  stop: AdminTripPlace | null;
+  checkpoint: (AdminTripPlace & { type: NetworkCheckpointType }) | null;
+}
+
+export interface AdminTripTiming {
+  id: string;
+  routeWaypointId: string;
+  sequence: number;
+  plannedArrivalAt: string | null;
+  plannedDepartureAt: string | null;
+}
+
+/** Business history read from the audit trail (no actor identity). */
+export interface TripHistoryEntry {
+  occurredAt: string;
+  action: string;
+  reason: string | null;
+  fromStatus: TripStatus | null;
+  toStatus: TripStatus | null;
+  fromVehicleCode: string | null;
+  toVehicleCode: string | null;
+}
+
+export interface AdminTrip extends Omit<AdminTripSummary, 'routeVersion'> {
+  routeVersion: AdminTripSummary['routeVersion'] & { waypoints: AdminTripRouteWaypoint[] };
+  timings: AdminTripTiming[];
+  history: TripHistoryEntry[];
+}
+
+export interface TripListOptions {
+  cursor?: string;
+  limit?: number;
+  status?: TripStatus;
+  routeId?: string;
+  routeVersionId?: string;
+  /** ISO 8601 with offset. */
+  departureFrom?: string;
+  departureTo?: string;
+}
+
+export interface TripCreateInput {
+  reference: string;
+  routeVersionId: string;
+  vehicleId?: string | null;
+}
+
+export interface TripTimetableInput {
+  /** One entry per route waypoint; ISO 8601 instants with an explicit offset. */
+  timings: Array<{
+    routeWaypointId: string;
+    plannedArrivalAt: string | null;
+    plannedDepartureAt: string | null;
+  }>;
+}
+
+export interface TripCancelInput {
+  reason: string;
+  expectedStatus?: TripStatus;
+}
+
+export interface TripVehicleInput {
+  /** null removes the vehicle. */
+  vehicleId: string | null;
+  /** Vehicle the decision was based on (null: none); refused if it moved. */
+  expectedVehicleId?: string | null;
+  /** Required once the trip is SCHEDULED. */
+  reason?: string;
+}
+
 function query(values: Record<string, string | number | undefined>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
@@ -587,6 +701,45 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<AdminVehicle>(
             'staff',
             `/v1/admin/fleet/vehicles/${encodeURIComponent(vehicleId)}/status`,
+            input,
+          ),
+      },
+      trips: {
+        trips: (options: TripListOptions = {}) =>
+          call<Page<AdminTripSummary>>(
+            'GET',
+            `/v1/admin/trips?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              status: options.status,
+              routeId: options.routeId,
+              routeVersionId: options.routeVersionId,
+              departureFrom: options.departureFrom,
+              departureTo: options.departureTo,
+            })}`,
+          ),
+        trip: (tripId: string) =>
+          call<AdminTrip>('GET', `/v1/admin/trips/${encodeURIComponent(tripId)}`),
+        createTrip: (input: TripCreateInput) =>
+          withCsrf<AdminTrip>('staff', '/v1/admin/trips', input),
+        replaceTimetable: (tripId: string, input: TripTimetableInput) =>
+          withCsrf<AdminTrip>(
+            'staff',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/timetable`,
+            input,
+          ),
+        scheduleTrip: (tripId: string) =>
+          withCsrf<AdminTrip>('staff', `/v1/admin/trips/${encodeURIComponent(tripId)}/schedule`),
+        cancelTrip: (tripId: string, input: TripCancelInput) =>
+          withCsrf<AdminTrip>(
+            'staff',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/cancel`,
+            input,
+          ),
+        assignTripVehicle: (tripId: string, input: TripVehicleInput) =>
+          withCsrf<AdminTrip>(
+            'staff',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/vehicle`,
             input,
           ),
       },

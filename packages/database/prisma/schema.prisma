@@ -59,6 +59,14 @@ enum CheckpointType {
   @@map("checkpoint_type")
 }
 
+enum TripStatus {
+  DRAFT
+  SCHEDULED
+  CANCELLED
+
+  @@map("trip_status")
+}
+
 enum VehicleStatus {
   PLANNED
   ACTIVE
@@ -475,6 +483,7 @@ model RouteVersion {
 
   route     Route           @relation(fields: [routeId], references: [id], onDelete: Restrict)
   waypoints RouteWaypoint[]
+  trips     Trip[]
 
   @@unique([routeId, version])
   @@index([status])
@@ -492,9 +501,10 @@ model RouteWaypoint {
   boardingAllowed  Boolean @default(false) @map("boarding_allowed")
   alightingAllowed Boolean @default(false) @map("alighting_allowed")
 
-  routeVersion RouteVersion @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
-  stop         Stop?        @relation(fields: [stopId], references: [id], onDelete: Restrict)
-  checkpoint   Checkpoint?  @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
+  routeVersion RouteVersion         @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  stop         Stop?                @relation(fields: [stopId], references: [id], onDelete: Restrict)
+  checkpoint   Checkpoint?          @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
+  timings      TripWaypointTiming[]
 
   @@unique([routeVersionId, sequence])
   @@index([stopId])
@@ -523,8 +533,59 @@ model Vehicle {
   updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   registrationCountry Country? @relation(fields: [registrationCountryId], references: [id], onDelete: Restrict)
+  trips               Trip[]
 
   @@unique([registrationCountryId, registrationPlate])
   @@index([status, id])
   @@map("vehicle")
+}
+
+/// One planned occurrence of a published (historical) route version (PR-06).
+/// Seats, prices, bookings, crew and actual times belong to later domains.
+/// The lifecycle, the frozen timetable and the scheduling validation are
+/// enforced by triggers in the PR-06 migration.
+model Trip {
+  id                 String     @id @default(uuid(7)) @db.Uuid
+  /// Public, immutable reference (e.g. ET-TEST-2030-0001 in tests).
+  reference          String     @unique @db.VarChar(32)
+  routeVersionId     String     @map("route_version_id") @db.Uuid
+  vehicleId          String?    @map("vehicle_id") @db.Uuid
+  status             TripStatus @default(DRAFT)
+  /// Departure of the first waypoint (UTC), copied from the timetable.
+  plannedDepartureAt DateTime?  @map("planned_departure_at") @db.Timestamptz(3)
+  /// Arrival at the last waypoint (UTC), copied from the timetable.
+  plannedArrivalAt   DateTime?  @map("planned_arrival_at") @db.Timestamptz(3)
+  scheduledAt        DateTime?  @map("scheduled_at") @db.Timestamptz(3)
+  cancelledAt        DateTime?  @map("cancelled_at") @db.Timestamptz(3)
+  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  routeVersion RouteVersion         @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  vehicle      Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  timings      TripWaypointTiming[]
+
+  @@index([status, id])
+  @@index([routeVersionId, id])
+  @@index([plannedDepartureAt, id])
+  @@index([vehicleId])
+  @@map("trip")
+}
+
+/// Planned time at one waypoint of the trip's route version (UTC). Editable
+/// only while the trip is DRAFT; frozen once SCHEDULED or CANCELLED.
+model TripWaypointTiming {
+  id                 String    @id @default(uuid(7)) @db.Uuid
+  tripId             String    @map("trip_id") @db.Uuid
+  routeWaypointId    String    @map("route_waypoint_id") @db.Uuid
+  sequence           Int
+  plannedArrivalAt   DateTime? @map("planned_arrival_at") @db.Timestamptz(3)
+  plannedDepartureAt DateTime? @map("planned_departure_at") @db.Timestamptz(3)
+
+  trip          Trip          @relation(fields: [tripId], references: [id], onDelete: Restrict)
+  routeWaypoint RouteWaypoint @relation(fields: [routeWaypointId], references: [id], onDelete: Restrict)
+
+  @@unique([tripId, sequence])
+  @@unique([tripId, routeWaypointId])
+  @@index([routeWaypointId])
+  @@map("trip_waypoint_timing")
 }

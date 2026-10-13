@@ -32,6 +32,11 @@ export function RefineProvider({ children }: { children: ReactNode }) {
             list: '/fleet',
             meta: { label: 'Flotte', permission: 'fleet.read' },
           },
+          {
+            name: 'trips',
+            list: '/trips',
+            meta: { label: 'Voyages', permission: 'trip.read' },
+          },
           // `permission` only filters the navigation; the API authorizes every call.
           {
             name: 'admin-identities',

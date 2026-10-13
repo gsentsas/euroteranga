@@ -21,6 +21,8 @@ export const PERMISSIONS = {
   NETWORK_MANAGE: 'network.manage',
   FLEET_READ: 'fleet.read',
   FLEET_MANAGE: 'fleet.manage',
+  TRIP_READ: 'trip.read',
+  TRIP_MANAGE: 'trip.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

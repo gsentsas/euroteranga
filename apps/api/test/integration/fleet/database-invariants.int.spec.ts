@@ -171,7 +171,12 @@ describe('fleet database invariants (isolated database)', () => {
     await expect(db(t.app).$executeRawUnsafe('DELETE FROM "vehicle"')).rejects.toThrow(
       /vehicles cannot be deleted/,
     );
+    // Since PR-06, trips reference vehicles: a plain TRUNCATE is refused by the
+    // foreign key, and a CASCADE reaches this table's trigger.
     await expect(db(t.app).$executeRawUnsafe('TRUNCATE TABLE "vehicle"')).rejects.toThrow(
+      /referenced in a foreign key constraint/,
+    );
+    await expect(db(t.app).$executeRawUnsafe('TRUNCATE TABLE "vehicle" CASCADE')).rejects.toThrow(
       /the vehicle registry cannot be truncated/,
     );
     await expect(

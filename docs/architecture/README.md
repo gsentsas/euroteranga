@@ -131,6 +131,25 @@ maps, maintenance, documents and tracking are deferred. See
 [`docs/domain/fleet.md`](../domain/fleet.md) and
 [ADR-022](../adr/ADR-022-vehicle-lifecycle.md).
 
+## Trips (PR-06)
+
+`apps/api/src/trips` (TripModule): a trip is one planned occurrence of a
+published, historical route version. It has a UTC timetable with one timing
+per waypoint, and an optional `ACTIVE` vehicle. Lifecycle:
+`DRAFT → SCHEDULED | CANCELLED`, `SCHEDULED → CANCELLED`.
+
+- The timetable is replaced atomically while DRAFT and frozen once scheduled.
+- PostgreSQL validates the complete timetable at scheduling, freezes it
+  afterwards, and refuses deletion, for every writer.
+- Mutations lock the trip, then the vehicle (`FOR SHARE`).
+- A vehicle that becomes unavailable after assignment is left to the future
+  Dispatch domain.
+- OPS exposes **Voyages** according to `trip.read` and `trip.manage`.
+- Seat maps, pricing, booking, crew and dispatch are deferred.
+
+See [`docs/domain/trips.md`](../domain/trips.md) and
+[ADR-023](../adr/ADR-023-trip-lifecycle.md).
+
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
 
@@ -140,7 +159,8 @@ Recorded in [`docs/adr/`](../adr/README.md): modular monolith (ADR-001),
 PostgreSQL and Prisma (ADR-002), NestJS (ADR-003), Refine (ADR-004), Plesk
 deployment target — not yet decided (ADR-010), monorepo tooling (ADR-011),
 authentication (ADR-012 to ADR-016), authorization (ADR-017 to ADR-020),
-route versioning (ADR-021) and vehicle lifecycle (ADR-022).
+route versioning (ADR-021), vehicle lifecycle (ADR-022) and trip lifecycle
+(ADR-023).
 
 Still open: object storage provider, offline crew
 synchronisation, payment provider abstraction, regulatory rule versioning, and
