@@ -83,6 +83,15 @@ export const vehicleStatusSchema = z
   })
   .strict();
 
+/** Dedicated operation: the general update never accepts a seat map. */
+export const vehicleSeatMapSchema = z
+  .object({
+    seatMapVersionId: uuid.nullable(),
+    /** Seat map the decision was based on (null: none); refused if it moved. */
+    expectedSeatMapVersionId: uuid.nullable().optional(),
+  })
+  .strict();
+
 // OpenAPI bodies. Runtime validation always uses the Zod schemas above.
 export class VehicleCreateBody {
   @ApiProperty({ maxLength: 32, example: 'BUS_A01' }) code!: string;
@@ -119,4 +128,14 @@ export class VehicleStatusBody {
   @ApiProperty({ enum: TARGET_STATUSES }) status!: (typeof TARGET_STATUSES)[number];
   @ApiProperty({ minLength: 3, maxLength: 500 }) reason!: string;
   @ApiPropertyOptional({ enum: STATUSES }) expectedStatus?: (typeof STATUSES)[number];
+}
+
+export class VehicleSeatMapBody {
+  @ApiProperty({
+    nullable: true,
+    format: 'uuid',
+    description: 'A PUBLISHED version; null removes it.',
+  })
+  seatMapVersionId!: string | null;
+  @ApiPropertyOptional({ nullable: true, format: 'uuid' }) expectedSeatMapVersionId?: string | null;
 }

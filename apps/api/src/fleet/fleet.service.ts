@@ -5,9 +5,16 @@ import { PublicApiError } from '../auth/http/public-api-error.js';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
+import {
+  lockAssignableSeatMapVersion,
+  seatMapLabel,
+  seatMapVersionSummarySelect,
+  seatMapVersionView,
+} from '../seat-maps/seat-map-assignment.js';
 import type {
   vehicleCreateSchema,
   vehicleListQuerySchema,
+  vehicleSeatMapSchema,
   vehicleStatusSchema,
   vehicleUpdateSchema,
 } from './fleet.dto.js';
@@ -18,12 +25,21 @@ type ListQuery = z.infer<typeof vehicleListQuerySchema>;
 type VehicleCreate = z.infer<typeof vehicleCreateSchema>;
 type VehicleUpdate = z.infer<typeof vehicleUpdateSchema>;
 type VehicleStatusChange = z.infer<typeof vehicleStatusSchema>;
+type VehicleSeatMap = z.infer<typeof vehicleSeatMapSchema>;
 
 const STATUS_CHANGED = 'VEHICLE_STATUS_CHANGED';
 
 const vehicleInclude = {
   registrationCountry: { select: { id: true, iso2: true, iso3: true, name: true, active: true } },
+  seatMapVersion: { select: seatMapVersionSummarySelect },
 } as const;
+
+/** Public view: the seat map summary carries its computed capacity. */
+function vehicleView<T extends { seatMapVersion: { _count: { cells: number } } | null }>(
+  vehicle: T,
+) {
+  return { ...vehicle, seatMapVersion: seatMapVersionView(vehicle.seatMapVersion) };
+}
 
 export interface VehicleStatusHistoryEntry {
   occurredAt: Date;
@@ -95,7 +111,7 @@ export class FleetService {
       orderBy: { id: 'desc' },
       include: vehicleInclude,
     });
-    const items = rows.slice(0, query.limit);
+    const items = rows.slice(0, query.limit).map(vehicleView);
     return {
       items,
       nextCursor: rows.length > query.limit ? (items.at(-1)?.id ?? null) : null,
@@ -121,7 +137,7 @@ export class FleetService {
       to: textOf(event.after, 'status'),
       reason: textOf(event.metadata, 'reason'),
     }));
-    return { ...vehicle, statusHistory };
+    return { ...vehicleView(vehicle), statusHistory };
   }
 
   createVehicle(input: VehicleCreate, actor: AuthPrincipal) {
@@ -153,7 +169,7 @@ export class FleetService {
           },
           tx,
         );
-        return vehicle;
+        return vehicleView(vehicle);
       }),
     );
   }
@@ -207,7 +223,7 @@ export class FleetService {
           },
           tx,
         );
-        return after;
+        return vehicleView(after);
       }),
     );
   }
@@ -249,7 +265,67 @@ export class FleetService {
           },
           tx,
         );
-        return after;
+        return vehicleView(after);
+      }),
+    );
+  }
+
+  /**
+   * Assign, replace or remove the seat map currently configured on a vehicle.
+   * A new assignment needs a currently PUBLISHED version of an active seat
+   * map. Existing trips keep their own historical seat map.
+   * Lock order: vehicle FOR UPDATE, then seat_map / seat_map_version FOR SHARE.
+   */
+  assignSeatMap(id: string, input: VehicleSeatMap, actor: AuthPrincipal) {
+    return mutation(() =>
+      this.database.client.$transaction(async (tx) => {
+        const locked = await lockVehicle(tx, id);
+        if (locked.status === 'RETIRED') throw FleetErrors.vehicleRetired();
+        const current = await tx.vehicle.findUniqueOrThrow({
+          where: { id },
+          select: {
+            seatMapVersionId: true,
+            seatMapVersion: { select: { version: true, seatMap: { select: { code: true } } } },
+          },
+        });
+        if (
+          input.expectedSeatMapVersionId !== undefined &&
+          input.expectedSeatMapVersionId !== current.seatMapVersionId
+        ) {
+          throw FleetErrors.seatMapConflict();
+        }
+        if (input.seatMapVersionId !== current.seatMapVersionId) {
+          const next = input.seatMapVersionId
+            ? await lockAssignableSeatMapVersion(tx, input.seatMapVersionId)
+            : null;
+          await tx.vehicle.update({
+            where: { id },
+            data: { seatMapVersionId: next?.id ?? null },
+          });
+          await this.audit.record(
+            {
+              actor,
+              action: 'VEHICLE_SEAT_MAP_CHANGED',
+              resourceType: 'vehicle',
+              resourceId: id,
+              before: {
+                seatMapVersionId: current.seatMapVersionId,
+                seatMap: seatMapLabel(
+                  current.seatMapVersion?.seatMap.code ?? null,
+                  current.seatMapVersion?.version ?? null,
+                ),
+              },
+              after: {
+                seatMapVersionId: next?.id ?? null,
+                seatMap: next ? seatMapLabel(next.seatMapCode, next.version) : null,
+              },
+            },
+            tx,
+          );
+        }
+        return vehicleView(
+          await tx.vehicle.findUniqueOrThrow({ where: { id }, include: vehicleInclude }),
+        );
       }),
     );
   }

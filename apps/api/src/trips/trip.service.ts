@@ -10,11 +10,18 @@ import { PublicApiError } from '../auth/http/public-api-error.js';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
+import {
+  lockAssignableSeatMapVersion,
+  seatMapLabel,
+  seatMapVersionSummarySelect,
+  seatMapVersionView,
+} from '../seat-maps/seat-map-assignment.js';
 import { checkTimetable, type TimetableEntry } from './trip-timetable.js';
 import type {
   tripCancelSchema,
   tripCreateSchema,
   tripListQuerySchema,
+  tripSeatMapSchema,
   tripTimetableSchema,
   tripVehicleSchema,
 } from './trip.dto.js';
@@ -25,6 +32,7 @@ type TripCreate = z.infer<typeof tripCreateSchema>;
 type TripTimetable = z.infer<typeof tripTimetableSchema>;
 type TripCancel = z.infer<typeof tripCancelSchema>;
 type TripVehicle = z.infer<typeof tripVehicleSchema>;
+type TripSeatMap = z.infer<typeof tripSeatMapSchema>;
 
 const placeSummary = { select: { id: true, code: true, name: true, timezone: true } } as const;
 
@@ -40,9 +48,33 @@ const tripSummaryInclude = {
     },
   },
   vehicle: {
-    select: { id: true, code: true, status: true, manufacturer: true, model: true },
+    select: {
+      id: true,
+      code: true,
+      status: true,
+      manufacturer: true,
+      model: true,
+      seatMapVersion: { select: seatMapVersionSummarySelect },
+    },
   },
+  seatMapVersion: { select: seatMapVersionSummarySelect },
 } as const;
+
+/** Public view: seat map summaries carry their computed capacity. */
+function tripView<
+  T extends {
+    seatMapVersion: { _count: { cells: number } } | null;
+    vehicle: { seatMapVersion: { _count: { cells: number } } | null } | null;
+  },
+>(trip: T) {
+  return {
+    ...trip,
+    seatMapVersion: seatMapVersionView(trip.seatMapVersion),
+    vehicle: trip.vehicle
+      ? { ...trip.vehicle, seatMapVersion: seatMapVersionView(trip.vehicle.seatMapVersion) }
+      : null,
+  };
+}
 
 export interface TripHistoryEntry {
   occurredAt: Date;
@@ -52,6 +84,8 @@ export interface TripHistoryEntry {
   toStatus: string | null;
   fromVehicleCode: string | null;
   toVehicleCode: string | null;
+  fromSeatMap: string | null;
+  toSeatMap: string | null;
 }
 
 interface LockedTrip {
@@ -59,6 +93,7 @@ interface LockedTrip {
   status: TripStatus;
   routeVersionId: string;
   vehicleId: string | null;
+  seatMapVersionId: string | null;
 }
 
 /** Convert expected database failures to stable public errors. */
@@ -86,9 +121,15 @@ async function mutation<T>(work: () => Promise<T>): Promise<T> {
  */
 async function lockTrip(tx: DatabaseTransaction, id: string): Promise<LockedTrip> {
   const rows = await tx.$queryRaw<
-    Array<{ id: string; status: TripStatus; route_version_id: string; vehicle_id: string | null }>
+    Array<{
+      id: string;
+      status: TripStatus;
+      route_version_id: string;
+      vehicle_id: string | null;
+      seat_map_version_id: string | null;
+    }>
   >`
-    SELECT "id", "status", "route_version_id", "vehicle_id"
+    SELECT "id", "status", "route_version_id", "vehicle_id", "seat_map_version_id"
     FROM "trip" WHERE "id" = ${id}::uuid FOR UPDATE
   `;
   const row = rows[0];
@@ -98,21 +139,58 @@ async function lockTrip(tx: DatabaseTransaction, id: string): Promise<LockedTrip
     status: row.status,
     routeVersionId: row.route_version_id,
     vehicleId: row.vehicle_id,
+    seatMapVersionId: row.seat_map_version_id,
   };
 }
 
 /** The vehicle must exist and be ACTIVE; FOR SHARE blocks a concurrent status change. */
-async function lockActiveVehicle(
+async function lockVehicle(
   tx: DatabaseTransaction,
   id: string,
-): Promise<{ id: string; code: string }> {
-  const rows = await tx.$queryRaw<Array<{ id: string; code: string; status: VehicleStatus }>>`
-    SELECT "id", "code", "status" FROM "vehicle" WHERE "id" = ${id}::uuid FOR SHARE
+): Promise<{ id: string; code: string; status: VehicleStatus; seatMapVersionId: string | null }> {
+  const rows = await tx.$queryRaw<
+    Array<{ id: string; code: string; status: VehicleStatus; seat_map_version_id: string | null }>
+  >`
+    SELECT "id", "code", "status", "seat_map_version_id"
+    FROM "vehicle" WHERE "id" = ${id}::uuid FOR SHARE
   `;
   const row = rows[0];
   if (!row) throw TripErrors.vehicleNotFound();
-  if (row.status !== 'ACTIVE') throw TripErrors.vehicleUnavailable();
-  return { id: row.id, code: row.code };
+  return {
+    id: row.id,
+    code: row.code,
+    status: row.status,
+    seatMapVersionId: row.seat_map_version_id,
+  };
+}
+
+async function lockActiveVehicle(tx: DatabaseTransaction, id: string) {
+  const vehicle = await lockVehicle(tx, id);
+  if (vehicle.status !== 'ACTIVE') throw TripErrors.vehicleUnavailable();
+  return vehicle;
+}
+
+/**
+ * PR-07 compatibility: a trip that carries a seat map can only have a vehicle
+ * configured with exactly that version (a vehicle without seat map does not
+ * match). Checked when either side of the trip changes and when scheduling.
+ */
+function assertCompatible(
+  tripSeatMapVersionId: string | null,
+  vehicle: { seatMapVersionId: string | null } | null,
+): void {
+  if (tripSeatMapVersionId && vehicle && vehicle.seatMapVersionId !== tripSeatMapVersionId) {
+    throw TripErrors.seatMapIncompatible();
+  }
+}
+
+async function seatMapLabelOf(tx: DatabaseTransaction, id: string | null): Promise<string | null> {
+  if (!id) return null;
+  const version = await tx.seatMapVersion.findUnique({
+    where: { id },
+    select: { version: true, seatMap: { select: { code: true } } },
+  });
+  return version ? seatMapLabel(version.seatMap.code, version.version) : null;
 }
 
 async function vehicleCode(tx: DatabaseTransaction, id: string | null): Promise<string | null> {
@@ -166,7 +244,7 @@ export class TripService {
       orderBy: { id: 'desc' },
       include: tripSummaryInclude,
     });
-    const items = rows.slice(0, query.limit);
+    const items = rows.slice(0, query.limit).map(tripView);
     return {
       items,
       nextCursor: rows.length > query.limit ? (items.at(-1)?.id ?? null) : null,
@@ -225,8 +303,10 @@ export class TripService {
       toStatus: fieldOf(event.after, 'status'),
       fromVehicleCode: fieldOf(event.before, 'vehicleCode'),
       toVehicleCode: fieldOf(event.after, 'vehicleCode'),
+      fromSeatMap: fieldOf(event.before, 'seatMap'),
+      toSeatMap: fieldOf(event.after, 'seatMap'),
     }));
-    return { ...trip, history };
+    return { ...tripView(trip), history };
   }
 
   /** DRAFT only, on a currently PUBLISHED route version; no implicit timetable. */
@@ -341,7 +421,8 @@ export class TripService {
         });
         const check = checkTimetable(await routeWaypoints(tx, trip.routeVersionId), stored);
         if (!check.ok) throw TripErrors.timetableInvalid(check.message);
-        if (trip.vehicleId) await lockActiveVehicle(tx, trip.vehicleId);
+        const vehicle = trip.vehicleId ? await lockActiveVehicle(tx, trip.vehicleId) : null;
+        assertCompatible(trip.seatMapVersionId, vehicle);
 
         const scheduledAt = new Date();
         await tx.trip.update({
@@ -418,6 +499,7 @@ export class TripService {
         if (input.vehicleId === trip.vehicleId) return;
 
         const next = input.vehicleId ? await lockActiveVehicle(tx, input.vehicleId) : null;
+        assertCompatible(trip.seatMapVersionId, next);
         const previousCode = await vehicleCode(tx, trip.vehicleId);
         await tx.trip.update({ where: { id }, data: { vehicleId: next?.id ?? null } });
         await this.audit.record(
@@ -429,6 +511,54 @@ export class TripService {
             before: { vehicleId: trip.vehicleId, vehicleCode: previousCode },
             after: { vehicleId: next?.id ?? null, vehicleCode: next?.code ?? null },
             ...(input.reason ? { metadata: { reason: input.reason } } : {}),
+          },
+          tx,
+        );
+      }),
+    );
+    return this.trip(id);
+  }
+
+  /**
+   * Assign, replace or remove the historical seat map of a DRAFT trip. A new
+   * assignment needs a currently PUBLISHED version of an active seat map; if
+   * a vehicle is assigned, it must be configured with exactly that version.
+   * Nothing is ever assigned implicitly.
+   * Lock order: trip FOR UPDATE, vehicle FOR SHARE, seat_map then
+   * seat_map_version FOR SHARE.
+   */
+  async assignSeatMap(id: string, input: TripSeatMap, actor: AuthPrincipal) {
+    await mutation(() =>
+      this.database.client.$transaction(async (tx) => {
+        const trip = await lockTrip(tx, id);
+        if (trip.status === 'CANCELLED') throw TripErrors.cancelled();
+        if (trip.status !== 'DRAFT') throw TripErrors.notDraft();
+        if (
+          input.expectedSeatMapVersionId !== undefined &&
+          input.expectedSeatMapVersionId !== trip.seatMapVersionId
+        ) {
+          throw TripErrors.seatMapConflict();
+        }
+        if (input.seatMapVersionId === trip.seatMapVersionId) return;
+
+        const vehicle = trip.vehicleId ? await lockVehicle(tx, trip.vehicleId) : null;
+        const next = input.seatMapVersionId
+          ? await lockAssignableSeatMapVersion(tx, input.seatMapVersionId)
+          : null;
+        assertCompatible(next?.id ?? null, vehicle);
+        const previous = await seatMapLabelOf(tx, trip.seatMapVersionId);
+        await tx.trip.update({ where: { id }, data: { seatMapVersionId: next?.id ?? null } });
+        await this.audit.record(
+          {
+            actor,
+            action: 'TRIP_SEAT_MAP_CHANGED',
+            resourceType: 'trip',
+            resourceId: id,
+            before: { seatMapVersionId: trip.seatMapVersionId, seatMap: previous },
+            after: {
+              seatMapVersionId: next?.id ?? null,
+              seatMap: next ? seatMapLabel(next.seatMapCode, next.version) : null,
+            },
           },
           tx,
         );

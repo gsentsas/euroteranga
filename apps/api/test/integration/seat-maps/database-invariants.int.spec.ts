@@ -73,7 +73,7 @@ describe('seat map database invariants (isolated database)', () => {
     await cell(created.id, 1, 2, 2, 'AISLE');
     await cell(created.id, 1, 2, 3, 'SEAT', '1B');
     if (state === 'PUBLISHED') await publish(created.id);
-    return { seatMapId: map, ...created };
+    return created;
   }
 
   async function activeVehicle(seatMapVersionId?: string) {

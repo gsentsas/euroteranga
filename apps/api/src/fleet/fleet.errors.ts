@@ -23,6 +23,12 @@ export const FleetErrors = {
       'VEHICLE_STATUS_TRANSITION_INVALID',
       "Ce changement de statut n'est pas autorisé.",
     ),
+  seatMapConflict: () =>
+    new PublicApiError(
+      409,
+      'VEHICLE_SEAT_MAP_CONFLICT',
+      'Le plan de sièges du véhicule a changé entre-temps. Rechargez la fiche.',
+    ),
   statusConflict: () =>
     new PublicApiError(
       409,
