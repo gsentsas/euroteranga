@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 const uuid = z.uuid();
 const instant = z.iso.datetime({ offset: true }).transform((value) => new Date(value));
-const STATUSES = ['HELD', 'EXPIRED', 'CANCELLED'] as const;
+const STATUSES = ['HELD', 'CONFIRMED', 'EXPIRED', 'CANCELLED'] as const;
 
 export interface SearchCursor {
   departureAt: Date;

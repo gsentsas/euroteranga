@@ -76,4 +76,10 @@ export const TripErrors = {
       "Un motif est obligatoire pour changer le véhicule d'un voyage planifié.",
     ),
   timetableInvalid: (message: string) => new PublicApiError(422, 'TRIP_TIMETABLE_INVALID', message),
+  hasConfirmedBookings: () =>
+    new PublicApiError(
+      409,
+      'TRIP_HAS_CONFIRMED_BOOKINGS',
+      'Ce voyage a des réservations confirmées (payées) : il ne peut pas être annulé tant que le remboursement n’existe pas.',
+    ),
 };

@@ -111,7 +111,7 @@ export class PublicBookingService {
               AND l."segment_sequence" >= o."sequence"
               AND l."segment_sequence" < d."sequence"
               AND b."cancelled_at" IS NULL
-              AND b."hold_expires_at" > now()
+              AND (b."confirmed_at" IS NOT NULL OR b."hold_expires_at" > now())
           )::int AS "occupied"
         FROM "trip" t
         JOIN "route_version" rv ON rv."id" = t."route_version_id"

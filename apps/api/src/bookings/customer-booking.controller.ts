@@ -98,7 +98,10 @@ export class CustomerBookingController {
   @Header('Cache-Control', 'no-store')
   @ApiOkResponse({ description: 'Active hold cancelled; its seats are available again.' })
   @ApiNotFoundResponse({ type: ErrorBody, description: 'BOOKING_NOT_FOUND' })
-  @ApiConflictResponse({ type: ErrorBody, description: 'BOOKING_CANCELLED or BOOKING_EXPIRED' })
+  @ApiConflictResponse({
+    type: ErrorBody,
+    description: 'BOOKING_CANCELLED, BOOKING_EXPIRED, BOOKING_CONFIRMED or BOOKING_CANCEL_CONFLICT',
+  })
   @ApiBody({ schema: { type: 'object', additionalProperties: false } })
   cancel(
     @CurrentPrincipal() principal: AuthPrincipal,

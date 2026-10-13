@@ -173,7 +173,10 @@ export class AdminTripController {
   @UseGuards(CsrfGuard)
   @RequirePermissions(PERMISSIONS.TRIP_MANAGE)
   @ApiOkResponse({ description: 'Trip cancelled (terminal) with its reason.' })
-  @ApiConflictResponse({ type: ErrorBody, description: 'TRIP_CANCELLED or TRIP_STATUS_CONFLICT' })
+  @ApiConflictResponse({
+    type: ErrorBody,
+    description: 'TRIP_CANCELLED, TRIP_STATUS_CONFLICT or TRIP_HAS_CONFIRMED_BOOKINGS',
+  })
   @ApiBody({ type: TripCancelBody })
   cancel(
     @Param('id', uuidV7) id: string,

@@ -27,6 +27,9 @@ export async function createApp(options: CreateAppOptions): Promise<NestExpressA
     logger: new NestJsonLogger(options.logger),
     // Surface bootstrap errors to the caller instead of exiting the process.
     abortOnError: false,
+    // Keeps the exact bytes of JSON bodies (request.rawBody): payment provider
+    // webhooks are authenticated by a signature over the raw payload.
+    rawBody: true,
   });
   configureApp(app, options);
   return app;
@@ -61,7 +64,7 @@ function configureApp(app: NestExpressApplication, { env, logger }: CreateAppOpt
     origin: [...buildAuthConfig(env).corsOrigins],
     credentials: true,
     methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'X-Request-Id'],
+    allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'X-Request-Id', 'Idempotency-Key'],
     exposedHeaders: ['X-Request-Id', 'Retry-After'],
   });
 

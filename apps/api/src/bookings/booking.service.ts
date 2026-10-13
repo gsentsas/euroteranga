@@ -4,6 +4,7 @@ import { PublicApiError } from '../auth/http/public-api-error.js';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
+import { cancelPendingPayments, lockPendingPayments } from '../payments/payment-transitions.js';
 import { findTripFare } from '../pricing/fare-resolution.service.js';
 import { BOOKING_CONFIG, type BookingConfig } from './booking.config.js';
 import type { AdminBookingListQuery, BookingCreate } from './booking.dto.js';
@@ -22,7 +23,12 @@ import {
   totalAmountMinor,
   withFreshReference,
 } from './booking-rules.js';
-import { adminBookingView, bookingInclude, customerBookingView } from './booking-views.js';
+import {
+  adminBookingInclude,
+  adminBookingView,
+  bookingInclude,
+  customerBookingView,
+} from './booking-views.js';
 
 const CUSTOMER_CANCELLATION_REASON = 'Annulation par le client';
 
@@ -251,11 +257,17 @@ export class BookingService {
   async cancelByCustomer(actor: AuthPrincipal, rawReference: string) {
     const reference = normalizeBookingReference(rawReference);
     if (!reference) throw BookingErrors.notFound();
+    const target = await this.database.client.booking.findFirst({
+      where: { reference, customerIdentityId: actor.identityId },
+      select: { id: true },
+    });
+    if (!target) throw BookingErrors.notFound();
     await this.cancel(
+      target.id,
       (tx) => tx.$queryRaw<LockedBooking[]>`
-        SELECT "id", "reference", "trip_id", "cancelled_at", "hold_expires_at"
+        SELECT "id", "reference", "trip_id", "cancelled_at", "confirmed_at", "hold_expires_at"
         FROM "booking"
-        WHERE "reference" = ${reference} AND "customer_identity_id" = ${actor.identityId}::uuid
+        WHERE "id" = ${target.id}::uuid AND "customer_identity_id" = ${actor.identityId}::uuid
         FOR UPDATE
       `,
       actor,
@@ -268,8 +280,9 @@ export class BookingService {
   /** booking.manage: cancel an active hold, with a mandatory reason. */
   async cancelByStaff(actor: AuthPrincipal, id: string, reason: string) {
     await this.cancel(
+      id,
       (tx) => tx.$queryRaw<LockedBooking[]>`
-        SELECT "id", "reference", "trip_id", "cancelled_at", "hold_expires_at"
+        SELECT "id", "reference", "trip_id", "cancelled_at", "confirmed_at", "hold_expires_at"
         FROM "booking" WHERE "id" = ${id}::uuid
         FOR UPDATE
       `,
@@ -281,10 +294,14 @@ export class BookingService {
   }
 
   /**
-   * Lock order: booking FOR UPDATE -> seats -> locks. A second concurrent
-   * cancellation waits, then sees the booking cancelled.
+   * Lock order: the booking's PENDING payments FOR UPDATE (by id) -> booking
+   * FOR UPDATE -> seats -> locks, the same payment -> booking order as the
+   * webhook pipeline. A second concurrent cancellation waits, then sees the
+   * booking cancelled. A CONFIRMED booking is refused (no refund workflow
+   * yet); a PENDING attempt is cancelled with its hold (PR-10).
    */
   private async cancel(
+    bookingId: string,
     lock: (tx: DatabaseTransaction) => Promise<LockedBooking[]>,
     actor: AuthPrincipal,
     reason: string,
@@ -292,11 +309,24 @@ export class BookingService {
   ) {
     try {
       await this.database.client.$transaction(async (tx) => {
+        const pendingPayments = await lockPendingPayments(tx, { bookingId });
         const [booking] = await lock(tx);
         if (!booking) throw BookingErrors.notFound();
         if (booking.cancelled_at) throw BookingErrors.cancelled();
+        if (booking.confirmed_at) throw BookingErrors.confirmed();
         const now = await databaseNow(tx);
         if (booking.hold_expires_at.getTime() <= now.getTime()) throw BookingErrors.expired();
+        // An attempt started between the two locks cannot be locked now
+        // without inverting the order: report a conflict instead.
+        const pendingNow = await tx.payment.count({
+          where: { bookingId: booking.id, status: 'PENDING' },
+        });
+        if (pendingNow !== pendingPayments.length) throw BookingErrors.cancelConflict();
+        await cancelPendingPayments(tx, this.audit, pendingPayments, {
+          actor,
+          reason,
+          cancelledBy: by,
+        });
         const seatLabels = await seatLabelsOf(tx, booking.id);
         await releaseCancelledHold(tx, booking.id, now, reason);
         await this.audit.record(
@@ -329,11 +359,13 @@ export class BookingService {
     const statusFilter: Prisma.BookingWhereInput =
       query.status === 'CANCELLED'
         ? { cancelledAt: { not: null } }
-        : query.status === 'EXPIRED'
-          ? { cancelledAt: null, holdExpiresAt: { lte: now } }
-          : query.status === 'HELD'
-            ? { cancelledAt: null, holdExpiresAt: { gt: now } }
-            : {};
+        : query.status === 'CONFIRMED'
+          ? { cancelledAt: null, confirmedAt: { not: null } }
+          : query.status === 'EXPIRED'
+            ? { cancelledAt: null, confirmedAt: null, holdExpiresAt: { lte: now } }
+            : query.status === 'HELD'
+              ? { cancelledAt: null, confirmedAt: null, holdExpiresAt: { gt: now } }
+              : {};
     const rows = await client.booking.findMany({
       take: query.limit + 1,
       where: {
@@ -352,14 +384,18 @@ export class BookingService {
     };
   }
 
-  async adminBooking(id: string) {
+  /**
+   * Booking detail. Its payment attempts are included only for callers
+   * holding payment.read (financial details are minimized under RBAC).
+   */
+  async adminBooking(id: string, options: { withPayments?: boolean } = {}) {
     const client = this.database.client;
     const [row, now] = await Promise.all([
-      client.booking.findUnique({ where: { id }, include: bookingInclude }),
+      client.booking.findUnique({ where: { id }, include: adminBookingInclude }),
       databaseNow(client),
     ]);
     if (!row) throw BookingErrors.notFound();
-    return adminBookingView(row, now);
+    return adminBookingView(row, now, options);
   }
 }
 
@@ -368,5 +404,6 @@ interface LockedBooking {
   reference: string;
   trip_id: string;
   cancelled_at: Date | null;
+  confirmed_at: Date | null;
   hold_expires_at: Date;
 }

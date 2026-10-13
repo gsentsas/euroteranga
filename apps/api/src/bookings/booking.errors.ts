@@ -56,6 +56,12 @@ export const BookingErrors = {
     new PublicApiError(409, 'BOOKING_EXPIRED', 'Cette réservation provisoire a expiré.'),
   cancelled: () =>
     new PublicApiError(409, 'BOOKING_CANCELLED', 'Cette réservation est déjà annulée.'),
+  confirmed: () =>
+    new PublicApiError(
+      409,
+      'BOOKING_CONFIRMED',
+      'Cette réservation est confirmée (payée) : elle ne peut pas être annulée en ligne.',
+    ),
   cancelConflict: () =>
     new PublicApiError(
       409,
