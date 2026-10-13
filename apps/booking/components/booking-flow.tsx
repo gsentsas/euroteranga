@@ -89,7 +89,9 @@ function HoldConfirmation({
           </strong>
         </dd>
         <dt>Expiration</dt>
-        <dd>{formatAt(booking.holdExpiresAt, booking.origin.stop)}</dd>
+        <dd data-testid="booking-expiration">
+          {formatAt(booking.holdExpiresAt, booking.origin.stop)}
+        </dd>
       </dl>
       <div className="et-actions">
         <a className="et-button et-booking-link-button" href={`${clientAppUrl}/compte`}>
@@ -212,9 +214,13 @@ export function BookingFlow() {
         setNeedsLogin(true);
         return;
       }
-      setError(result.error.message);
       if (result.error.code === 'BOOKING_SEAT_UNAVAILABLE') {
         await loadAvailability(trip, true);
+        setError(
+          `${result.error.message} Les disponibilités ont été actualisées et les sièges encore libres sont conservés.`,
+        );
+      } else {
+        setError(result.error.message);
       }
     } finally {
       setBusy(false);

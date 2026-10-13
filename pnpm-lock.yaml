@@ -387,6 +387,9 @@ importers:
 
   apps/booking:
     dependencies:
+      '@euroteranga/auth-client':
+        specifier: workspace:*
+        version: link:../../packages/auth-client
       '@euroteranga/config':
         specifier: workspace:*
         version: link:../../packages/config
