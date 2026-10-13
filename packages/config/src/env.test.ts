@@ -134,6 +134,20 @@ describe('loadPublicEnv', () => {
 
   it('rejects a missing or non-http API base URL', () => {
     expect(() => loadPublicEnv({ NEXT_PUBLIC_APP_ENV: 'ci' })).toThrow(/NEXT_PUBLIC_API_BASE_URL/);
+    expect(
+      loadPublicEnv({
+        NEXT_PUBLIC_APP_ENV: 'ci',
+        NEXT_PUBLIC_API_BASE_URL: 'http://localhost:4000',
+        NEXT_PUBLIC_CLIENT_URL: 'http://localhost:3002',
+      }).NEXT_PUBLIC_CLIENT_URL,
+    ).toBe('http://localhost:3002');
+    expect(() =>
+      loadPublicEnv({
+        NEXT_PUBLIC_APP_ENV: 'ci',
+        NEXT_PUBLIC_API_BASE_URL: 'http://localhost:4000',
+        NEXT_PUBLIC_CLIENT_URL: 'javascript:alert(1)',
+      }),
+    ).toThrow(/NEXT_PUBLIC_CLIENT_URL/);
     expect(() =>
       loadPublicEnv({ NEXT_PUBLIC_APP_ENV: 'ci', NEXT_PUBLIC_API_BASE_URL: 'javascript:alert(1)' }),
     ).toThrow(/NEXT_PUBLIC_API_BASE_URL/);

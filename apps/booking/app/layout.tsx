@@ -1,4 +1,5 @@
 import '@euroteranga/ui/tokens.css';
+import './booking.css';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 

@@ -21,6 +21,7 @@ env:
   # Public frontend configuration for CI builds (no secret involved).
   NEXT_PUBLIC_APP_ENV: ci
   NEXT_PUBLIC_API_BASE_URL: http://localhost:4000
+  NEXT_PUBLIC_CLIENT_URL: http://localhost:3002
 
 jobs:
   quality:

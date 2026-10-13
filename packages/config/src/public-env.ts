@@ -9,6 +9,8 @@ import { appEnvSchema, httpUrlSchema } from './schemas.js';
 export const publicEnvSchema = z.object({
   NEXT_PUBLIC_APP_ENV: appEnvSchema,
   NEXT_PUBLIC_API_BASE_URL: httpUrlSchema,
+  /** Customer account app (links from the booking app); optional elsewhere. */
+  NEXT_PUBLIC_CLIENT_URL: httpUrlSchema.optional(),
 });
 
 export type PublicEnv = z.infer<typeof publicEnvSchema>;

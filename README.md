@@ -113,6 +113,7 @@ All configuration comes from environment variables, validated at startup.
 | `LOG_LEVEL`                | API         | `debug`, `info`, `warn` or `error`                         |
 | `NEXT_PUBLIC_APP_ENV`      | Frontends   | Environment label shown in the UI                          |
 | `NEXT_PUBLIC_API_BASE_URL` | Frontends   | Core API base URL                                          |
+| `NEXT_PUBLIC_CLIENT_URL`   | Booking     | Public Client app URL used for account links               |
 
 Authentication adds `AUTH_CSRF_KEY`, `AUTH_HMAC_KEY`,
 `AUTH_TOTP_ENCRYPTION_KEY` (secrets, base64), per-realm origins
