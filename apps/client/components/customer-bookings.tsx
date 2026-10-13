@@ -7,14 +7,19 @@ import {
 } from '@euroteranga/auth-client';
 import { FormAlert, FormStatus } from '@euroteranga/ui';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { auth } from '../lib/auth';
+import { paymentTestEnvironment } from '../lib/env';
 
 const STATUS_LABELS: Record<CustomerBookingStatus, string> = {
   HELD: 'Provisoire',
+  CONFIRMED: 'Confirmée',
   EXPIRED: 'Expirée',
   CANCELLED: 'Annulée',
 };
+
+/** How often PENDING attempts are re-read until the provider's result arrives. */
+const PENDING_REFRESH_MS = 2_000;
 
 function formatAt(value: string, timeZone = 'UTC'): string {
   try {
@@ -37,13 +42,20 @@ function stopName(booking: CustomerBooking, end: 'origin' | 'destination'): stri
   return stop ? `${stop.name} (${stop.locality})` : 'Arrêt inconnu';
 }
 
-/** CUSTOMER-owned holds only; ownership and every mutation are checked again by the API. */
+/**
+ * CUSTOMER-owned bookings only; ownership and every mutation are checked
+ * again by the API. A HELD booking can be paid (the amount comes from the
+ * server; no card or bank data is ever asked here); a CONFIRMED one shows
+ * its payment and can no longer be cancelled online (no refund yet).
+ */
 export function CustomerBookings() {
   const router = useRouter();
   const [bookings, setBookings] = useState<CustomerBooking[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyReference, setBusyReference] = useState<string | null>(null);
+  // Idempotency keys of payment intents, in memory only, by booking reference.
+  const intents = useRef(new Map<string, string>());
 
   const load = useCallback(async () => {
     setError(null);
@@ -59,6 +71,53 @@ export function CustomerBookings() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const pending = bookings?.some((booking) => booking.payment?.status === 'PENDING') ?? false;
+  useEffect(() => {
+    if (!pending) return undefined;
+    const timer = window.setInterval(() => void load(), PENDING_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [load, pending]);
+
+  const pay = async (reference: string) => {
+    setBusyReference(reference);
+    setError(null);
+    setNotice(null);
+    const key = intents.current.get(reference) ?? crypto.randomUUID();
+    intents.current.set(reference, key);
+    try {
+      const result = await auth.booking.customer.createPayment(reference, key);
+      // The same key only retries a request that may not have reached the API.
+      if (result.ok || result.error.status !== 0) intents.current.delete(reference);
+      if (!result.ok) {
+        setError(result.error.message);
+        return;
+      }
+      await load();
+      setNotice(
+        `Paiement ${result.data.payment.reference} en attente de confirmation par le prestataire.`,
+      );
+    } finally {
+      setBusyReference(null);
+    }
+  };
+
+  const cancelPayment = async (paymentReference: string, bookingReference: string) => {
+    setBusyReference(bookingReference);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await auth.booking.customer.cancelPayment(paymentReference);
+      if (!result.ok) {
+        setError(result.error.message);
+        return;
+      }
+      await load();
+      setNotice(`Tentative de paiement ${paymentReference} annulée.`);
+    } finally {
+      setBusyReference(null);
+    }
+  };
 
   const cancel = async (reference: string) => {
     setBusyReference(reference);
@@ -90,9 +149,14 @@ export function CustomerBookings() {
         </button>
       </div>
       <p>
-        Les réservations affichées sont des retenues provisoires. Elles ne constituent ni un
-        paiement ni un billet.
+        Une réservation provisoire retient vos sièges jusqu’à son expiration, sans paiement. Une
+        réservation confirmée est payée ; elle ne constitue pas encore un billet.
       </p>
+      {paymentTestEnvironment ? (
+        <p className="et-tag" data-testid="payment-test-mode">
+          Environnement de test : paiement simulé (SANDBOX), aucun débit réel.
+        </p>
+      ) : null}
       <FormAlert message={error} />
       {notice ? (
         <FormStatus>
@@ -105,6 +169,8 @@ export function CustomerBookings() {
         <div className="et-booking-list">
           {bookings.map((booking) => {
             const active = booking.status === 'HELD';
+            const payment = booking.payment;
+            const paying = active && payment?.status === 'PENDING';
             return (
               <article
                 key={booking.reference}
@@ -153,18 +219,78 @@ export function CustomerBookings() {
                     </strong>{' '}
                     ({booking.seatCount} siège{booking.seatCount > 1 ? 's' : ''})
                   </dd>
-                  <dt>Expiration</dt>
-                  <dd>{formatAt(booking.holdExpiresAt, booking.origin.stop?.timezone)}</dd>
+                  {booking.status === 'CONFIRMED' && payment ? (
+                    <>
+                      <dt>Montant payé</dt>
+                      <dd data-testid={`paid-amount-${booking.reference}`}>
+                        <strong>
+                          {formatMoney(
+                            payment.amountMinor,
+                            booking.currencyCode,
+                            booking.currencyMinorUnit,
+                          )}
+                        </strong>
+                      </dd>
+                      <dt>Référence du paiement</dt>
+                      <dd
+                        className="et-code"
+                        data-testid={`payment-reference-${booking.reference}`}
+                      >
+                        {payment.reference}
+                      </dd>
+                      <dt>Confirmée le</dt>
+                      <dd>
+                        {booking.confirmedAt
+                          ? formatAt(booking.confirmedAt, booking.origin.stop?.timezone)
+                          : '—'}
+                      </dd>
+                    </>
+                  ) : (
+                    <>
+                      <dt>Expiration</dt>
+                      <dd>{formatAt(booking.holdExpiresAt, booking.origin.stop?.timezone)}</dd>
+                    </>
+                  )}
                 </dl>
+                {paying && payment ? (
+                  <div className="et-customer-booking-payment" role="status">
+                    <p>
+                      Paiement <span className="et-code">{payment.reference}</span> en attente de
+                      confirmation par le prestataire de paiement.
+                    </p>
+                  </div>
+                ) : null}
                 {active ? (
-                  <button
-                    type="button"
-                    className="et-button et-button--secondary"
-                    disabled={busyReference === booking.reference}
-                    onClick={() => void cancel(booking.reference)}
-                  >
-                    Annuler la réservation {booking.reference}
-                  </button>
+                  <div className="et-actions">
+                    {paying && payment ? (
+                      <button
+                        type="button"
+                        className="et-button et-button--secondary"
+                        disabled={busyReference === booking.reference}
+                        onClick={() => void cancelPayment(payment.reference, booking.reference)}
+                      >
+                        Annuler la tentative de paiement {payment.reference}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="et-button"
+                        disabled={busyReference === booking.reference}
+                        aria-label={`Continuer vers le paiement de ${booking.reference}`}
+                        onClick={() => void pay(booking.reference)}
+                      >
+                        Continuer vers le paiement
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="et-button et-button--secondary"
+                      disabled={busyReference === booking.reference}
+                      onClick={() => void cancel(booking.reference)}
+                    >
+                      Annuler la réservation {booking.reference}
+                    </button>
+                  </div>
                 ) : null}
               </article>
             );

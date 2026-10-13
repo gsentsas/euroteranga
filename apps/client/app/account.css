@@ -35,3 +35,9 @@
     grid-template-columns: 1fr;
   }
 }
+
+.et-customer-booking-payment {
+  margin-bottom: var(--et-space-3);
+  padding: var(--et-space-2) var(--et-space-3);
+  border-left: 4px solid var(--et-color-border);
+}

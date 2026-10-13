@@ -95,3 +95,9 @@
     grid-template-columns: 1fr;
   }
 }
+
+.et-payment-timeline {
+  display: grid;
+  gap: var(--et-space-1);
+  margin: 0 0 var(--et-space-3);
+}

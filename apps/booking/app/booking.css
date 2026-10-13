@@ -42,6 +42,7 @@
 .et-booking-card,
 .et-booking-recap,
 .et-booking-confirmation,
+.et-booking-payment,
 .et-booking-login {
   padding: var(--et-space-4);
   border: 1px solid var(--et-color-border);
@@ -51,6 +52,7 @@
 
 .et-booking-card h3,
 .et-booking-recap h3,
+.et-booking-payment h3,
 .et-booking-confirmation h2 {
   margin-top: 0;
 }
@@ -141,4 +143,8 @@
   .et-booking-summary dd {
     margin-bottom: var(--et-space-2);
   }
+}
+
+.et-booking-payment {
+  margin-bottom: var(--et-space-4);
 }

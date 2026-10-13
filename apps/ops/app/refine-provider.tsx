@@ -52,6 +52,11 @@ export function RefineProvider({ children }: { children: ReactNode }) {
             list: '/bookings',
             meta: { label: 'Réservations', permission: 'booking.read' },
           },
+          {
+            name: 'payments',
+            list: '/payments',
+            meta: { label: 'Paiements', permission: 'payment.read' },
+          },
           // `permission` only filters the navigation; the API authorizes every call.
           {
             name: 'admin-identities',
