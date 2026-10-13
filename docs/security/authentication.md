@@ -112,6 +112,20 @@ JSON. The OpenAPI document marks passwords, tokens and codes as write-only.
   `v1.<exp>.<nonce>.HMAC-SHA256(AUTH_CSRF_KEY, csrf|v1|sessionId|exp|nonce)`,
   2 h, bound to the session, compared in constant time; kept in memory only.
 
+### Booking and Client (PR-09)
+
+The Booking app and Client account app are two exact CUSTOMER origins
+(`http://localhost:3001` and `http://localhost:3002` locally/CI). Both use the
+same existing CUSTOMER realm and HttpOnly session cookie. There is no booking
+token and no new authentication mechanism.
+
+Public search and availability need no session. Hold creation/list/detail/
+cancellation require the CUSTOMER session; the two mutations additionally
+fetch a session-bound CSRF token immediately before the request. Customer
+identity is taken only from that session. The Booking sign-in component keeps
+the in-progress trip/seat selection in React memory and never writes a token
+or selection to localStorage, sessionStorage, IndexedDB or a URL.
+
 ## Rate limiting
 
 PostgreSQL fixed windows (`auth_rate_limit_bucket`), keyed by

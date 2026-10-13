@@ -26,6 +26,7 @@ written yet.
 | [ADR-023](ADR-023-trip-lifecycle.md)                                | Trip lifecycle and immutable scheduled timetable  | Accepted |
 | [ADR-024](ADR-024-seat-map-versioning.md)                           | Seat-map versioning and historical trip layout    | Accepted |
 | [ADR-025](ADR-025-versioned-fare-tables-historical-trip-pricing.md) | Versioned fare tables and historical trip pricing | Accepted |
+| [ADR-026](ADR-026-segment-inventory-booking-holds.md)               | Segment-based seat inventory and customer holds   | Accepted |
 
 Planned: ADR-005 Object Storage, ADR-007 Offline Crew,
 ADR-008 Payment Abstraction, ADR-009 Regulatory Versioning. ADR-006
@@ -35,5 +36,6 @@ by ADR-017 to ADR-020.
 Business-domain decisions: ADR-021 (route versioning and immutable published
 geometry), ADR-022 (vehicle lifecycle and retirement), ADR-023 (trip
 lifecycle and immutable scheduled timetable), ADR-024 (seat-map versioning
-and historical trip layout) and ADR-025 (versioned fare tables and historical
-trip pricing).
+and historical trip layout), ADR-025 (versioned fare tables and historical
+trip pricing) and ADR-026 (segment-based inventory and customer booking
+holds).

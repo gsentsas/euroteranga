@@ -145,7 +145,8 @@ per waypoint, and an optional `ACTIVE` vehicle. Lifecycle:
 - A vehicle that becomes unavailable after assignment is left to the future
   Dispatch domain.
 - OPS exposes **Voyages** according to `trip.read` and `trip.manage`.
-- Seat maps, pricing, booking, crew and dispatch are deferred.
+- Seat maps and pricing were added in PR-07/PR-08; booking holds in PR-09.
+  Crew and dispatch remain deferred.
 
 See [`docs/domain/trips.md`](../domain/trips.md) and
 [ADR-023](../adr/ADR-023-trip-lifecycle.md).
@@ -169,7 +170,7 @@ scheduling, in the service and in PostgreSQL.
 - Lock hierarchy: trip → vehicle → seat map → version.
 - OPS exposes **Plans de sièges** according to `seatmap.read` and
   `seatmap.manage`, and seat-map panels on vehicles and trips.
-- Booking is deferred.
+- Booking uses the trip's historical layout from PR-09 onward.
 
 See [`docs/domain/seat-maps.md`](../domain/seat-maps.md) and
 [ADR-024](../adr/ADR-024-seat-map-versioning.md).
@@ -193,10 +194,34 @@ at scheduling. Fares are resolved on the server.
 - Lock hierarchy: trip → fare table → version; publication never locks trips.
 - OPS exposes **Tarification** according to `pricing.read` and
   `pricing.manage`, and a pricing panel on trips.
-- Booking, discounts, taxes and payments are deferred.
+- Booking holds use the trip's historical base fare from PR-09 onward.
+  Discounts, taxes and payments remain deferred.
 
 See [`docs/domain/pricing.md`](../domain/pricing.md) and
 [ADR-025](../adr/ADR-025-versioned-fare-tables-historical-trip-pricing.md).
+
+## Booking holds and segment seat inventory (PR-09)
+
+`apps/api/src/bookings` (BookingModule) provides public stop lookup, journey
+search and historical seat availability; authenticated CUSTOMER hold
+creation/list/detail/cancellation; and permissioned STAFF administration.
+
+- A journey occupies the half-open route interval
+  `[originSequence, destinationSequence)`.
+- One PostgreSQL `SeatInventoryLock` per seat and segment, with a unique
+  `(trip, seat, segment)` key, is the concurrent overbooking authority.
+- `BookingSeat` preserves history; operational locks are released on
+  cancellation or transactional cleanup after expiry.
+- Identity, seat labels, fare and currency come from the server. Each booking
+  snapshots the trip's historical fare in integer minor units.
+- Creation, all seats/segments and audit are atomic. Trip cancellation also
+  cancels active holds and releases their inventory atomically.
+- Booking and Client expose the CUSTOMER flow; OPS exposes **Réservations**
+  with `booking.read` / `booking.manage`.
+
+This is a provisional hold only: payment, ticketing, passengers and check-in
+remain deferred. See [`docs/domain/bookings.md`](../domain/bookings.md) and
+[ADR-026](../adr/ADR-026-segment-inventory-booking-holds.md).
 
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
@@ -209,7 +234,8 @@ deployment target — not yet decided (ADR-010), monorepo tooling (ADR-011),
 authentication (ADR-012 to ADR-016), authorization (ADR-017 to ADR-020),
 route versioning (ADR-021), vehicle lifecycle (ADR-022), trip lifecycle
 (ADR-023), seat-map versioning (ADR-024) and versioned fare tables with
-historical trip pricing (ADR-025).
+historical trip pricing (ADR-025), and segment inventory/customer holds
+(ADR-026).
 
 Still open: object storage provider, offline crew
 synchronisation, payment provider abstraction, regulatory rule versioning, and
