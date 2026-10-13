@@ -464,9 +464,15 @@ describe('pricing database invariants (isolated database)', () => {
           data: { fareTableVersionId: version.id },
         }),
       ).rejects.toThrow(/identity and version are immutable/);
+      // Since PR-09, bookings reference fare entries: a plain TRUNCATE stops at
+      // the foreign key, a CASCADE still reaches the fare trigger (the named
+      // table's trigger fires first).
       await expect(db(t.app).$executeRawUnsafe('TRUNCATE TABLE "fare_entry"')).rejects.toThrow(
-        /fare history cannot be truncated/,
+        /referenced in a foreign key constraint/,
       );
+      await expect(
+        db(t.app).$executeRawUnsafe('TRUNCATE TABLE "fare_entry" CASCADE'),
+      ).rejects.toThrow(/fare history cannot be truncated/);
       // fare_table_version is referenced by entries and trips: a plain TRUNCATE
       // stops at the foreign key, a CASCADE reaches its trigger.
       await expect(
