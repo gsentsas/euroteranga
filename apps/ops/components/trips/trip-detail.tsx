@@ -4,6 +4,7 @@ import type { AdminTrip, AdminVehicle, TripTimetableInput } from '@euroteranga/a
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import type { useAdminFeedback } from '../admin/admin-feedback';
+import { TripPricingPanel } from '../pricing/trip-pricing-panel';
 import { assignedLabel } from '../seat-maps/seat-map-format';
 import { SeatMapAssignmentForm } from '../seat-maps/seat-map-assignment-form';
 import type { PublishedVersionOption } from '../seat-maps/use-published-versions';
@@ -387,6 +388,8 @@ export function TripDetail({
   canManage,
   canAssignSeatMap,
   seatMapOptions,
+  canReadPricing,
+  canAssignPricing,
   run,
   busy,
   onReload,
@@ -397,6 +400,10 @@ export function TripDetail({
   /** trip.manage + seatmap.read. */
   canAssignSeatMap: boolean;
   seatMapOptions: readonly PublishedVersionOption[];
+  /** pricing.read. */
+  canReadPricing: boolean;
+  /** trip.manage + pricing.read. */
+  canAssignPricing: boolean;
   run: Run;
   busy: boolean;
   onReload: () => Promise<void>;
@@ -480,6 +487,16 @@ export function TripDetail({
         onReload={onReload}
       />
 
+      {canReadPricing ? (
+        <TripPricingPanel
+          trip={trip}
+          canAssign={canAssignPricing}
+          run={run}
+          busy={busy}
+          onReload={onReload}
+        />
+      ) : null}
+
       {canManage && trip.status !== 'CANCELLED' ? (
         <VehicleForm trip={trip} vehicles={vehicles} run={run} busy={busy} onSaved={onReload} />
       ) : null}
@@ -514,6 +531,9 @@ export function TripDetail({
               : ''}
             {entry.action === 'TRIP_VEHICLE_CHANGED'
               ? ` (${entry.fromVehicleCode ?? 'aucun'} → ${entry.toVehicleCode ?? 'aucun'})`
+              : ''}
+            {entry.action === 'TRIP_FARE_TABLE_CHANGED'
+              ? ` (${entry.fromFareTable ?? 'aucune'} → ${entry.toFareTable ?? 'aucune'})`
               : ''}
             {entry.reason ? ` — ${entry.reason}` : ''}
           </li>

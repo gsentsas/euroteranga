@@ -12,6 +12,7 @@ export const TRIP_ACTION_LABELS: Record<string, string> = {
   TRIP_SCHEDULED: 'Planification',
   TRIP_CANCELLED: 'Annulation',
   TRIP_VEHICLE_CHANGED: 'Changement de véhicule',
+  TRIP_FARE_TABLE_CHANGED: 'Changement de tarification',
 };
 
 const utcFormat = new Intl.DateTimeFormat('fr-FR', {

@@ -129,6 +129,8 @@ export function TripsAdmin() {
   const canManage = useCan('trip.manage');
   const canAssignSeatMap = useCan('trip.manage', 'seatmap.read');
   const seatMapOptions = usePublishedSeatMapVersions(canAssignSeatMap);
+  const canReadPricing = useCan('pricing.read');
+  const canAssignPricing = useCan('trip.manage', 'pricing.read');
   const filterId = useId();
   const { run, busy, feedback, setError } = useAdminFeedback();
   const [status, setStatus] = useState<TripStatus | ''>('');
@@ -290,6 +292,8 @@ export function TripsAdmin() {
           canManage={canManage}
           canAssignSeatMap={canAssignSeatMap}
           seatMapOptions={seatMapOptions}
+          canReadPricing={canReadPricing}
+          canAssignPricing={canAssignPricing}
           run={run}
           busy={busy}
           onReload={reload}
