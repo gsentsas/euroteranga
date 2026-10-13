@@ -40,19 +40,22 @@ ADR-017 to ADR-020. This document contains no secret value.
 | `network.manage`           | Managing them, drafting and publishing route versions      |
 | `fleet.read`               | Reading the vehicle registry and status history (PR-05)    |
 | `fleet.manage`             | Registering vehicles, editing them, changing their status  |
+| `trip.read`                | Reading trips, their timetable and vehicle (PR-06)         |
+| `trip.manage`              | Creating, timing, scheduling, cancelling trips; vehicles   |
 
 ### Role matrix
 
-| Role                                | Realm | Privileged | Permissions                                                                                                |
-| ----------------------------------- | ----- | ---------- | ---------------------------------------------------------------------------------------------------------- |
-| `SUPER_ADMIN`                       | STAFF | yes        | all fourteen                                                                                               |
-| `DIRECTOR`                          | STAFF | no         | all except `privileged.manage`                                                                             |
-| `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage` |
-| `AUDITOR`                           | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`, `fleet.read`                     |
-| `DISPATCHER`, `COMPLIANCE_AGENT`    | STAFF | no         | `ops.access`, `network.read`, `fleet.read`                                                                 |
-| `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read` (no fleet permission by default)                                              |
-| `FINANCE`                           | STAFF | no         | `ops.access` (no network or fleet permission by default)                                                   |
-| `DRIVER`, `CREW`                    | CREW  | no         | none yet                                                                                                   |
+| Role                                | Realm | Privileged | Permissions                                                                                                                            |
+| ----------------------------------- | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPER_ADMIN`                       | STAFF | yes        | all sixteen                                                                                                                            |
+| `DIRECTOR`                          | STAFF | no         | all except `privileged.manage`                                                                                                         |
+| `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage`, `trip.read`, `trip.manage` |
+| `DISPATCHER`                        | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `trip.manage`                                                                 |
+| `AUDITOR`                           | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`, `fleet.read`, `trip.read`                                    |
+| `COMPLIANCE_AGENT`                  | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`                                                                                |
+| `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`, `trip.read` (no fleet permission by default)                                                             |
+| `FINANCE`                           | STAFF | no         | `ops.access` (no network, fleet or trip permission by default)                                                                         |
+| `DRIVER`, `CREW`                    | CREW  | no         | none yet                                                                                                                               |
 
 A STAFF identity without any role, or with roles lacking `ops.access`, can
 sign in (password + TOTP) but gets **Accès refusé** in OPS and 403 from every
