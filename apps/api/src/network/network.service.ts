@@ -45,8 +45,7 @@ interface WaypointRecord {
   alightingAllowed: boolean;
   stop: (LocatedRecord & { id: string; active: boolean; country: { active: boolean } }) | null;
   checkpoint:
-    | (LocatedRecord & { id: string; active: boolean; country: { active: boolean } })
-    | null;
+    (LocatedRecord & { id: string; active: boolean; country: { active: boolean } }) | null;
 }
 
 const locationView = <T extends LocatedRecord>(record: T) => ({
@@ -166,7 +165,14 @@ export class NetworkService {
           },
         });
         await this.audit.record(
-          { actor, action: 'COUNTRY_UPDATED', resourceType: 'country', resourceId: id, before, after },
+          {
+            actor,
+            action: 'COUNTRY_UPDATED',
+            resourceType: 'country',
+            resourceId: id,
+            before,
+            after,
+          },
           tx,
         );
         return after;
@@ -188,7 +194,9 @@ export class NetworkService {
   createStop(input: StopCreate, actor: AuthPrincipal) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
-        if (!(await tx.country.findUnique({ where: { id: input.countryId }, select: { id: true } }))) {
+        if (
+          !(await tx.country.findUnique({ where: { id: input.countryId }, select: { id: true } }))
+        ) {
           throw NetworkErrors.countryNotFound();
         }
         const stop = await tx.stop.create({ data: input, include: { country: true } });
@@ -252,7 +260,9 @@ export class NetworkService {
   createCheckpoint(input: CheckpointCreate, actor: AuthPrincipal) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
-        if (!(await tx.country.findUnique({ where: { id: input.countryId }, select: { id: true } }))) {
+        if (
+          !(await tx.country.findUnique({ where: { id: input.countryId }, select: { id: true } }))
+        ) {
           throw NetworkErrors.countryNotFound();
         }
         const checkpoint = await tx.checkpoint.create({ data: input, include: { country: true } });
@@ -354,7 +364,13 @@ export class NetworkService {
       this.database.client.$transaction(async (tx) => {
         const route = await tx.route.create({ data: input });
         await this.audit.record(
-          { actor, action: 'ROUTE_CREATED', resourceType: 'route', resourceId: route.id, after: route },
+          {
+            actor,
+            action: 'ROUTE_CREATED',
+            resourceType: 'route',
+            resourceId: route.id,
+            after: route,
+          },
           tx,
         );
         return { ...route, versions: [] };
@@ -433,7 +449,11 @@ export class NetworkService {
         if (version.status !== 'DRAFT') throw NetworkErrors.versionNotDraft();
 
         const stopIds = [
-          ...new Set(input.waypoints.flatMap((waypoint) => (waypoint.kind === 'STOP' ? [waypoint.stopId] : []))),
+          ...new Set(
+            input.waypoints.flatMap((waypoint) =>
+              waypoint.kind === 'STOP' ? [waypoint.stopId] : [],
+            ),
+          ),
         ];
         const checkpointIds = [
           ...new Set(

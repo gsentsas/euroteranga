@@ -15,13 +15,24 @@ const uppercase = (length: number) =>
     .string()
     .trim()
     .transform((value) => value.toUpperCase())
-    .pipe(z.string().length(length).regex(/^[A-Z]+$/));
+    .pipe(
+      z
+        .string()
+        .length(length)
+        .regex(/^[A-Z]+$/),
+    );
 
 const code = z
   .string()
   .trim()
   .transform((value) => value.toUpperCase())
-  .pipe(z.string().min(1).max(32).regex(/^[A-Z0-9][A-Z0-9_-]*$/));
+  .pipe(
+    z
+      .string()
+      .min(1)
+      .max(32)
+      .regex(/^[A-Z0-9][A-Z0-9_-]*$/),
+  );
 
 const nonEmptyUpdate = <T extends z.ZodRawShape>(shape: T) =>
   z
@@ -79,7 +90,9 @@ export const checkpointWaypointSchema = z
   .strict();
 export const replaceWaypointsSchema = z
   .object({
-    waypoints: z.array(z.discriminatedUnion('kind', [stopWaypointSchema, checkpointWaypointSchema])).max(500),
+    waypoints: z
+      .array(z.discriminatedUnion('kind', [stopWaypointSchema, checkpointWaypointSchema]))
+      .max(500),
   })
   .strict();
 

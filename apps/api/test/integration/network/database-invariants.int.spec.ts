@@ -112,9 +112,7 @@ describe('network database invariants (isolated database)', () => {
 
   it('enforces coordinate ranges for stops and checkpoints', async () => {
     const nation = await country();
-    await expect(stop(nation.id, { latitude: 90.000001 })).rejects.toThrow(
-      /stop_latitude_range/,
-    );
+    await expect(stop(nation.id, { latitude: 90.000001 })).rejects.toThrow(/stop_latitude_range/);
     await expect(stop(nation.id, { longitude: -180.000001 })).rejects.toThrow(
       /stop_longitude_range/,
     );
@@ -132,9 +130,7 @@ describe('network database invariants (isolated database)', () => {
     const nation = await country();
     await stop(nation.id, { code: 'STOP_UNIQUE' });
     await expect(stop(nation.id, { code: 'STOP_UNIQUE' })).rejects.toThrow();
-    await expect(stop(nation.id, { code: 'stop_lower' })).rejects.toThrow(
-      /stop_code_normalized/,
-    );
+    await expect(stop(nation.id, { code: 'stop_lower' })).rejects.toThrow(/stop_code_normalized/);
 
     await checkpoint(nation.id, { code: 'CHECK_UNIQUE' });
     await expect(checkpoint(nation.id, { code: 'CHECK_UNIQUE' })).rejects.toThrow();

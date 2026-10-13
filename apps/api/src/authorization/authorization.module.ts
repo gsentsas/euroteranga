@@ -34,12 +34,7 @@ export class AuthorizationModule {
       ],
       // Cross-cutting guards and audit are shared by business modules. The
       // configured AuthModule is re-exported so it is still instantiated once.
-      exports: [
-        AuthModule,
-        AuthorizationService,
-        AuthorizationGuard,
-        AuditService,
-      ],
+      exports: [AuthModule, AuthorizationService, AuthorizationGuard, AuditService],
     };
   }
 }
