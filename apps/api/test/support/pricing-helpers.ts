@@ -127,3 +127,36 @@ export async function publishedFareTable(actor: StaffActor, route: PricedRoute, 
   if (published.status !== 200) throw new Error(`publish: ${published.status} ${published.text}`);
   return { api, table, versionId: draft.id };
 }
+
+/** A DRAFT trip on the priced route with a complete timetable (schedulable). */
+export async function pricedTrip(app: NestExpressApplication, route: PricedRoute) {
+  const trip = await db(app).trip.create({
+    data: { reference: `ET-TEST-2030-${suffix()}`, routeVersionId: route.routeVersionId },
+  });
+  const at = (hour: number, minute = 0) => new Date(Date.UTC(2030, 2, 1, hour, minute));
+  await db(app).tripWaypointTiming.createMany({
+    data: [
+      { tripId: trip.id, routeWaypointId: route.A, sequence: 1, plannedDepartureAt: at(8) },
+      {
+        tripId: trip.id,
+        routeWaypointId: route.C,
+        sequence: 2,
+        plannedArrivalAt: at(9),
+        plannedDepartureAt: at(9, 5),
+      },
+      {
+        tripId: trip.id,
+        routeWaypointId: route.B,
+        sequence: 3,
+        plannedArrivalAt: at(10),
+        plannedDepartureAt: at(10, 10),
+      },
+      { tripId: trip.id, routeWaypointId: route.D, sequence: 4, plannedArrivalAt: at(12) },
+    ],
+  });
+  await db(app).trip.update({
+    where: { id: trip.id },
+    data: { plannedDepartureAt: at(8), plannedArrivalAt: at(12) },
+  });
+  return trip;
+}
