@@ -27,6 +27,11 @@ export function RefineProvider({ children }: { children: ReactNode }) {
             list: '/network',
             meta: { label: 'Réseau', permission: 'network.read' },
           },
+          {
+            name: 'fleet',
+            list: '/fleet',
+            meta: { label: 'Flotte', permission: 'fleet.read' },
+          },
           // `permission` only filters the navigation; the API authorizes every call.
           {
             name: 'admin-identities',
