@@ -408,6 +408,121 @@ describe('trip pricing and fare resolution (isolated database)', () => {
     });
   });
 
+  describe('visibility without pricing.read', () => {
+    /** All a trip.read holder without pricing.read may see of the trip's pricing. */
+    const IDENTITY_KEYS = ['entryCount', 'fareTable', 'id', 'version'];
+
+    function expectIdentityOnly(
+      fareTableVersion: Record<string, unknown> & { fareTable: Record<string, unknown> },
+      expected: { id: string; code: string; entryCount: number },
+    ) {
+      // Present.
+      expect(fareTableVersion).toEqual({
+        id: expected.id,
+        version: 1,
+        fareTable: { code: expected.code, currencyCode: 'EUR' },
+        entryCount: expected.entryCount,
+      });
+      // Absent: catalogue data stays behind pricing.read.
+      for (const field of ['status', 'publishedAt', 'retiredAt', 'routeVersionId']) {
+        expect(fareTableVersion).not.toHaveProperty(field);
+      }
+      for (const field of ['name', 'active', 'currencyMinorUnit']) {
+        expect(fareTableVersion.fareTable).not.toHaveProperty(field);
+      }
+    }
+
+    it('COMPLIANCE_AGENT sees the identity of the trip fare table only, in detail and list', async () => {
+      const { table, versionId } = await publishedFareTable(admin, route);
+      const trip = await pricedTrip(t.app, route);
+      await assign(admin, trip.id, { fareTableVersionId: versionId });
+      const compliance = await staffActor(t.app, ['COMPLIANCE_AGENT']);
+      const api = adminApi(compliance);
+      const expected = { id: versionId, code: table.code, entryCount: 2 };
+
+      const detail = await api.get(`/trips/${trip.id}`);
+      expect(detail.status).toBe(200);
+      expect(detail.body.fareTableVersionId).toBe(versionId);
+      expectIdentityOnly(detail.body.fareTableVersion, expected);
+      const body = JSON.stringify(detail.body);
+      expect(body).not.toContain('amountMinor');
+      expect(body).not.toContain('currencyMinorUnit');
+      expect(body).not.toContain('Tarif synthétique'); // the fare table name
+      expect((await resolve(compliance, trip.id, route.A, route.B)).status).toBe(403);
+
+      // The list must not leak what the detail hides.
+      const list = await api.get(`/trips?routeVersionId=${route.routeVersionId}&limit=100`);
+      expect(list.status).toBe(200);
+      const item = (list.body.items as Array<{ id: string; fareTableVersion: never }>).find(
+        (candidate) => candidate.id === trip.id,
+      );
+      expectIdentityOnly(item!.fareTableVersion, expected);
+      for (const candidate of list.body.items as Array<{
+        fareTableVersion: Record<string, unknown> | null;
+      }>) {
+        if (candidate.fareTableVersion) {
+          expect(Object.keys(candidate.fareTableVersion).sort()).toEqual(IDENTITY_KEYS);
+        }
+      }
+      const listed = JSON.stringify(list.body);
+      expect(listed).not.toContain('amountMinor');
+      expect(listed).not.toContain('currencyMinorUnit');
+      expect(listed).not.toContain('Tarif synthétique');
+    });
+
+    it('trip.manage without pricing.read gets the identity only in mutation results', async () => {
+      const { table, versionId } = await publishedFareTable(admin, route);
+      const trip = await pricedTrip(t.app, route);
+      await assign(admin, trip.id, { fareTableVersionId: versionId });
+      const tripOnly = adminApi(
+        await staffActor(t.app, [
+          await createTestRole(t.app, ['ops.access', 'trip.manage', 'trip.read']),
+        ]),
+      );
+      const scheduled = await tripOnly.post(`/trips/${trip.id}/schedule`, {});
+      expect(scheduled.status).toBe(200);
+      expectIdentityOnly(scheduled.body.fareTableVersion, {
+        id: versionId,
+        code: table.code,
+        entryCount: 2,
+      });
+      const cancelled = await tripOnly.post(`/trips/${trip.id}/cancel`, { reason: 'Contrôle' });
+      expect(cancelled.status).toBe(200);
+      expect(Object.keys(cancelled.body.fareTableVersion).sort()).toEqual(IDENTITY_KEYS);
+      expect(JSON.stringify(cancelled.body)).not.toContain('currencyMinorUnit');
+    });
+
+    it('keeps the full summary for pricing.read holders', async () => {
+      const { table, versionId } = await publishedFareTable(admin, route);
+      const trip = await pricedTrip(t.app, route);
+      await assign(admin, trip.id, { fareTableVersionId: versionId });
+      const auditor = adminApi(await staffActor(t.app, ['AUDITOR']));
+      const full = {
+        id: versionId,
+        version: 1,
+        status: 'PUBLISHED',
+        routeVersionId: route.routeVersionId,
+        entryCount: 2,
+        fareTable: {
+          code: table.code,
+          name: 'Tarif synthétique',
+          currencyCode: 'EUR',
+          currencyMinorUnit: 2,
+          active: true,
+        },
+      };
+      const detail = await auditor.get(`/trips/${trip.id}`);
+      expect(detail.body.fareTableVersion).toMatchObject(full);
+      expect(detail.body.fareTableVersion.publishedAt).not.toBeNull();
+      const list = await auditor.get(`/trips?routeVersionId=${route.routeVersionId}&limit=100`);
+      expect(
+        (list.body.items as Array<{ id: string; fareTableVersion: unknown }>).find(
+          (candidate) => candidate.id === trip.id,
+        )?.fareTableVersion,
+      ).toMatchObject(full);
+    });
+  });
+
   describe('concurrency', () => {
     it('two concurrent assignments decided on the same state: exactly one applies', async () => {
       const [a, b] = [

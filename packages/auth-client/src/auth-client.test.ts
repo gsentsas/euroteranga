@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   createAuthClient,
+  hasFareTableDetails,
   type AdminFareTable,
+  type AssignedFareTableVersion,
   type AdminSeatMap,
   type AdminTrip,
   type AdminTripSummary,
@@ -10,6 +12,7 @@ import {
   type AdminVehicleDetail,
   type ApiResult,
   type ResolvedTripFare,
+  type TripFareTableIdentity,
   type NetworkRouteVersion,
   type NetworkWaypointReplacement,
 } from './index.js';
@@ -433,5 +436,36 @@ describe('admin client', () => {
     // Route and currency cannot be updated.
     expectTypeOf(admin.pricing.updateFareTable).parameter(1).not.toHaveProperty('currencyCode');
     expectTypeOf(admin.pricing.updateFareTable).parameter(1).not.toHaveProperty('routeId');
+  });
+
+  it('distinguishes the trip pricing identity (trip.read) from the full summary', () => {
+    const identity: TripFareTableIdentity = {
+      id: 'v',
+      version: 1,
+      fareTable: { code: 'ROUTE_TEST_EUR', currencyCode: 'EUR' },
+      entryCount: 2,
+    };
+    expect(hasFareTableDetails(identity)).toBe(false);
+    expect(
+      hasFareTableDetails({
+        ...identity,
+        status: 'RETIRED',
+        publishedAt: null,
+        retiredAt: null,
+        routeVersionId: 'r',
+        fareTable: {
+          ...identity.fareTable,
+          id: 't',
+          name: 'n',
+          currencyMinorUnit: 2,
+          active: true,
+        },
+      }),
+    ).toBe(true);
+    expectTypeOf<TripFareTableIdentity>().not.toHaveProperty('status');
+    expectTypeOf<TripFareTableIdentity['fareTable']>().not.toHaveProperty('currencyMinorUnit');
+    expectTypeOf<AdminTripSummary['fareTableVersion']>().toEqualTypeOf<
+      AssignedFareTableVersion | TripFareTableIdentity | null
+    >();
   });
 });
