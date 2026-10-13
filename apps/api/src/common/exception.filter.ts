@@ -26,6 +26,23 @@ const PUBLIC_ERRORS: Record<number, { code: string; message: string }> = {
 const INTERNAL_ERROR = { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' };
 
 /**
+ * Body-parser failures happen before Nest routing and are not HttpExceptions.
+ * An oversized body (body-parser `entity.too.large`) keeps its 413 instead of
+ * becoming an internal error; nothing else of such errors is trusted.
+ */
+function statusOf(exception: unknown): number {
+  if (exception instanceof HttpException) return exception.getStatus();
+  if (
+    typeof exception === 'object' &&
+    exception !== null &&
+    (exception as { type?: unknown }).type === 'entity.too.large'
+  ) {
+    return 413;
+  }
+  return 500;
+}
+
+/**
  * Single error shape for every failure: { code, message, requestId }.
  *
  * Messages are fixed per status rather than copied from the exception, so
@@ -42,7 +59,7 @@ export class FoundationExceptionFilter implements ExceptionFilter {
     const response = http.getResponse<Response>();
     const request = http.getRequest<Request>();
 
-    const status = exception instanceof HttpException ? exception.getStatus() : 500;
+    const status = statusOf(exception);
     // PublicApiError carries a code and message written for clients; any
     // other error gets the fixed message of its status.
     const publicError =
