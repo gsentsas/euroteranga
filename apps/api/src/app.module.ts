@@ -6,6 +6,7 @@ import type { AuthMailProvider } from './auth/mail/auth-mail.provider.js';
 import { ConfigModule } from './config/config.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
+import { NetworkModule } from './network/network.module.js';
 
 export interface AppModuleOptions {
   env: ApiEnv;
@@ -27,6 +28,7 @@ export class AppModule {
         AuthorizationModule.register(
           options.mailProvider ? { mailProvider: options.mailProvider } : {},
         ),
+        NetworkModule,
       ],
       controllers: options.extraControllers ?? [],
     };

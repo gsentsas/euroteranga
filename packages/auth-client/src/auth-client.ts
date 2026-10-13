@@ -64,6 +64,167 @@ export interface Page<T> {
   nextCursor: string | null;
 }
 
+export interface NetworkCountry {
+  id: string;
+  iso2: string;
+  iso3: string;
+  name: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NetworkStop {
+  id: string;
+  code: string;
+  name: string;
+  countryId: string;
+  locality: string;
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  country: NetworkCountry;
+}
+
+export type NetworkCheckpointType = 'BORDER' | 'FERRY_TERMINAL' | 'PORT' | 'TECHNICAL';
+
+export interface NetworkCheckpoint {
+  id: string;
+  code: string;
+  name: string;
+  countryId: string;
+  type: NetworkCheckpointType;
+  locality: string;
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  country: NetworkCountry;
+}
+
+export type NetworkRouteVersionStatus = 'DRAFT' | 'PUBLISHED' | 'RETIRED';
+
+export interface NetworkRoute {
+  id: string;
+  code: string;
+  name: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  versions: NetworkRouteVersionSummary[];
+}
+
+export interface NetworkRouteWaypoint {
+  id: string;
+  routeVersionId: string;
+  sequence: number;
+  kind: 'STOP' | 'CHECKPOINT';
+  stopId: string | null;
+  checkpointId: string | null;
+  boardingAllowed: boolean;
+  alightingAllowed: boolean;
+  stop: NetworkStop | null;
+  checkpoint: NetworkCheckpoint | null;
+}
+
+export interface NetworkRouteVersion {
+  id: string;
+  routeId: string;
+  version: number;
+  status: NetworkRouteVersionStatus;
+  publishedAt: string | null;
+  retiredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  waypoints: NetworkRouteWaypoint[];
+}
+
+export type NetworkRouteVersionSummary = Omit<NetworkRouteVersion, 'waypoints'>;
+
+export interface NetworkRouteDetail extends Omit<NetworkRoute, 'versions'> {
+  versions: NetworkRouteVersion[];
+}
+
+export interface NetworkWaypointReplacement {
+  routeVersionId: string;
+  waypoints: NetworkRouteWaypoint[];
+}
+
+export interface NetworkListOptions {
+  cursor?: string;
+  limit?: number;
+}
+
+export interface NetworkCountryInput {
+  iso2: string;
+  iso3: string;
+  name: string;
+  active: boolean;
+}
+
+export interface NetworkCountryUpdate {
+  iso2?: string;
+  iso3?: string;
+  name?: string;
+  active?: boolean;
+}
+
+export interface NetworkPlaceInput {
+  code: string;
+  name: string;
+  countryId: string;
+  locality: string;
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  active: boolean;
+}
+
+export interface NetworkPlaceUpdate {
+  code?: string;
+  name?: string;
+  countryId?: string;
+  locality?: string;
+  latitude?: number;
+  longitude?: number;
+  timezone?: string;
+  active?: boolean;
+}
+
+export interface NetworkCheckpointInput extends NetworkPlaceInput {
+  type: NetworkCheckpointType;
+}
+
+export interface NetworkCheckpointUpdate extends NetworkPlaceUpdate {
+  type?: NetworkCheckpointType;
+}
+
+export interface NetworkRouteInput {
+  code: string;
+  name: string;
+  active: boolean;
+}
+
+export interface NetworkRouteUpdate {
+  code?: string;
+  name?: string;
+  active?: boolean;
+}
+
+export type NetworkWaypointInput =
+  | {
+      kind: 'STOP';
+      stopId: string;
+      boardingAllowed: boolean;
+      alightingAllowed: boolean;
+    }
+  | { kind: 'CHECKPOINT'; checkpointId: string };
+
 function query(values: Record<string, string | number | undefined>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
@@ -265,6 +426,81 @@ export function createAuthClient(baseUrl: string) {
           'staff',
           `/v1/admin/staff/${encodeURIComponent(identityId)}/mfa/enrollment-authorization`,
         ),
+      network: {
+        countries: (options: NetworkListOptions = {}) =>
+          call<Page<NetworkCountry>>(
+            'GET',
+            `/v1/admin/network/countries?${query({ cursor: options.cursor, limit: options.limit })}`,
+          ),
+        createCountry: (input: NetworkCountryInput) =>
+          withCsrf<NetworkCountry>('staff', '/v1/admin/network/countries', input),
+        updateCountry: (countryId: string, input: NetworkCountryUpdate) =>
+          withCsrf<NetworkCountry>(
+            'staff',
+            `/v1/admin/network/countries/${encodeURIComponent(countryId)}`,
+            input,
+          ),
+        stops: (options: NetworkListOptions = {}) =>
+          call<Page<NetworkStop>>(
+            'GET',
+            `/v1/admin/network/stops?${query({ cursor: options.cursor, limit: options.limit })}`,
+          ),
+        createStop: (input: NetworkPlaceInput) =>
+          withCsrf<NetworkStop>('staff', '/v1/admin/network/stops', input),
+        updateStop: (stopId: string, input: NetworkPlaceUpdate) =>
+          withCsrf<NetworkStop>(
+            'staff',
+            `/v1/admin/network/stops/${encodeURIComponent(stopId)}`,
+            input,
+          ),
+        checkpoints: (options: NetworkListOptions = {}) =>
+          call<Page<NetworkCheckpoint>>(
+            'GET',
+            `/v1/admin/network/checkpoints?${query({ cursor: options.cursor, limit: options.limit })}`,
+          ),
+        createCheckpoint: (input: NetworkCheckpointInput) =>
+          withCsrf<NetworkCheckpoint>('staff', '/v1/admin/network/checkpoints', input),
+        updateCheckpoint: (checkpointId: string, input: NetworkCheckpointUpdate) =>
+          withCsrf<NetworkCheckpoint>(
+            'staff',
+            `/v1/admin/network/checkpoints/${encodeURIComponent(checkpointId)}`,
+            input,
+          ),
+        routes: (options: NetworkListOptions = {}) =>
+          call<Page<NetworkRoute>>(
+            'GET',
+            `/v1/admin/network/routes?${query({ cursor: options.cursor, limit: options.limit })}`,
+          ),
+        route: (routeId: string) =>
+          call<NetworkRouteDetail>(
+            'GET',
+            `/v1/admin/network/routes/${encodeURIComponent(routeId)}`,
+          ),
+        createRoute: (input: NetworkRouteInput) =>
+          withCsrf<NetworkRoute>('staff', '/v1/admin/network/routes', input),
+        updateRoute: (routeId: string, input: NetworkRouteUpdate) =>
+          withCsrf<NetworkRoute>(
+            'staff',
+            `/v1/admin/network/routes/${encodeURIComponent(routeId)}`,
+            input,
+          ),
+        createVersion: (routeId: string) =>
+          withCsrf<NetworkRouteVersion>(
+            'staff',
+            `/v1/admin/network/routes/${encodeURIComponent(routeId)}/versions`,
+          ),
+        replaceWaypoints: (routeId: string, versionId: string, waypoints: NetworkWaypointInput[]) =>
+          withCsrf<NetworkWaypointReplacement>(
+            'staff',
+            `/v1/admin/network/routes/${encodeURIComponent(routeId)}/versions/${encodeURIComponent(versionId)}/waypoints`,
+            { waypoints },
+          ),
+        publishVersion: (routeId: string, versionId: string) =>
+          withCsrf<NetworkRouteVersion>(
+            'staff',
+            `/v1/admin/network/routes/${encodeURIComponent(routeId)}/versions/${encodeURIComponent(versionId)}/publish`,
+          ),
+      },
     },
   };
 }

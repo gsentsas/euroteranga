@@ -19,8 +19,8 @@ export function StaffHome() {
         Rôles : <span data-testid="session-roles">{roles.length ? roles.join(', ') : 'aucun'}</span>
       </p>
       <p>
-        Le back-office des opérations n’est pas encore disponible. Aucune donnée opérationnelle
-        n’est affichée et aucun indicateur n’est calculé.
+        Utilisez la navigation pour accéder aux espaces autorisés pour vos rôles. Les données du
+        réseau sont disponibles aux profils disposant de la permission de lecture correspondante.
       </p>
       <button type="button" className="et-button" disabled={isPending} onClick={() => logout()}>
         Se déconnecter

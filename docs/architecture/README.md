@@ -103,6 +103,21 @@ enrollment grant, and a CLI-only SUPER_ADMIN bootstrap. The OPS app shows
 `GET /v1/admin/access/me`, but the API remains the authority.
 See [`docs/security/authorization.md`](../security/authorization.md).
 
+## Network and versioned routes (PR-04)
+
+`apps/api/src/network` (NetworkModule) is the first business domain. Countries,
+stops and checkpoints form the geographic catalogue. A stable route owns
+numbered versions whose ordered waypoints reference exactly one stop or
+checkpoint. Draft orders can be replaced atomically; publication retires the
+previous version and writes the audit event in the same transaction.
+
+The database enforces coordinate, uniqueness and exact-one-of constraints and
+protects published/retired geometry against direct writes. OPS exposes the
+network according to `network.read` and `network.manage`, while the Core API
+remains the sole authority. No real corridor is seeded. See
+[`docs/domain/network.md`](../domain/network.md) and
+[ADR-021](../adr/ADR-021-route-versioning.md).
+
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
 
@@ -111,7 +126,8 @@ Health probes: `/health` (basic), `/health/live` (process alive),
 Recorded in [`docs/adr/`](../adr/README.md): modular monolith (ADR-001),
 PostgreSQL and Prisma (ADR-002), NestJS (ADR-003), Refine (ADR-004), Plesk
 deployment target — not yet decided (ADR-010), monorepo tooling (ADR-011),
-authentication (ADR-012 to ADR-016) and authorization (ADR-017 to ADR-020).
+authentication (ADR-012 to ADR-016), authorization (ADR-017 to ADR-020) and
+route versioning (ADR-021).
 
 Still open: object storage provider, offline crew
 synchronisation, payment provider abstraction, regulatory rule versioning, and

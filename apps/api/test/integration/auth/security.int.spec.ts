@@ -157,7 +157,10 @@ describe('authentication security controls', () => {
       } finally {
         await direct.app.close();
       }
-    });
+      // 31 sequential logins, each costing an Argon2id verification (64 MiB,
+      // t=3): CPU-bound by design, so it gets its own budget instead of the
+      // 20 s default when the suite runs files in parallel.
+    }, 60_000);
   });
 
   describe('production cookies', () => {

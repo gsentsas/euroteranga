@@ -1,0 +1,37 @@
+.et-network {
+  display: grid;
+  gap: var(--et-space-5);
+}
+
+.et-network > section {
+  display: grid;
+  gap: var(--et-space-3);
+}
+
+.et-network-form,
+.et-network-panel {
+  max-width: none;
+  padding: var(--et-space-3);
+  border: 1px solid var(--et-color-border);
+  border-radius: var(--et-radius);
+  background: var(--et-color-surface-raised);
+}
+
+.et-network-adders {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--et-space-3);
+}
+
+.et-network-waypoints,
+.et-network-versions {
+  display: grid;
+  gap: var(--et-space-2);
+}
+
+.et-network-waypoints > li {
+  padding: var(--et-space-2);
+  border: 1px solid var(--et-color-border);
+  border-radius: var(--et-radius);
+  background: var(--et-color-surface-raised);
+}

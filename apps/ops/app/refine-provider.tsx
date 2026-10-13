@@ -22,6 +22,11 @@ export function RefineProvider({ children }: { children: ReactNode }) {
         authProvider={authProvider}
         resources={[
           { name: 'foundation', list: '/', meta: { label: 'Foundation' } },
+          {
+            name: 'network',
+            list: '/network',
+            meta: { label: 'Réseau', permission: 'network.read' },
+          },
           // `permission` only filters the navigation; the API authorizes every call.
           {
             name: 'admin-identities',

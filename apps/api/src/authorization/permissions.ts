@@ -17,6 +17,8 @@ export const PERMISSIONS = {
   AUDIT_READ: 'audit.read',
   SESSION_REVOKE_ANY: 'session.revoke.any',
   MFA_ENROLLMENT_AUTHORIZE: 'mfa.enrollment.authorize',
+  NETWORK_READ: 'network.read',
+  NETWORK_MANAGE: 'network.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

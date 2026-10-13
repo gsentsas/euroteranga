@@ -18,6 +18,8 @@ const EXPECTED_MATRIX: Record<
       'identity.staff.provision',
       'identity.status.manage',
       'mfa.enrollment.authorize',
+      'network.manage',
+      'network.read',
       'ops.access',
       'privileged.manage',
       'role.assign',
@@ -34,6 +36,8 @@ const EXPECTED_MATRIX: Record<
       'identity.staff.provision',
       'identity.status.manage',
       'mfa.enrollment.authorize',
+      'network.manage',
+      'network.read',
       'ops.access',
       'role.assign',
       'role.read',
@@ -43,17 +47,26 @@ const EXPECTED_MATRIX: Record<
   OPS_MANAGER: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['identity.read', 'ops.access', 'role.read'],
+    permissions: ['identity.read', 'network.manage', 'network.read', 'ops.access', 'role.read'],
   },
-  DISPATCHER: { realm: 'STAFF', privileged: false, permissions: ['ops.access'] },
-  BOOKING_AGENT: { realm: 'STAFF', privileged: false, permissions: ['ops.access'] },
-  COMPLIANCE_AGENT: { realm: 'STAFF', privileged: false, permissions: ['ops.access'] },
+  DISPATCHER: { realm: 'STAFF', privileged: false, permissions: ['network.read', 'ops.access'] },
+  BOOKING_AGENT: { realm: 'STAFF', privileged: false, permissions: ['network.read', 'ops.access'] },
+  COMPLIANCE_AGENT: {
+    realm: 'STAFF',
+    privileged: false,
+    permissions: ['network.read', 'ops.access'],
+  },
+  // FINANCE has no network permission by default (PR-04 matrix).
   FINANCE: { realm: 'STAFF', privileged: false, permissions: ['ops.access'] },
-  CUSTOMER_SUPPORT: { realm: 'STAFF', privileged: false, permissions: ['ops.access'] },
+  CUSTOMER_SUPPORT: {
+    realm: 'STAFF',
+    privileged: false,
+    permissions: ['network.read', 'ops.access'],
+  },
   AUDITOR: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['audit.read', 'identity.read', 'ops.access', 'role.read'],
+    permissions: ['audit.read', 'identity.read', 'network.read', 'ops.access', 'role.read'],
   },
   DRIVER: { realm: 'CREW', privileged: false, permissions: [] },
   CREW: { realm: 'CREW', privileged: false, permissions: [] },
@@ -71,6 +84,13 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['POST', '/v1/admin/staff/invitations'],
   ['POST', '/v1/admin/staff/01900000-0000-7000-8000-000000000000/mfa/enrollment-authorization'],
   ['GET', '/v1/admin/audit'],
+  ['GET', '/v1/admin/network/countries'],
+  ['POST', '/v1/admin/network/countries'],
+  ['GET', '/v1/admin/network/stops'],
+  ['GET', '/v1/admin/network/checkpoints'],
+  ['GET', '/v1/admin/network/routes'],
+  ['POST', '/v1/admin/network/routes'],
+  ['POST', '/v1/admin/network/routes/01900000-0000-7000-8000-000000000000/versions'],
 ];
 
 describe('server-side RBAC', () => {
@@ -154,6 +174,9 @@ describe('server-side RBAC', () => {
       expect((await api.get('/roles')).status).toBe(allowed('role.read') ? 200 : 403);
       expect((await api.get('/identities')).status).toBe(allowed('identity.read') ? 200 : 403);
       expect((await api.get('/audit')).status).toBe(allowed('audit.read') ? 200 : 403);
+      expect((await api.get('/network/countries')).status).toBe(
+        allowed('network.read') ? 200 : 403,
+      );
     },
   );
 

@@ -1,5 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createAuthClient } from './index.js';
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import {
+  createAuthClient,
+  type ApiResult,
+  type NetworkRouteVersion,
+  type NetworkWaypointReplacement,
+} from './index.js';
 
 type Call = { url: string; init: RequestInit };
 
@@ -122,5 +127,83 @@ describe('admin client', () => {
     const calls = mockFetch([{ status: 200, body: { items: [], nextCursor: null } }]);
     await createAuthClient('http://api.test').admin.identities({ realm: 'crew', limit: 20 });
     expect(calls[0]?.url).toBe('http://api.test/v1/admin/identities?realm=crew&limit=20');
+  });
+
+  it('lists network resources with bounded pagination options', async () => {
+    const calls = mockFetch([{ status: 200, body: { items: [], nextCursor: null } }]);
+    await createAuthClient('http://api.test').admin.network.checkpoints({
+      cursor: '0199b0fd-b600-7000-8000-000000000001',
+      limit: 25,
+    });
+    expect(calls[0]?.url).toBe(
+      'http://api.test/v1/admin/network/checkpoints?cursor=0199b0fd-b600-7000-8000-000000000001&limit=25',
+    );
+    expect(calls[0]?.init.method).toBe('GET');
+  });
+
+  it('creates network data through the shared in-memory CSRF flow', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { csrfToken: 'v1.1.n.m' } },
+      { status: 201, body: { id: 'country-id', iso2: 'XA' } },
+    ]);
+    const result = await createAuthClient('http://api.test').admin.network.createCountry({
+      iso2: 'XA',
+      iso3: 'XAA',
+      name: 'Pays synthétique',
+      active: true,
+    });
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.url).toBe('http://api.test/v1/auth/staff/csrf');
+    expect(calls[1]?.url).toBe('http://api.test/v1/admin/network/countries');
+    expect(calls[1]?.init).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': 'v1.1.n.m' },
+      body: JSON.stringify({ iso2: 'XA', iso3: 'XAA', name: 'Pays synthétique', active: true }),
+    });
+  });
+
+  it('encodes route identifiers and replaces the complete ordered waypoint list', async () => {
+    const calls = mockFetch([{ status: 200, body: { csrfToken: 'token' } }, { status: 200 }]);
+    await createAuthClient('http://api.test').admin.network.replaceWaypoints(
+      'route/../id',
+      'version/../id',
+      [
+        {
+          kind: 'STOP',
+          stopId: 'stop-id',
+          boardingAllowed: true,
+          alightingAllowed: false,
+        },
+        { kind: 'CHECKPOINT', checkpointId: 'checkpoint-id' },
+      ],
+    );
+    expect(calls[1]?.url).toBe(
+      'http://api.test/v1/admin/network/routes/route%2F..%2Fid/versions/version%2F..%2Fid/waypoints',
+    );
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({
+      waypoints: [
+        {
+          kind: 'STOP',
+          stopId: 'stop-id',
+          boardingAllowed: true,
+          alightingAllowed: false,
+        },
+        { kind: 'CHECKPOINT', checkpointId: 'checkpoint-id' },
+      ],
+    });
+  });
+
+  it('types network results as the API returns them', () => {
+    const network = createAuthClient('http://api.test').admin.network;
+    // A new draft is a route version; a waypoint replacement returns the list.
+    expectTypeOf(network.createVersion).returns.resolves.toEqualTypeOf<
+      ApiResult<NetworkRouteVersion>
+    >();
+    expectTypeOf(network.replaceWaypoints).returns.resolves.toEqualTypeOf<
+      ApiResult<NetworkWaypointReplacement>
+    >();
+    expectTypeOf(network.publishVersion).returns.resolves.toEqualTypeOf<
+      ApiResult<NetworkRouteVersion>
+    >();
   });
 });

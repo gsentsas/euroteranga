@@ -22,6 +22,7 @@ export class AuthorizationModule {
   static register(authOptions: AuthModuleOptions = {}): DynamicModule {
     return {
       module: AuthorizationModule,
+      global: true,
       imports: [DatabaseModule, AuthModule.register(authOptions)],
       controllers: [AdminAuthorizationController, AdminAccessController, StaffInvitationController],
       providers: [
@@ -31,7 +32,9 @@ export class AuthorizationModule {
         IdentityAdministrationService,
         StaffProvisioningService,
       ],
-      exports: [AuthorizationService, AuditService],
+      // Cross-cutting guards and audit are shared by business modules. The
+      // configured AuthModule is re-exported so it is still instantiated once.
+      exports: [AuthModule, AuthorizationService, AuthorizationGuard, AuditService],
     };
   }
 }
