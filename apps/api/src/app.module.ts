@@ -8,6 +8,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { FleetModule } from './fleet/fleet.module.js';
 import { HealthModule } from './health/health.module.js';
 import { NetworkModule } from './network/network.module.js';
+import { TripModule } from './trips/trip.module.js';
 
 export interface AppModuleOptions {
   env: ApiEnv;
@@ -31,6 +32,7 @@ export class AppModule {
         ),
         NetworkModule,
         FleetModule,
+        TripModule,
       ],
       controllers: options.extraControllers ?? [],
     };
