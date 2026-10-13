@@ -1,6 +1,6 @@
 # EURO TERANGA
 
-> **Status: Foundation / Identity-Authentication / Authorization-RBAC-Audit / Network / Fleet / Trips / Seat maps / Pricing / Booking —
+> **Status: Foundation / Identity-Authentication / Authorization-RBAC-Audit / Network / Fleet / Trips / Seat maps / Pricing / Booking / Payments —
 > NOT PRODUCTION DEPLOYED.**
 >
 > The repository contains the technical foundation, authentication for three
@@ -21,11 +21,17 @@
 > - booking: public journey search and segment-aware availability, authenticated
 >   CUSTOMER seat holds, owned booking history/cancellation and permissioned
 >   STAFF administration.
+> - payments: a payment provider abstraction with payment attempts and
+>   idempotent, signed provider events. A succeeded payment confirms a booking,
+>   which then keeps its seats.
 >
-> A PR-09 booking is a time-limited provisional hold, not a sale or ticket.
-> There is no payment, passenger, discount, refund, check-in, crew, dispatch,
-> maintenance, vehicle document or tracking feature yet. Nothing is deployed
-> and this is not production-ready.
+> **There is no real payment provider:** the only one, SANDBOX, simulates
+> payments locally for development, tests and CI, and is refused in staging
+> and production. No real money moves and no card data is ever collected. A
+> confirmed booking is paid but is not a ticket. There is no refund, ticket,
+> passenger, discount, check-in, crew, dispatch, maintenance, vehicle document
+> or tracking feature yet. Nothing is deployed and this is not
+> production-ready.
 
 EURO TERANGA is a future digital platform for operating international road
 passenger transport services between Europe and Africa.
@@ -53,21 +59,21 @@ database. The backend is a modular monolith. Details:
 
 ## Monorepo
 
-| Path                   | Package                      | What it is today                                                              | Local port |
-| ---------------------- | ---------------------------- | ----------------------------------------------------------------------------- | ---------- |
-| `apps/web`             | `@euroteranga/web`           | Next.js public site skeleton                                                  | 3000       |
-| `apps/booking`         | `@euroteranga/booking`       | Public search, historical seat selection and CUSTOMER holds                   | 3001       |
-| `apps/client`          | `@euroteranga/client`        | Customer auth, account and owned booking holds                                | 3002       |
-| `apps/tracking`        | `@euroteranga/tracking`      | Next.js tracking skeleton (no tracking)                                       | 3003       |
-| `apps/ops`             | `@euroteranga/ops`           | Refine back-office: auth, network, fleet, trips, seat maps, pricing, bookings | 3004       |
-| `apps/crew`            | `@euroteranga/crew`          | Crew sign-in (not offline yet)                                                | 3005       |
-| `apps/api`             | `@euroteranga/api`           | NestJS Core API — auth, RBAC and PR-04…PR-09 domains                          | 4000       |
-| `packages/config`      | `@euroteranga/config`        | Validated environment configuration                                           | —          |
-| `packages/logger`      | `@euroteranga/logger`        | Structured JSON logs with redaction                                           | —          |
-| `packages/database`    | `@euroteranga/database`      | Prisma schema, migrations, client                                             | —          |
-| `packages/ui`          | `@euroteranga/ui`            | Brand mark, page shell, forms, tokens                                         | —          |
-| `packages/auth-client` | `@euroteranga/auth-client`   | Typed browser client for Core API                                             | —          |
-| `tests/browser`        | `@euroteranga/browser-tests` | Playwright foundation, auth and business flows                                | —          |
+| Path                   | Package                      | What it is today                                                                  | Local port |
+| ---------------------- | ---------------------------- | --------------------------------------------------------------------------------- | ---------- |
+| `apps/web`             | `@euroteranga/web`           | Next.js public site skeleton                                                      | 3000       |
+| `apps/booking`         | `@euroteranga/booking`       | Public search, historical seat selection, CUSTOMER holds and SANDBOX payment      | 3001       |
+| `apps/client`          | `@euroteranga/client`        | Customer auth, account, owned bookings and their payments                         | 3002       |
+| `apps/tracking`        | `@euroteranga/tracking`      | Next.js tracking skeleton (no tracking)                                           | 3003       |
+| `apps/ops`             | `@euroteranga/ops`           | Refine back-office: network, fleet, trips, seat maps, pricing, bookings, payments | 3004       |
+| `apps/crew`            | `@euroteranga/crew`          | Crew sign-in (not offline yet)                                                    | 3005       |
+| `apps/api`             | `@euroteranga/api`           | NestJS Core API — auth, RBAC and PR-04…PR-10 domains                              | 4000       |
+| `packages/config`      | `@euroteranga/config`        | Validated environment configuration                                               | —          |
+| `packages/logger`      | `@euroteranga/logger`        | Structured JSON logs with redaction                                               | —          |
+| `packages/database`    | `@euroteranga/database`      | Prisma schema, migrations, client                                                 | —          |
+| `packages/ui`          | `@euroteranga/ui`            | Brand mark, page shell, forms, tokens                                             | —          |
+| `packages/auth-client` | `@euroteranga/auth-client`   | Typed browser client for Core API                                                 | —          |
+| `tests/browser`        | `@euroteranga/browser-tests` | Playwright foundation, auth and business flows                                    | —          |
 
 Ports are a local development convention only; production does not depend on
 them.
@@ -125,6 +131,11 @@ Authentication adds `AUTH_CSRF_KEY`, `AUTH_HMAC_KEY`,
 and mail settings (`AUTH_MAIL_PROVIDER`, `SMTP_*`, `AUTH_EMAIL_FROM`,
 `CLIENT_PUBLIC_URL`). The example keys in `.env.example` are refused in
 staging and production. Details: [`docs/security/authentication.md`](docs/security/authentication.md).
+
+Payments add `PAYMENT_PROVIDER` (`DISABLED` by default; `SANDBOX` only in
+local and ci) and, with SANDBOX, the server-side webhook key
+`PAYMENT_SANDBOX_WEBHOOK_SECRET`: never a `NEXT_PUBLIC_` value. See
+[`docs/domain/payments.md`](docs/domain/payments.md).
 
 Authorization adds `OPS_PUBLIC_URL` (base of STAFF invitation links, HTTPS in
 staging and production), `AUTH_STAFF_INVITATION_TTL_SECONDS` and
