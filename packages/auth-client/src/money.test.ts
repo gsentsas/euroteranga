@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatMoney, minorToDecimalString, parseMoneyToMinor } from './money.js';
+import {
+  formatMoney,
+  MAX_AMOUNT_MINOR,
+  minorToDecimalString,
+  multiplyAmountMinor,
+  parseMoneyToMinor,
+} from './money.js';
 
 /** Intl uses (narrow) non-breaking spaces; compare with plain spaces. */
 const plain = (value: string) => value.replace(/[\u00a0\u202f]/g, ' ');
@@ -52,5 +58,20 @@ describe('exact money helpers', () => {
     expect(() => formatMoney(100, 'EUR', 4)).toThrow(RangeError);
     expect(() => parseMoneyToMinor('1', -1)).toThrow(RangeError);
     expect(() => formatMoney(1.5, 'EUR', 2)).toThrow(RangeError);
+  });
+
+  it('multiplies a per-seat amount exactly (booking totals)', () => {
+    expect(multiplyAmountMinor(15000, 2)).toBe(30000);
+    expect(plain(formatMoney(multiplyAmountMinor(15000, 2), 'XOF', 0))).toBe('30 000 XOF');
+    expect(multiplyAmountMinor(12345, 2)).toBe(24690);
+    expect(plain(formatMoney(multiplyAmountMinor(12345, 2), 'EUR', 2))).toBe('246,90 EUR');
+    expect(multiplyAmountMinor(MAX_AMOUNT_MINOR, 20)).toBe(42_949_672_940);
+    expect(plain(formatMoney(multiplyAmountMinor(MAX_AMOUNT_MINOR, 20), 'EUR', 2))).toBe(
+      '429 496 729,40 EUR',
+    );
+    expect(multiplyAmountMinor(12345, 0)).toBe(0);
+    expect(() => multiplyAmountMinor(Number.MAX_SAFE_INTEGER, 2)).toThrow(RangeError);
+    expect(() => multiplyAmountMinor(1.5, 2)).toThrow(RangeError);
+    expect(() => multiplyAmountMinor(100, -1)).toThrow(RangeError);
   });
 });

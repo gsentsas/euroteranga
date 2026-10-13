@@ -67,3 +67,20 @@ export function parseMoneyToMinor(input: string, minorUnit: number): number | nu
   if (minor < 1n || minor > BigInt(MAX_AMOUNT_MINOR)) return null;
   return Number(minor);
 }
+
+/**
+ * Exact multiplication of an amount by a count (e.g. a per-seat fare by the
+ * number of seats): BigInt arithmetic, returned only as a safe integer.
+ * Display helper for a summary; the server computes the authoritative total.
+ */
+export function multiplyAmountMinor(amountMinor: number, count: number): number {
+  if (!Number.isSafeInteger(amountMinor) || !Number.isSafeInteger(count) || count < 0) {
+    throw new RangeError('amount and count must be safe integers');
+  }
+  const total = BigInt(amountMinor) * BigInt(count);
+  const value = Number(total);
+  if (!Number.isSafeInteger(value) || BigInt(value) !== total) {
+    throw new RangeError('total exceeds the safe integer range');
+  }
+  return value;
+}

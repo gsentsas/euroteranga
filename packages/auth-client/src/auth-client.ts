@@ -679,6 +679,152 @@ export interface ResolvedTripFare {
   currencyMinorUnit: number;
 }
 
+/** A stop as shown to travellers (no coordinates, no internal flags). */
+export interface BookingSearchStop {
+  id: string;
+  code: string;
+  name: string;
+  locality: string;
+  /** IANA timezone, for presentation (times are UTC instants). */
+  timezone: string;
+  country: { iso2: string; name: string };
+}
+
+export interface BookingStopListOptions {
+  query?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+/** Exact base fare of one journey, per seat. */
+export interface BookingFare {
+  amountMinor: number;
+  currencyCode: string;
+  currencyMinorUnit: number;
+}
+
+export interface BookingJourneyOrigin {
+  routeWaypointId: string;
+  stop: BookingSearchStop | null;
+  plannedDepartureAt: string | null;
+}
+
+export interface BookingJourneyDestination {
+  routeWaypointId: string;
+  stop: BookingSearchStop | null;
+  plannedArrivalAt: string | null;
+}
+
+/** One bookable journey: a trip and an exact origin/destination waypoint pair. */
+export interface BookingSearchResult {
+  tripId: string;
+  tripReference: string;
+  route: { code: string; name: string };
+  origin: BookingJourneyOrigin;
+  destination: BookingJourneyDestination;
+  fare: BookingFare;
+  seatCount: number;
+  availableSeatCount: number;
+}
+
+export interface BookingSearchOptions {
+  originStopId: string;
+  destinationStopId: string;
+  /** ISO 8601 instants bounding the origin departure. */
+  departureFrom?: string;
+  departureTo?: string;
+  minAvailableSeats?: number;
+  limit?: number;
+  cursor?: string;
+}
+
+/** A physical cell of the trip's historical seat map. */
+export interface BookingAvailabilityCell {
+  id: string;
+  deck: number;
+  row: number;
+  column: number;
+  kind: SeatMapCellKind;
+  seatLabel: string | null;
+  /** SEAT cells only: free on every segment of the requested journey. */
+  available?: boolean;
+}
+
+export interface BookingAvailability {
+  tripId: string;
+  tripReference: string;
+  seatMapVersionId: string;
+  origin: BookingJourneyOrigin;
+  destination: BookingJourneyDestination;
+  fare: BookingFare;
+  /** Seats per hold, decided by the server. */
+  maxSeatsPerHold: number;
+  seatCount: number;
+  availableSeatCount: number;
+  cells: BookingAvailabilityCell[];
+}
+
+/** Derived from the database clock: never stored. */
+export type CustomerBookingStatus = 'HELD' | 'EXPIRED' | 'CANCELLED';
+
+export interface CustomerBookingSeat {
+  seatLabel: string | null;
+  deck: number;
+  row: number;
+  column: number;
+  releasedAt: string | null;
+}
+
+/** A provisional hold of the signed-in customer: not paid, not a ticket. */
+export interface CustomerBooking {
+  reference: string;
+  status: CustomerBookingStatus;
+  trip: { id: string; reference: string; route: { code: string; name: string } };
+  origin: BookingJourneyOrigin;
+  destination: BookingJourneyDestination;
+  seats: CustomerBookingSeat[];
+  unitAmountMinor: number;
+  seatCount: number;
+  /** unitAmountMinor x seatCount, computed exactly by the server. */
+  totalAmountMinor: number;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  holdExpiresAt: string;
+  cancelledAt: string | null;
+  createdAt: string;
+}
+
+/** The only authority a customer has: trip, journey and seats. */
+export interface CreateBookingInput {
+  tripId: string;
+  originRouteWaypointId: string;
+  destinationRouteWaypointId: string;
+  seatMapCellIds: string[];
+}
+
+export interface AdminBookingSeat extends CustomerBookingSeat {
+  seatMapCellId: string;
+}
+
+/** STAFF view (booking.read): no customer email, an opaque identity id. */
+export interface AdminBooking extends Omit<CustomerBooking, 'seats'> {
+  id: string;
+  customerIdentityId: string;
+  tripStatus: TripStatus;
+  seats: AdminBookingSeat[];
+  cancellationReason: string | null;
+}
+
+export type AdminBookingPage = Page<AdminBooking>;
+
+export interface AdminBookingListOptions {
+  cursor?: string;
+  limit?: number;
+  status?: CustomerBookingStatus;
+  tripId?: string;
+  reference?: string;
+}
+
 function query(values: Record<string, string | number | undefined>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
@@ -824,6 +970,61 @@ export function createAuthClient(baseUrl: string) {
      * Administration API (STAFF session). Permissions returned by `access`
      * are for display only: the API re-checks every call.
      */
+    /**
+     * Booking (PR-09). Public reads need no session; customer actions use the
+     * CUSTOMER session and a CSRF token on mutations. A hold is provisional:
+     * not paid, not a ticket.
+     */
+    booking: {
+      public: {
+        stops: (options: BookingStopListOptions = {}) =>
+          call<Page<BookingSearchStop>>(
+            'GET',
+            `/v1/booking/stops?${query({ query: options.query, limit: options.limit, cursor: options.cursor })}`,
+          ),
+        searchTrips: (options: BookingSearchOptions) =>
+          call<Page<BookingSearchResult>>(
+            'GET',
+            `/v1/booking/trips?${query({
+              originStopId: options.originStopId,
+              destinationStopId: options.destinationStopId,
+              departureFrom: options.departureFrom,
+              departureTo: options.departureTo,
+              minAvailableSeats: options.minAvailableSeats,
+              limit: options.limit,
+              cursor: options.cursor,
+            })}`,
+          ),
+        availability: (
+          tripId: string,
+          originRouteWaypointId: string,
+          destinationRouteWaypointId: string,
+        ) =>
+          call<BookingAvailability>(
+            'GET',
+            `/v1/booking/trips/${encodeURIComponent(tripId)}/availability?${query({
+              originRouteWaypointId,
+              destinationRouteWaypointId,
+            })}`,
+          ),
+      },
+      customer: {
+        createHold: (input: CreateBookingInput) =>
+          withCsrf<CustomerBooking>('customer', '/v1/booking/bookings', input),
+        bookings: (options: { cursor?: string; limit?: number } = {}) =>
+          call<Page<CustomerBooking>>(
+            'GET',
+            `/v1/booking/bookings?${query({ cursor: options.cursor, limit: options.limit })}`,
+          ),
+        booking: (reference: string) =>
+          call<CustomerBooking>('GET', `/v1/booking/bookings/${encodeURIComponent(reference)}`),
+        cancel: (reference: string) =>
+          withCsrf<CustomerBooking>(
+            'customer',
+            `/v1/booking/bookings/${encodeURIComponent(reference)}/cancel`,
+          ),
+      },
+    },
     admin: {
       access: () => call<AccessInfo>('GET', '/v1/admin/access/me'),
       roles: () => call<AdminRole[]>('GET', '/v1/admin/roles'),
@@ -1127,6 +1328,27 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<AdminFareTable>(
             'staff',
             `/v1/admin/pricing/fare-tables/${encodeURIComponent(fareTableId)}/versions/${encodeURIComponent(versionId)}/publish`,
+          ),
+      },
+      bookings: {
+        bookings: (options: AdminBookingListOptions = {}) =>
+          call<AdminBookingPage>(
+            'GET',
+            `/v1/admin/bookings?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              status: options.status,
+              tripId: options.tripId,
+              reference: options.reference,
+            })}`,
+          ),
+        booking: (bookingId: string) =>
+          call<AdminBooking>('GET', `/v1/admin/bookings/${encodeURIComponent(bookingId)}`),
+        cancel: (bookingId: string, reason: string) =>
+          withCsrf<AdminBooking>(
+            'staff',
+            `/v1/admin/bookings/${encodeURIComponent(bookingId)}/cancel`,
+            { reason },
           ),
       },
     },

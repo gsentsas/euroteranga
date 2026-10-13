@@ -2,7 +2,10 @@ import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   createAuthClient,
   hasFareTableDetails,
+  type AdminBooking,
   type AdminFareTable,
+  type BookingAvailability,
+  type CustomerBooking,
   type AssignedFareTableVersion,
   type AdminSeatMap,
   type AdminTrip,
@@ -467,5 +470,83 @@ describe('admin client', () => {
     expectTypeOf<AdminTripSummary['fareTableVersion']>().toEqualTypeOf<
       AssignedFareTableVersion | TripFareTableIdentity | null
     >();
+  });
+
+  it('separates public booking reads, customer actions and staff administration', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { items: [], nextCursor: null } },
+      { status: 200, body: { items: [], nextCursor: null } },
+      { status: 200, body: { cells: [] } },
+      { status: 200, body: { csrfToken: 'c' } },
+      { status: 201, body: { reference: 'ETB-AAAAAAAAAAAA' } },
+      { status: 200, body: { csrfToken: 'c' } },
+      { status: 200, body: { status: 'CANCELLED' } },
+      { status: 200, body: { csrfToken: 's' } },
+      { status: 200, body: { status: 'CANCELLED' } },
+    ]);
+    const client = createAuthClient('http://api.test');
+    await client.booking.public.stops({ query: 'arrêt', limit: 5 });
+    expect(calls[0]?.url).toBe('http://api.test/v1/booking/stops?query=arr%C3%AAt&limit=5');
+    await client.booking.public.searchTrips({
+      originStopId: 'o',
+      destinationStopId: 'd',
+      minAvailableSeats: 2,
+    });
+    expect(calls[1]?.url).toBe(
+      'http://api.test/v1/booking/trips?originStopId=o&destinationStopId=d&minAvailableSeats=2',
+    );
+    await client.booking.public.availability('trip', 'o', 'd');
+    expect(calls[2]?.url).toBe(
+      'http://api.test/v1/booking/trips/trip/availability?originRouteWaypointId=o&destinationRouteWaypointId=d',
+    );
+    // Public reads carry no CSRF header.
+    for (const call of calls.slice(0, 3)) expect(call.init.headers).toEqual({});
+    await client.booking.customer.createHold({
+      tripId: 't',
+      originRouteWaypointId: 'o',
+      destinationRouteWaypointId: 'd',
+      seatMapCellIds: ['c1', 'c2'],
+    });
+    expect(calls[3]?.url).toBe('http://api.test/v1/auth/customer/csrf');
+    expect(calls[4]).toMatchObject({ url: 'http://api.test/v1/booking/bookings' });
+    expect(calls[4]?.init.headers).toEqual({
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': 'c',
+    });
+    expect(JSON.parse(String(calls[4]?.init.body))).toEqual({
+      tripId: 't',
+      originRouteWaypointId: 'o',
+      destinationRouteWaypointId: 'd',
+      seatMapCellIds: ['c1', 'c2'],
+    });
+    await client.booking.customer.cancel('ETB-AAAAAAAAAAAA');
+    expect(calls[6]?.url).toBe('http://api.test/v1/booking/bookings/ETB-AAAAAAAAAAAA/cancel');
+    await client.admin.bookings.cancel('booking-id', 'Raison');
+    expect(calls[7]?.url).toBe('http://api.test/v1/auth/staff/csrf');
+    expect(calls[8]?.url).toBe('http://api.test/v1/admin/bookings/booking-id/cancel');
+    expect(JSON.parse(String(calls[8]?.init.body))).toEqual({ reason: 'Raison' });
+  });
+
+  it('types booking results explicitly, with exact integer amounts', () => {
+    const client = createAuthClient('http://api.test');
+    expectTypeOf(client.booking.public.availability).returns.resolves.toEqualTypeOf<
+      ApiResult<BookingAvailability>
+    >();
+    expectTypeOf(client.booking.customer.createHold).returns.resolves.toEqualTypeOf<
+      ApiResult<CustomerBooking>
+    >();
+    expectTypeOf(client.admin.bookings.booking).returns.resolves.toEqualTypeOf<
+      ApiResult<AdminBooking>
+    >();
+    expectTypeOf<CustomerBooking['totalAmountMinor']>().toEqualTypeOf<number>();
+    expectTypeOf<CustomerBooking['status']>().toEqualTypeOf<'HELD' | 'EXPIRED' | 'CANCELLED'>();
+    // The client never sends a price, a currency or an identity.
+    expectTypeOf(client.booking.customer.createHold)
+      .parameter(0)
+      .not.toHaveProperty('unitAmountMinor');
+    expectTypeOf(client.booking.customer.createHold)
+      .parameter(0)
+      .not.toHaveProperty('customerIdentityId');
+    expectTypeOf<CustomerBooking>().not.toHaveProperty('customerIdentityId');
   });
 });
