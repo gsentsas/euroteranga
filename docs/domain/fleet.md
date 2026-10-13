@@ -166,3 +166,9 @@ request id is kept, and snapshots go through the existing redaction.
   and request id, rollback on audit failure, concurrent transitions,
   pagination, absence of a delete endpoint.
 - Browser tests with synthetic data (VINs prefixed `ZZZ`, no plates).
+
+`prisma migrate diff` detects drift in what Prisma models: tables, columns,
+indexes and foreign keys. It does **not** see CHECK constraints or triggers:
+dropping `vehicle_model_year_range` on a migrated database still reports no
+drift. Their presence and behaviour are proven by the direct database tests
+instead, and each is covered by a mutation check.
