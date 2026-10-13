@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ConfigValidationError, describeIssues } from './errors.js';
 import { authEnvShape, refineAuthEnv } from './auth-env.js';
+import { bookingEnvShape } from './booking-env.js';
 import { appEnvSchema, booleanFlag, originListSchema } from './schemas.js';
 
 export const apiEnvSchema = z
@@ -29,6 +30,7 @@ export const apiEnvSchema = z
     OPENAPI_ENABLED: booleanFlag.default(false),
     LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
     ...authEnvShape,
+    ...bookingEnvShape,
   })
   .superRefine(refineAuthEnv);
 

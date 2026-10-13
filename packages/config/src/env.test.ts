@@ -33,7 +33,40 @@ describe('loadApiEnv', () => {
       API_CORS_ORIGINS: [],
       OPENAPI_ENABLED: false,
       LOG_LEVEL: 'info',
+      BOOKING_HOLD_TTL_SECONDS: 900,
+      BOOKING_MAX_SEATS_PER_HOLD: 8,
     });
+  });
+
+  it('accepts booking hold settings within their documented bounds', () => {
+    for (const [ttl, seats] of [
+      ['60', '1'],
+      ['3600', '20'],
+      ['600', '4'],
+    ] as const) {
+      expect(
+        loadApiEnv({
+          ...validApiEnv,
+          BOOKING_HOLD_TTL_SECONDS: ttl,
+          BOOKING_MAX_SEATS_PER_HOLD: seats,
+        }),
+      ).toMatchObject({
+        BOOKING_HOLD_TTL_SECONDS: Number(ttl),
+        BOOKING_MAX_SEATS_PER_HOLD: Number(seats),
+      });
+    }
+  });
+
+  it.each([
+    ['BOOKING_HOLD_TTL_SECONDS', '59'],
+    ['BOOKING_HOLD_TTL_SECONDS', '3601'],
+    ['BOOKING_HOLD_TTL_SECONDS', '90.5'],
+    ['BOOKING_HOLD_TTL_SECONDS', 'soon'],
+    ['BOOKING_MAX_SEATS_PER_HOLD', '0'],
+    ['BOOKING_MAX_SEATS_PER_HOLD', '21'],
+    ['BOOKING_MAX_SEATS_PER_HOLD', '2.5'],
+  ])('rejects %s=%s', (name, value) => {
+    expect(() => loadApiEnv({ ...validApiEnv, [name]: value })).toThrow(new RegExp(name));
   });
 
   it('fails fast and names every missing required variable', () => {

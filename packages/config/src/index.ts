@@ -2,6 +2,10 @@ export { ConfigValidationError } from './errors.js';
 export { apiEnvSchema, loadApiEnv, type ApiEnv } from './api-env.js';
 export { EXAMPLE_AUTH_SECRETS, decodeSecretKey } from './auth-env.js';
 export {
+  BOOKING_HOLD_TTL_SECONDS_BOUNDS,
+  BOOKING_MAX_SEATS_PER_HOLD_BOUNDS,
+} from './booking-env.js';
+export {
   assertNoSensitivePublicEnv,
   loadPublicEnv,
   publicEnvSchema,

@@ -21,6 +21,8 @@ export {
 export type {
   AuthIdentity,
   AuthSession,
+  Booking,
+  BookingSeat,
   Checkpoint,
   Country,
   FareEntry,
@@ -29,6 +31,7 @@ export type {
   Route,
   RouteVersion,
   RouteWaypoint,
+  SeatInventoryLock,
   SeatMap,
   SeatMapCell,
   SeatMapVersion,
