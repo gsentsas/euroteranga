@@ -169,10 +169,34 @@ scheduling, in the service and in PostgreSQL.
 - Lock hierarchy: trip → vehicle → seat map → version.
 - OPS exposes **Plans de sièges** according to `seatmap.read` and
   `seatmap.manage`, and seat-map panels on vehicles and trips.
-- Pricing and booking are deferred.
+- Booking is deferred.
 
 See [`docs/domain/seat-maps.md`](../domain/seat-maps.md) and
 [ADR-024](../adr/ADR-024-seat-map-versioning.md).
+
+## Pricing (PR-08)
+
+`apps/api/src/pricing` (PricingModule):
+
+- versioned base fare tables: a fare table (one route, one immutable
+  currency and minor unit), its numbered versions
+  `DRAFT → PUBLISHED → RETIRED`, each pricing one published route version,
+  and explicit fares between two stops;
+- money is an exact integer in minor units (`amountMinor`); no float, no
+  hard-coded currency list;
+- published versions are immutable; a price change is a new version.
+
+A trip carries its historical pricing (`fareTableVersionId`), chosen while
+DRAFT among published versions pricing exactly its route version, and frozen
+at scheduling. Fares are resolved on the server.
+
+- Lock hierarchy: trip → fare table → version; publication never locks trips.
+- OPS exposes **Tarification** according to `pricing.read` and
+  `pricing.manage`, and a pricing panel on trips.
+- Booking, discounts, taxes and payments are deferred.
+
+See [`docs/domain/pricing.md`](../domain/pricing.md) and
+[ADR-025](../adr/ADR-025-versioned-fare-tables-historical-trip-pricing.md).
 
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
@@ -184,7 +208,8 @@ PostgreSQL and Prisma (ADR-002), NestJS (ADR-003), Refine (ADR-004), Plesk
 deployment target — not yet decided (ADR-010), monorepo tooling (ADR-011),
 authentication (ADR-012 to ADR-016), authorization (ADR-017 to ADR-020),
 route versioning (ADR-021), vehicle lifecycle (ADR-022), trip lifecycle
-(ADR-023) and seat-map versioning (ADR-024).
+(ADR-023), seat-map versioning (ADR-024) and versioned fare tables with
+historical trip pricing (ADR-025).
 
 Still open: object storage provider, offline crew
 synchronisation, payment provider abstraction, regulatory rule versioning, and

@@ -44,20 +44,22 @@ ADR-017 to ADR-020. This document contains no secret value.
 | `trip.manage`              | Creating, timing, scheduling, cancelling trips; vehicles   |
 | `seatmap.read`             | Reading seat maps, versions, cells and capacity (PR-07)    |
 | `seatmap.manage`           | Creating seat maps, editing drafts, publishing versions    |
+| `pricing.read`             | Reading fare tables, versions and fares (PR-08)            |
+| `pricing.manage`           | Creating fare tables, editing drafts, publishing versions  |
 
 ### Role matrix
 
-| Role                                | Realm | Privileged | Permissions                                                                                                                                                              |
-| ----------------------------------- | ----- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SUPER_ADMIN`                       | STAFF | yes        | all eighteen                                                                                                                                                             |
-| `DIRECTOR`                          | STAFF | no         | all except `privileged.manage`                                                                                                                                           |
-| `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage`, `trip.read`, `trip.manage`, `seatmap.read`, `seatmap.manage` |
-| `DISPATCHER`                        | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `trip.manage`, `seatmap.read`                                                                                   |
-| `AUDITOR`                           | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`                                                      |
-| `COMPLIANCE_AGENT`                  | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`                                                                                                  |
-| `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`, `trip.read`, `seatmap.read` (no fleet permission by default)                                                                               |
-| `FINANCE`                           | STAFF | no         | `ops.access` (no network, fleet, trip or seat-map permission by default)                                                                                                 |
-| `DRIVER`, `CREW`                    | CREW  | no         | none yet                                                                                                                                                                 |
+| Role                                | Realm | Privileged | Permissions                                                                                                                                                                                                |
+| ----------------------------------- | ----- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPER_ADMIN`                       | STAFF | yes        | all twenty                                                                                                                                                                                                 |
+| `DIRECTOR`                          | STAFF | no         | all except `privileged.manage`                                                                                                                                                                             |
+| `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage`, `trip.read`, `trip.manage`, `seatmap.read`, `seatmap.manage`, `pricing.read`, `pricing.manage` |
+| `DISPATCHER`                        | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `trip.manage`, `seatmap.read`, `pricing.read`                                                                                                     |
+| `AUDITOR`                           | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `pricing.read`                                                                        |
+| `COMPLIANCE_AGENT`                  | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read` (no pricing permission)                                                                                                            |
+| `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`, `trip.read`, `seatmap.read`, `pricing.read` (no fleet permission by default)                                                                                                 |
+| `FINANCE`                           | STAFF | no         | `ops.access`, `pricing.read` (no network, fleet, trip or seat-map permission by default)                                                                                                                   |
+| `DRIVER`, `CREW`                    | CREW  | no         | none yet                                                                                                                                                                                                   |
 
 A STAFF identity without any role, or with roles lacking `ops.access`, can
 sign in (password + TOTP) but gets **Accès refusé** in OPS and 403 from every

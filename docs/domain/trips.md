@@ -14,8 +14,8 @@ optional vehicle. It does not sell seats or run on the road.
 
 PR-06 deliberately leaves these to later pull requests:
 
-- Pricing, booking, passengers, payments, baggage, check-in and boarding.
-  (Seat maps: added in PR-07, see below.)
+- Booking, passengers, payments, baggage, check-in and boarding.
+  (Seat maps: added in PR-07; pricing: added in PR-08, see below.)
 - **Crew and driver assignment.**
 - **Dispatch**: operational follow-up, actual departure/arrival times,
   `IN_PROGRESS`/`COMPLETED` states, handling of vehicles that become
@@ -122,6 +122,30 @@ computed capacity).
 
 See [seat-maps.md](seat-maps.md).
 
+## Pricing (PR-08)
+
+A trip may carry a **historical pricing** (`fareTableVersionId`): the
+fare-table version whose base fares apply to its journeys.
+
+- It is chosen or removed while the trip is **DRAFT** through
+  `POST /:id/fare-table` (`trip.manage` + `pricing.read` + CSRF, optional
+  `expectedFareTableVersionId`). Trip creation never sets it.
+- A new assignment needs a currently PUBLISHED version of an active fare
+  table pricing **exactly** the trip's route version
+  (`TRIP_FARE_TABLE_INCOMPATIBLE` otherwise).
+- It is frozen by scheduling and kept after cancellation.
+- It is optional for scheduling, so PR-06/PR-07 trips stay valid.
+- A version retired later, or a fare table deactivated later, stays valid on
+  the trip.
+- `GET /:id/fare?originRouteWaypointId&destinationRouteWaypointId`
+  (`trip.read` + `pricing.read`) resolves one base fare on the server:
+  `TRIP_PRICING_NOT_CONFIGURED`, `FARE_WAYPOINT_INVALID` and
+  `FARE_NOT_CONFIGURED` otherwise, with no fallback.
+- The migration `20261013180000_pricing` extends `trip_lifecycle_guard`
+  (`CREATE OR REPLACE`) and keeps every PR-06 and PR-07 rule.
+
+See [pricing.md](pricing.md).
+
 ## Enforcement in PostgreSQL
 
 The migration `20261013120000_trips_timetable` enforces the rules for every
@@ -152,7 +176,10 @@ stable public errors.
 ## Concurrency
 
 Lock order for every trip mutation: **trip row `FOR UPDATE`, then vehicle row
-`FOR SHARE`**, then, for seat maps (PR-07), seat map and version `FOR SHARE`. Fleet status changes lock only the vehicle row, so no deadlock
+`FOR SHARE`**, then, for seat maps (PR-07), seat map and version `FOR SHARE`,
+and, for pricing (PR-08), fare table and version `FOR SHARE`. Fleet status
+changes lock only the vehicle row and fare-table publication never locks a
+trip, so no deadlock
 cycle is possible. Consequences, all tested on PostgreSQL:
 
 - two timetable replacements are serialized; the result is one complete
