@@ -7,7 +7,7 @@ import { clientAppUrl } from '../lib/env';
 
 /**
  * CUSTOMER sign-in, as in the client app: the session stays in the API's
- * HttpOnly cookie, nothing is stored in the page or in localStorage. The
+ * HttpOnly cookie; nothing is stored in the page or in web storage. The
  * selection survives because the page is not reloaded.
  */
 export function CustomerLogin({ onSignedIn }: { onSignedIn: () => void }) {
