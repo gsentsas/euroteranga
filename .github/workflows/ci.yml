@@ -161,17 +161,20 @@ jobs:
       AUTH_MAIL_PROVIDER: disabled
       CLIENT_PUBLIC_URL: http://localhost:3002
       OPS_PUBLIC_URL: http://localhost:3004
+      # PR-10: the local, test-only SANDBOX payment provider (no external call).
+      PAYMENT_PROVIDER: SANDBOX
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-workspace
-      - name: Generate ephemeral authentication keys (never stored)
+      - name: Generate ephemeral authentication and webhook keys (never stored)
         run: |
           {
             echo "AUTH_CSRF_KEY=$(openssl rand -base64 32)"
             echo "AUTH_HMAC_KEY=$(openssl rand -base64 32)"
             echo "AUTH_TOTP_ENCRYPTION_KEY=$(openssl rand -base64 32)"
+            echo "PAYMENT_SANDBOX_WEBHOOK_SECRET=$(openssl rand -base64 32)"
           } >> "$GITHUB_ENV"
       - name: Build packages and all applications
         run: pnpm build
