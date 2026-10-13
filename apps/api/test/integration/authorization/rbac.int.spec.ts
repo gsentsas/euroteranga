@@ -14,6 +14,8 @@ const EXPECTED_MATRIX: Record<
     privileged: true,
     permissions: [
       'audit.read',
+      'fleet.manage',
+      'fleet.read',
       'identity.read',
       'identity.staff.provision',
       'identity.status.manage',
@@ -32,6 +34,8 @@ const EXPECTED_MATRIX: Record<
     privileged: false,
     permissions: [
       'audit.read',
+      'fleet.manage',
+      'fleet.read',
       'identity.read',
       'identity.staff.provision',
       'identity.status.manage',
@@ -47,16 +51,29 @@ const EXPECTED_MATRIX: Record<
   OPS_MANAGER: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['identity.read', 'network.manage', 'network.read', 'ops.access', 'role.read'],
+    permissions: [
+      'fleet.manage',
+      'fleet.read',
+      'identity.read',
+      'network.manage',
+      'network.read',
+      'ops.access',
+      'role.read',
+    ],
   },
-  DISPATCHER: { realm: 'STAFF', privileged: false, permissions: ['network.read', 'ops.access'] },
+  DISPATCHER: {
+    realm: 'STAFF',
+    privileged: false,
+    permissions: ['fleet.read', 'network.read', 'ops.access'],
+  },
+  // BOOKING_AGENT and CUSTOMER_SUPPORT have no fleet permission (PR-05 matrix).
   BOOKING_AGENT: { realm: 'STAFF', privileged: false, permissions: ['network.read', 'ops.access'] },
   COMPLIANCE_AGENT: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['network.read', 'ops.access'],
+    permissions: ['fleet.read', 'network.read', 'ops.access'],
   },
-  // FINANCE has no network permission by default (PR-04 matrix).
+  // FINANCE has no network (PR-04) nor fleet (PR-05) permission by default.
   FINANCE: { realm: 'STAFF', privileged: false, permissions: ['ops.access'] },
   CUSTOMER_SUPPORT: {
     realm: 'STAFF',
@@ -66,7 +83,14 @@ const EXPECTED_MATRIX: Record<
   AUDITOR: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['audit.read', 'identity.read', 'network.read', 'ops.access', 'role.read'],
+    permissions: [
+      'audit.read',
+      'fleet.read',
+      'identity.read',
+      'network.read',
+      'ops.access',
+      'role.read',
+    ],
   },
   DRIVER: { realm: 'CREW', privileged: false, permissions: [] },
   CREW: { realm: 'CREW', privileged: false, permissions: [] },
@@ -91,6 +115,11 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['GET', '/v1/admin/network/routes'],
   ['POST', '/v1/admin/network/routes'],
   ['POST', '/v1/admin/network/routes/01900000-0000-7000-8000-000000000000/versions'],
+  ['GET', '/v1/admin/fleet/vehicles'],
+  ['GET', '/v1/admin/fleet/vehicles/01900000-0000-7000-8000-000000000000'],
+  ['POST', '/v1/admin/fleet/vehicles'],
+  ['POST', '/v1/admin/fleet/vehicles/01900000-0000-7000-8000-000000000000'],
+  ['POST', '/v1/admin/fleet/vehicles/01900000-0000-7000-8000-000000000000/status'],
 ];
 
 describe('server-side RBAC', () => {
@@ -177,6 +206,7 @@ describe('server-side RBAC', () => {
       expect((await api.get('/network/countries')).status).toBe(
         allowed('network.read') ? 200 : 403,
       );
+      expect((await api.get('/fleet/vehicles')).status).toBe(allowed('fleet.read') ? 200 : 403);
     },
   );
 

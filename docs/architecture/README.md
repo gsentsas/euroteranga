@@ -118,6 +118,19 @@ remains the sole authority. No real corridor is seeded. See
 [`docs/domain/network.md`](../domain/network.md) and
 [ADR-021](../adr/ADR-021-route-versioning.md).
 
+## Fleet core (PR-05)
+
+`apps/api/src/fleet` (FleetModule) holds the vehicle registry: a stable
+internal code, an optional shape-checked VIN, an optional plate tied to a
+PR-04 country, and a lifecycle `PLANNED → ACTIVE ⇄ OUT_OF_SERVICE → RETIRED`.
+Status changes go through one transactional operation with a reason, a row
+lock and an audit event. PostgreSQL enforces the transition matrix, the
+terminal `RETIRED` state and the absence of deletion for every writer. OPS
+exposes **Flotte** according to `fleet.read` and `fleet.manage`. Trips, seat
+maps, maintenance, documents and tracking are deferred. See
+[`docs/domain/fleet.md`](../domain/fleet.md) and
+[ADR-022](../adr/ADR-022-vehicle-lifecycle.md).
+
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
 
@@ -126,8 +139,8 @@ Health probes: `/health` (basic), `/health/live` (process alive),
 Recorded in [`docs/adr/`](../adr/README.md): modular monolith (ADR-001),
 PostgreSQL and Prisma (ADR-002), NestJS (ADR-003), Refine (ADR-004), Plesk
 deployment target — not yet decided (ADR-010), monorepo tooling (ADR-011),
-authentication (ADR-012 to ADR-016), authorization (ADR-017 to ADR-020) and
-route versioning (ADR-021).
+authentication (ADR-012 to ADR-016), authorization (ADR-017 to ADR-020),
+route versioning (ADR-021) and vehicle lifecycle (ADR-022).
 
 Still open: object storage provider, offline crew
 synchronisation, payment provider abstraction, regulatory rule versioning, and

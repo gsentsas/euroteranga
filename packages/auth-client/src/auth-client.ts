@@ -225,6 +225,69 @@ export type NetworkWaypointInput =
     }
   | { kind: 'CHECKPOINT'; checkpointId: string };
 
+export type VehicleStatus = 'PLANNED' | 'ACTIVE' | 'OUT_OF_SERVICE' | 'RETIRED';
+
+export interface AdminVehicle {
+  id: string;
+  code: string;
+  vin: string | null;
+  registrationPlate: string | null;
+  registrationCountryId: string | null;
+  registrationCountry: {
+    id: string;
+    iso2: string;
+    iso3: string;
+    name: string;
+    active: boolean;
+  } | null;
+  manufacturer: string;
+  model: string;
+  modelYear: number | null;
+  status: VehicleStatus;
+  statusChangedAt: string | null;
+  retiredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One status change, read from the audit trail (no actor identity). */
+export interface VehicleStatusHistoryEntry {
+  occurredAt: string;
+  from: VehicleStatus | null;
+  to: VehicleStatus | null;
+  reason: string | null;
+}
+
+export interface AdminVehicleDetail extends AdminVehicle {
+  statusHistory: VehicleStatusHistoryEntry[];
+}
+
+export interface VehicleListOptions {
+  cursor?: string;
+  limit?: number;
+  status?: VehicleStatus;
+}
+
+export interface VehicleCreateInput {
+  code: string;
+  vin?: string | null;
+  registrationPlate?: string | null;
+  registrationCountryId?: string | null;
+  manufacturer: string;
+  model: string;
+  modelYear?: number | null;
+}
+
+/** Administrative data only: the status changes through changeVehicleStatus. */
+export type VehicleUpdateInput = Partial<VehicleCreateInput>;
+
+export interface VehicleStatusTransitionInput {
+  status: Exclude<VehicleStatus, 'PLANNED'>;
+  reason: string;
+  /** Status the decision was based on; the API refuses the change if it moved. */
+  expectedStatus?: VehicleStatus;
+}
+
 function query(values: Record<string, string | number | undefined>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
@@ -499,6 +562,32 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<NetworkRouteVersion>(
             'staff',
             `/v1/admin/network/routes/${encodeURIComponent(routeId)}/versions/${encodeURIComponent(versionId)}/publish`,
+          ),
+      },
+      fleet: {
+        vehicles: (options: VehicleListOptions = {}) =>
+          call<Page<AdminVehicle>>(
+            'GET',
+            `/v1/admin/fleet/vehicles?${query({ cursor: options.cursor, limit: options.limit, status: options.status })}`,
+          ),
+        vehicle: (vehicleId: string) =>
+          call<AdminVehicleDetail>(
+            'GET',
+            `/v1/admin/fleet/vehicles/${encodeURIComponent(vehicleId)}`,
+          ),
+        createVehicle: (input: VehicleCreateInput) =>
+          withCsrf<AdminVehicle>('staff', '/v1/admin/fleet/vehicles', input),
+        updateVehicle: (vehicleId: string, input: VehicleUpdateInput) =>
+          withCsrf<AdminVehicle>(
+            'staff',
+            `/v1/admin/fleet/vehicles/${encodeURIComponent(vehicleId)}`,
+            input,
+          ),
+        changeVehicleStatus: (vehicleId: string, input: VehicleStatusTransitionInput) =>
+          withCsrf<AdminVehicle>(
+            'staff',
+            `/v1/admin/fleet/vehicles/${encodeURIComponent(vehicleId)}/status`,
+            input,
           ),
       },
     },

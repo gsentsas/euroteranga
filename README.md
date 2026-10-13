@@ -1,15 +1,17 @@
 # EURO TERANGA
 
-> **Status: Foundation / Identity-Authentication / Authorization-RBAC-Audit / Network —
+> **Status: Foundation / Identity-Authentication / Authorization-RBAC-Audit / Network / Fleet —
 > NOT PRODUCTION DEPLOYED.**
 >
 > The repository contains the technical foundation, authentication for three
 > realms (customer, staff with mandatory TOTP, crew) and server-side
 > authorization: roles and permissions, controlled STAFF provisioning by
-> invitation, an append-only audit trail, and the first operations domain:
-> countries, stops, checkpoints and immutable versioned routes. There is no
-> trip, fleet, pricing, booking, payment, passenger, dispatch or tracking
-> feature yet. Nothing is deployed and this is not production-ready.
+> invitation, an append-only audit trail. It also contains the first
+> operations domains: countries, stops, checkpoints and immutable versioned
+> routes (network), and the vehicle registry with its lifecycle (fleet core).
+> There is no trip, seat map, maintenance, vehicle document, tracking,
+> pricing, booking, payment, passenger or dispatch feature yet. Nothing is
+> deployed and this is not production-ready.
 
 EURO TERANGA is a future digital platform for operating international road
 passenger transport services between Europe and Africa.
@@ -37,21 +39,21 @@ database. The backend is a modular monolith. Details:
 
 ## Monorepo
 
-| Path                   | Package                      | What it is today                         | Local port |
-| ---------------------- | ---------------------------- | ---------------------------------------- | ---------- |
-| `apps/web`             | `@euroteranga/web`           | Next.js public site skeleton             | 3000       |
-| `apps/booking`         | `@euroteranga/booking`       | Next.js booking skeleton (no booking)    | 3001       |
-| `apps/client`          | `@euroteranga/client`        | Customer sign-in, registration, account  | 3002       |
-| `apps/tracking`        | `@euroteranga/tracking`      | Next.js tracking skeleton (no tracking)  | 3003       |
-| `apps/ops`             | `@euroteranga/ops`           | Refine back-office, auth + network admin | 3004       |
-| `apps/crew`            | `@euroteranga/crew`          | Crew sign-in (not offline yet)           | 3005       |
-| `apps/api`             | `@euroteranga/api`           | NestJS Core API — auth, RBAC + network   | 4000       |
-| `packages/config`      | `@euroteranga/config`        | Validated environment configuration      | —          |
-| `packages/logger`      | `@euroteranga/logger`        | Structured JSON logs with redaction      | —          |
-| `packages/database`    | `@euroteranga/database`      | Prisma schema, migrations, client        | —          |
-| `packages/ui`          | `@euroteranga/ui`            | Brand mark, page shell, forms, tokens    | —          |
-| `packages/auth-client` | `@euroteranga/auth-client`   | Typed browser client for Core API        | —          |
-| `tests/browser`        | `@euroteranga/browser-tests` | Playwright foundation tests              | —          |
+| Path                   | Package                      | What it is today                             | Local port |
+| ---------------------- | ---------------------------- | -------------------------------------------- | ---------- |
+| `apps/web`             | `@euroteranga/web`           | Next.js public site skeleton                 | 3000       |
+| `apps/booking`         | `@euroteranga/booking`       | Next.js booking skeleton (no booking)        | 3001       |
+| `apps/client`          | `@euroteranga/client`        | Customer sign-in, registration, account      | 3002       |
+| `apps/tracking`        | `@euroteranga/tracking`      | Next.js tracking skeleton (no tracking)      | 3003       |
+| `apps/ops`             | `@euroteranga/ops`           | Refine back-office: auth, network, fleet     | 3004       |
+| `apps/crew`            | `@euroteranga/crew`          | Crew sign-in (not offline yet)               | 3005       |
+| `apps/api`             | `@euroteranga/api`           | NestJS Core API — auth, RBAC, network, fleet | 4000       |
+| `packages/config`      | `@euroteranga/config`        | Validated environment configuration          | —          |
+| `packages/logger`      | `@euroteranga/logger`        | Structured JSON logs with redaction          | —          |
+| `packages/database`    | `@euroteranga/database`      | Prisma schema, migrations, client            | —          |
+| `packages/ui`          | `@euroteranga/ui`            | Brand mark, page shell, forms, tokens        | —          |
+| `packages/auth-client` | `@euroteranga/auth-client`   | Typed browser client for Core API            | —          |
+| `tests/browser`        | `@euroteranga/browser-tests` | Playwright foundation tests                  | —          |
 
 Ports are a local development convention only; production does not depend on
 them.

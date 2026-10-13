@@ -19,6 +19,8 @@ export const PERMISSIONS = {
   MFA_ENROLLMENT_AUTHORIZE: 'mfa.enrollment.authorize',
   NETWORK_READ: 'network.read',
   NETWORK_MANAGE: 'network.manage',
+  FLEET_READ: 'fleet.read',
+  FLEET_MANAGE: 'fleet.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

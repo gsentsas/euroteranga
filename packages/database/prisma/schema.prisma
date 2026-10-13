@@ -59,6 +59,15 @@ enum CheckpointType {
   @@map("checkpoint_type")
 }
 
+enum VehicleStatus {
+  PLANNED
+  ACTIVE
+  OUT_OF_SERVICE
+  RETIRED
+
+  @@map("vehicle_status")
+}
+
 enum RouteVersionStatus {
   DRAFT
   PUBLISHED
@@ -384,6 +393,7 @@ model Country {
 
   stops       Stop[]
   checkpoints Checkpoint[]
+  vehicles    Vehicle[]
 
   @@index([active, id])
   @@map("country")
@@ -474,13 +484,13 @@ model RouteVersion {
 /// One position in a route version. Exactly one of stop/checkpoint is set;
 /// the database also forbids passenger activity at checkpoint waypoints.
 model RouteWaypoint {
-  id                String  @id @default(uuid(7)) @db.Uuid
-  routeVersionId    String  @map("route_version_id") @db.Uuid
-  sequence          Int
-  stopId            String? @map("stop_id") @db.Uuid
-  checkpointId      String? @map("checkpoint_id") @db.Uuid
-  boardingAllowed   Boolean @default(false) @map("boarding_allowed")
-  alightingAllowed  Boolean @default(false) @map("alighting_allowed")
+  id               String  @id @default(uuid(7)) @db.Uuid
+  routeVersionId   String  @map("route_version_id") @db.Uuid
+  sequence         Int
+  stopId           String? @map("stop_id") @db.Uuid
+  checkpointId     String? @map("checkpoint_id") @db.Uuid
+  boardingAllowed  Boolean @default(false) @map("boarding_allowed")
+  alightingAllowed Boolean @default(false) @map("alighting_allowed")
 
   routeVersion RouteVersion @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
   stop         Stop?        @relation(fields: [stopId], references: [id], onDelete: Restrict)
@@ -490,4 +500,31 @@ model RouteWaypoint {
   @@index([stopId])
   @@index([checkpointId])
   @@map("route_waypoint")
+}
+
+/// A vehicle operated by EURO TERANGA (PR-05 fleet core). Capacity, seat
+/// maps, maintenance, documents and assignments belong to later domains.
+/// The lifecycle (creation as PLANNED, allowed transitions, RETIRED terminal,
+/// no physical deletion) is enforced by triggers in the PR-05 migration.
+model Vehicle {
+  id                    String        @id @default(uuid(7)) @db.Uuid
+  code                  String        @unique @db.VarChar(32)
+  /// Application-level shape check only (17 characters, no I/O/Q).
+  vin                   String?       @unique @db.VarChar(17)
+  registrationPlate     String?       @map("registration_plate") @db.VarChar(16)
+  registrationCountryId String?       @map("registration_country_id") @db.Uuid
+  manufacturer          String        @db.VarChar(80)
+  model                 String        @db.VarChar(80)
+  modelYear             Int?          @map("model_year")
+  status                VehicleStatus @default(PLANNED)
+  statusChangedAt       DateTime?     @map("status_changed_at") @db.Timestamptz(3)
+  retiredAt             DateTime?     @map("retired_at") @db.Timestamptz(3)
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  registrationCountry Country? @relation(fields: [registrationCountryId], references: [id], onDelete: Restrict)
+
+  @@unique([registrationCountryId, registrationPlate])
+  @@index([status, id])
+  @@map("vehicle")
 }

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   createAuthClient,
+  type AdminVehicle,
+  type AdminVehicleDetail,
   type ApiResult,
   type NetworkRouteVersion,
   type NetworkWaypointReplacement,
@@ -205,5 +207,54 @@ describe('admin client', () => {
     expectTypeOf(network.publishVersion).returns.resolves.toEqualTypeOf<
       ApiResult<NetworkRouteVersion>
     >();
+  });
+
+  it('lists vehicles with bounded options and a status filter', async () => {
+    const calls = mockFetch([{ status: 200, body: { items: [], nextCursor: null } }]);
+    await createAuthClient('http://api.test').admin.fleet.vehicles({
+      limit: 25,
+      status: 'OUT_OF_SERVICE',
+    });
+    expect(calls[0]?.url).toBe(
+      'http://api.test/v1/admin/fleet/vehicles?limit=25&status=OUT_OF_SERVICE',
+    );
+    expect(calls[0]?.init.method).toBe('GET');
+  });
+
+  it('changes a vehicle status through the in-memory CSRF flow, with its reason', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { csrfToken: 'v1.1.n.m' } },
+      { status: 200, body: { id: 'vehicle-id', status: 'ACTIVE' } },
+    ]);
+    const result = await createAuthClient('http://api.test').admin.fleet.changeVehicleStatus(
+      'vehicle/../id',
+      { status: 'ACTIVE', reason: 'Mise en service', expectedStatus: 'PLANNED' },
+    );
+    expect(result.ok).toBe(true);
+    expect(calls[1]?.url).toBe('http://api.test/v1/admin/fleet/vehicles/vehicle%2F..%2Fid/status');
+    expect(calls[1]?.init).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': 'v1.1.n.m' },
+    });
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({
+      status: 'ACTIVE',
+      reason: 'Mise en service',
+      expectedStatus: 'PLANNED',
+    });
+  });
+
+  it('types fleet results and refuses PLANNED as a transition target', () => {
+    const fleet = createAuthClient('http://api.test').admin.fleet;
+    expectTypeOf(fleet.vehicle).returns.resolves.toEqualTypeOf<ApiResult<AdminVehicleDetail>>();
+    expectTypeOf(fleet.createVehicle).returns.resolves.toEqualTypeOf<ApiResult<AdminVehicle>>();
+    expectTypeOf(fleet.changeVehicleStatus).returns.resolves.toEqualTypeOf<
+      ApiResult<AdminVehicle>
+    >();
+    expectTypeOf(fleet.changeVehicleStatus)
+      .parameter(1)
+      .toHaveProperty('status')
+      .toEqualTypeOf<'ACTIVE' | 'OUT_OF_SERVICE' | 'RETIRED'>();
+    // The general update cannot carry a status.
+    expectTypeOf(fleet.updateVehicle).parameter(1).not.toHaveProperty('status');
   });
 });

@@ -12,6 +12,7 @@ export {
   CheckpointType,
   Prisma,
   RouteVersionStatus,
+  VehicleStatus,
 } from './generated/prisma/client.js';
 export type {
   AuthIdentity,
@@ -22,6 +23,7 @@ export type {
   RouteVersion,
   RouteWaypoint,
   Stop,
+  Vehicle,
 } from './generated/prisma/client.js';
 
 /** Interactive transaction client, as passed to `$transaction(async (tx) => ...)`. */

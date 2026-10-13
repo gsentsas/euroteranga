@@ -49,6 +49,17 @@ export const FIXTURES = {
   get networkDenied(): Fixture {
     return { realm: 'STAFF', email: runScoped('network-denied'), roles: ['FINANCE'] };
   },
+  get fleetAdmin(): Fixture {
+    return { realm: 'STAFF', email: runScoped('fleet-admin'), roles: ['SUPER_ADMIN'] };
+  },
+  /** fleet.read only. */
+  get fleetReader(): Fixture {
+    return { realm: 'STAFF', email: runScoped('fleet-reader'), roles: ['DISPATCHER'] };
+  },
+  /** ops.access and network.read, but no fleet permission. */
+  get fleetDenied(): Fixture {
+    return { realm: 'STAFF', email: runScoped('fleet-denied'), roles: ['BOOKING_AGENT'] };
+  },
   get auditor(): Fixture {
     return { realm: 'STAFF', email: runScoped('auditor'), roles: ['AUDITOR'] };
   },
@@ -66,4 +77,11 @@ export function invitationToken(): string {
   const token = process.env.E2E_INVITATION_TOKEN;
   if (!token) throw new Error('E2E_INVITATION_TOKEN is set by global-setup.ts');
   return token;
+}
+
+/** Code of the synthetic vehicle seeded for read-only scenarios. */
+export function seededVehicleCode(): string {
+  const runId = process.env.E2E_RUN_ID;
+  if (!runId) throw new Error('E2E_RUN_ID is set by global-setup.ts');
+  return `VH_SEED_${runId.toUpperCase()}`;
 }

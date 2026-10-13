@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { createDatabaseClient } from '@euroteranga/database';
 import { hash } from '@node-rs/argon2';
-import { FIXTURE_PASSWORD, FIXTURES, type Fixture } from './fixtures.js';
+import { FIXTURE_PASSWORD, FIXTURES, seededVehicleCode, type Fixture } from './fixtures.js';
 
 const DAY_MS = 24 * 3_600_000;
 
@@ -68,6 +68,14 @@ export default async function globalSetup(): Promise<void> {
         await db.staffEnrollmentGrant.create({ data: { identityId: identity.id, expiresAt } });
       }
     }
+    // One synthetic vehicle (no VIN, no plate) for read-only scenarios.
+    await db.vehicle.create({
+      data: {
+        code: seededVehicleCode(),
+        manufacturer: 'Constructeur synthétique',
+        model: 'Lecture',
+      },
+    });
   } finally {
     await db.$disconnect();
   }
