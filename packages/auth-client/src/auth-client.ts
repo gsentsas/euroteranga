@@ -225,6 +225,23 @@ export type NetworkWaypointInput =
     }
   | { kind: 'CHECKPOINT'; checkpointId: string };
 
+export type SeatMapVersionStatus = 'DRAFT' | 'PUBLISHED' | 'RETIRED';
+
+/** Physical kind of a cell; an absent coordinate is an empty area. */
+export type SeatMapCellKind = 'SEAT' | 'AISLE' | 'DRIVER' | 'DOOR' | 'TOILET' | 'STAIRS' | 'OTHER';
+
+/** Seat-map version as embedded in vehicles and trips (capacity computed). */
+export interface AssignedSeatMapVersion {
+  id: string;
+  version: number;
+  status: SeatMapVersionStatus;
+  publishedAt: string | null;
+  retiredAt: string | null;
+  seatMap: { id: string; code: string; name: string; active: boolean };
+  /** Number of SEAT cells. */
+  seatCount: number;
+}
+
 export type VehicleStatus = 'PLANNED' | 'ACTIVE' | 'OUT_OF_SERVICE' | 'RETIRED';
 
 export interface AdminVehicle {
@@ -246,6 +263,9 @@ export interface AdminVehicle {
   status: VehicleStatus;
   statusChangedAt: string | null;
   retiredAt: string | null;
+  /** Physical seat map currently configured. */
+  seatMapVersionId: string | null;
+  seatMapVersion: AssignedSeatMapVersion | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -317,7 +337,12 @@ export interface AdminTripSummary {
     status: VehicleStatus;
     manufacturer: string;
     model: string;
+    /** The vehicle's current configuration (may differ from the trip's later). */
+    seatMapVersion: AssignedSeatMapVersion | null;
   } | null;
+  /** Historical seat map of the trip; frozen once SCHEDULED. */
+  seatMapVersionId: string | null;
+  seatMapVersion: AssignedSeatMapVersion | null;
 }
 
 export interface AdminTripPlace {
@@ -354,6 +379,8 @@ export interface TripHistoryEntry {
   toStatus: TripStatus | null;
   fromVehicleCode: string | null;
   toVehicleCode: string | null;
+  fromSeatMap: string | null;
+  toSeatMap: string | null;
 }
 
 export interface AdminTrip extends Omit<AdminTripSummary, 'routeVersion'> {
@@ -401,6 +428,85 @@ export interface TripVehicleInput {
   /** Required once the trip is SCHEDULED. */
   reason?: string;
 }
+
+export interface AdminSeatMapCell {
+  id: string;
+  deck: number;
+  row: number;
+  column: number;
+  kind: SeatMapCellKind;
+  seatLabel: string | null;
+}
+
+export interface AdminSeatMapVersionSummary {
+  id: string;
+  seatMapId: string;
+  version: number;
+  status: SeatMapVersionStatus;
+  publishedAt: string | null;
+  retiredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** Number of SEAT cells (never stored). */
+  seatCount: number;
+}
+
+export interface AdminSeatMapVersion extends AdminSeatMapVersionSummary {
+  cells: AdminSeatMapCell[];
+  /** Vehicles currently configured with this version. */
+  vehicleCount: number;
+  /** Trips carrying this version. */
+  tripCount: number;
+}
+
+export interface AdminSeatMapSummary {
+  id: string;
+  code: string;
+  name: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  versions: AdminSeatMapVersionSummary[];
+}
+
+export interface AdminSeatMap extends Omit<AdminSeatMapSummary, 'versions'> {
+  versions: AdminSeatMapVersion[];
+}
+
+export interface SeatMapListOptions {
+  cursor?: string;
+  limit?: number;
+  active?: boolean;
+}
+
+export interface SeatMapCreateInput {
+  code: string;
+  name: string;
+  active: boolean;
+}
+
+export type SeatMapUpdateInput = Partial<SeatMapCreateInput>;
+
+export interface SeatMapCellsInput {
+  /** The complete layout of the draft (replaces the previous one). */
+  cells: Array<{
+    deck: number;
+    row: number;
+    column: number;
+    kind: SeatMapCellKind;
+    /** Required for SEAT, absent or null otherwise. */
+    seatLabel?: string | null;
+  }>;
+}
+
+export interface VehicleSeatMapInput {
+  /** A PUBLISHED version; null removes the seat map. */
+  seatMapVersionId: string | null;
+  /** Seat map the decision was based on (null: none); refused if it moved. */
+  expectedSeatMapVersionId?: string | null;
+}
+
+export type TripSeatMapInput = VehicleSeatMapInput;
 
 function query(values: Record<string, string | number | undefined>): string {
   const params = new URLSearchParams();
@@ -703,6 +809,12 @@ export function createAuthClient(baseUrl: string) {
             `/v1/admin/fleet/vehicles/${encodeURIComponent(vehicleId)}/status`,
             input,
           ),
+        assignVehicleSeatMap: (vehicleId: string, input: VehicleSeatMapInput) =>
+          withCsrf<AdminVehicle>(
+            'staff',
+            `/v1/admin/fleet/vehicles/${encodeURIComponent(vehicleId)}/seat-map`,
+            input,
+          ),
       },
       trips: {
         trips: (options: TripListOptions = {}) =>
@@ -741,6 +853,49 @@ export function createAuthClient(baseUrl: string) {
             'staff',
             `/v1/admin/trips/${encodeURIComponent(tripId)}/vehicle`,
             input,
+          ),
+        assignTripSeatMap: (tripId: string, input: TripSeatMapInput) =>
+          withCsrf<AdminTrip>(
+            'staff',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/seat-map`,
+            input,
+          ),
+      },
+      seatMaps: {
+        seatMaps: (options: SeatMapListOptions = {}) =>
+          call<Page<AdminSeatMapSummary>>(
+            'GET',
+            `/v1/admin/seat-maps?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              active: options.active === undefined ? undefined : String(options.active),
+            })}`,
+          ),
+        seatMap: (seatMapId: string) =>
+          call<AdminSeatMap>('GET', `/v1/admin/seat-maps/${encodeURIComponent(seatMapId)}`),
+        createSeatMap: (input: SeatMapCreateInput) =>
+          withCsrf<AdminSeatMap>('staff', '/v1/admin/seat-maps', input),
+        updateSeatMap: (seatMapId: string, input: SeatMapUpdateInput) =>
+          withCsrf<AdminSeatMap>(
+            'staff',
+            `/v1/admin/seat-maps/${encodeURIComponent(seatMapId)}`,
+            input,
+          ),
+        createVersion: (seatMapId: string) =>
+          withCsrf<AdminSeatMap>(
+            'staff',
+            `/v1/admin/seat-maps/${encodeURIComponent(seatMapId)}/versions`,
+          ),
+        replaceCells: (seatMapId: string, versionId: string, input: SeatMapCellsInput) =>
+          withCsrf<AdminSeatMap>(
+            'staff',
+            `/v1/admin/seat-maps/${encodeURIComponent(seatMapId)}/versions/${encodeURIComponent(versionId)}/cells`,
+            input,
+          ),
+        publishVersion: (seatMapId: string, versionId: string) =>
+          withCsrf<AdminSeatMap>(
+            'staff',
+            `/v1/admin/seat-maps/${encodeURIComponent(seatMapId)}/versions/${encodeURIComponent(versionId)}/publish`,
           ),
       },
     },

@@ -59,6 +59,27 @@ enum CheckpointType {
   @@map("checkpoint_type")
 }
 
+enum SeatMapVersionStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+
+  @@map("seat_map_version_status")
+}
+
+/// Physical kind of a seat-map cell. An absent coordinate is an empty area.
+enum SeatMapCellKind {
+  SEAT
+  AISLE
+  DRIVER
+  DOOR
+  TOILET
+  STAIRS
+  OTHER
+
+  @@map("seat_map_cell_kind")
+}
+
 enum TripStatus {
   DRAFT
   SCHEDULED
@@ -529,14 +550,18 @@ model Vehicle {
   status                VehicleStatus @default(PLANNED)
   statusChangedAt       DateTime?     @map("status_changed_at") @db.Timestamptz(3)
   retiredAt             DateTime?     @map("retired_at") @db.Timestamptz(3)
+  /// Physical seat map currently configured (a published version).
+  seatMapVersionId      String?       @map("seat_map_version_id") @db.Uuid
   createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  registrationCountry Country? @relation(fields: [registrationCountryId], references: [id], onDelete: Restrict)
+  registrationCountry Country?        @relation(fields: [registrationCountryId], references: [id], onDelete: Restrict)
+  seatMapVersion      SeatMapVersion? @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
   trips               Trip[]
 
   @@unique([registrationCountryId, registrationPlate])
   @@index([status, id])
+  @@index([seatMapVersionId])
   @@map("vehicle")
 }
 
@@ -550,6 +575,8 @@ model Trip {
   reference          String     @unique @db.VarChar(32)
   routeVersionId     String     @map("route_version_id") @db.Uuid
   vehicleId          String?    @map("vehicle_id") @db.Uuid
+  /// Historical seat map of this trip; frozen once SCHEDULED.
+  seatMapVersionId   String?    @map("seat_map_version_id") @db.Uuid
   status             TripStatus @default(DRAFT)
   /// Departure of the first waypoint (UTC), copied from the timetable.
   plannedDepartureAt DateTime?  @map("planned_departure_at") @db.Timestamptz(3)
@@ -560,14 +587,16 @@ model Trip {
   createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  routeVersion RouteVersion         @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
-  vehicle      Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  timings      TripWaypointTiming[]
+  routeVersion   RouteVersion         @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  vehicle        Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  seatMapVersion SeatMapVersion?      @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
+  timings        TripWaypointTiming[]
 
   @@index([status, id])
   @@index([routeVersionId, id])
   @@index([plannedDepartureAt, id])
   @@index([vehicleId])
+  @@index([seatMapVersionId])
   @@map("trip")
 }
 
@@ -588,4 +617,61 @@ model TripWaypointTiming {
   @@unique([tripId, routeWaypointId])
   @@index([routeWaypointId])
   @@map("trip_waypoint_timing")
+}
+
+/// Stable identity of a seat-map model (PR-07). Its physical layout belongs
+/// to numbered versions. Deactivation does not affect published versions.
+model SeatMap {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  code      String   @unique @db.VarChar(32)
+  name      String   @db.VarChar(160)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  versions SeatMapVersion[]
+
+  @@index([active, id])
+  @@map("seat_map")
+}
+
+/// Numbered physical layout, immutable once published. Partial unique indexes
+/// and lifecycle triggers live in the PR-07 migration.
+model SeatMapVersion {
+  id          String               @id @default(uuid(7)) @db.Uuid
+  seatMapId   String               @map("seat_map_id") @db.Uuid
+  version     Int
+  status      SeatMapVersionStatus @default(DRAFT)
+  publishedAt DateTime?            @map("published_at") @db.Timestamptz(3)
+  retiredAt   DateTime?            @map("retired_at") @db.Timestamptz(3)
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  seatMap  SeatMap       @relation(fields: [seatMapId], references: [id], onDelete: Restrict)
+  cells    SeatMapCell[]
+  vehicles Vehicle[]
+  trips    Trip[]
+
+  @@unique([seatMapId, version])
+  @@index([status])
+  @@map("seat_map_version")
+}
+
+/// One physical position of a version. Capacity = number of SEAT cells; it is
+/// always computed, never stored.
+model SeatMapCell {
+  id               String          @id @default(uuid(7)) @db.Uuid
+  seatMapVersionId String          @map("seat_map_version_id") @db.Uuid
+  deck             Int
+  row              Int             @map("row_number")
+  column           Int             @map("column_number")
+  kind             SeatMapCellKind
+  seatLabel        String?         @map("seat_label") @db.VarChar(8)
+
+  seatMapVersion SeatMapVersion @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([seatMapVersionId, deck, row, column])
+  @@unique([seatMapVersionId, seatLabel])
+  @@index([seatMapVersionId, kind])
+  @@map("seat_map_cell")
 }

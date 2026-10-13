@@ -26,6 +26,8 @@ const EXPECTED_MATRIX: Record<
       'privileged.manage',
       'role.assign',
       'role.read',
+      'seatmap.manage',
+      'seatmap.read',
       'session.revoke.any',
       'trip.manage',
       'trip.read',
@@ -47,6 +49,8 @@ const EXPECTED_MATRIX: Record<
       'ops.access',
       'role.assign',
       'role.read',
+      'seatmap.manage',
+      'seatmap.read',
       'session.revoke.any',
       'trip.manage',
       'trip.read',
@@ -63,6 +67,8 @@ const EXPECTED_MATRIX: Record<
       'network.read',
       'ops.access',
       'role.read',
+      'seatmap.manage',
+      'seatmap.read',
       'trip.manage',
       'trip.read',
     ],
@@ -70,25 +76,33 @@ const EXPECTED_MATRIX: Record<
   DISPATCHER: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['fleet.read', 'network.read', 'ops.access', 'trip.manage', 'trip.read'],
+    permissions: [
+      'fleet.read',
+      'network.read',
+      'ops.access',
+      'seatmap.read',
+      'trip.manage',
+      'trip.read',
+    ],
   },
   // BOOKING_AGENT and CUSTOMER_SUPPORT have no fleet permission (PR-05 matrix).
   BOOKING_AGENT: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['network.read', 'ops.access', 'trip.read'],
+    permissions: ['network.read', 'ops.access', 'seatmap.read', 'trip.read'],
   },
   COMPLIANCE_AGENT: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['fleet.read', 'network.read', 'ops.access', 'trip.read'],
+    permissions: ['fleet.read', 'network.read', 'ops.access', 'seatmap.read', 'trip.read'],
   },
-  // FINANCE has no network (PR-04), fleet (PR-05) nor trip (PR-06) permission by default.
+  // FINANCE has no network (PR-04), fleet (PR-05), trip (PR-06) nor seat map (PR-07)
+  // permission by default.
   FINANCE: { realm: 'STAFF', privileged: false, permissions: ['ops.access'] },
   CUSTOMER_SUPPORT: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['network.read', 'ops.access', 'trip.read'],
+    permissions: ['network.read', 'ops.access', 'seatmap.read', 'trip.read'],
   },
   AUDITOR: {
     realm: 'STAFF',
@@ -100,6 +114,7 @@ const EXPECTED_MATRIX: Record<
       'network.read',
       'ops.access',
       'role.read',
+      'seatmap.read',
       'trip.read',
     ],
   },
@@ -138,6 +153,21 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/schedule'],
   ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/cancel'],
   ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/vehicle'],
+  ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/seat-map'],
+  ['POST', '/v1/admin/fleet/vehicles/01900000-0000-7000-8000-000000000000/seat-map'],
+  ['GET', '/v1/admin/seat-maps'],
+  ['GET', '/v1/admin/seat-maps/01900000-0000-7000-8000-000000000000'],
+  ['POST', '/v1/admin/seat-maps'],
+  ['POST', '/v1/admin/seat-maps/01900000-0000-7000-8000-000000000000'],
+  ['POST', '/v1/admin/seat-maps/01900000-0000-7000-8000-000000000000/versions'],
+  [
+    'POST',
+    '/v1/admin/seat-maps/01900000-0000-7000-8000-000000000000/versions/01900000-0000-7000-8000-000000000001/cells',
+  ],
+  [
+    'POST',
+    '/v1/admin/seat-maps/01900000-0000-7000-8000-000000000000/versions/01900000-0000-7000-8000-000000000001/publish',
+  ],
 ];
 
 describe('server-side RBAC', () => {
@@ -226,6 +256,7 @@ describe('server-side RBAC', () => {
       );
       expect((await api.get('/fleet/vehicles')).status).toBe(allowed('fleet.read') ? 200 : 403);
       expect((await api.get('/trips')).status).toBe(allowed('trip.read') ? 200 : 403);
+      expect((await api.get('/seat-maps')).status).toBe(allowed('seatmap.read') ? 200 : 403);
     },
   );
 

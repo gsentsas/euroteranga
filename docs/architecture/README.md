@@ -150,6 +150,30 @@ per waypoint, and an optional `ACTIVE` vehicle. Lifecycle:
 See [`docs/domain/trips.md`](../domain/trips.md) and
 [ADR-023](../adr/ADR-023-trip-lifecycle.md).
 
+## Seat maps (PR-07)
+
+`apps/api/src/seat-maps` (SeatMapModule):
+
+- versioned physical layouts: a seat map, its numbered versions
+  `DRAFT → PUBLISHED → RETIRED`, and cells (deck/row/column, physical kind,
+  label for seats);
+- capacity is the computed count of seats;
+- published versions are immutable; a change is a new version.
+
+A vehicle carries its current seat map, through a dedicated Fleet operation.
+A trip carries its historical seat map, chosen while DRAFT and frozen at
+scheduling. A strict compatibility rule (the trip's vehicle must carry
+exactly the trip's seat map) is checked when either side changes and at
+scheduling, in the service and in PostgreSQL.
+
+- Lock hierarchy: trip → vehicle → seat map → version.
+- OPS exposes **Plans de sièges** according to `seatmap.read` and
+  `seatmap.manage`, and seat-map panels on vehicles and trips.
+- Pricing and booking are deferred.
+
+See [`docs/domain/seat-maps.md`](../domain/seat-maps.md) and
+[ADR-024](../adr/ADR-024-seat-map-versioning.md).
+
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
 
@@ -159,8 +183,8 @@ Recorded in [`docs/adr/`](../adr/README.md): modular monolith (ADR-001),
 PostgreSQL and Prisma (ADR-002), NestJS (ADR-003), Refine (ADR-004), Plesk
 deployment target — not yet decided (ADR-010), monorepo tooling (ADR-011),
 authentication (ADR-012 to ADR-016), authorization (ADR-017 to ADR-020),
-route versioning (ADR-021), vehicle lifecycle (ADR-022) and trip lifecycle
-(ADR-023).
+route versioning (ADR-021), vehicle lifecycle (ADR-022), trip lifecycle
+(ADR-023) and seat-map versioning (ADR-024).
 
 Still open: object storage provider, offline crew
 synchronisation, payment provider abstraction, regulatory rule versioning, and

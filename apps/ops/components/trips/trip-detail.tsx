@@ -4,6 +4,9 @@ import type { AdminTrip, AdminVehicle, TripTimetableInput } from '@euroteranga/a
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import type { useAdminFeedback } from '../admin/admin-feedback';
+import { assignedLabel } from '../seat-maps/seat-map-format';
+import { SeatMapAssignmentForm } from '../seat-maps/seat-map-assignment-form';
+import type { PublishedVersionOption } from '../seat-maps/use-published-versions';
 import {
   formatLocal,
   formatUtc,
@@ -300,10 +303,90 @@ function CancelForm({
   );
 }
 
+function TripSeatMapPanel({
+  trip,
+  canAssign,
+  options,
+  run,
+  busy,
+  onReload,
+}: {
+  trip: AdminTrip;
+  canAssign: boolean;
+  options: readonly PublishedVersionOption[];
+  run: Run;
+  busy: boolean;
+  onReload: () => Promise<void>;
+}) {
+  const vehicleSeatMap = trip.vehicle?.seatMapVersion ?? null;
+  const editable = canAssign && trip.status === 'DRAFT';
+  const applyVehicleSeatMap = async () => {
+    if (!vehicleSeatMap || busy) return;
+    const ok = await run(
+      () =>
+        auth.admin.trips.assignTripSeatMap(trip.id, {
+          seatMapVersionId: vehicleSeatMap.id,
+          expectedSeatMapVersionId: trip.seatMapVersionId,
+        }),
+      `Plan de sièges du voyage ${trip.reference} : ${assignedLabel(vehicleSeatMap)}.`,
+    );
+    if (ok) await onReload();
+  };
+  return (
+    <section aria-labelledby="trip-seat-map-title">
+      <h3 id="trip-seat-map-title">Plan de sièges</h3>
+      <p>
+        Plan du voyage :{' '}
+        <strong data-testid="trip-seat-map">{assignedLabel(trip.seatMapVersion)}</strong>
+      </p>
+      {trip.vehicle ? (
+        <p className="et-hint">Plan actuel du véhicule : {assignedLabel(vehicleSeatMap)}</p>
+      ) : null}
+      {trip.status !== 'DRAFT' ? (
+        <p className="et-hint">
+          Le plan de sièges est figé : il fait partie de l’historique du voyage.
+        </p>
+      ) : null}
+      {editable && vehicleSeatMap && vehicleSeatMap.id !== trip.seatMapVersionId ? (
+        <button
+          type="button"
+          className="et-button"
+          disabled={busy}
+          onClick={() => void applyVehicleSeatMap()}
+        >
+          Utiliser le plan du véhicule
+        </button>
+      ) : null}
+      {editable ? (
+        <SeatMapAssignmentForm
+          formLabel={`Plan de sièges du voyage ${trip.reference}`}
+          selectLabel="Plan de sièges du voyage"
+          submitLabel="Enregistrer le plan du voyage"
+          currentId={trip.seatMapVersionId}
+          currentLabel={assignedLabel(trip.seatMapVersion)}
+          options={options}
+          run={run}
+          busy={busy}
+          success={(label) => `Plan de sièges du voyage ${trip.reference} : ${label}.`}
+          assign={(seatMapVersionId, expected) =>
+            auth.admin.trips.assignTripSeatMap(trip.id, {
+              seatMapVersionId,
+              expectedSeatMapVersionId: expected,
+            })
+          }
+          onSaved={onReload}
+        />
+      ) : null}
+    </section>
+  );
+}
+
 export function TripDetail({
   trip,
   vehicles,
   canManage,
+  canAssignSeatMap,
+  seatMapOptions,
   run,
   busy,
   onReload,
@@ -311,6 +394,9 @@ export function TripDetail({
   trip: AdminTrip;
   vehicles: readonly AdminVehicle[];
   canManage: boolean;
+  /** trip.manage + seatmap.read. */
+  canAssignSeatMap: boolean;
+  seatMapOptions: readonly PublishedVersionOption[];
   run: Run;
   busy: boolean;
   onReload: () => Promise<void>;
@@ -384,6 +470,15 @@ export function TripDetail({
           </table>
         </div>
       )}
+
+      <TripSeatMapPanel
+        trip={trip}
+        canAssign={canAssignSeatMap}
+        options={seatMapOptions}
+        run={run}
+        busy={busy}
+        onReload={onReload}
+      />
 
       {canManage && trip.status !== 'CANCELLED' ? (
         <VehicleForm trip={trip} vehicles={vehicles} run={run} busy={busy} onSaved={onReload} />

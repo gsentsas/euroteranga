@@ -31,10 +31,12 @@ import { AuthorizationGuard, RequirePermissions } from '../authorization/authori
 import { PERMISSIONS } from '../authorization/permissions.js';
 import {
   VehicleCreateBody,
+  VehicleSeatMapBody,
   VehicleStatusBody,
   VehicleUpdateBody,
   vehicleCreateSchema,
   vehicleListQuerySchema,
+  vehicleSeatMapSchema,
   vehicleStatusSchema,
   vehicleUpdateSchema,
 } from './fleet.dto.js';
@@ -138,5 +140,27 @@ export class AdminFleetController {
     @Body(new ZodValidationPipe(vehicleStatusSchema)) body: z.infer<typeof vehicleStatusSchema>,
   ) {
     return this.fleet.changeStatus(id, body, principal);
+  }
+
+  @Post('vehicles/:id/seat-map')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.FLEET_MANAGE, PERMISSIONS.SEATMAP_READ)
+  @ApiOkResponse({ description: 'Seat map assigned, replaced or removed, and audited.' })
+  @ApiConflictResponse({
+    type: ErrorBody,
+    description: 'VEHICLE_RETIRED or VEHICLE_SEAT_MAP_CONFLICT',
+  })
+  @ApiUnprocessableEntityResponse({
+    type: ErrorBody,
+    description: 'SEAT_MAP_VERSION_NOT_PUBLISHED, SEAT_MAP_VERSION_RETIRED or SEAT_MAP_INACTIVE',
+  })
+  @ApiBody({ type: VehicleSeatMapBody })
+  assignSeatMap(
+    @Param('id', uuidV7) id: string,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body(new ZodValidationPipe(vehicleSeatMapSchema)) body: z.infer<typeof vehicleSeatMapSchema>,
+  ) {
+    return this.fleet.assignSeatMap(id, body, principal);
   }
 }

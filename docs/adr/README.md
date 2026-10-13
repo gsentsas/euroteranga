@@ -24,6 +24,7 @@ written yet.
 | [ADR-021](ADR-021-route-versioning.md)                 | Versioned, immutable route geometry              | Accepted |
 | [ADR-022](ADR-022-vehicle-lifecycle.md)                | Vehicle lifecycle and retirement                 | Accepted |
 | [ADR-023](ADR-023-trip-lifecycle.md)                   | Trip lifecycle and immutable scheduled timetable | Accepted |
+| [ADR-024](ADR-024-seat-map-versioning.md)              | Seat-map versioning and historical trip layout   | Accepted |
 
 Planned: ADR-005 Object Storage, ADR-007 Offline Crew,
 ADR-008 Payment Abstraction, ADR-009 Regulatory Versioning. ADR-006
@@ -31,5 +32,6 @@ ADR-008 Payment Abstraction, ADR-009 Regulatory Versioning. ADR-006
 by ADR-017 to ADR-020.
 
 Business-domain decisions: ADR-021 (route versioning and immutable published
-geometry), ADR-022 (vehicle lifecycle and retirement) and ADR-023 (trip
-lifecycle and immutable scheduled timetable).
+geometry), ADR-022 (vehicle lifecycle and retirement), ADR-023 (trip
+lifecycle and immutable scheduled timetable) and ADR-024 (seat-map versioning
+and historical trip layout).

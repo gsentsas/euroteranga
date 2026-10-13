@@ -8,6 +8,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { FleetModule } from './fleet/fleet.module.js';
 import { HealthModule } from './health/health.module.js';
 import { NetworkModule } from './network/network.module.js';
+import { SeatMapModule } from './seat-maps/seat-map.module.js';
 import { TripModule } from './trips/trip.module.js';
 
 export interface AppModuleOptions {
@@ -33,6 +34,7 @@ export class AppModule {
         NetworkModule,
         FleetModule,
         TripModule,
+        SeatMapModule,
       ],
       controllers: options.extraControllers ?? [],
     };

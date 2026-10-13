@@ -13,7 +13,8 @@ and can they be used?". It does not plan or run anything.
 PR-05 deliberately leaves these to later pull requests:
 
 - **Trip**: assigning a vehicle to a trip or a route version.
-- **SeatMap**: capacity, seat layout, seat classes.
+- **SeatMap**: done in PR-07 (see below and [seat-maps.md](seat-maps.md));
+  seat classes remain deferred to Pricing.
 - **Maintenance**: workshop jobs, interventions, odometer, inspection due dates.
 - **Documents**: registration certificates, insurance, technical inspection
   and other regulatory files.
@@ -108,13 +109,14 @@ All endpoints are below `/v1/admin/fleet`. They require a STAFF session and
 `ops.access`. Reads also require `fleet.read`; mutations require
 `fleet.manage` and a session-bound CSRF token.
 
-| Method | Path                   | Purpose                                                      |
-| ------ | ---------------------- | ------------------------------------------------------------ |
-| GET    | `/vehicles`            | Keyset pagination (`limit` 1–100, `cursor`), `status` filter |
-| GET    | `/vehicles/:id`        | Vehicle with its status history                              |
-| POST   | `/vehicles`            | Register a vehicle (always `PLANNED`)                        |
-| POST   | `/vehicles/:id`        | Update administrative data (not the status)                  |
-| POST   | `/vehicles/:id/status` | Status transition with reason and optional `expectedStatus`  |
+| Method | Path                     | Purpose                                                      |
+| ------ | ------------------------ | ------------------------------------------------------------ |
+| GET    | `/vehicles`              | Keyset pagination (`limit` 1–100, `cursor`), `status` filter |
+| GET    | `/vehicles/:id`          | Vehicle with its status history                              |
+| POST   | `/vehicles`              | Register a vehicle (always `PLANNED`)                        |
+| POST   | `/vehicles/:id`          | Update administrative data (not the status)                  |
+| POST   | `/vehicles/:id/status`   | Status transition with reason and optional `expectedStatus`  |
+| POST   | `/vehicles/:id/seat-map` | Current seat map (PR-07): `fleet.manage` + `seatmap.read`    |
 
 There is no delete endpoint. Errors:
 
@@ -128,6 +130,20 @@ There is no delete endpoint. Errors:
 | `VEHICLE_STATUS_TRANSITION_INVALID` | 409  | transition not in the matrix                        |
 | `VEHICLE_STATUS_CONFLICT`           | 409  | `expectedStatus` differs from the current status    |
 | `VEHICLE_REGISTRATION_INCOMPLETE`   | 422  | plate without country, or country without plate     |
+
+## Seat map (PR-07)
+
+A vehicle carries the seat-map version **currently configured** on it
+(`seatMapVersionId`, with its computed capacity in API responses).
+
+- It is changed only through `POST /vehicles/:id/seat-map`, with an optional
+  `expectedSeatMapVersionId`; the general update rejects it.
+- A new assignment needs a currently published version of an active seat map.
+- Retiring the version later does not break the vehicle.
+- Trips keep their own historical seat map: changing the vehicle's
+  configuration never alters a trip.
+
+See [seat-maps.md](seat-maps.md).
 
 ## Status history
 

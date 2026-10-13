@@ -12,6 +12,8 @@ export {
   CheckpointType,
   Prisma,
   RouteVersionStatus,
+  SeatMapCellKind,
+  SeatMapVersionStatus,
   TripStatus,
   VehicleStatus,
 } from './generated/prisma/client.js';
@@ -23,6 +25,9 @@ export type {
   Route,
   RouteVersion,
   RouteWaypoint,
+  SeatMap,
+  SeatMapCell,
+  SeatMapVersion,
   Stop,
   Trip,
   TripWaypointTiming,

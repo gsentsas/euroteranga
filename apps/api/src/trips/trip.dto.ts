@@ -72,6 +72,15 @@ export const tripVehicleSchema = z
   })
   .strict();
 
+/** Dedicated operation, DRAFT trips only. */
+export const tripSeatMapSchema = z
+  .object({
+    seatMapVersionId: uuid.nullable(),
+    /** Seat map the decision was based on (null: none); refused if it moved. */
+    expectedSeatMapVersionId: uuid.nullable().optional(),
+  })
+  .strict();
+
 // OpenAPI bodies. Runtime validation always uses the Zod schemas above.
 export class TripCreateBody {
   @ApiProperty({ maxLength: 32, example: 'ET-TEST-2030-0001' }) reference!: string;
@@ -105,4 +114,14 @@ export class TripVehicleBody {
   @ApiPropertyOptional({ nullable: true, format: 'uuid' }) expectedVehicleId?: string | null;
   @ApiPropertyOptional({ minLength: 3, maxLength: 500, description: 'Required once SCHEDULED.' })
   reason?: string;
+}
+
+export class TripSeatMapBody {
+  @ApiProperty({
+    nullable: true,
+    format: 'uuid',
+    description: 'A PUBLISHED version; null removes it.',
+  })
+  seatMapVersionId!: string | null;
+  @ApiPropertyOptional({ nullable: true, format: 'uuid' }) expectedSeatMapVersionId?: string | null;
 }

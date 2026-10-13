@@ -71,6 +71,17 @@ export const FIXTURES = {
   get tripDenied(): Fixture {
     return { realm: 'STAFF', email: runScoped('trip-denied'), roles: ['FINANCE'] };
   },
+  get seatMapAdmin(): Fixture {
+    return { realm: 'STAFF', email: runScoped('seat-map-admin'), roles: ['SUPER_ADMIN'] };
+  },
+  /** seatmap.read only (no seatmap.manage). */
+  get seatMapReader(): Fixture {
+    return { realm: 'STAFF', email: runScoped('seat-map-reader'), roles: ['BOOKING_AGENT'] };
+  },
+  /** ops.access only: no seat-map permission. */
+  get seatMapDenied(): Fixture {
+    return { realm: 'STAFF', email: runScoped('seat-map-denied'), roles: ['FINANCE'] };
+  },
   get auditor(): Fixture {
     return { realm: 'STAFF', email: runScoped('auditor'), roles: ['AUDITOR'] };
   },
@@ -121,5 +132,22 @@ export function tripSeed() {
     vehicleCode: `VH_TRIP_${run}`,
     vehicleLabel: 'Constructeur synthétique Autocar voyages',
     seededTripReference: `ET-TEST-SEED-${run}`,
+  };
+}
+
+/**
+ * Synthetic data for the seat-map scenarios: a published seat map for the
+ * read-only profile, and an ACTIVE vehicle with a DRAFT trip (complete
+ * timetable) on the trip-seed route for the SUPER_ADMIN scenario.
+ */
+export function seatMapSeed() {
+  const raw = process.env.E2E_RUN_ID;
+  if (!raw) throw new Error('E2E_RUN_ID is set by global-setup.ts');
+  const run = raw.toUpperCase();
+  return {
+    run,
+    seededSeatMapCode: `SM_SEED_${run}`,
+    vehicleCode: `VH_SEAT_${run}`,
+    tripReference: `ET-TEST-SEAT-${run}`,
   };
 }

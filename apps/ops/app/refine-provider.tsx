@@ -37,6 +37,11 @@ export function RefineProvider({ children }: { children: ReactNode }) {
             list: '/trips',
             meta: { label: 'Voyages', permission: 'trip.read' },
           },
+          {
+            name: 'seat-maps',
+            list: '/seat-maps',
+            meta: { label: 'Plans de sièges', permission: 'seatmap.read' },
+          },
           // `permission` only filters the navigation; the API authorizes every call.
           {
             name: 'admin-identities',

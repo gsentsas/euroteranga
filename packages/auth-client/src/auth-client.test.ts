@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   createAuthClient,
+  type AdminSeatMap,
   type AdminTrip,
   type AdminTripSummary,
   type AdminVehicle,
@@ -312,5 +313,62 @@ describe('admin client', () => {
       .toEqualTypeOf<string | null>();
     // The status changes only through schedule/cancel, never at creation.
     expectTypeOf(trips.createTrip).parameter(0).not.toHaveProperty('status');
+  });
+
+  it('lists seat maps and replaces a draft layout through the in-memory CSRF flow', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { items: [], nextCursor: null } },
+      { status: 200, body: { csrfToken: 'v1.1.n.m' } },
+      { status: 200, body: { id: 'map' } },
+    ]);
+    const seatMaps = createAuthClient('http://api.test').admin.seatMaps;
+    await seatMaps.seatMaps({ limit: 10, active: true });
+    const cells = [
+      { deck: 1, row: 1, column: 1, kind: 'DRIVER' as const },
+      { deck: 1, row: 2, column: 1, kind: 'SEAT' as const, seatLabel: '1A' },
+    ];
+    await seatMaps.replaceCells('map/../id', 'version-id', { cells });
+    expect(calls[0]?.url).toBe('http://api.test/v1/admin/seat-maps?limit=10&active=true');
+    expect(calls[2]?.url).toBe(
+      'http://api.test/v1/admin/seat-maps/map%2F..%2Fid/versions/version-id/cells',
+    );
+    expect(calls[2]?.init).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': 'v1.1.n.m' },
+    });
+    expect(JSON.parse(String(calls[2]?.init.body))).toEqual({ cells });
+  });
+
+  it('assigns seat maps to vehicles and trips with an expected state', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { csrfToken: 'a' } },
+      { status: 200, body: {} },
+      { status: 200, body: { csrfToken: 'b' } },
+      { status: 200, body: {} },
+    ]);
+    const admin = createAuthClient('http://api.test').admin;
+    await admin.fleet.assignVehicleSeatMap('vehicle-id', {
+      seatMapVersionId: 'version-id',
+      expectedSeatMapVersionId: null,
+    });
+    await admin.trips.assignTripSeatMap('trip-id', { seatMapVersionId: null });
+    expect(calls[1]?.url).toBe('http://api.test/v1/admin/fleet/vehicles/vehicle-id/seat-map');
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({
+      seatMapVersionId: 'version-id',
+      expectedSeatMapVersionId: null,
+    });
+    expect(calls[3]?.url).toBe('http://api.test/v1/admin/trips/trip-id/seat-map');
+  });
+
+  it('types seat-map results and keeps capacity computed', () => {
+    const admin = createAuthClient('http://api.test').admin;
+    expectTypeOf(admin.seatMaps.seatMap).returns.resolves.toEqualTypeOf<ApiResult<AdminSeatMap>>();
+    expectTypeOf(admin.trips.assignTripSeatMap).returns.resolves.toEqualTypeOf<
+      ApiResult<AdminTrip>
+    >();
+    expectTypeOf<AdminSeatMap['versions'][number]['seatCount']>().toEqualTypeOf<number>();
+    // No capacity can be sent: it is derived from SEAT cells.
+    expectTypeOf(admin.seatMaps.replaceCells).parameter(2).not.toHaveProperty('seatCount');
+    expectTypeOf(admin.fleet.updateVehicle).parameter(1).not.toHaveProperty('seatMapVersionId');
   });
 });

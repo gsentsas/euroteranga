@@ -10,6 +10,12 @@ import type {
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
+import { assignedLabel } from '../seat-maps/seat-map-format';
+import { SeatMapAssignmentForm } from '../seat-maps/seat-map-assignment-form';
+import {
+  usePublishedSeatMapVersions,
+  type PublishedVersionOption,
+} from '../seat-maps/use-published-versions';
 import { useCan } from '../staff-access';
 import {
   EMPTY_VEHICLE,
@@ -238,6 +244,8 @@ function VehicleDetail({
   vehicle,
   countries,
   canManage,
+  canAssignSeatMap,
+  seatMapOptions,
   run,
   busy,
   onReload,
@@ -245,6 +253,9 @@ function VehicleDetail({
   vehicle: AdminVehicleDetail;
   countries: readonly NetworkCountry[] | null;
   canManage: boolean;
+  /** fleet.manage + seatmap.read. */
+  canAssignSeatMap: boolean;
+  seatMapOptions: readonly PublishedVersionOption[];
   run: Run;
   busy: boolean;
   onReload: () => Promise<void>;
@@ -264,6 +275,8 @@ function VehicleDetail({
         <dd>{vehicle.vin ?? '—'}</dd>
         <dt>Immatriculation</dt>
         <dd>{registrationOf(vehicle)}</dd>
+        <dt>Plan de sièges actuel</dt>
+        <dd data-testid="vehicle-seat-map">{assignedLabel(vehicle.seatMapVersion)}</dd>
         {vehicle.retiredAt ? (
           <>
             <dt>Retiré le</dt>
@@ -290,6 +303,26 @@ function VehicleDetail({
         <p>Aucun changement de statut depuis l’enregistrement.</p>
       )}
 
+      {canAssignSeatMap && vehicle.status !== 'RETIRED' ? (
+        <SeatMapAssignmentForm
+          formLabel={`Plan de sièges du véhicule ${vehicle.code}`}
+          selectLabel="Plan de sièges à configurer"
+          submitLabel="Enregistrer le plan de sièges"
+          currentId={vehicle.seatMapVersionId}
+          currentLabel={assignedLabel(vehicle.seatMapVersion)}
+          options={seatMapOptions}
+          run={run}
+          busy={busy}
+          success={(label) => `Plan de sièges du véhicule ${vehicle.code} : ${label}.`}
+          assign={(seatMapVersionId, expected) =>
+            auth.admin.fleet.assignVehicleSeatMap(vehicle.id, {
+              seatMapVersionId,
+              expectedSeatMapVersionId: expected,
+            })
+          }
+          onSaved={onReload}
+        />
+      ) : null}
       {canManage && vehicle.status !== 'RETIRED' ? (
         <>
           <StatusForm vehicle={vehicle} run={run} busy={busy} onChanged={onReload} />
@@ -313,6 +346,8 @@ function VehicleDetail({
 export function FleetAdmin() {
   const canManage = useCan('fleet.manage');
   const canReadNetwork = useCan('network.read');
+  const canAssignSeatMap = useCan('fleet.manage', 'seatmap.read');
+  const seatMapOptions = usePublishedSeatMapVersions(canAssignSeatMap);
   const { run, busy, feedback, setError } = useAdminFeedback();
   const [vehicles, setVehicles] = useState<AdminVehicle[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -444,6 +479,8 @@ export function FleetAdmin() {
           vehicle={detail}
           countries={countries}
           canManage={canManage}
+          canAssignSeatMap={canAssignSeatMap}
+          seatMapOptions={seatMapOptions}
           run={run}
           busy={busy}
           onReload={reload}

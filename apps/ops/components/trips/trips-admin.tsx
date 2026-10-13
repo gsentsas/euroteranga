@@ -11,6 +11,7 @@ import { TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
+import { usePublishedSeatMapVersions } from '../seat-maps/use-published-versions';
 import { useCan } from '../staff-access';
 import { TripDetail } from './trip-detail';
 import { formatUtc, TRIP_STATUS_LABELS } from './trip-format';
@@ -126,6 +127,8 @@ function CreateTripForm({
 /** Trips (trip.read) and their administration (trip.manage). */
 export function TripsAdmin() {
   const canManage = useCan('trip.manage');
+  const canAssignSeatMap = useCan('trip.manage', 'seatmap.read');
+  const seatMapOptions = usePublishedSeatMapVersions(canAssignSeatMap);
   const filterId = useId();
   const { run, busy, feedback, setError } = useAdminFeedback();
   const [status, setStatus] = useState<TripStatus | ''>('');
@@ -285,6 +288,8 @@ export function TripsAdmin() {
           trip={detail}
           vehicles={vehicles}
           canManage={canManage}
+          canAssignSeatMap={canAssignSeatMap}
+          seatMapOptions={seatMapOptions}
           run={run}
           busy={busy}
           onReload={reload}

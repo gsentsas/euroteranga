@@ -45,6 +45,18 @@ export const TripErrors = {
       'TRIP_VEHICLE_CONFLICT',
       'Le véhicule affecté a changé entre-temps. Rechargez la fiche.',
     ),
+  seatMapConflict: () =>
+    new PublicApiError(
+      409,
+      'TRIP_SEAT_MAP_CONFLICT',
+      'Le plan de sièges du voyage a changé entre-temps. Rechargez la fiche.',
+    ),
+  seatMapIncompatible: () =>
+    new PublicApiError(
+      422,
+      'TRIP_SEAT_MAP_INCOMPATIBLE',
+      'Le plan de sièges du véhicule ne correspond pas à celui du voyage.',
+    ),
   reasonRequired: () =>
     new PublicApiError(
       422,

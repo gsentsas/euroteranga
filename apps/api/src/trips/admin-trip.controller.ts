@@ -32,12 +32,14 @@ import { PERMISSIONS } from '../authorization/permissions.js';
 import {
   TripCancelBody,
   TripCreateBody,
+  TripSeatMapBody,
   TripTimetableBody,
   TripVehicleBody,
   tripCancelSchema,
   tripCreateSchema,
   tripListQuerySchema,
   tripScheduleSchema,
+  tripSeatMapSchema,
   tripTimetableSchema,
   tripVehicleSchema,
 } from './trip.dto.js';
@@ -169,5 +171,28 @@ export class AdminTripController {
     @Body(new ZodValidationPipe(tripVehicleSchema)) body: z.infer<typeof tripVehicleSchema>,
   ) {
     return this.trips.assignVehicle(id, body, principal);
+  }
+
+  @Post(':id/seat-map')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.TRIP_MANAGE, PERMISSIONS.SEATMAP_READ)
+  @ApiOkResponse({ description: 'Historical seat map assigned or removed (DRAFT only), audited.' })
+  @ApiConflictResponse({
+    type: ErrorBody,
+    description: 'TRIP_NOT_DRAFT, TRIP_CANCELLED or TRIP_SEAT_MAP_CONFLICT',
+  })
+  @ApiUnprocessableEntityResponse({
+    type: ErrorBody,
+    description:
+      'TRIP_SEAT_MAP_INCOMPATIBLE, SEAT_MAP_VERSION_NOT_PUBLISHED, SEAT_MAP_VERSION_RETIRED or SEAT_MAP_INACTIVE',
+  })
+  @ApiBody({ type: TripSeatMapBody })
+  seatMap(
+    @Param('id', uuidV7) id: string,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body(new ZodValidationPipe(tripSeatMapSchema)) body: z.infer<typeof tripSeatMapSchema>,
+  ) {
+    return this.trips.assignSeatMap(id, body, principal);
   }
 }
