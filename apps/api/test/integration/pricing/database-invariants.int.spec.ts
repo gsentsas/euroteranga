@@ -314,6 +314,11 @@ describe('pricing database invariants (isolated database)', () => {
           data: { publishedAt: new Date(0) },
         }),
       ).rejects.toThrow(/may only transition to RETIRED/);
+      await expect(
+        db(t.app).$executeRawUnsafe(
+          `UPDATE "fare_table_version" SET "status" = 'DRAFT', "published_at" = NULL WHERE "id" = '${draft.id}'`,
+        ),
+      ).rejects.toThrow(/may only transition to RETIRED/);
       await expect(db(t.app).fareTableVersion.delete({ where: { id: draft.id } })).rejects.toThrow(
         /immutable/,
       );
