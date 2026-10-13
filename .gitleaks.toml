@@ -12,7 +12,7 @@ paths = [
   '''(^|/)dist/''',
   '''(^|/)node_modules/''',
 ]
-# The three example keys published in .env.example. They decode to
+# The example keys published in .env.example. They decode to
 # "dev-only-...-not-a-real-secret", are refused at startup in staging and
 # production (EXAMPLE_AUTH_SECRETS in packages/config) and kept in sync by a
 # unit test. Only these exact values are allowed: any other key is reported.
@@ -21,4 +21,7 @@ regexes = [
   '''^ZGV2LW9ubHktY3NyZi1rZXktbm90LWEtcmVhbC1zZWNyZXQ=$''',
   '''^ZGV2LW9ubHktaG1hYy1rZXktbm90LWEtcmVhbC1zZWNyZXQ=$''',
   '''^ZGV2LW9ubHktdG90cC1rZXktbm90LWEtc2VjcmV0ISE=$''',
+  # PR-10: SANDBOX webhook example key ("dev-only-sandbox-webhook-not-a-secret");
+  # SANDBOX is refused in staging and production (packages/config).
+  '''^ZGV2LW9ubHktc2FuZGJveC13ZWJob29rLW5vdC1hLXNlY3JldA==$''',
 ]

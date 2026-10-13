@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ConfigValidationError, describeIssues } from './errors.js';
 import { authEnvShape, refineAuthEnv } from './auth-env.js';
 import { bookingEnvShape } from './booking-env.js';
+import { paymentEnvShape, refinePaymentEnv } from './payment-env.js';
 import { appEnvSchema, booleanFlag, originListSchema } from './schemas.js';
 
 export const apiEnvSchema = z
@@ -31,8 +32,12 @@ export const apiEnvSchema = z
     LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
     ...authEnvShape,
     ...bookingEnvShape,
+    ...paymentEnvShape,
   })
-  .superRefine(refineAuthEnv);
+  .superRefine((env, ctx) => {
+    refineAuthEnv(env, ctx);
+    refinePaymentEnv(env, ctx);
+  });
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;
 

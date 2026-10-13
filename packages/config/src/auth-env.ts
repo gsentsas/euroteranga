@@ -23,7 +23,7 @@ export function decodeSecretKey(value: string): Buffer {
  * A secret encoded in base64 (or base64url). Validation checks the encoding
  * and the decoded length; messages never include the value.
  */
-function secretKey(options: { minBytes: number; exactBytes?: number }) {
+export function secretKey(options: { minBytes: number; exactBytes?: number }) {
   return z
     .string({ error: 'is required' })
     .min(1, 'is required')
