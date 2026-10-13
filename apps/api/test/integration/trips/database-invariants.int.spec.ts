@@ -502,6 +502,18 @@ describe('trip database invariants (isolated database)', () => {
     await expect(db(t.app).$executeRawUnsafe('TRUNCATE TABLE "trip" CASCADE')).rejects.toThrow(
       /trip history cannot be truncated/,
     );
+    // TRUNCATE of trip must include trip_waypoint_timing (foreign key), whose
+    // trigger then fires: the trip-level trigger is a second barrier, checked
+    // here in the catalogue.
+    const truncateTriggers = await db(t.app).$queryRaw<Array<{ tgname: string }>>`
+      SELECT tgname FROM pg_trigger
+      WHERE tgrelid IN ('trip'::regclass, 'trip_waypoint_timing'::regclass)
+        AND tgname LIKE '%no_truncate' ORDER BY tgname
+    `;
+    expect(truncateTriggers.map((row) => row.tgname)).toEqual([
+      'trip_no_truncate',
+      'trip_waypoint_timing_no_truncate',
+    ]);
     await schedule(trip.id);
     await expect(
       db(t.app).$executeRawUnsafe(`DELETE FROM "trip" WHERE "id" = '${trip.id}'`),
