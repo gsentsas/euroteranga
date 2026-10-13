@@ -227,10 +227,20 @@ export type NetworkWaypointInput =
 
 export type FareTableVersionStatus = 'DRAFT' | 'PUBLISHED' | 'RETIRED';
 
-/** Fare table version as embedded in trips. */
-export interface AssignedFareTableVersion {
+/**
+ * Identity of a trip's fare table version: all a trip.read holder without
+ * pricing.read receives.
+ */
+export interface TripFareTableIdentity {
   id: string;
   version: number;
+  fareTable: { code: string; currencyCode: string };
+  /** Number of priced origin/destination pairs. */
+  entryCount: number;
+}
+
+/** Fare table version as embedded in trips, for pricing.read holders. */
+export interface AssignedFareTableVersion extends TripFareTableIdentity {
   status: FareTableVersionStatus;
   publishedAt: string | null;
   retiredAt: string | null;
@@ -243,8 +253,13 @@ export interface AssignedFareTableVersion {
     currencyMinorUnit: number;
     active: boolean;
   };
-  /** Number of priced origin/destination pairs. */
-  entryCount: number;
+}
+
+/** True when the caller received the full fare-table summary (pricing.read). */
+export function hasFareTableDetails(
+  version: AssignedFareTableVersion | TripFareTableIdentity,
+): version is AssignedFareTableVersion {
+  return 'status' in version;
 }
 
 export type SeatMapVersionStatus = 'DRAFT' | 'PUBLISHED' | 'RETIRED';
@@ -367,7 +382,8 @@ export interface AdminTripSummary {
   seatMapVersion: AssignedSeatMapVersion | null;
   /** Historical pricing of the trip; frozen once SCHEDULED. */
   fareTableVersionId: string | null;
-  fareTableVersion: AssignedFareTableVersion | null;
+  /** Full summary with pricing.read; its identity only otherwise. */
+  fareTableVersion: AssignedFareTableVersion | TripFareTableIdentity | null;
 }
 
 export interface AdminTripPlace {

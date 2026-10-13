@@ -25,6 +25,8 @@ export {
   type ApiError,
   type ApiResult,
   type AssignedFareTableVersion,
+  type TripFareTableIdentity,
+  hasFareTableDetails,
   type AssignedSeatMapVersion,
   type AuthClient,
   type FareTableCreateInput,

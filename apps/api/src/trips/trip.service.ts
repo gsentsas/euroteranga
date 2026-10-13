@@ -12,8 +12,10 @@ import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import {
   fareTableLabel,
+  fareTableVersionIdentity,
   fareTableVersionSummarySelect,
   fareTableVersionView,
+  type FareTableVersionIdentity,
   lockAssignableFareTableVersion,
 } from '../pricing/fare-assignment.js';
 import {
@@ -85,6 +87,16 @@ function tripView<
       ? { ...trip.vehicle, seatMapVersion: seatMapVersionView(trip.vehicle.seatMapVersion) }
       : null,
   };
+}
+
+/**
+ * Trip view for a caller without pricing.read: the fare-table version is
+ * reduced to its identity (id, version, code, currency, number of pairs).
+ */
+export function withFareTableIdentityOnly<
+  T extends { fareTableVersion: FareTableVersionIdentity | null },
+>(trip: T): Omit<T, 'fareTableVersion'> & { fareTableVersion: FareTableVersionIdentity | null } {
+  return { ...trip, fareTableVersion: fareTableVersionIdentity(trip.fareTableVersion) };
 }
 
 export interface TripHistoryEntry {

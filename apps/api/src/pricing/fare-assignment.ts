@@ -30,6 +30,31 @@ export function fareTableVersionView<T extends { _count: { entries: number } }>(
   return { ...rest, entryCount: _count.entries };
 }
 
+/**
+ * What a trip.read holder without pricing.read may see of a trip's pricing:
+ * the version's identity only. Name, state, minor unit, dates and route
+ * version stay catalogue data behind pricing.read.
+ */
+export interface FareTableVersionIdentity {
+  id: string;
+  version: number;
+  fareTable: { code: string; currencyCode: string };
+  entryCount: number;
+}
+
+/** Explicit allow-list (never a spread), so new summary fields stay hidden. */
+export function fareTableVersionIdentity(
+  version: FareTableVersionIdentity | null,
+): FareTableVersionIdentity | null {
+  if (!version) return null;
+  return {
+    id: version.id,
+    version: version.version,
+    fareTable: { code: version.fareTable.code, currencyCode: version.fareTable.currencyCode },
+    entryCount: version.entryCount,
+  };
+}
+
 export const fareTableLabel = (
   code: string | null,
   version: number | null,

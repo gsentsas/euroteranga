@@ -1,6 +1,10 @@
 'use client';
 
-import type { AdminTrip, ResolvedTripFare } from '@euroteranga/auth-client';
+import {
+  hasFareTableDetails,
+  type AdminTrip,
+  type ResolvedTripFare,
+} from '@euroteranga/auth-client';
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import type { useAdminFeedback } from '../admin/admin-feedback';
@@ -206,7 +210,7 @@ export function TripPricingPanel({
         Grille du voyage :{' '}
         <strong data-testid="trip-fare-table">{assignedFareLabel(current)}</strong>
       </p>
-      {current && !current.fareTable.active ? (
+      {current && hasFareTableDetails(current) && !current.fareTable.active ? (
         <p className="et-hint">
           La grille a été désactivée depuis ; le voyage conserve sa version.
         </p>

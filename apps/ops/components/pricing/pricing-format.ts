@@ -1,8 +1,10 @@
 import {
   formatMoney,
+  hasFareTableDetails,
   type AdminFareWaypoint,
   type AssignedFareTableVersion,
   type FareTableVersionStatus,
+  type TripFareTableIdentity,
 } from '@euroteranga/auth-client';
 
 export const FARE_VERSION_STATUS_LABELS: Record<FareTableVersionStatus, string> = {
@@ -44,9 +46,12 @@ export const fareDestinations = <T extends FarePlace>(waypoints: readonly T[], o
     : [];
 
 /** "CODE v2 (EUR) — 3 paires tarifées", plus a note when retired since. */
-export function assignedFareLabel(version: AssignedFareTableVersion | null): string {
+export function assignedFareLabel(
+  version: AssignedFareTableVersion | TripFareTableIdentity | null,
+): string {
   if (!version) return 'Aucune';
-  const retired = version.status === 'RETIRED' ? ' (version retirée depuis)' : '';
+  const retired =
+    hasFareTableDetails(version) && version.status === 'RETIRED' ? ' (version retirée depuis)' : '';
   return `${version.fareTable.code} v${version.version} (${version.fareTable.currencyCode}) — ${faresLabel(version.entryCount)}${retired}`;
 }
 
