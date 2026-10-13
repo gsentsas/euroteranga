@@ -55,6 +55,10 @@ export interface FixtureOptions {
   status?: 'SCHEDULED' | 'DRAFT';
   withSeatMap?: boolean;
   withPricing?: boolean;
+  /** Reuse these five stops (another trip on the same stop pairs). */
+  stopIds?: string[];
+  /** W4 reuses the stop of W1 (a loop): the same stop appears twice. */
+  repeatFirstStop?: boolean;
   /** Fare amount for every pair (default: 1000 * (destination - origin)). */
   amount?: (origin: number, destination: number) => number;
 }
@@ -69,8 +73,8 @@ export async function bookableFixture(
 ): Promise<BookableFixture> {
   const prisma = db(app);
   const countryId = options.countryId ?? (await syntheticCountry(app));
-  const stopIds: string[] = [];
-  for (let index = 1; index <= 5; index += 1) {
+  const stopIds: string[] = options.stopIds ? [...options.stopIds] : [];
+  for (let index = stopIds.length + 1; index <= 5; index += 1) {
     const stop = await prisma.stop.create({
       data: {
         code: `BK_${suffix()}`,
@@ -114,7 +118,11 @@ export async function bookableFixture(
   }
   waypoints.push(
     { stopId: stopIds[2]!, boardingAllowed: true, alightingAllowed: true },
-    { stopId: stopIds[3]!, boardingAllowed: true, alightingAllowed: true },
+    {
+      stopId: options.repeatFirstStop ? stopIds[0]! : stopIds[3]!,
+      boardingAllowed: true,
+      alightingAllowed: true,
+    },
     { stopId: stopIds[4]!, alightingAllowed: true },
   );
   await prisma.routeWaypoint.createMany({
