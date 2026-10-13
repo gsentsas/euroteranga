@@ -14,8 +14,8 @@ optional vehicle. It does not sell seats or run on the road.
 
 PR-06 deliberately leaves these to later pull requests:
 
-- **SeatMap** and commercial capacity (PR-07), pricing, booking, passengers,
-  payments, baggage, check-in and boarding.
+- Pricing, booking, passengers, payments, baggage, check-in and boarding.
+  (Seat maps: added in PR-07, see below.)
 - **Crew and driver assignment.**
 - **Dispatch**: operational follow-up, actual departure/arrival times,
   `IN_PROGRESS`/`COMPLETED` states, handling of vehicles that become
@@ -100,6 +100,28 @@ version. Once `SCHEDULED` (or `CANCELLED`), the timetable is **frozen**.
   to a scheduled trip may later go `OUT_OF_SERVICE` or be `RETIRED`. That
   operational conflict will be handled by Dispatch.
 
+## Seat map (PR-07)
+
+A trip may carry a **historical seat map** (`seatMapVersionId`, with its
+computed capacity).
+
+- It is chosen or removed while the trip is **DRAFT** through
+  `POST /:id/seat-map` (`trip.manage` + `seatmap.read`, optional
+  `expectedSeatMapVersionId`).
+- It is frozen by scheduling and kept after cancellation.
+- It is optional for scheduling, so PR-06 trips stay valid.
+- A version retired later stays valid on the trip.
+- **Compatibility:** a trip carrying a seat map only accepts a vehicle
+  configured with exactly that version. This is checked when the seat map or
+  the vehicle of the trip changes and when scheduling
+  (`TRIP_SEAT_MAP_INCOMPATIBLE`), in the service and in PostgreSQL. Nothing
+  is assigned implicitly: OPS offers an explicit _Utiliser le plan du
+  véhicule_ action.
+- **Limitation:** a vehicle reconfigured after scheduling leaves the trip on
+  its historical layout. Dispatch will handle the mismatch.
+
+See [seat-maps.md](seat-maps.md).
+
 ## Enforcement in PostgreSQL
 
 The migration `20261013120000_trips_timetable` enforces the rules for every
@@ -130,7 +152,7 @@ stable public errors.
 ## Concurrency
 
 Lock order for every trip mutation: **trip row `FOR UPDATE`, then vehicle row
-`FOR SHARE`**. Fleet status changes lock only the vehicle row, so no deadlock
+`FOR SHARE`**, then, for seat maps (PR-07), seat map and version `FOR SHARE`. Fleet status changes lock only the vehicle row, so no deadlock
 cycle is possible. Consequences, all tested on PostgreSQL:
 
 - two timetable replacements are serialized; the result is one complete
