@@ -59,6 +59,14 @@ enum CheckpointType {
   @@map("checkpoint_type")
 }
 
+enum FareTableVersionStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+
+  @@map("fare_table_version_status")
+}
+
 enum SeatMapVersionStatus {
   DRAFT
   PUBLISHED
@@ -484,7 +492,8 @@ model Route {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  versions RouteVersion[]
+  versions   RouteVersion[]
+  fareTables FareTable[]
 
   @@index([active, id])
   @@map("route")
@@ -502,9 +511,10 @@ model RouteVersion {
   createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  route     Route           @relation(fields: [routeId], references: [id], onDelete: Restrict)
-  waypoints RouteWaypoint[]
-  trips     Trip[]
+  route             Route              @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  waypoints         RouteWaypoint[]
+  trips             Trip[]
+  fareTableVersions FareTableVersion[]
 
   @@unique([routeId, version])
   @@index([status])
@@ -526,6 +536,8 @@ model RouteWaypoint {
   stop         Stop?                @relation(fields: [stopId], references: [id], onDelete: Restrict)
   checkpoint   Checkpoint?          @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
   timings      TripWaypointTiming[]
+  faresFrom    FareEntry[]          @relation("FareOrigin")
+  faresTo      FareEntry[]          @relation("FareDestination")
 
   @@unique([routeVersionId, sequence])
   @@index([stopId])
@@ -577,6 +589,8 @@ model Trip {
   vehicleId          String?    @map("vehicle_id") @db.Uuid
   /// Historical seat map of this trip; frozen once SCHEDULED.
   seatMapVersionId   String?    @map("seat_map_version_id") @db.Uuid
+  /// Historical pricing of this trip; frozen once SCHEDULED.
+  fareTableVersionId String?    @map("fare_table_version_id") @db.Uuid
   status             TripStatus @default(DRAFT)
   /// Departure of the first waypoint (UTC), copied from the timetable.
   plannedDepartureAt DateTime?  @map("planned_departure_at") @db.Timestamptz(3)
@@ -587,16 +601,18 @@ model Trip {
   createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  routeVersion   RouteVersion         @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
-  vehicle        Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  seatMapVersion SeatMapVersion?      @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
-  timings        TripWaypointTiming[]
+  routeVersion     RouteVersion         @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  vehicle          Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  seatMapVersion   SeatMapVersion?      @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
+  fareTableVersion FareTableVersion?    @relation(fields: [fareTableVersionId], references: [id], onDelete: Restrict)
+  timings          TripWaypointTiming[]
 
   @@index([status, id])
   @@index([routeVersionId, id])
   @@index([plannedDepartureAt, id])
   @@index([vehicleId])
   @@index([seatMapVersionId])
+  @@index([fareTableVersionId])
   @@map("trip")
 }
 
@@ -674,4 +690,74 @@ model SeatMapCell {
   @@unique([seatMapVersionId, seatLabel])
   @@index([seatMapVersionId, kind])
   @@map("seat_map_cell")
+}
+
+/// Stable commercial fare table of one route (PR-08). Route and currency are
+/// its economic identity: immutable once created (trigger in the PR-08
+/// migration). Amounts are exact integers in the currency's minor unit.
+model FareTable {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  code              String   @unique @db.VarChar(32)
+  name              String   @db.VarChar(160)
+  routeId           String   @map("route_id") @db.Uuid
+  /// Three uppercase letters (e.g. EUR, XOF); no fixed ISO list.
+  currencyCode      String   @map("currency_code") @db.VarChar(3)
+  /// Digits after the decimal separator (0-3): EUR 2, XOF 0.
+  currencyMinorUnit Int      @map("currency_minor_unit")
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  route    Route              @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  versions FareTableVersion[]
+
+  @@index([routeId])
+  @@index([active, id])
+  @@map("fare_table")
+}
+
+/// Historical base fares for exactly one (published) route version.
+/// Immutable once published; partial unique indexes and triggers live in the
+/// PR-08 migration.
+model FareTableVersion {
+  id             String                 @id @default(uuid(7)) @db.Uuid
+  fareTableId    String                 @map("fare_table_id") @db.Uuid
+  routeVersionId String                 @map("route_version_id") @db.Uuid
+  version        Int
+  status         FareTableVersionStatus @default(DRAFT)
+  publishedAt    DateTime?              @map("published_at") @db.Timestamptz(3)
+  retiredAt      DateTime?              @map("retired_at") @db.Timestamptz(3)
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  fareTable    FareTable    @relation(fields: [fareTableId], references: [id], onDelete: Restrict)
+  routeVersion RouteVersion @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  entries      FareEntry[]
+  trips        Trip[]
+
+  @@unique([fareTableId, version])
+  @@index([routeVersionId])
+  @@index([status])
+  @@map("fare_table_version")
+}
+
+/// Base fare from one boarding stop waypoint to a later alighting stop
+/// waypoint of the version's route version. The matrix may be partial: an
+/// absent pair has no configured fare (nothing is ever derived).
+model FareEntry {
+  id                         String @id @default(uuid(7)) @db.Uuid
+  fareTableVersionId         String @map("fare_table_version_id") @db.Uuid
+  originRouteWaypointId      String @map("origin_route_waypoint_id") @db.Uuid
+  destinationRouteWaypointId String @map("destination_route_waypoint_id") @db.Uuid
+  /// Exact amount in the currency's minor unit (EUR 125,50 -> 12550).
+  amountMinor                Int    @map("amount_minor")
+
+  fareTableVersion         FareTableVersion @relation(fields: [fareTableVersionId], references: [id], onDelete: Restrict)
+  originRouteWaypoint      RouteWaypoint    @relation("FareOrigin", fields: [originRouteWaypointId], references: [id], onDelete: Restrict)
+  destinationRouteWaypoint RouteWaypoint    @relation("FareDestination", fields: [destinationRouteWaypointId], references: [id], onDelete: Restrict)
+
+  @@unique([fareTableVersionId, originRouteWaypointId, destinationRouteWaypointId])
+  @@index([originRouteWaypointId])
+  @@index([destinationRouteWaypointId])
+  @@map("fare_entry")
 }
