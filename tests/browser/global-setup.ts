@@ -4,6 +4,7 @@ import { hash } from '@node-rs/argon2';
 import {
   FIXTURE_PASSWORD,
   FIXTURES,
+  pricingSeed,
   seatMapSeed,
   seededVehicleCode,
   tripSeed,
@@ -136,6 +137,7 @@ async function seedTripData(db: ReturnType<typeof createDatabaseClient>): Promis
     data: { reference: seed.seededTripReference, routeVersionId: version.id },
   });
   await seedSeatMapData(db, version.id);
+  await seedPricingData(db, route.id, version.id);
 }
 
 /** Synthetic seat-map data (no real layout, plate or reference). */
@@ -190,6 +192,57 @@ async function seedSeatMapData(
         sequence: 2,
         plannedArrivalAt: arrival,
       },
+    ],
+  });
+  await db.trip.update({
+    where: { id: trip.id },
+    data: { plannedDepartureAt: departure, plannedArrivalAt: arrival },
+  });
+}
+
+/** Synthetic fare table and DRAFT trip on the trip-seed route (no real price). */
+async function seedPricingData(
+  db: ReturnType<typeof createDatabaseClient>,
+  routeId: string,
+  routeVersionId: string,
+): Promise<void> {
+  const seed = pricingSeed();
+  const [origin, destination] = await db.routeWaypoint.findMany({
+    where: { routeVersionId },
+    orderBy: { sequence: 'asc' },
+  });
+  const fareTable = await db.fareTable.create({
+    data: {
+      code: seed.seededFareTableCode,
+      name: 'Grille synthétique de lecture',
+      routeId,
+      currencyCode: 'XOF',
+      currencyMinorUnit: 0,
+    },
+  });
+  const version = await db.fareTableVersion.create({
+    data: { fareTableId: fareTable.id, routeVersionId, version: 1 },
+  });
+  await db.fareEntry.create({
+    data: {
+      fareTableVersionId: version.id,
+      originRouteWaypointId: origin!.id,
+      destinationRouteWaypointId: destination!.id,
+      amountMinor: 15000,
+    },
+  });
+  await db.fareTableVersion.update({
+    where: { id: version.id },
+    data: { status: 'PUBLISHED', publishedAt: new Date() },
+  });
+
+  const trip = await db.trip.create({ data: { reference: seed.tripReference, routeVersionId } });
+  const departure = new Date('2030-04-01T08:00:00Z');
+  const arrival = new Date('2030-04-01T12:00:00Z');
+  await db.tripWaypointTiming.createMany({
+    data: [
+      { tripId: trip.id, routeWaypointId: origin!.id, sequence: 1, plannedDepartureAt: departure },
+      { tripId: trip.id, routeWaypointId: destination!.id, sequence: 2, plannedArrivalAt: arrival },
     ],
   });
   await db.trip.update({
