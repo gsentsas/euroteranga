@@ -81,6 +81,20 @@ export const tripSeatMapSchema = z
   })
   .strict();
 
+/** Dedicated operation, DRAFT trips only. */
+export const tripFareTableSchema = z
+  .object({
+    fareTableVersionId: uuid.nullable(),
+    /** Pricing the decision was based on (null: none); refused if it moved. */
+    expectedFareTableVersionId: uuid.nullable().optional(),
+  })
+  .strict();
+
+/** Server-side fare resolution query (exact pair, no fallback). */
+export const tripFareQuerySchema = z
+  .object({ originRouteWaypointId: uuid, destinationRouteWaypointId: uuid })
+  .strict();
+
 // OpenAPI bodies. Runtime validation always uses the Zod schemas above.
 export class TripCreateBody {
   @ApiProperty({ maxLength: 32, example: 'ET-TEST-2030-0001' }) reference!: string;
@@ -124,4 +138,15 @@ export class TripSeatMapBody {
   })
   seatMapVersionId!: string | null;
   @ApiPropertyOptional({ nullable: true, format: 'uuid' }) expectedSeatMapVersionId?: string | null;
+}
+
+export class TripFareTableBody {
+  @ApiProperty({
+    nullable: true,
+    format: 'uuid',
+    description: 'A PUBLISHED version; null removes it.',
+  })
+  fareTableVersionId!: string | null;
+  @ApiPropertyOptional({ nullable: true, format: 'uuid' }) expectedFareTableVersionId?:
+    string | null;
 }

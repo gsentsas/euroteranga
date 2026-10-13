@@ -23,6 +23,8 @@ const EXPECTED_MATRIX: Record<
       'network.manage',
       'network.read',
       'ops.access',
+      'pricing.manage',
+      'pricing.read',
       'privileged.manage',
       'role.assign',
       'role.read',
@@ -47,6 +49,8 @@ const EXPECTED_MATRIX: Record<
       'network.manage',
       'network.read',
       'ops.access',
+      'pricing.manage',
+      'pricing.read',
       'role.assign',
       'role.read',
       'seatmap.manage',
@@ -66,6 +70,8 @@ const EXPECTED_MATRIX: Record<
       'network.manage',
       'network.read',
       'ops.access',
+      'pricing.manage',
+      'pricing.read',
       'role.read',
       'seatmap.manage',
       'seatmap.read',
@@ -80,6 +86,7 @@ const EXPECTED_MATRIX: Record<
       'fleet.read',
       'network.read',
       'ops.access',
+      'pricing.read',
       'seatmap.read',
       'trip.manage',
       'trip.read',
@@ -89,20 +96,21 @@ const EXPECTED_MATRIX: Record<
   BOOKING_AGENT: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['network.read', 'ops.access', 'seatmap.read', 'trip.read'],
+    permissions: ['network.read', 'ops.access', 'pricing.read', 'seatmap.read', 'trip.read'],
   },
+  // COMPLIANCE_AGENT has no pricing permission by default (PR-08 matrix).
   COMPLIANCE_AGENT: {
     realm: 'STAFF',
     privileged: false,
     permissions: ['fleet.read', 'network.read', 'ops.access', 'seatmap.read', 'trip.read'],
   },
-  // FINANCE has no network (PR-04), fleet (PR-05), trip (PR-06) nor seat map (PR-07)
-  // permission by default.
-  FINANCE: { realm: 'STAFF', privileged: false, permissions: ['ops.access'] },
+  // FINANCE: no network (PR-04), fleet (PR-05), trip (PR-06) nor seat map (PR-07)
+  // permission by default; pricing.read only (PR-08).
+  FINANCE: { realm: 'STAFF', privileged: false, permissions: ['ops.access', 'pricing.read'] },
   CUSTOMER_SUPPORT: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['network.read', 'ops.access', 'seatmap.read', 'trip.read'],
+    permissions: ['network.read', 'ops.access', 'pricing.read', 'seatmap.read', 'trip.read'],
   },
   AUDITOR: {
     realm: 'STAFF',
@@ -113,6 +121,7 @@ const EXPECTED_MATRIX: Record<
       'identity.read',
       'network.read',
       'ops.access',
+      'pricing.read',
       'role.read',
       'seatmap.read',
       'trip.read',
@@ -167,6 +176,24 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   [
     'POST',
     '/v1/admin/seat-maps/01900000-0000-7000-8000-000000000000/versions/01900000-0000-7000-8000-000000000001/publish',
+  ],
+  ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/fare-table'],
+  [
+    'GET',
+    '/v1/admin/trips/01900000-0000-7000-8000-000000000000/fare?originRouteWaypointId=01900000-0000-7000-8000-000000000001&destinationRouteWaypointId=01900000-0000-7000-8000-000000000002',
+  ],
+  ['GET', '/v1/admin/pricing/fare-tables'],
+  ['GET', '/v1/admin/pricing/fare-tables/01900000-0000-7000-8000-000000000000'],
+  ['POST', '/v1/admin/pricing/fare-tables'],
+  ['POST', '/v1/admin/pricing/fare-tables/01900000-0000-7000-8000-000000000000'],
+  ['POST', '/v1/admin/pricing/fare-tables/01900000-0000-7000-8000-000000000000/versions'],
+  [
+    'POST',
+    '/v1/admin/pricing/fare-tables/01900000-0000-7000-8000-000000000000/versions/01900000-0000-7000-8000-000000000001/fares',
+  ],
+  [
+    'POST',
+    '/v1/admin/pricing/fare-tables/01900000-0000-7000-8000-000000000000/versions/01900000-0000-7000-8000-000000000001/publish',
   ],
 ];
 
@@ -257,6 +284,9 @@ describe('server-side RBAC', () => {
       expect((await api.get('/fleet/vehicles')).status).toBe(allowed('fleet.read') ? 200 : 403);
       expect((await api.get('/trips')).status).toBe(allowed('trip.read') ? 200 : 403);
       expect((await api.get('/seat-maps')).status).toBe(allowed('seatmap.read') ? 200 : 403);
+      expect((await api.get('/pricing/fare-tables')).status).toBe(
+        allowed('pricing.read') ? 200 : 403,
+      );
     },
   );
 

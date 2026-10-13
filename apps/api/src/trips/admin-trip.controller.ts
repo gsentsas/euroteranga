@@ -32,17 +32,21 @@ import { PERMISSIONS } from '../authorization/permissions.js';
 import {
   TripCancelBody,
   TripCreateBody,
+  TripFareTableBody,
   TripSeatMapBody,
   TripTimetableBody,
   TripVehicleBody,
   tripCancelSchema,
   tripCreateSchema,
+  tripFareQuerySchema,
+  tripFareTableSchema,
   tripListQuerySchema,
   tripScheduleSchema,
   tripSeatMapSchema,
   tripTimetableSchema,
   tripVehicleSchema,
 } from './trip.dto.js';
+import { FareResolutionService } from '../pricing/fare-resolution.service.js';
 import { TripService } from './trip.service.js';
 
 const uuidV7 = new ParseUUIDPipe({ version: '7' });
@@ -61,7 +65,10 @@ const uuidV7 = new ParseUUIDPipe({ version: '7' });
 @UseGuards(AuthRequestGuard, SessionGuard, AuthorizationGuard)
 @RequirePermissions(PERMISSIONS.OPS_ACCESS)
 export class AdminTripController {
-  constructor(private readonly trips: TripService) {}
+  constructor(
+    private readonly trips: TripService,
+    private readonly fares: FareResolutionService,
+  ) {}
 
   @Get()
   @RequirePermissions(PERMISSIONS.TRIP_READ)
@@ -194,5 +201,47 @@ export class AdminTripController {
     @Body(new ZodValidationPipe(tripSeatMapSchema)) body: z.infer<typeof tripSeatMapSchema>,
   ) {
     return this.trips.assignSeatMap(id, body, principal);
+  }
+
+  @Post(':id/fare-table')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.TRIP_MANAGE, PERMISSIONS.PRICING_READ)
+  @ApiOkResponse({ description: 'Historical pricing assigned or removed (DRAFT only), audited.' })
+  @ApiConflictResponse({
+    type: ErrorBody,
+    description: 'TRIP_NOT_DRAFT, TRIP_CANCELLED or TRIP_FARE_TABLE_CONFLICT',
+  })
+  @ApiUnprocessableEntityResponse({
+    type: ErrorBody,
+    description:
+      'TRIP_FARE_TABLE_INCOMPATIBLE, FARE_TABLE_VERSION_NOT_PUBLISHED, FARE_TABLE_VERSION_RETIRED or FARE_TABLE_INACTIVE',
+  })
+  @ApiBody({ type: TripFareTableBody })
+  fareTable(
+    @Param('id', uuidV7) id: string,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body(new ZodValidationPipe(tripFareTableSchema)) body: z.infer<typeof tripFareTableSchema>,
+  ) {
+    return this.trips.assignFareTable(id, body, principal);
+  }
+
+  @Get(':id/fare')
+  @RequirePermissions(PERMISSIONS.TRIP_READ, PERMISSIONS.PRICING_READ)
+  @ApiOkResponse({
+    description:
+      'Exact base fare (amountMinor, currencyCode, currencyMinorUnit) for one origin/destination pair. Not a booking.',
+  })
+  @ApiUnprocessableEntityResponse({
+    type: ErrorBody,
+    description: 'TRIP_PRICING_NOT_CONFIGURED or FARE_WAYPOINT_INVALID',
+  })
+  @ApiQuery({ name: 'originRouteWaypointId', required: true, type: String, format: 'uuid' })
+  @ApiQuery({ name: 'destinationRouteWaypointId', required: true, type: String, format: 'uuid' })
+  fare(
+    @Param('id', uuidV7) id: string,
+    @Query(new ZodValidationPipe(tripFareQuerySchema)) query: z.infer<typeof tripFareQuerySchema>,
+  ) {
+    return this.fares.resolve(id, query.originRouteWaypointId, query.destinationRouteWaypointId);
   }
 }
