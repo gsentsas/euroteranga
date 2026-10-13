@@ -134,9 +134,20 @@ keeps it.
 - PostgreSQL (`trip_lifecycle_guard`, extended by `CREATE OR REPLACE` with
   every PR-06/PR-07 rule kept) refuses a pricing change outside DRAFT, a
   version never published and a version of another route version.
-- The trip view exposes the **identity** of its fare-table version (code,
-  version, currency, number of priced pairs) to `trip.read` holders. Amounts
-  are only available with `pricing.read`.
+- **Visibility.** Trip responses (`GET /trips`, `GET /trips/:id` and every
+  trip mutation result) return the full fare-table summary only to
+  `pricing.read` holders. A caller with `trip.read` alone gets the version's
+  identity, built from an explicit allow-list:
+
+  ```text
+  fareTableVersion: { id, version, fareTable: { code, currencyCode }, entryCount }
+  ```
+
+  Never under `trip.read` alone: the fare table name and active state,
+  `currencyMinorUnit`, the version status, `publishedAt`, `retiredAt`,
+  `routeVersionId`, and any amount. Integration tests check this for
+  `COMPLIANCE_AGENT` (detail and list) and for a synthetic `trip.manage`
+  role without `pricing.read` (mutation results).
 
 ## Fare resolution
 
@@ -215,7 +226,8 @@ There is no delete endpoint. Errors never expose Prisma or PostgreSQL:
 Every `trip.manage` holder also holds `pricing.read`, and every
 `pricing.manage` holder holds `network.read`; database tests check both.
 Assigning a published version to a trip does not require `pricing.manage`.
-A synthetic role with `trip.manage` but no `pricing.read` gets 403.
+A synthetic role with `trip.manage` but no `pricing.read` gets 403 on
+pricing endpoints and sees only the fare-table identity in trip responses.
 
 ## Audit
 

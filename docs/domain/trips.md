@@ -141,6 +141,9 @@ fare-table version whose base fares apply to its journeys.
   (`trip.read` + `pricing.read`) resolves one base fare on the server:
   `TRIP_PRICING_NOT_CONFIGURED`, `FARE_WAYPOINT_INVALID` and
   `FARE_NOT_CONFIGURED` otherwise, with no fallback.
+- Trip responses carry the full fare-table summary for `pricing.read`
+  holders only. With `trip.read` alone: `id`, `version`, `fareTable.code`,
+  `fareTable.currencyCode` and `entryCount`.
 - The migration `20261013180000_pricing` extends `trip_lifecycle_guard`
   (`CREATE OR REPLACE`) and keeps every PR-06 and PR-07 rule.
 
