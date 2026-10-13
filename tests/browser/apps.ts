@@ -8,25 +8,38 @@ export interface FrontendApp {
   heading: string;
 }
 
+const rawPortOffset = process.env.E2E_FRONTEND_PORT_OFFSET ?? '0';
+const portOffset = Number(rawPortOffset);
+if (!Number.isInteger(portOffset) || portOffset < 0 || portOffset > 50_000) {
+  throw new Error('E2E_FRONTEND_PORT_OFFSET must be an integer between 0 and 50000');
+}
+const frontendPort = (base: number) => base + portOffset;
+
 export const frontendApps: readonly FrontendApp[] = [
-  { name: 'web', port: 3000, path: '/', title: 'EURO TERANGA', heading: 'EURO TERANGA' },
+  {
+    name: 'web',
+    port: frontendPort(3000),
+    path: '/',
+    title: 'EURO TERANGA',
+    heading: 'EURO TERANGA',
+  },
   {
     name: 'booking',
-    port: 3001,
+    port: frontendPort(3001),
     path: '/',
     title: 'EURO TERANGA Booking',
     heading: 'EURO TERANGA Booking',
   },
   {
     name: 'client',
-    port: 3002,
+    port: frontendPort(3002),
     path: '/',
     title: 'EURO TERANGA Client',
     heading: 'EURO TERANGA Client',
   },
   {
     name: 'tracking',
-    port: 3003,
+    port: frontendPort(3003),
     path: '/',
     title: 'EURO TERANGA Tracking',
     heading: 'EURO TERANGA Tracking',
@@ -34,12 +47,18 @@ export const frontendApps: readonly FrontendApp[] = [
   // The OPS home page now requires a STAFF session; its public page is the login.
   {
     name: 'ops',
-    port: 3004,
+    port: frontendPort(3004),
     path: '/connexion',
     title: 'Connexion opérations — EURO TERANGA Ops',
     heading: 'Connexion opérations',
   },
-  { name: 'crew', port: 3005, path: '/', title: 'EURO TERANGA Crew', heading: 'EURO TERANGA Crew' },
+  {
+    name: 'crew',
+    port: frontendPort(3005),
+    path: '/',
+    title: 'EURO TERANGA Crew',
+    heading: 'EURO TERANGA Crew',
+  },
 ];
 
 /**

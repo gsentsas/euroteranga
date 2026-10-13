@@ -2,8 +2,11 @@ import { createHash, randomBytes } from 'node:crypto';
 import { createDatabaseClient } from '@euroteranga/database';
 import { hash } from '@node-rs/argon2';
 import {
+  bookingReaderRole,
+  bookingSeed,
   FIXTURE_PASSWORD,
   FIXTURES,
+  networkSpecCountryCodes,
   pricingSeed,
   seatMapSeed,
   seededVehicleCode,
@@ -38,6 +41,19 @@ export default async function globalSetup(): Promise<void> {
       memoryCost: 65536,
       timeCost: 3,
       parallelism: 1,
+    });
+    const readRole = bookingReaderRole();
+    await db.authorizationRole.create({
+      data: {
+        key: readRole,
+        name: 'Lecture réservations E2E',
+        description: 'Rôle synthétique du scénario navigateur PR-09',
+        realm: 'STAFF',
+        system: false,
+        permissions: {
+          create: [{ permissionKey: 'ops.access' }, { permissionKey: 'booking.read' }],
+        },
+      },
     });
     const expiresAt = new Date(Date.now() + DAY_MS);
     const fixtures: Fixture[] = Object.values(FIXTURES);
@@ -85,9 +101,242 @@ export default async function globalSetup(): Promise<void> {
       },
     });
     await seedTripData(db);
+    await seedBookingData(db);
   } finally {
     await db.$disconnect();
   }
+}
+
+/** A complete scheduled trip and one active hold, scoped to the browser-test run. */
+async function seedBookingData(db: ReturnType<typeof createDatabaseClient>): Promise<void> {
+  const seed = bookingSeed();
+  const customer = await db.authIdentity.findUniqueOrThrow({
+    where: {
+      realm_normalizedEmail: {
+        realm: 'CUSTOMER',
+        normalizedEmail: FIXTURES.customer.email,
+      },
+    },
+  });
+  const start = (seed.iso2.charCodeAt(0) - 65) * 26 + (seed.iso2.charCodeAt(1) - 65);
+  const reserved = networkSpecCountryCodes();
+  let countryCodes: { iso2: string; iso3: string } | null = null;
+  for (let offset = 0; offset < 26 * 26; offset += 1) {
+    const value = (start + offset) % (26 * 26);
+    const iso2 = `${String.fromCharCode(65 + Math.floor(value / 26))}${String.fromCharCode(65 + (value % 26))}`;
+    const iso3 = `${iso2}Z`;
+    if (iso2 === reserved.iso2 || iso3 === reserved.iso3) continue;
+    const existing = await db.country.findFirst({
+      where: { OR: [{ iso2 }, { iso3 }] },
+      select: { id: true },
+    });
+    if (!existing) {
+      countryCodes = { iso2, iso3 };
+      break;
+    }
+  }
+  if (!countryCodes) throw new Error('No synthetic country code available for booking tests');
+  const country = await db.country.create({
+    data: { ...countryCodes, name: seed.countryName },
+  });
+  const [origin, destination] = await Promise.all([
+    db.stop.create({
+      data: {
+        code: seed.originCode,
+        name: 'Gare de départ réservation',
+        countryId: country.id,
+        locality: 'Ville départ',
+        latitude: 1,
+        longitude: 1,
+        timezone: 'Etc/UTC',
+      },
+    }),
+    db.stop.create({
+      data: {
+        code: seed.destinationCode,
+        name: 'Gare d’arrivée réservation',
+        countryId: country.id,
+        locality: 'Ville arrivée',
+        latitude: 2,
+        longitude: 2,
+        timezone: 'Etc/UTC',
+      },
+    }),
+  ]);
+  const route = await db.route.create({
+    data: { code: seed.routeCode, name: seed.routeName },
+  });
+  const routeVersion = await db.routeVersion.create({
+    data: { routeId: route.id, version: 1 },
+  });
+  await db.routeWaypoint.createMany({
+    data: [
+      {
+        routeVersionId: routeVersion.id,
+        sequence: 1,
+        stopId: origin.id,
+        boardingAllowed: true,
+      },
+      {
+        routeVersionId: routeVersion.id,
+        sequence: 2,
+        stopId: destination.id,
+        alightingAllowed: true,
+      },
+    ],
+  });
+  await db.routeVersion.update({
+    where: { id: routeVersion.id },
+    data: { status: 'PUBLISHED', publishedAt: new Date() },
+  });
+  const [originWaypoint, destinationWaypoint] = await db.routeWaypoint.findMany({
+    where: { routeVersionId: routeVersion.id },
+    orderBy: { sequence: 'asc' },
+  });
+
+  const seatMap = await db.seatMap.create({
+    data: { code: seed.seatMapCode, name: 'Plan réservation navigateur' },
+  });
+  const seatMapVersion = await db.seatMapVersion.create({
+    data: { seatMapId: seatMap.id, version: 1 },
+  });
+  await db.seatMapCell.createMany({
+    data: [
+      { seatMapVersionId: seatMapVersion.id, deck: 1, row: 1, column: 1, kind: 'DRIVER' },
+      {
+        seatMapVersionId: seatMapVersion.id,
+        deck: 1,
+        row: 2,
+        column: 1,
+        kind: 'SEAT',
+        seatLabel: '1A',
+      },
+      {
+        seatMapVersionId: seatMapVersion.id,
+        deck: 1,
+        row: 2,
+        column: 2,
+        kind: 'SEAT',
+        seatLabel: '1B',
+      },
+      { seatMapVersionId: seatMapVersion.id, deck: 1, row: 2, column: 3, kind: 'AISLE' },
+      {
+        seatMapVersionId: seatMapVersion.id,
+        deck: 1,
+        row: 3,
+        column: 1,
+        kind: 'SEAT',
+        seatLabel: '2A',
+      },
+      {
+        seatMapVersionId: seatMapVersion.id,
+        deck: 1,
+        row: 3,
+        column: 2,
+        kind: 'SEAT',
+        seatLabel: '2B',
+      },
+    ],
+  });
+  await db.seatMapVersion.update({
+    where: { id: seatMapVersion.id },
+    data: { status: 'PUBLISHED', publishedAt: new Date() },
+  });
+
+  const fareTable = await db.fareTable.create({
+    data: {
+      code: seed.fareTableCode,
+      name: 'Tarif réservation navigateur',
+      routeId: route.id,
+      currencyCode: 'EUR',
+      currencyMinorUnit: 2,
+    },
+  });
+  const fareVersion = await db.fareTableVersion.create({
+    data: { fareTableId: fareTable.id, routeVersionId: routeVersion.id, version: 1 },
+  });
+  const fare = await db.fareEntry.create({
+    data: {
+      fareTableVersionId: fareVersion.id,
+      originRouteWaypointId: originWaypoint!.id,
+      destinationRouteWaypointId: destinationWaypoint!.id,
+      amountMinor: seed.unitAmountMinor,
+    },
+  });
+  await db.fareTableVersion.update({
+    where: { id: fareVersion.id },
+    data: { status: 'PUBLISHED', publishedAt: new Date() },
+  });
+
+  const trip = await db.trip.create({
+    data: {
+      reference: seed.tripReference,
+      routeVersionId: routeVersion.id,
+      seatMapVersionId: seatMapVersion.id,
+      fareTableVersionId: fareVersion.id,
+    },
+  });
+  const departure = new Date(`${seed.departureDate}T08:00:00.000Z`);
+  const arrival = new Date(`${seed.departureDate}T12:00:00.000Z`);
+  await db.tripWaypointTiming.createMany({
+    data: [
+      {
+        tripId: trip.id,
+        routeWaypointId: originWaypoint!.id,
+        sequence: 1,
+        plannedDepartureAt: departure,
+      },
+      {
+        tripId: trip.id,
+        routeWaypointId: destinationWaypoint!.id,
+        sequence: 2,
+        plannedArrivalAt: arrival,
+      },
+    ],
+  });
+  await db.trip.update({
+    where: { id: trip.id },
+    data: {
+      plannedDepartureAt: departure,
+      plannedArrivalAt: arrival,
+      status: 'SCHEDULED',
+      scheduledAt: new Date(),
+    },
+  });
+
+  const heldSeat = await db.seatMapCell.findFirstOrThrow({
+    where: { seatMapVersionId: seatMapVersion.id, seatLabel: '2B' },
+  });
+  const now = new Date();
+  const booking = await db.booking.create({
+    data: {
+      reference: seed.staffBookingReference,
+      customerIdentityId: customer.id,
+      tripId: trip.id,
+      originRouteWaypointId: originWaypoint!.id,
+      destinationRouteWaypointId: destinationWaypoint!.id,
+      originSequence: 1,
+      destinationSequence: 2,
+      fareEntryId: fare.id,
+      unitAmountMinor: seed.unitAmountMinor,
+      currencyCode: 'EUR',
+      currencyMinorUnit: 2,
+      createdAt: now,
+      holdExpiresAt: new Date(now.getTime() + 30 * 60_000),
+    },
+  });
+  const bookingSeat = await db.bookingSeat.create({
+    data: { bookingId: booking.id, seatMapCellId: heldSeat.id, createdAt: now },
+  });
+  await db.seatInventoryLock.create({
+    data: {
+      bookingSeatId: bookingSeat.id,
+      tripId: trip.id,
+      seatMapCellId: heldSeat.id,
+      segmentSequence: 1,
+      createdAt: now,
+    },
+  });
 }
 
 /**

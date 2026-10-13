@@ -28,7 +28,10 @@ function runScoped(name: string): string {
 }
 
 export const FIXTURES = {
-  customer: { realm: 'CUSTOMER', email: 'customer.e2e@fixtures.example.test' },
+  /** Run-scoped because booking history is deliberately immutable. */
+  get customer(): Fixture {
+    return { realm: 'CUSTOMER', email: runScoped('customer') };
+  },
   crew: { realm: 'CREW', email: 'crew.e2e@fixtures.example.test' },
   get staff(): Fixture {
     return { realm: 'STAFF', email: runScoped('staff'), roles: ['DISPATCHER'] };
@@ -93,6 +96,17 @@ export const FIXTURES = {
   get pricingDenied(): Fixture {
     return { realm: 'STAFF', email: runScoped('pricing-denied'), roles: ['COMPLIANCE_AGENT'] };
   },
+  get bookingAdmin(): Fixture {
+    return { realm: 'STAFF', email: runScoped('booking-admin'), roles: ['BOOKING_AGENT'] };
+  },
+  /** booking.read and ops.access, without booking.manage. */
+  get bookingReader(): Fixture {
+    return { realm: 'STAFF', email: runScoped('booking-reader'), roles: [bookingReaderRole()] };
+  },
+  /** ops.access through FINANCE, but no booking permission. */
+  get bookingDenied(): Fixture {
+    return { realm: 'STAFF', email: runScoped('booking-denied'), roles: ['FINANCE'] };
+  },
   get auditor(): Fixture {
     return { realm: 'STAFF', email: runScoped('auditor'), roles: ['AUDITOR'] };
   },
@@ -104,6 +118,13 @@ export const FIXTURES = {
     return { realm: 'STAFF', email: runScoped('invited'), roles: ['DISPATCHER'], invited: true };
   },
 } satisfies Record<string, Fixture>;
+
+/** Test-only read role created by global setup before fixture assignments. */
+export function bookingReaderRole(): string {
+  const runId = process.env.E2E_RUN_ID;
+  if (!runId) throw new Error('E2E_RUN_ID is set by global-setup.ts');
+  return `E2E_BOOKING_READER_${runId.toUpperCase()}`;
+}
 
 /** Single-use invitation token of the `invited` fixture (random per run). */
 export function invitationToken(): string {
@@ -176,5 +197,44 @@ export function pricingSeed() {
     run,
     seededFareTableCode: `FT_SEED_${run}`,
     tripReference: `ET-TEST-FARE-${run}`,
+  };
+}
+
+/**
+ * ISO codes the network spec creates through the UI (same formula as
+ * specs/network.spec.ts): seeded countries must never take them.
+ */
+export function networkSpecCountryCodes(): { iso2: string; iso3: string } {
+  const raw = process.env.E2E_RUN_ID;
+  if (!raw) throw new Error('E2E_RUN_ID is set by global-setup.ts');
+  const letter = (pair: string) => String.fromCharCode(65 + (Number.parseInt(pair, 16) % 26));
+  const iso2 = `${letter(raw.slice(0, 2))}${letter(raw.slice(2, 4))}`;
+  return { iso2, iso3: `${iso2}${letter(raw.slice(4, 6))}` };
+}
+
+/** Fully bookable synthetic trip used only by the PR-09 browser scenarios. */
+export function bookingSeed() {
+  const raw = process.env.E2E_RUN_ID;
+  if (!raw) throw new Error('E2E_RUN_ID is set by global-setup.ts');
+  const run = raw.toUpperCase();
+  // Start two letters after the network spec's first letter (the trip seed
+  // uses one); global-setup also skips the network spec's exact codes.
+  const networkFirst = Number.parseInt(raw.slice(0, 2), 16) % 26;
+  const iso2 = `${String.fromCharCode(65 + ((networkFirst + 2) % 26))}R`;
+  return {
+    run,
+    iso2,
+    iso3: `${iso2}R`,
+    countryName: `Pays réservation ${run}`,
+    originCode: `BKS_A_${run}`,
+    destinationCode: `BKS_B_${run}`,
+    routeCode: `BKR_${run}`,
+    routeName: `Route réservation ${run}`,
+    seatMapCode: `BKM_${run}`,
+    fareTableCode: `BKF_${run}`,
+    tripReference: `ET-BK-${run}`,
+    staffBookingReference: `ETB-E2E0${run}`,
+    departureDate: '2030-06-15',
+    unitAmountMinor: 12_345,
   };
 }
