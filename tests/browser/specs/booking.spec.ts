@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { appByName, appUrl } from '../apps.js';
-import { bookingSeed, FIXTURE_PASSWORD, FIXTURES } from '../fixtures.js';
+import { bookingSeed, FIXTURE_PASSWORD, FIXTURES, paymentSeed } from '../fixtures.js';
 import { directAdminApi, signInAndEnroll } from '../staff.js';
 
 const bookingApp = appByName('booking');
@@ -117,6 +117,30 @@ test('ops booking agent: MFA, list, detail and reasoned cancellation', async ({ 
       .filter({ hasText: `Réservation ${seed.staffBookingReference} annulée.` }),
   ).toBeVisible();
   await expect(detail).toContainText('Annulée');
+  // PR-10 (same sign-in): BOOKING_AGENT holds payment.read. The booking shows
+  // its (absent) payments, and the Paiements space lists and details them,
+  // with no control able to make an attempt succeed.
+  await expect(detail.getByTestId('booking-payments')).toContainText(
+    'Aucune tentative de paiement.',
+  );
+  const payments = paymentSeed();
+  await mainNav(page).getByRole('link', { name: 'Paiements' }).click();
+  await expect(page).toHaveURL(appUrl(opsApp, '/payments'));
+  const row = page.getByRole('row').filter({ hasText: payments.paymentReference });
+  await expect(row).toContainText(payments.confirmedBookingReference);
+  await expect(row).toContainText('Réussi');
+  await expect(row).toContainText('123,45 EUR');
+  await page
+    .getByRole('button', { name: `Consulter le paiement ${payments.paymentReference}` })
+    .click();
+  const payment = page.getByRole('region', { name: `Paiement ${payments.paymentReference}` });
+  await expect(payment).toContainText('Confirmée');
+  await expect(payment.getByTestId('payment-timeline')).toContainText(
+    'Succès signalé par le prestataire',
+  );
+  // payment.read only: no cancellation form, and no "mark paid" control at all.
+  await expect(payment.getByRole('form')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /payé|forcer|marquer/i })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
@@ -144,6 +168,21 @@ test('ops booking.read: read-only UI and direct mutation refused', async ({ page
   });
   expect(refused.status()).toBe(403);
   expect(((await refused.json()) as { code: string }).code).toBe('FORBIDDEN');
+  // PR-10 (same sign-in): booking.read without payment.read. No financial
+  // payment detail on the booking, no Paiements menu, and the API refuses.
+  await expect(page.getByTestId('booking-payments')).toHaveCount(0);
+  const detail = await directAdminApi(page.request).get(`/bookings/${booking?.id}`);
+  expect(detail.status()).toBe(200);
+  expect(Object.keys((await detail.json()) as object)).not.toContain('payments');
+  await expect(mainNav(page).getByRole('link', { name: 'Paiements' })).toHaveCount(0);
+  const payments = await directAdminApi(page.request).get('/payments');
+  expect(payments.status()).toBe(403);
+  expect(((await payments.json()) as { code: string }).code).toBe('FORBIDDEN');
+  await page.goto(appUrl(opsApp, '/payments'));
+  await expect(
+    page.getByText('Vous n’avez pas la permission d’afficher cette page.'),
+  ).toBeVisible();
+  await expect(page.getByTestId('payments-workspace')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

@@ -7,6 +7,7 @@ import {
   FIXTURE_PASSWORD,
   FIXTURES,
   networkSpecCountryCodes,
+  paymentSeed,
   pricingSeed,
   seatMapSeed,
   seededVehicleCode,
@@ -102,6 +103,7 @@ export default async function globalSetup(): Promise<void> {
     });
     await seedTripData(db);
     await seedBookingData(db);
+    await seedPaymentData(db);
   } finally {
     await db.$disconnect();
   }
@@ -336,6 +338,135 @@ async function seedBookingData(db: ReturnType<typeof createDatabaseClient>): Pro
       segmentSequence: 1,
       createdAt: now,
     },
+  });
+}
+
+/**
+ * PR-10: a second scheduled trip on the booking-seed route (same seat map and
+ * fare table, another date) and one CONFIRMED booking on it, paid through a
+ * recorded SANDBOX event under every PostgreSQL guard (processed event,
+ * succeeded attempt and confirmation in one transaction).
+ */
+async function seedPaymentData(db: ReturnType<typeof createDatabaseClient>): Promise<void> {
+  const booking = bookingSeed();
+  const seed = paymentSeed();
+  const customer = await db.authIdentity.findUniqueOrThrow({
+    where: {
+      realm_normalizedEmail: {
+        realm: 'CUSTOMER',
+        normalizedEmail: FIXTURES.paymentCustomer.email,
+      },
+    },
+  });
+  const template = await db.trip.findUniqueOrThrow({
+    where: { reference: booking.tripReference },
+    include: { timings: { orderBy: { sequence: 'asc' } } },
+  });
+  const [origin, destination] = template.timings;
+  const trip = await db.trip.create({
+    data: {
+      reference: seed.tripReference,
+      routeVersionId: template.routeVersionId,
+      seatMapVersionId: template.seatMapVersionId,
+      fareTableVersionId: template.fareTableVersionId,
+    },
+  });
+  const departure = new Date(`${seed.departureDate}T08:00:00.000Z`);
+  const arrival = new Date(`${seed.departureDate}T12:00:00.000Z`);
+  await db.tripWaypointTiming.createMany({
+    data: [
+      {
+        tripId: trip.id,
+        routeWaypointId: origin!.routeWaypointId,
+        sequence: 1,
+        plannedDepartureAt: departure,
+      },
+      {
+        tripId: trip.id,
+        routeWaypointId: destination!.routeWaypointId,
+        sequence: 2,
+        plannedArrivalAt: arrival,
+      },
+    ],
+  });
+  await db.trip.update({
+    where: { id: trip.id },
+    data: {
+      plannedDepartureAt: departure,
+      plannedArrivalAt: arrival,
+      status: 'SCHEDULED',
+      scheduledAt: new Date(),
+    },
+  });
+  const fare = await db.fareEntry.findFirstOrThrow({
+    where: {
+      fareTableVersionId: template.fareTableVersionId!,
+      originRouteWaypointId: origin!.routeWaypointId,
+      destinationRouteWaypointId: destination!.routeWaypointId,
+    },
+  });
+  const seat = await db.seatMapCell.findFirstOrThrow({
+    where: { seatMapVersionId: template.seatMapVersionId!, seatLabel: '2B' },
+  });
+  await db.$transaction(async (tx) => {
+    const [{ now }] = await tx.$queryRaw<[{ now: Date }]>`SELECT now() AS "now"`;
+    const held = await tx.booking.create({
+      data: {
+        reference: seed.confirmedBookingReference,
+        customerIdentityId: customer.id,
+        tripId: trip.id,
+        originRouteWaypointId: origin!.routeWaypointId,
+        destinationRouteWaypointId: destination!.routeWaypointId,
+        originSequence: 1,
+        destinationSequence: 2,
+        fareEntryId: fare.id,
+        unitAmountMinor: seed.unitAmountMinor,
+        currencyCode: 'EUR',
+        currencyMinorUnit: 2,
+        createdAt: now,
+        holdExpiresAt: new Date(now.getTime() + 30 * 60_000),
+      },
+    });
+    const bookingSeat = await tx.bookingSeat.create({
+      data: { bookingId: held.id, seatMapCellId: seat.id, createdAt: now },
+    });
+    await tx.seatInventoryLock.create({
+      data: {
+        bookingSeatId: bookingSeat.id,
+        tripId: trip.id,
+        seatMapCellId: seat.id,
+        segmentSequence: 1,
+      },
+    });
+    const payment = await tx.payment.create({
+      data: {
+        reference: seed.paymentReference,
+        bookingId: held.id,
+        customerIdentityId: customer.id,
+        provider: 'SANDBOX',
+        providerPaymentId: `sbx_e2e_${seed.run.toLowerCase()}`,
+        amountMinor: BigInt(seed.unitAmountMinor),
+        currencyCode: 'EUR',
+        currencyMinorUnit: 2,
+        createdAt: now,
+      },
+    });
+    await tx.paymentEvent.create({
+      data: {
+        paymentId: payment.id,
+        provider: 'SANDBOX',
+        providerEventId: `evt_e2e_${seed.run.toLowerCase()}`,
+        type: 'PAYMENT_SUCCEEDED',
+        payloadHash: createHash('sha256').update(`synthetic e2e event ${seed.run}`).digest('hex'),
+        receivedAt: now,
+        processedAt: now,
+      },
+    });
+    await tx.payment.update({
+      where: { id: payment.id },
+      data: { status: 'SUCCEEDED', succeededAt: now },
+    });
+    await tx.booking.update({ where: { id: held.id }, data: { confirmedAt: now } });
   });
 }
 
