@@ -60,6 +60,17 @@ export const FIXTURES = {
   get fleetDenied(): Fixture {
     return { realm: 'STAFF', email: runScoped('fleet-denied'), roles: ['BOOKING_AGENT'] };
   },
+  get tripAdmin(): Fixture {
+    return { realm: 'STAFF', email: runScoped('trip-admin'), roles: ['SUPER_ADMIN'] };
+  },
+  /** trip.read only (no trip.manage, no fleet.read). */
+  get tripReader(): Fixture {
+    return { realm: 'STAFF', email: runScoped('trip-reader'), roles: ['BOOKING_AGENT'] };
+  },
+  /** ops.access only: no trip permission. */
+  get tripDenied(): Fixture {
+    return { realm: 'STAFF', email: runScoped('trip-denied'), roles: ['FINANCE'] };
+  },
   get auditor(): Fixture {
     return { realm: 'STAFF', email: runScoped('auditor'), roles: ['AUDITOR'] };
   },
@@ -84,4 +95,31 @@ export function seededVehicleCode(): string {
   const runId = process.env.E2E_RUN_ID;
   if (!runId) throw new Error('E2E_RUN_ID is set by global-setup.ts');
   return `VH_SEED_${runId.toUpperCase()}`;
+}
+
+/**
+ * Synthetic network/fleet data seeded for the trip scenarios: two stops, a
+ * published route version, an ACTIVE vehicle and one DRAFT trip.
+ */
+export function tripSeed() {
+  const raw = process.env.E2E_RUN_ID;
+  if (!raw) throw new Error('E2E_RUN_ID is set by global-setup.ts');
+  const run = raw.toUpperCase();
+  // The network spec creates a country whose ISO codes start with
+  // letter(runId[0:2]); shifting that first letter guarantees no collision.
+  const networkFirst = Number.parseInt(raw.slice(0, 2), 16) % 26;
+  const iso2 = `${String.fromCharCode(65 + ((networkFirst + 1) % 26))}Q`;
+  return {
+    run,
+    iso2,
+    iso3: `${iso2}Q`,
+    countryName: `Pays voyages ${run}`,
+    originCode: `TRS_A_${run}`,
+    destinationCode: `TRS_B_${run}`,
+    routeCode: `TRR_${run}`,
+    routeName: `Route voyages ${run}`,
+    vehicleCode: `VH_TRIP_${run}`,
+    vehicleLabel: 'Constructeur synthétique Autocar voyages',
+    seededTripReference: `ET-TEST-SEED-${run}`,
+  };
 }
