@@ -25,6 +25,8 @@ const EXPECTED_MATRIX: Record<
       'network.manage',
       'network.read',
       'ops.access',
+      'payment.manage',
+      'payment.read',
       'pricing.manage',
       'pricing.read',
       'privileged.manage',
@@ -53,6 +55,8 @@ const EXPECTED_MATRIX: Record<
       'network.manage',
       'network.read',
       'ops.access',
+      'payment.manage',
+      'payment.read',
       'pricing.manage',
       'pricing.read',
       'role.assign',
@@ -76,6 +80,7 @@ const EXPECTED_MATRIX: Record<
       'network.manage',
       'network.read',
       'ops.access',
+      'payment.read',
       'pricing.manage',
       'pricing.read',
       'role.read',
@@ -86,7 +91,8 @@ const EXPECTED_MATRIX: Record<
     ],
   },
   // DISPATCHER, COMPLIANCE_AGENT, FINANCE and AUDITOR have no booking
-  // permission by default (PR-09; AUDITOR keeps audit.read).
+  // permission by default (PR-09; AUDITOR keeps audit.read). DISPATCHER,
+  // COMPLIANCE_AGENT, DRIVER and CREW have no payment permission (PR-10).
   DISPATCHER: {
     realm: 'STAFF',
     privileged: false,
@@ -110,6 +116,7 @@ const EXPECTED_MATRIX: Record<
       'booking.read',
       'network.read',
       'ops.access',
+      'payment.read',
       'pricing.read',
       'seatmap.read',
       'trip.read',
@@ -123,7 +130,12 @@ const EXPECTED_MATRIX: Record<
   },
   // FINANCE: no network (PR-04), fleet (PR-05), trip (PR-06) nor seat map (PR-07)
   // permission by default; pricing.read only (PR-08).
-  FINANCE: { realm: 'STAFF', privileged: false, permissions: ['ops.access', 'pricing.read'] },
+  // PR-10: FINANCE reads payments and may cancel a PENDING attempt.
+  FINANCE: {
+    realm: 'STAFF',
+    privileged: false,
+    permissions: ['ops.access', 'payment.manage', 'payment.read', 'pricing.read'],
+  },
   CUSTOMER_SUPPORT: {
     realm: 'STAFF',
     privileged: false,
@@ -132,6 +144,7 @@ const EXPECTED_MATRIX: Record<
       'booking.read',
       'network.read',
       'ops.access',
+      'payment.read',
       'pricing.read',
       'seatmap.read',
       'trip.read',
@@ -146,6 +159,7 @@ const EXPECTED_MATRIX: Record<
       'identity.read',
       'network.read',
       'ops.access',
+      'payment.read',
       'pricing.read',
       'role.read',
       'seatmap.read',
@@ -223,6 +237,9 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['GET', '/v1/admin/bookings'],
   ['GET', '/v1/admin/bookings/01900000-0000-7000-8000-000000000000'],
   ['POST', '/v1/admin/bookings/01900000-0000-7000-8000-000000000000/cancel'],
+  ['GET', '/v1/admin/payments'],
+  ['GET', '/v1/admin/payments/01900000-0000-7000-8000-000000000000'],
+  ['POST', '/v1/admin/payments/01900000-0000-7000-8000-000000000000/cancel'],
 ];
 
 describe('server-side RBAC', () => {
@@ -316,6 +333,7 @@ describe('server-side RBAC', () => {
         allowed('pricing.read') ? 200 : 403,
       );
       expect((await api.get('/bookings')).status).toBe(allowed('booking.read') ? 200 : 403);
+      expect((await api.get('/payments')).status).toBe(allowed('payment.read') ? 200 : 403);
     },
   );
 

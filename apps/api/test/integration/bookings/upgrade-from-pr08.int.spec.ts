@@ -73,7 +73,8 @@ const SNAPSHOTS = {
   fares: `SELECT json_agg(f ORDER BY f.id)::text AS value FROM fare_entry f`,
   fareVersions: `SELECT json_agg(v ORDER BY v.id)::text AS value FROM fare_table_version v`,
   vehicle: `SELECT row_to_json(v)::text AS value FROM (SELECT id, status, seat_map_version_id FROM vehicle) v`,
-  grants: `SELECT json_agg(g ORDER BY g.role_key, g.permission_key)::text AS value FROM authorization_role_permission g WHERE g.permission_key NOT LIKE 'booking.%'`,
+  // Grants added by later migrations (booking.* in PR-09, payment.* in PR-10) aside.
+  grants: `SELECT json_agg(g ORDER BY g.role_key, g.permission_key)::text AS value FROM authorization_role_permission g WHERE g.permission_key NOT LIKE 'booking.%' AND g.permission_key NOT LIKE 'payment.%'`,
 };
 
 function deploy(config: string | null, url: string) {
@@ -87,7 +88,9 @@ function deploy(config: string | null, url: string) {
 /**
  * Upgrade of an existing PR-08 database: only the booking migration is
  * applied by `prisma migrate deploy`, with a SCHEDULED trip carrying its
- * historical seat map and pricing.
+ * historical seat map and pricing. The PR-09 state is measured right after
+ * that step; later migrations (PR-10 and on) are then applied, as a
+ * deployment would, before the API starts.
  */
 describe('upgrade from a PR-08 database (isolated database)', () => {
   let t: TestApp;
@@ -98,6 +101,11 @@ describe('upgrade from a PR-08 database (isolated database)', () => {
   let raw: ReturnType<typeof createDatabaseClient>;
   const name = `et_upg_${randomBytes(6).toString('hex')}`;
   const before: Record<string, string> = {};
+  const afterBooking: {
+    applied: string[];
+    snapshot: Record<string, string>;
+    counts: Record<string, number>;
+  } = { applied: [], snapshot: {}, counts: {} };
 
   const snapshot = async () =>
     Object.fromEntries(
@@ -126,24 +134,29 @@ describe('upgrade from a PR-08 database (isolated database)', () => {
     target.pathname = `/${name}`;
     url = target.toString();
 
-    // The PR-08 migration set: every migration up to and including pricing.
+    // A migration set: every migration of the real directory up to a bound.
     workDir = mkdtempSync(join(tmpdir(), 'et-upgrade-'));
-    const pr08 = join(workDir, 'migrations');
-    for (const entry of readdirSync(MIGRATIONS)) {
-      if (entry <= PRICING_MIGRATION) {
-        cpSync(join(MIGRATIONS, entry), join(pr08, entry), { recursive: true });
+    const migrationSet = (label: string, include: (entry: string) => boolean) => {
+      const path = join(workDir, label, 'migrations');
+      for (const entry of readdirSync(MIGRATIONS)) {
+        if (include(entry)) cpSync(join(MIGRATIONS, entry), join(path, entry), { recursive: true });
       }
-    }
-    const config = join(workDir, 'prisma.config.mjs');
-    writeFileSync(
-      config,
-      `export default ${JSON.stringify({
-        schema: join(DATABASE_PACKAGE, 'prisma', 'schema.prisma'),
-        migrations: { path: pr08 },
-        datasource: { url },
-      })};\n`,
+      const config = join(workDir, label, 'prisma.config.mjs');
+      writeFileSync(
+        config,
+        `export default ${JSON.stringify({
+          schema: join(DATABASE_PACKAGE, 'prisma', 'schema.prisma'),
+          migrations: { path },
+          datasource: { url },
+        })};\n`,
+      );
+      return config;
+    };
+    // The PR-08 migration set: every migration up to and including pricing.
+    deploy(
+      migrationSet('pr08', (entry) => entry <= PRICING_MIGRATION),
+      url,
     );
-    deploy(config, url);
 
     raw = createDatabaseClient({ databaseUrl: url });
     expect(await appliedMigrations()).toHaveLength(8);
@@ -155,11 +168,30 @@ describe('upgrade from a PR-08 database (isolated database)', () => {
     for (const statement of PR08_DATA) await raw.$executeRawUnsafe(statement);
     Object.assign(before, await snapshot());
 
-    // The real directory: only the booking migration is pending.
+    // The PR-09 migration set: only the booking migration is pending.
+    deploy(
+      migrationSet('pr09', (entry) => entry <= BOOKING_MIGRATION),
+      url,
+    );
+    afterBooking.applied = await appliedMigrations();
+    afterBooking.snapshot = await snapshot();
+    for (const table of ['booking', 'booking_seat', 'seat_inventory_lock']) {
+      afterBooking.counts[table] = await count(`SELECT count(*) AS count FROM "${table}"`);
+    }
+    afterBooking.counts.permissions = await count(
+      `SELECT count(*) AS count FROM authorization_permission WHERE key LIKE 'booking.%'`,
+    );
+    afterBooking.counts.grants = await count(
+      `SELECT count(*) AS count FROM authorization_role_permission WHERE permission_key LIKE 'booking.%'`,
+    );
+    // The real directory: later migrations (PR-10 and on), as deployed.
     deploy(null, url);
     t = await startTestApp(integrationEnv({ DATABASE_URL: url }));
     admin = await staffActor(t.app, ['SUPER_ADMIN']);
-  });
+    // Same budget as the PR-07 upgrade test: three `prisma migrate deploy`
+    // processes (~2.5 s each when idle, measured; several times that under
+    // the parallel integration load), the API start and a STAFF enrollment.
+  }, 60_000);
 
   afterAll(async () => {
     await t?.app.close();
@@ -170,18 +202,20 @@ describe('upgrade from a PR-08 database (isolated database)', () => {
   });
 
   it('applies only the booking migration and leaves PR-08 data untouched', async () => {
-    const applied = await appliedMigrations();
+    const applied = afterBooking.applied;
     expect(applied).toHaveLength(9);
     expect(applied.at(-1)).toBe(BOOKING_MIGRATION);
+    expect(afterBooking.snapshot).toEqual(before);
+    for (const table of ['booking', 'booking_seat', 'seat_inventory_lock']) {
+      expect(afterBooking.counts[table], table).toBe(0);
+    }
+    expect(afterBooking.counts.permissions).toBe(2);
+    expect(afterBooking.counts.grants).toBe(10);
+    // Still true once the later migrations are applied.
     expect(await snapshot()).toEqual(before);
     for (const table of ['booking', 'booking_seat', 'seat_inventory_lock']) {
       expect(await count(`SELECT count(*) AS count FROM "${table}"`), table).toBe(0);
     }
-    expect(
-      await count(
-        `SELECT count(*) AS count FROM authorization_permission WHERE key LIKE 'booking.%'`,
-      ),
-    ).toBe(2);
     expect(
       await count(
         `SELECT count(*) AS count FROM authorization_role_permission WHERE permission_key LIKE 'booking.%'`,

@@ -48,6 +48,9 @@ export function integrationEnv(overrides: Record<string, string> = {}): ApiEnv {
     AUTH_MAIL_PROVIDER: 'disabled',
     CLIENT_PUBLIC_URL: TEST_ORIGINS.customer,
     OPS_PUBLIC_URL: TEST_ORIGINS.staff,
+    // PR-10: the local test-only provider, with a fresh webhook key.
+    PAYMENT_PROVIDER: 'SANDBOX',
+    PAYMENT_SANDBOX_WEBHOOK_SECRET: randomKey(),
     ...overrides,
   });
 }
@@ -66,6 +69,8 @@ export function productionLikeEnv(overrides: Record<string, string> = {}): ApiEn
     AUTH_EMAIL_FROM: 'no-reply@example.test',
     CLIENT_PUBLIC_URL: 'https://client.example.test',
     OPS_PUBLIC_URL: 'https://ops.example.test',
+    // SANDBOX is refused in production: payments are disabled there.
+    PAYMENT_PROVIDER: 'DISABLED',
     ...overrides,
   });
 }
