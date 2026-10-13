@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   createAuthClient,
+  type AdminFareTable,
   type AdminSeatMap,
   type AdminTrip,
   type AdminTripSummary,
@@ -8,6 +9,7 @@ import {
   type Page,
   type AdminVehicleDetail,
   type ApiResult,
+  type ResolvedTripFare,
   type NetworkRouteVersion,
   type NetworkWaypointReplacement,
 } from './index.js';
@@ -370,5 +372,66 @@ describe('admin client', () => {
     // No capacity can be sent: it is derived from SEAT cells.
     expectTypeOf(admin.seatMaps.replaceCells).parameter(2).not.toHaveProperty('seatCount');
     expectTypeOf(admin.fleet.updateVehicle).parameter(1).not.toHaveProperty('seatMapVersionId');
+  });
+
+  it('replaces a fare matrix in minor units through the in-memory CSRF flow', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { csrfToken: 'v1.1.n.m' } },
+      { status: 200, body: { id: 'table' } },
+    ]);
+    const fares = [
+      { originRouteWaypointId: 'a', destinationRouteWaypointId: 'b', amountMinor: 12345 },
+    ];
+    await createAuthClient('http://api.test').admin.pricing.replaceFares(
+      'table/../id',
+      'version-id',
+      { fares },
+    );
+    expect(calls[1]?.url).toBe(
+      'http://api.test/v1/admin/pricing/fare-tables/table%2F..%2Fid/versions/version-id/fares',
+    );
+    expect(calls[1]?.init).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': 'v1.1.n.m' },
+    });
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({ fares });
+  });
+
+  it('resolves a trip fare with query parameters and assigns a fare table', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { amountMinor: 12345, currencyCode: 'EUR', currencyMinorUnit: 2 } },
+      { status: 200, body: { csrfToken: 'x' } },
+      { status: 200, body: {} },
+      { status: 200, body: { items: [], nextCursor: null } },
+    ]);
+    const admin = createAuthClient('http://api.test').admin;
+    const resolved = await admin.trips.resolveTripFare('trip-id', 'origin-id', 'destination-id');
+    expect(resolved).toMatchObject({ ok: true, data: { amountMinor: 12345 } });
+    expect(calls[0]?.url).toBe(
+      'http://api.test/v1/admin/trips/trip-id/fare?originRouteWaypointId=origin-id&destinationRouteWaypointId=destination-id',
+    );
+    await admin.trips.assignTripFareTable('trip-id', {
+      fareTableVersionId: 'v',
+      expectedFareTableVersionId: null,
+    });
+    expect(calls[2]?.url).toBe('http://api.test/v1/admin/trips/trip-id/fare-table');
+    await admin.pricing.fareTables({ active: true, routeId: 'route-id', limit: 5 });
+    expect(calls[3]?.url).toBe(
+      'http://api.test/v1/admin/pricing/fare-tables?limit=5&active=true&routeId=route-id',
+    );
+  });
+
+  it('types pricing results with exact integer amounts', () => {
+    const admin = createAuthClient('http://api.test').admin;
+    expectTypeOf(admin.pricing.fareTable).returns.resolves.toEqualTypeOf<
+      ApiResult<AdminFareTable>
+    >();
+    expectTypeOf(admin.trips.resolveTripFare).returns.resolves.toEqualTypeOf<
+      ApiResult<ResolvedTripFare>
+    >();
+    expectTypeOf<ResolvedTripFare['amountMinor']>().toEqualTypeOf<number>();
+    // Route and currency cannot be updated.
+    expectTypeOf(admin.pricing.updateFareTable).parameter(1).not.toHaveProperty('currencyCode');
+    expectTypeOf(admin.pricing.updateFareTable).parameter(1).not.toHaveProperty('routeId');
   });
 });
