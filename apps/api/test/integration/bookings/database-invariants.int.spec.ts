@@ -127,7 +127,7 @@ describe('booking database invariants (isolated database)', () => {
         ['BOOKING-000001', 'sequential'],
         ['ETB-abcdefghijkl', 'lowercase'],
         ['ETB-0000000000IL', 'ambiguous letters'],
-      ]) {
+      ] as const) {
         await expect(insert(await bookingData(f, 1, 3, { reference })), label).rejects.toThrow(
           /booking_reference_format/,
         );

@@ -98,7 +98,7 @@ describe('booking concurrency (isolated database)', () => {
       ]);
       expect(statuses(results)).toEqual([201, 201]);
       const locks = await db(t.app).seatInventoryLock.findMany({
-        where: { tripId: f.tripId, seatMapCellId: f.cells['1A'] },
+        where: { tripId: f.tripId, seatMapCellId: f.cells['1A']! },
         orderBy: { segmentSequence: 'asc' },
         select: { segmentSequence: true },
       });
