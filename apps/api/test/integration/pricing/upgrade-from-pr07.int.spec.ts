@@ -170,7 +170,10 @@ describe('upgrade from a PR-07 database (isolated database)', () => {
     deploy(null, url);
     t = await startTestApp(integrationEnv({ DATABASE_URL: url }));
     admin = await staffActor(t.app, ['SUPER_ADMIN']);
-  });
+    // Budget for three `prisma migrate deploy` processes (~2.5 s each when
+    // idle, measured; several times that under the parallel integration
+    // load), the API start and a STAFF enrollment (Argon2 + TOTP).
+  }, 60_000);
 
   afterAll(async () => {
     await t?.app.close();

@@ -65,16 +65,21 @@ describe('booking administration and trip cancellation (isolated database)', () 
   describe('permissions', () => {
     it('booking.read reads, booking.manage cancels; other roles get 403', async () => {
       const { booking } = await hold(['1A']);
-      for (const role of ['BOOKING_AGENT', 'CUSTOMER_SUPPORT', 'OPS_MANAGER', 'DIRECTOR']) {
-        const api = adminApi(await staffActor(t.app, [role]));
-        expect((await api.get('/bookings')).status, role).toBe(200);
-        expect((await api.get(`/bookings/${booking.id}`)).status, role).toBe(200);
-      }
-      for (const role of ['DISPATCHER', 'FINANCE', 'AUDITOR', 'COMPLIANCE_AGENT']) {
-        const api = adminApi(await staffActor(t.app, [role]));
+      // Each role's read access is checked by the RBAC matrix test; here the
+      // actors are created in parallel (Argon2 + TOTP enrollment each).
+      const deniedRoles = ['DISPATCHER', 'FINANCE', 'AUDITOR', 'COMPLIANCE_AGENT'];
+      const [support, ...deniedActors] = await Promise.all(
+        ['CUSTOMER_SUPPORT', ...deniedRoles].map((role) => staffActor(t.app, [role])),
+      );
+      expect((await adminApi(support!).get('/bookings')).status).toBe(200);
+      expect((await adminApi(support!).get(`/bookings/${booking.id}`)).status).toBe(200);
+      for (const [index, actor] of deniedActors.entries()) {
+        const role = deniedRoles[index]!;
+        const api = adminApi(actor);
         const response = await api.get('/bookings');
         expect(response.status, role).toBe(403);
         expect(response.body.code).toBe('FORBIDDEN');
+        expect((await api.get(`/bookings/${booking.id}`)).status, role).toBe(403);
         expect(
           (await api.post(`/bookings/${booking.id}/cancel`, { reason: 'Interdit' })).status,
           role,
