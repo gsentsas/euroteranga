@@ -313,9 +313,25 @@ describe('network database invariants (isolated database)', () => {
     await expect(db(t.app).routeVersion.delete({ where: { id: version.id } })).rejects.toThrow(
       /published or retired route versions are immutable/,
     );
+    // Retired geometry stays frozen as well.
+    await expect(
+      db(t.app).routeWaypoint.update({ where: { id: first.id }, data: { boardingAllowed: true } }),
+    ).rejects.toThrow(/waypoints of published or retired route versions are immutable/);
+    await expect(db(t.app).routeWaypoint.delete({ where: { id: first.id } })).rejects.toThrow(
+      /waypoints of published or retired route versions are immutable/,
+    );
+    await expect(
+      db(t.app).routeWaypoint.create({
+        data: { routeVersionId: version.id, sequence: 4, stopId: destination.id },
+      }),
+    ).rejects.toThrow(/waypoints of published or retired route versions are immutable/);
     await expect(db(t.app).$executeRawUnsafe('TRUNCATE TABLE "route_waypoint"')).rejects.toThrow(
       /network route history cannot be truncated/,
     );
+    await expect(
+      db(t.app).$executeRawUnsafe('TRUNCATE TABLE "route_version" CASCADE'),
+    ).rejects.toThrow(/network route history cannot be truncated/);
+    expect(await db(t.app).routeWaypoint.count({ where: { routeVersionId: version.id } })).toBe(2);
   });
 
   it('uses RESTRICT foreign keys to preserve referenced geography and route history', async () => {
