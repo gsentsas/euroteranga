@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   createAuthClient,
+  type AdminTrip,
+  type AdminTripSummary,
   type AdminVehicle,
+  type Page,
   type AdminVehicleDetail,
   type ApiResult,
   type NetworkRouteVersion,
@@ -256,5 +259,58 @@ describe('admin client', () => {
       .toEqualTypeOf<'ACTIVE' | 'OUT_OF_SERVICE' | 'RETIRED'>();
     // The general update cannot carry a status.
     expectTypeOf(fleet.updateVehicle).parameter(1).not.toHaveProperty('status');
+  });
+
+  it('lists trips with bounded options and filters', async () => {
+    const calls = mockFetch([{ status: 200, body: { items: [], nextCursor: null } }]);
+    await createAuthClient('http://api.test').admin.trips.trips({
+      limit: 20,
+      status: 'SCHEDULED',
+      routeId: 'route-id',
+      departureFrom: '2030-01-15T00:00:00Z',
+    });
+    expect(calls[0]?.url).toBe(
+      'http://api.test/v1/admin/trips?limit=20&status=SCHEDULED&routeId=route-id&departureFrom=2030-01-15T00%3A00%3A00Z',
+    );
+  });
+
+  it('replaces a timetable and cancels a trip through the in-memory CSRF flow', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { csrfToken: 'v1.1.n.m' } },
+      { status: 200, body: { id: 'trip-id' } },
+      { status: 200, body: { csrfToken: 'v1.2.n.m' } },
+      { status: 200, body: { id: 'trip-id', status: 'CANCELLED' } },
+    ]);
+    const trips = createAuthClient('http://api.test').admin.trips;
+    const timings = [
+      { routeWaypointId: 'w1', plannedArrivalAt: null, plannedDepartureAt: '2030-01-15T08:00:00Z' },
+      { routeWaypointId: 'w2', plannedArrivalAt: '2030-01-15T12:00:00Z', plannedDepartureAt: null },
+    ];
+    await trips.replaceTimetable('trip/../id', { timings });
+    await trips.cancelTrip('trip-id', { reason: 'Annulation', expectedStatus: 'SCHEDULED' });
+    expect(calls[1]?.url).toBe('http://api.test/v1/admin/trips/trip%2F..%2Fid/timetable');
+    expect(calls[1]?.init).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': 'v1.1.n.m' },
+    });
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({ timings });
+    expect(calls[3]?.url).toBe('http://api.test/v1/admin/trips/trip-id/cancel');
+    expect(JSON.parse(String(calls[3]?.init.body))).toEqual({
+      reason: 'Annulation',
+      expectedStatus: 'SCHEDULED',
+    });
+  });
+
+  it('types trip results and inputs', () => {
+    const trips = createAuthClient('http://api.test').admin.trips;
+    expectTypeOf(trips.trips).returns.resolves.toEqualTypeOf<ApiResult<Page<AdminTripSummary>>>();
+    expectTypeOf(trips.trip).returns.resolves.toEqualTypeOf<ApiResult<AdminTrip>>();
+    expectTypeOf(trips.scheduleTrip).returns.resolves.toEqualTypeOf<ApiResult<AdminTrip>>();
+    expectTypeOf(trips.assignTripVehicle)
+      .parameter(1)
+      .toHaveProperty('vehicleId')
+      .toEqualTypeOf<string | null>();
+    // The status changes only through schedule/cancel, never at creation.
+    expectTypeOf(trips.createTrip).parameter(0).not.toHaveProperty('status');
   });
 });
