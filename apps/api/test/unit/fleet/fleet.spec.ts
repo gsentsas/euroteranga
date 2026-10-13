@@ -30,18 +30,18 @@ describe('vehicle input validation', () => {
     const parsed = vehicleCreateSchema.parse({
       ...base,
       vin: ' zzz1234567890abcd ',
-      registrationPlate: '  ab   123 cd ',
+      registrationPlate: '  test   plaque z ',
       registrationCountryId: '01900000-0000-7000-8000-000000000001',
       modelYear: 2020,
     });
     expect(parsed).toMatchObject({
       code: 'BUS_A01',
       vin: 'ZZZ1234567890ABCD',
-      registrationPlate: 'AB 123 CD',
+      registrationPlate: 'TEST PLAQUE Z',
       manufacturer: 'Constructeur',
     });
     // A non-Latin plate is accepted: formats differ per country.
-    expect(vehicleCreateSchema.safeParse({ ...base, registrationPlate: 'ب 12345' }).success).toBe(
+    expect(vehicleCreateSchema.safeParse({ ...base, registrationPlate: 'ب TEST' }).success).toBe(
       true,
     );
   });
@@ -50,7 +50,7 @@ describe('vehicle input validation', () => {
     ['VIN with I/O/Q', { vin: 'ZZZ12345678901IOQ' }],
     ['VIN of 16 characters', { vin: 'ZZZ1234567890ABC' }],
     ['plate over 16 characters', { registrationPlate: 'A'.repeat(17) }],
-    ['plate with a control character', { registrationPlate: 'AB\u0007123' }],
+    ['plate with a control character', { registrationPlate: 'TEST\u0007Z' }],
     ['model year before 1950', { modelYear: 1949 }],
     ['model year two years ahead', { modelYear: new Date().getUTCFullYear() + 2 }],
     ['code with a space', { code: 'BUS A01' }],
