@@ -325,9 +325,14 @@ describe('network database invariants (isolated database)', () => {
         data: { routeVersionId: version.id, sequence: 4, stopId: destination.id },
       }),
     ).rejects.toThrow(/waypoints of published or retired route versions are immutable/);
+    // Since PR-06, trip timings reference route waypoints: a plain TRUNCATE is
+    // refused by the foreign key, and a CASCADE reaches this table's trigger.
     await expect(db(t.app).$executeRawUnsafe('TRUNCATE TABLE "route_waypoint"')).rejects.toThrow(
-      /network route history cannot be truncated/,
+      /referenced in a foreign key constraint/,
     );
+    await expect(
+      db(t.app).$executeRawUnsafe('TRUNCATE TABLE "route_waypoint" CASCADE'),
+    ).rejects.toThrow(/network route history cannot be truncated/);
     await expect(
       db(t.app).$executeRawUnsafe('TRUNCATE TABLE "route_version" CASCADE'),
     ).rejects.toThrow(/network route history cannot be truncated/);
