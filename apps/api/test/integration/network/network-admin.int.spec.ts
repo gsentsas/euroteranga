@@ -30,11 +30,14 @@ describe('network administration API (isolated database)', () => {
   let t: TestApp;
   let database: Awaited<ReturnType<typeof isolatedDatabase>>;
   let admin: StaffActor;
+  // One read-only actor shared by the tests (each actor costs Argon2 work).
+  let dispatcher: StaffActor;
 
   beforeAll(async () => {
     database = await isolatedDatabase();
     t = await startTestApp(integrationEnv({ DATABASE_URL: database.url }));
     admin = await staffActor(t.app, ['SUPER_ADMIN']);
+    dispatcher = await staffActor(t.app, ['DISPATCHER']);
   });
 
   afterAll(async () => {
@@ -44,7 +47,7 @@ describe('network administration API (isolated database)', () => {
 
   describe('authorization', () => {
     it('lets network.read holders read every list, and refuses others with 403', async () => {
-      const reader = adminApi(await staffActor(t.app, ['DISPATCHER']));
+      const reader = adminApi(dispatcher);
       for (const path of ['countries', 'stops', 'checkpoints', 'routes']) {
         expect((await reader.get(`/network/${path}`)).status, path).toBe(200);
       }
@@ -507,7 +510,7 @@ describe('network administration API (isolated database)', () => {
 
     it('refuses to publish without network.manage, leaving the draft untouched', async () => {
       const { route, draft } = await publishableDraft(admin);
-      const reader = adminApi(await staffActor(t.app, ['DISPATCHER']));
+      const reader = adminApi(dispatcher);
       expect(
         (await reader.post(`/network/routes/${route.id}/versions/${draft.id}/publish`, {})).status,
       ).toBe(403);
