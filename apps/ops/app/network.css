@@ -70,3 +70,28 @@
 .et-seatmap-cell--aisle {
   border-style: dashed;
 }
+
+.et-booking-admin-detail h2 {
+  margin: 0;
+}
+
+.et-booking-admin-summary {
+  display: grid;
+  grid-template-columns: minmax(9rem, 13rem) 1fr;
+  gap: var(--et-space-2) var(--et-space-3);
+  margin-block: var(--et-space-3) var(--et-space-4);
+}
+
+.et-booking-admin-summary dt {
+  font-weight: 700;
+}
+
+.et-booking-admin-summary dd {
+  margin: 0;
+}
+
+@media (max-width: 36rem) {
+  .et-booking-admin-summary {
+    grid-template-columns: 1fr;
+  }
+}
