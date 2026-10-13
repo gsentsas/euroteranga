@@ -68,7 +68,15 @@ function waypointLabel(
     : `Checkpoint ${waypoint.checkpointId}`;
 }
 
-function VersionSummary({ version }: { version: NetworkRouteVersion }) {
+function VersionSummary({
+  version,
+  stops,
+  checkpoints,
+}: {
+  version: NetworkRouteVersion;
+  stops: readonly NetworkStop[];
+  checkpoints: readonly NetworkCheckpoint[];
+}) {
   return (
     <li>
       <strong>Version {version.version}</strong>{' '}
@@ -80,6 +88,13 @@ function VersionSummary({ version }: { version: NetworkRouteVersion }) {
           {' '}
           · publiée le {new Date(version.publishedAt).toLocaleString('fr-FR')}
         </span>
+      ) : null}
+      {version.status !== 'DRAFT' && version.waypoints.length > 0 ? (
+        <ol aria-label={`Waypoints de la version ${version.version}`}>
+          {toInput(version).map((item) => (
+            <li key={item.key}>{waypointLabel(item.value, stops, checkpoints)}</li>
+          ))}
+        </ol>
       ) : null}
     </li>
   );
@@ -151,6 +166,12 @@ export function RouteEditor({
     setCheckpointId('');
   };
 
+  // Publication publishes the stored order: unsaved edits must be saved first.
+  const dirty =
+    draft !== undefined &&
+    JSON.stringify(items.map((item) => item.value)) !==
+      JSON.stringify(toInput(draft).map((item) => item.value));
+
   const save = async () => {
     if (!draft) return;
     const ok = await run(
@@ -189,11 +210,16 @@ export function RouteEditor({
       </h3>
       <h4>Versions</h4>
       {route.versions.length ? (
-        <ol className="et-network-versions">
+        <ol className="et-network-versions" aria-label={`Versions de ${route.code}`}>
           {[...route.versions]
             .sort((left, right) => right.version - left.version)
             .map((version) => (
-              <VersionSummary key={version.id} version={version} />
+              <VersionSummary
+                key={version.id}
+                version={version}
+                stops={stops}
+                checkpoints={checkpoints}
+              />
             ))}
         </ol>
       ) : (
@@ -380,12 +406,18 @@ export function RouteEditor({
                 <button
                   type="button"
                   className="et-button et-button--secondary"
-                  disabled={busy}
+                  disabled={busy || dirty}
+                  aria-describedby={dirty ? `${stopSelectId}-unsaved` : undefined}
                   onClick={() => void publish()}
                 >
                   Publier la version {draft.version}
                 </button>
               </div>
+              {dirty ? (
+                <p id={`${stopSelectId}-unsaved`} className="et-hint">
+                  Modifications non enregistrées : enregistrez l’ordre avant de publier.
+                </p>
+              ) : null}
             </>
           ) : (
             <ol aria-label={`Waypoints du brouillon ${draft.version}`}>

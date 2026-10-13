@@ -485,12 +485,12 @@ export function createAuthClient(baseUrl: string) {
             input,
           ),
         createVersion: (routeId: string) =>
-          withCsrf<NetworkWaypointReplacement>(
+          withCsrf<NetworkRouteVersion>(
             'staff',
             `/v1/admin/network/routes/${encodeURIComponent(routeId)}/versions`,
           ),
         replaceWaypoints: (routeId: string, versionId: string, waypoints: NetworkWaypointInput[]) =>
-          withCsrf<NetworkRouteVersion>(
+          withCsrf<NetworkWaypointReplacement>(
             'staff',
             `/v1/admin/network/routes/${encodeURIComponent(routeId)}/versions/${encodeURIComponent(versionId)}/waypoints`,
             { waypoints },

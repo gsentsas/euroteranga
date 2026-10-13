@@ -127,8 +127,24 @@ test('ops network: SUPER_ADMIN creates and publishes a synthetic versioned route
     page.getByRole('status').filter({ hasText: 'Ordre de la version 1 enregistré.' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Publier la version 1' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Version 1 publiée.' })).toBeVisible();
+  // The published version is listed with its frozen, ordered geometry.
+  const publishedVersion = page
+    .getByRole('list', { name: `Versions de ${routeCode}` })
+    .getByRole('listitem')
+    .filter({ hasText: 'Version 1' });
+  await expect(publishedVersion).toContainText('Publiée');
+  const frozen = publishedVersion
+    .getByRole('list', { name: 'Waypoints de la version 1' })
+    .getByRole('listitem');
+  await expect(frozen).toHaveCount(3);
+  await expect(frozen.nth(0)).toContainText(firstStopCode);
+  await expect(frozen.nth(1)).toContainText(checkpointCode);
+  await expect(frozen.nth(2)).toContainText(lastStopCode);
+  // No draft remains: editing requires a new version.
+  await expect(page.getByRole('button', { name: 'Publier la version 1' })).toHaveCount(0);
   await expect(
-    page.getByText('Version 1', { exact: false }).filter({ hasText: 'Publiée' }),
+    page.getByRole('button', { name: `Créer un brouillon pour ${routeCode}` }),
   ).toBeVisible();
   expect(errors).toEqual([]);
 });

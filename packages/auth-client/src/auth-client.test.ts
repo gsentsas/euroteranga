@@ -1,5 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createAuthClient } from './index.js';
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import {
+  createAuthClient,
+  type ApiResult,
+  type NetworkRouteVersion,
+  type NetworkWaypointReplacement,
+} from './index.js';
 
 type Call = { url: string; init: RequestInit };
 
@@ -186,5 +191,19 @@ describe('admin client', () => {
         { kind: 'CHECKPOINT', checkpointId: 'checkpoint-id' },
       ],
     });
+  });
+
+  it('types network results as the API returns them', () => {
+    const network = createAuthClient('http://api.test').admin.network;
+    // A new draft is a route version; a waypoint replacement returns the list.
+    expectTypeOf(network.createVersion).returns.resolves.toEqualTypeOf<
+      ApiResult<NetworkRouteVersion>
+    >();
+    expectTypeOf(network.replaceWaypoints).returns.resolves.toEqualTypeOf<
+      ApiResult<NetworkWaypointReplacement>
+    >();
+    expectTypeOf(network.publishVersion).returns.resolves.toEqualTypeOf<
+      ApiResult<NetworkRouteVersion>
+    >();
   });
 });

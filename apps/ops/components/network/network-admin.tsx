@@ -208,7 +208,7 @@ function StopForm({
         value={code}
         onChange={setCode}
         autoComplete="off"
-        maxLength={64}
+        maxLength={32}
       />
       <TextField
         label="Nom de l’arrêt"
@@ -230,7 +230,7 @@ function StopForm({
         value={locality}
         onChange={setLocality}
         autoComplete="off"
-        maxLength={160}
+        maxLength={128}
       />
       <NumberField
         label="Latitude de l’arrêt"
@@ -319,7 +319,7 @@ function CheckpointForm({
         value={code}
         onChange={setCode}
         autoComplete="off"
-        maxLength={64}
+        maxLength={32}
       />
       <TextField
         label="Nom du checkpoint"
@@ -356,7 +356,7 @@ function CheckpointForm({
         value={locality}
         onChange={setLocality}
         autoComplete="off"
-        maxLength={160}
+        maxLength={128}
       />
       <NumberField
         label="Latitude du checkpoint"
@@ -424,7 +424,7 @@ function RouteForm({
         value={code}
         onChange={setCode}
         autoComplete="off"
-        maxLength={64}
+        maxLength={32}
       />
       <TextField
         label="Nom de la route"
