@@ -3,6 +3,7 @@ import type { Logger } from '@euroteranga/logger';
 import { Module, type DynamicModule, type Type } from '@nestjs/common';
 import { AuthorizationModule } from './authorization/authorization.module.js';
 import { BaggageModule } from './baggage/baggage.module.js';
+import { CheckInModule } from './check-in/check-in.module.js';
 import { BookingModule } from './bookings/booking.module.js';
 import { ComplianceModule } from './compliance/compliance.module.js';
 import type { AuthMailProvider } from './auth/mail/auth-mail.provider.js';
@@ -47,6 +48,7 @@ export class AppModule {
         PassengerDocumentModule,
         ComplianceModule,
         BaggageModule,
+        CheckInModule,
       ],
       controllers: options.extraControllers ?? [],
     };

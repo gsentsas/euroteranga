@@ -39,6 +39,10 @@ export const PERMISSIONS = {
   COMPLIANCE_RULE_MANAGE: 'compliance.rule.manage',
   BAGGAGE_READ: 'baggage.read',
   BAGGAGE_MANAGE: 'baggage.manage',
+  CHECKIN_READ: 'checkin.read',
+  CHECKIN_MANAGE: 'checkin.manage',
+  BOARDING_READ: 'boarding.read',
+  BOARDING_SCAN: 'boarding.scan',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

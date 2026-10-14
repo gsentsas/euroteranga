@@ -5,6 +5,12 @@ import { HttpException } from '@nestjs/common';
  * message is written here, never derived from internal errors.
  */
 export class PublicApiError extends HttpException {
+  /**
+   * Optional structured detail built by the server from stable codes (for
+   * example check-in blockers). Never copied from an internal error.
+   */
+  readonly publicDetails: Readonly<Record<string, unknown>> | undefined = undefined;
+
   constructor(
     status: number,
     readonly code: string,

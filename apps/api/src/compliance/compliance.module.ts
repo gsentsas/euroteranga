@@ -19,5 +19,7 @@ import { CustomerComplianceController } from './customer-compliance.controller.j
     AdminComplianceController,
   ],
   providers: [ComplianceRulesService, ComplianceEvaluationService],
+  /** PR-14 check-in reads current compliance through the PR-12 service. */
+  exports: [ComplianceEvaluationService],
 })
 export class ComplianceModule {}
