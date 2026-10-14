@@ -49,8 +49,10 @@ export interface PaymentProvider {
   /** True for providers that move no real money (SANDBOX). */
   readonly testMode: boolean;
   /**
-   * Registers an attempt at the provider. Called before the database
-   * transaction (no network call ever holds a database lock).
+   * Registers an attempt at the provider after the PENDING Payment has been
+   * committed. paymentReference is a mandatory provider-side idempotency key:
+   * every call with the same reference must return the same provider attempt.
+   * No database transaction or lock is held during this network call.
    */
   createPayment(request: ProviderPaymentRequest): Promise<ProviderCheckout>;
   /**

@@ -77,6 +77,28 @@ interface LockedPayment {
   booking_reference: string;
 }
 
+interface LockedProviderPayment {
+  id: string;
+  status: string;
+  provider_payment_id: string | null;
+}
+
+/** Everything needed after the database has reserved an initiation. */
+const reservedPaymentSelect = {
+  id: true,
+  provider: true,
+  providerPaymentId: true,
+  booking: { select: { reference: true } },
+  ...customerPaymentSelect,
+} as const satisfies Prisma.PaymentSelect;
+
+type ReservedPayment = Prisma.PaymentGetPayload<{ select: typeof reservedPaymentSelect }>;
+
+interface PaymentReservation {
+  replayed: boolean;
+  payment: ReservedPayment;
+}
+
 /**
  * Payment attempts of authenticated CUSTOMERs and their STAFF reading. The
  * server derives every amount from the booking; a result (success or
@@ -92,12 +114,11 @@ export class PaymentService {
   ) {}
 
   /**
-   * Starts an attempt for a HELD booking of the caller. The provider is
-   * called first, outside any transaction (with our new payment reference as
-   * its idempotency key); then, in one transaction: trip FOR SHARE (no
-   * concurrent trip cancellation), booking FOR UPDATE, state checks, amount
-   * derived from the locked booking, PENDING attempt, PAYMENT_CREATED audit.
-   * The same Idempotency-Key returns the same attempt.
+   * Starts an attempt for a HELD booking of the caller in three phases:
+   * reserve and audit the PENDING row in a short transaction; call the
+   * provider after that transaction commits; attach its id in another short
+   * transaction. Payment.reference is the provider-side idempotency key, so
+   * a lost provider response can be recovered by replaying Idempotency-Key.
    */
   async create(
     actor: AuthPrincipal,
@@ -111,46 +132,40 @@ export class PaymentService {
     const idempotencyKey = parseIdempotencyKey(rawIdempotencyKey);
     if (idempotencyKey === null) throw PaymentErrors.idempotencyKeyInvalid();
 
-    if (idempotencyKey) {
-      const replay = await this.replay(this.database.client, actor, reference, idempotencyKey);
-      if (replay) return { replayed: true, result: replay };
-    }
+    // This lookup only resolves the immutable lock targets. All payable-state
+    // checks and the amount derivation happen again under the Phase A locks.
     const booking = await this.database.client.booking.findFirst({
       where: { reference, customerIdentityId: actor.identityId },
-      select: {
-        id: true,
-        tripId: true,
-        unitAmountMinor: true,
-        currencyCode: true,
-        currencyMinorUnit: true,
-        _count: { select: { seats: true } },
-      },
+      select: { id: true, tripId: true },
     });
     if (!booking) throw BookingErrors.notFound();
-    const amountMinor = bookingAmountMinor(booking.unitAmountMinor, booking._count.seats);
 
+    const reservation = await this.reservePayment({
+      actor,
+      provider,
+      bookingId: booking.id,
+      tripId: booking.tripId,
+      bookingReference: reference,
+      idempotencyKey,
+    });
+    const result = await this.createAtProvider(provider, reservation.payment);
+    return { replayed: reservation.replayed, result };
+  }
+
+  /** Phase A: reserve the attempt and commit before any provider call. */
+  private async reservePayment(input: {
+    actor: AuthPrincipal;
+    provider: PaymentProvider;
+    bookingId: string;
+    tripId: string;
+    bookingReference: string;
+    idempotencyKey: string | undefined;
+  }): Promise<PaymentReservation> {
     try {
       return await withFreshReference(
         async (paymentReference) => {
-          const checkout = await provider.createPayment({
-            paymentReference,
-            bookingReference: reference,
-            amountMinor,
-            currencyCode: booking.currencyCode,
-            currencyMinorUnit: booking.currencyMinorUnit,
-          });
           return this.database.client.$transaction((tx) =>
-            this.createInTransaction(tx, {
-              actor,
-              provider,
-              checkout,
-              paymentReference,
-              bookingId: booking.id,
-              tripId: booking.tripId,
-              bookingReference: reference,
-              expectedAmountMinor: amountMinor,
-              idempotencyKey,
-            }),
+            this.reserveInTransaction(tx, { ...input, paymentReference }),
           );
         },
         (error) => uniqueViolationOn(error, 'payment_reference_key'),
@@ -158,28 +173,31 @@ export class PaymentService {
       );
     } catch (error) {
       // A concurrent request with the same key won the race: same attempt.
-      if (idempotencyKey && uniqueViolationOn(error, 'idempotency_key')) {
-        const replay = await this.replay(this.database.client, actor, reference, idempotencyKey);
-        if (replay) return { replayed: true, result: replay };
+      if (input.idempotencyKey && uniqueViolationOn(error, 'idempotency_key')) {
+        const replay = await this.replay(
+          this.database.client,
+          input.actor,
+          input.bookingReference,
+          input.idempotencyKey,
+        );
+        if (replay) return { replayed: true, payment: replay };
       }
       return translate(error);
     }
   }
 
-  private async createInTransaction(
+  private async reserveInTransaction(
     tx: DatabaseTransaction,
     input: {
       actor: AuthPrincipal;
       provider: PaymentProvider;
-      checkout: ProviderCheckout;
       paymentReference: string;
       bookingId: string;
       tripId: string;
       bookingReference: string;
-      expectedAmountMinor: bigint;
       idempotencyKey: string | undefined;
     },
-  ): Promise<{ replayed: boolean; result: CreatePaymentResult }> {
+  ): Promise<PaymentReservation> {
     const { actor } = input;
     // Lock order: trip (shared) -> booking -> new payment row.
     const [trip] = await tx.$queryRaw<Array<{ status: string; planned_departure_at: Date | null }>>`
@@ -195,21 +213,27 @@ export class PaymentService {
       FOR UPDATE
     `;
     if (!booking) throw BookingErrors.notFound();
+
+    // Evaluate the complete payable state from the locked rows. An exact-key
+    // replay still wins over a later terminal state, preserving the original
+    // idempotency contract, but it never calls the provider unless PENDING.
+    const now = await databaseNow(tx);
+    const stateError = booking.cancelled_at
+      ? PaymentErrors.bookingNotPayable()
+      : booking.confirmed_at
+        ? PaymentErrors.bookingConfirmed()
+        : booking.hold_expires_at.getTime() <= now.getTime()
+          ? PaymentErrors.bookingExpired()
+          : trip?.status !== 'SCHEDULED' ||
+              !trip.planned_departure_at ||
+              trip.planned_departure_at.getTime() <= now.getTime()
+            ? PaymentErrors.bookingNotPayable()
+            : null;
     if (input.idempotencyKey) {
       const replay = await this.replay(tx, actor, booking.reference, input.idempotencyKey);
-      if (replay) return { replayed: true, result: replay };
+      if (replay) return { replayed: true, payment: replay };
     }
-    const now = await databaseNow(tx);
-    if (booking.cancelled_at) throw PaymentErrors.bookingNotPayable();
-    if (booking.confirmed_at) throw PaymentErrors.bookingConfirmed();
-    if (booking.hold_expires_at.getTime() <= now.getTime()) throw PaymentErrors.bookingExpired();
-    if (
-      trip?.status !== 'SCHEDULED' ||
-      !trip.planned_departure_at ||
-      trip.planned_departure_at.getTime() <= now.getTime()
-    ) {
-      throw PaymentErrors.bookingNotPayable();
-    }
+    if (stateError) throw stateError;
     const pending = await tx.payment.findFirst({
       where: { bookingId: booking.id, status: 'PENDING' },
       select: { id: true },
@@ -219,23 +243,20 @@ export class PaymentService {
     // Derived from the locked booking only: unit fare x seats (BigInt).
     const seatCount = await tx.bookingSeat.count({ where: { bookingId: booking.id } });
     const amountMinor = bookingAmountMinor(booking.unit_amount_minor, seatCount);
-    if (amountMinor !== input.expectedAmountMinor) {
-      throw new Error('booking amount changed while starting a payment');
-    }
     const payment = await tx.payment.create({
       data: {
         reference: input.paymentReference,
         bookingId: booking.id,
         customerIdentityId: actor.identityId,
         provider: input.provider.name,
-        providerPaymentId: input.checkout.providerPaymentId,
+        providerPaymentId: null,
         amountMinor,
         currencyCode: booking.currency_code,
         currencyMinorUnit: booking.currency_minor_unit,
         ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
         createdAt: now,
       },
-      select: { id: true, ...customerPaymentSelect },
+      select: reservedPaymentSelect,
     });
     await this.audit.record(
       {
@@ -257,16 +278,74 @@ export class PaymentService {
       },
       tx,
     );
+    return { replayed: false, payment };
+  }
+
+  /**
+   * Phase B: no database transaction or lock is held during this call.
+   * Replays of a PENDING attempt intentionally call again with the same
+   * Payment.reference; the provider contract makes that operation idempotent.
+   */
+  private async createAtProvider(
+    provider: PaymentProvider,
+    reserved: ReservedPayment,
+  ): Promise<CreatePaymentResult> {
+    if (reserved.status !== 'PENDING') {
+      return this.createResult(provider, reserved, null);
+    }
+    const checkout = await provider.createPayment({
+      paymentReference: reserved.reference,
+      bookingReference: reserved.booking.reference,
+      amountMinor: reserved.amountMinor,
+      currencyCode: reserved.currencyCode,
+      currencyMinorUnit: reserved.currencyMinorUnit,
+    });
+    const payment = await this.database.client.$transaction((tx) =>
+      this.attachProviderPaymentId(tx, reserved.id, checkout),
+    );
+    return this.createResult(provider, payment, checkout.redirectUrl);
+  }
+
+  /** Phase C: attach the provider id once, while the attempt is still PENDING. */
+  private async attachProviderPaymentId(
+    tx: DatabaseTransaction,
+    paymentId: string,
+    checkout: ProviderCheckout,
+  ): Promise<ReservedPayment> {
+    const [locked] = await tx.$queryRaw<LockedProviderPayment[]>`
+      SELECT "id", "status"::text AS "status", "provider_payment_id"
+      FROM "payment" WHERE "id" = ${paymentId}::uuid
+      FOR UPDATE
+    `;
+    if (!locked) throw PaymentErrors.notFound();
+    if (locked.status !== 'PENDING') throw PaymentErrors.invalidTransition();
+    if (
+      locked.provider_payment_id !== null &&
+      locked.provider_payment_id !== checkout.providerPaymentId
+    ) {
+      throw new Error('payment provider returned another id for the same payment reference');
+    }
+    if (locked.provider_payment_id === null) {
+      return tx.payment.update({
+        where: { id: paymentId },
+        data: { providerPaymentId: checkout.providerPaymentId },
+        select: reservedPaymentSelect,
+      });
+    }
+    return tx.payment.findUniqueOrThrow({
+      where: { id: paymentId },
+      select: reservedPaymentSelect,
+    });
+  }
+
+  private createResult(
+    provider: PaymentProvider,
+    payment: ReservedPayment,
+    redirectUrl: string | null,
+  ): CreatePaymentResult {
     return {
-      replayed: false,
-      result: {
-        payment: customerPaymentView(payment),
-        checkout: {
-          provider: input.provider.name,
-          testMode: input.provider.testMode,
-          redirectUrl: input.checkout.redirectUrl,
-        },
-      },
+      payment: customerPaymentView(payment),
+      checkout: { provider: provider.name, testMode: provider.testMode, redirectUrl },
     };
   }
 
@@ -279,7 +358,7 @@ export class PaymentService {
     actor: AuthPrincipal,
     bookingReference: string,
     idempotencyKey: string,
-  ): Promise<CreatePaymentResult | null> {
+  ): Promise<ReservedPayment | null> {
     const existing = await client.payment.findUnique({
       where: {
         customerIdentityId_idempotencyKey: {
@@ -287,22 +366,11 @@ export class PaymentService {
           idempotencyKey,
         },
       },
-      select: {
-        ...customerPaymentSelect,
-        provider: true,
-        booking: { select: { reference: true } },
-      },
+      select: reservedPaymentSelect,
     });
     if (!existing) return null;
     if (existing.booking.reference !== bookingReference) throw PaymentErrors.idempotencyKeyReused();
-    return {
-      payment: customerPaymentView(existing),
-      checkout: {
-        provider: existing.provider,
-        testMode: this.provider?.testMode ?? true,
-        redirectUrl: null,
-      },
-    };
+    return existing;
   }
 
   /** Attempts of one of the caller's bookings, newest first. */

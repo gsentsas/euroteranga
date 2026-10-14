@@ -18,7 +18,11 @@ customer cancellation and trip cancellation. Refunds do not exist yet.
 
 - **Abstraction:** business services use an internal `PaymentProvider`
   interface:
-  - `createPayment` is called before the database transaction;
+  - a short transaction first reserves and audits the PENDING `Payment` with a
+    NULL provider id;
+  - `createPayment` is then called outside any transaction, with the committed
+    `Payment.reference` as a provider-side idempotency key;
+  - a second short transaction locks the Payment and attaches the provider id;
   - `verifyWebhook` and `parseWebhook` normalize authenticated events.
 
   No PSP SDK is added. The only provider is **SANDBOX**: local, test-only,
@@ -27,9 +31,11 @@ customer cancellation and trip cancellation. Refunds do not exist yet.
 
 - **One pipeline:** results only arrive as signed provider events (HMAC-SHA256
   over the raw body, timestamp within ±300 s, constant-time comparison, 8 KiB
-  maximum). This is the same pipeline a real PSP will use. Neither the service
-  nor STAFF can mark an attempt paid; PostgreSQL requires a processed event for
-  SUCCEEDED and FAILED.
+  maximum). This is the same pipeline a real PSP will use. An isolated Payment
+  update cannot mark an attempt paid: the transaction requires a processed
+  PaymentEvent and booking confirmation. Provider authenticity is checked by
+  the API at the webhook boundary; full SQL access remains in the trusted
+  computing base.
 - **History:** every attempt is a `Payment` row, PENDING then one final state;
   a new try is a new row. PostgreSQL guarantees, through partial unique
   indexes, at most one PENDING and one SUCCEEDED attempt per booking, and one
@@ -39,6 +45,10 @@ customer cancellation and trip cancellation. Refunds do not exist yet.
   booking, and returned only as a safe integer.
 - **Idempotency:**
   - initiation accepts an optional `Idempotency-Key`, unique per customer;
+  - `Payment.reference` is the stable provider-side idempotency key, and the
+    provider contract requires the same attempt on every retry;
+  - a provider failure leaves the reserved PENDING row intact; the same client
+    key resumes it without creating another row;
   - provider events are unique per `(provider, providerEventId)`;
   - a replay is refused with no effect.
 - **Confirmation:**
@@ -76,6 +86,9 @@ customer cancellation and trip cancellation. Refunds do not exist yet.
   - voiding the provider-side attempt when an attempt is cancelled (an outbox,
     so that no network call happens inside a transaction);
   - acknowledging replays with a success status if the PSP requires it.
+- A provider outage can leave a PENDING attempt without a provider id. That is
+  deliberate durable recovery state, not a row to delete; retrying the same
+  client key resumes the same provider reference.
 - Refunds, tickets, passengers, check-in, promotions, taxes and accounting stay
   separate future domains. CONFIRMED never implies a ticket.
 - A trip with confirmed bookings cannot be cancelled before the Refund domain

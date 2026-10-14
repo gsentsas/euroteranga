@@ -239,6 +239,11 @@ How it works:
   `parseWebhook`). The only provider is **SANDBOX**: local, test-only, with no
   external call and no real money, refused in staging and production
   (`PAYMENT_PROVIDER=DISABLED` by default). No PSP SDK, no card data.
+- **Initiation order:** a short transaction reserves the PENDING Payment and
+  audit first; `createPayment` then runs without a database lock, using the
+  committed Payment reference as its idempotency key; a final short
+  transaction attaches the provider id. A failed provider call leaves the
+  reservation recoverable with the same client idempotency key.
 - **Amounts:** the server derives them from the booking (fare × seats, BIGINT /
   `BigInt`); PostgreSQL checks them against the booking.
 - **Results:** they arrive only as signed, idempotent provider events

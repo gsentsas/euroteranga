@@ -55,15 +55,23 @@ const codeOf = (fn: () => unknown): [number, string] => {
 };
 
 describe('SANDBOX provider', () => {
-  it('creates opaque attempt ids and collects nothing (no redirect, no card data)', async () => {
-    const checkout = await provider.createPayment({
+  it('creates an idempotent opaque attempt and collects nothing (no redirect, no card data)', async () => {
+    const request = {
       paymentReference: 'ETP-000000000000',
       bookingReference: 'ETB-000000000000',
       amountMinor: 24_690n,
       currencyCode: 'EUR',
       currencyMinorUnit: 2,
+    };
+    const checkout = await provider.createPayment(request);
+    const replay = await provider.createPayment(request);
+    const other = await provider.createPayment({
+      ...request,
+      paymentReference: 'ETP-000000000001',
     });
     expect(checkout.providerPaymentId).toMatch(/^sbx_[A-Za-z0-9_-]{24}$/);
+    expect(replay.providerPaymentId).toBe(checkout.providerPaymentId);
+    expect(other.providerPaymentId).not.toBe(checkout.providerPaymentId);
     expect(checkout.redirectUrl).toBeNull();
     expect(provider.testMode).toBe(true);
   });

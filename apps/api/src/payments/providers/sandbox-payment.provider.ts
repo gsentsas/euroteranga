@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { PaymentErrors } from '../payment.errors.js';
 import type { PaymentFailureCode } from '../payment-rules.js';
@@ -65,9 +65,15 @@ export class SandboxPaymentProvider implements PaymentProvider {
 
   constructor(private readonly webhookKey: Buffer) {}
 
-  createPayment(_request: ProviderPaymentRequest): Promise<ProviderCheckout> {
+  createPayment(request: ProviderPaymentRequest): Promise<ProviderCheckout> {
+    // SANDBOX models the provider contract without keeping process-local
+    // state: the stable provider id is derived only from the idempotency key.
+    const stableId = createHash('sha256')
+      .update(request.paymentReference)
+      .digest('base64url')
+      .slice(0, 24);
     return Promise.resolve({
-      providerPaymentId: `sbx_${randomBytes(18).toString('base64url')}`,
+      providerPaymentId: `sbx_${stableId}`,
       redirectUrl: null,
     });
   }

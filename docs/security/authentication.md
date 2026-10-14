@@ -141,6 +141,12 @@ or selection to localStorage, sessionStorage, IndexedDB or a URL.
   limit. Replays are refused by the unique provider event id. For this, the API
   keeps the raw bytes of JSON bodies (`rawBody`). A CUSTOMER cookie or CSRF
   token is never a substitute for the signature.
+- **Payment trust boundary:** an isolated `UPDATE` of `Payment` cannot mark it
+  paid; the transactional pipeline requires `PaymentEvent` plus booking
+  confirmation. Provider authenticity is verified at the webhook boundary by
+  the API. PostgreSQL enforces structural and transactional invariants, but it
+  does not cryptographically authenticate the PSP; full SQL access to these
+  tables is in the trusted computing base.
 - **Oversized bodies:** a body above the global 32 KiB JSON limit is answered
   `413 PAYLOAD_TOO_LARGE`; it used to surface as an internal error.
 

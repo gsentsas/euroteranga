@@ -1,6 +1,10 @@
 import type { ApiEnv } from '@euroteranga/config';
 import { createDatabaseClient } from '@euroteranga/database';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  PAYMENT_PROVIDER,
+  type PaymentProvider,
+} from '../../../src/payments/providers/payment-provider.js';
 import {
   adminApi,
   isolatedDatabase,
@@ -41,12 +45,14 @@ describe('payment concurrency (isolated database)', () => {
   let bob: CustomerActor;
   let admin: StaffActor;
   let gate: ReturnType<typeof createDatabaseClient>;
+  let provider: PaymentProvider;
   const ROUNDS = 4;
 
   beforeAll(async () => {
     database = await isolatedDatabase();
     env = integrationEnv({ DATABASE_URL: database.url });
     t = await startTestApp(env);
+    provider = t.app.get<PaymentProvider>(PAYMENT_PROVIDER);
     countryId = await syntheticCountry(t.app);
     [alice, bob, admin] = await Promise.all([
       customerActor(t.app),
@@ -61,6 +67,8 @@ describe('payment concurrency (isolated database)', () => {
     await t.app.close();
     await database.drop();
   });
+
+  afterEach(() => vi.restoreAllMocks());
 
   const fixture = () => bookableFixture(t.app, { countryId, amount: () => 5_000 });
   const statuses = (responses: Array<{ status: number }>) =>
@@ -180,7 +188,9 @@ describe('payment concurrency (isolated database)', () => {
   }
 
   it('A. two simultaneous initiations for one booking: one PENDING attempt, one 409', async () => {
+    const providerCalls = vi.spyOn(provider, 'createPayment');
     for (let round = 0; round < ROUNDS; round += 1) {
+      providerCalls.mockClear();
       const f = await fixture();
       const hold = await bookingApi(alice).post('/bookings', holdBody(f, 1, 3, ['1A']));
       const results = await Promise.all([
@@ -193,11 +203,16 @@ describe('payment concurrency (isolated database)', () => {
       );
       const booking = await assertCoherent(hold.body.reference as string);
       expect(booking.payments).toHaveLength(1);
+      // The request that lost the database reservation never reaches the provider.
+      expect(providerCalls).toHaveBeenCalledTimes(1);
+      expect(providerCalls.mock.calls[0]![0].paymentReference).toBe(booking.payments[0]!.reference);
     }
   });
 
   it('B. the same Idempotency-Key sent concurrently: one attempt, returned to all', async () => {
+    const providerCalls = vi.spyOn(provider, 'createPayment');
     for (let round = 0; round < ROUNDS; round += 1) {
+      providerCalls.mockClear();
       const f = await fixture();
       const hold = await bookingApi(alice).post('/bookings', holdBody(f, 1, 3, ['1B']));
       const key = idempotencyKey();
@@ -207,12 +222,19 @@ describe('payment concurrency (isolated database)', () => {
       expect(statuses(results)).toEqual([200, 200, 201]);
       const references = new Set(results.map((result) => result.body.payment.reference as string));
       expect(references.size).toBe(1);
+      const reference = [...references][0]!;
+      expect(providerCalls).toHaveBeenCalledTimes(3);
+      expect(providerCalls.mock.calls.map(([request]) => request.paymentReference)).toEqual([
+        reference,
+        reference,
+        reference,
+      ]);
       expect((await state(hold.body.reference as string)).payments).toHaveLength(1);
       expect(
         await db(t.app).auditEvent.count({
           where: {
             action: 'PAYMENT_CREATED',
-            after: { path: ['reference'], equals: [...references][0]! },
+            after: { path: ['reference'], equals: reference },
           },
         }),
       ).toBe(1);
@@ -497,6 +519,7 @@ describe('payment concurrency (isolated database)', () => {
   });
 
   it('I. initiation racing the trip cancellation: no PENDING attempt survives a cancelled trip', async () => {
+    const providerCalls = vi.spyOn(provider, 'createPayment');
     const check = async (
       bookingReference: string,
       attempt: { status: number; body: { code?: string } },
@@ -504,11 +527,17 @@ describe('payment concurrency (isolated database)', () => {
     ) => {
       expect(cancel.status).toBe(200);
       expect([201, 409]).toContain(attempt.status);
-      if (attempt.status === 409) expect(attempt.body.code).toBe('PAYMENT_BOOKING_NOT_PAYABLE');
+      if (attempt.status === 409) {
+        expect(['PAYMENT_BOOKING_NOT_PAYABLE', 'PAYMENT_INVALID_TRANSITION']).toContain(
+          attempt.body.code,
+        );
+      }
       const booking = await assertCoherent(bookingReference);
       expect(booking.cancelledAt).not.toBeNull();
       expect(booking.payments.every((payment) => payment.status === 'CANCELLED')).toBe(true);
-      return attempt.status === 201 ? 'attempt first' : 'trip first';
+      // A reserved attempt can lose Phase C to the cancellation and answer
+      // INVALID_TRANSITION; its durable CANCELLED row still proves Phase A won.
+      return booking.payments.length === 1 ? 'attempt first' : 'trip first';
     };
     const start = async () => {
       const f = await fixture();
@@ -533,22 +562,27 @@ describe('payment concurrency (isolated database)', () => {
     }
     // Forced orders through the trip row: initiation takes it FOR SHARE first.
     const payFirst = await start();
+    providerCalls.mockClear();
     const [attempt, cancel] = await ordered(
       lockTrip(payFirst.f.tripId),
       payFirst.pay,
       payFirst.cancel,
     );
     expect(await check(payFirst.reference, attempt, cancel)).toBe('attempt first');
+    expect(providerCalls).toHaveBeenCalledTimes(1);
     const tripFirst = await start();
+    providerCalls.mockClear();
     const [cancelFirst, attemptSecond] = await ordered(
       lockTrip(tripFirst.f.tripId),
       tripFirst.cancel,
       tripFirst.pay,
     );
     expect(await check(tripFirst.reference, attemptSecond, cancelFirst)).toBe('trip first');
+    expect(providerCalls).not.toHaveBeenCalled();
   });
 
   it('J. initiation racing the booking cancellation: no PENDING attempt on a cancelled booking', async () => {
+    const providerCalls = vi.spyOn(provider, 'createPayment');
     const check = async (
       reference: string,
       attempt: { status: number; body: { code?: string } },
@@ -557,11 +591,15 @@ describe('payment concurrency (isolated database)', () => {
       expect([201, 409]).toContain(attempt.status);
       expect([200, 409]).toContain(cancel.status);
       if (cancel.status === 409) expect(cancel.body.code).toBe('BOOKING_CANCEL_CONFLICT');
-      if (attempt.status === 409) expect(attempt.body.code).toBe('PAYMENT_BOOKING_NOT_PAYABLE');
+      if (attempt.status === 409) {
+        expect(['PAYMENT_BOOKING_NOT_PAYABLE', 'PAYMENT_INVALID_TRANSITION']).toContain(
+          attempt.body.code,
+        );
+      }
       const booking = await assertCoherent(reference);
       if (cancel.status === 200) {
         expect(booking.payments.every((payment) => payment.status === 'CANCELLED')).toBe(true);
-        return attempt.status === 201 ? 'attempt then cancellation' : 'cancellation first';
+        return booking.payments.length === 1 ? 'attempt then cancellation' : 'cancellation first';
       }
       // The attempt committed between the two locks: nothing was cancelled.
       expect(booking.cancelledAt).toBeNull();
@@ -590,18 +628,22 @@ describe('payment concurrency (isolated database)', () => {
     // payments, so the cancellation reports a conflict instead of inverting
     // the payment -> booking lock order.
     const payFirst = await start();
+    providerCalls.mockClear();
     const [attempt, cancel] = await ordered(
       lockBooking(payFirst.reference),
       payFirst.pay,
       payFirst.cancel,
     );
     expect(await check(payFirst.reference, attempt, cancel)).toBe('conflict');
+    expect(providerCalls).toHaveBeenCalledTimes(1);
     const cancelFirst = await start();
+    providerCalls.mockClear();
     const [cancelled, refused] = await ordered(
       lockBooking(cancelFirst.reference),
       cancelFirst.cancel,
       cancelFirst.pay,
     );
     expect(await check(cancelFirst.reference, refused, cancelled)).toBe('cancellation first');
+    expect(providerCalls).not.toHaveBeenCalled();
   });
 });

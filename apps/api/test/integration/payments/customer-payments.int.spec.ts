@@ -1,6 +1,11 @@
 import type { ApiEnv } from '@euroteranga/config';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  PAYMENT_PROVIDER,
+  type PaymentProvider,
+  type ProviderPaymentRequest,
+} from '../../../src/payments/providers/payment-provider.js';
 import { adminApi, isolatedDatabase, staffActor } from '../../support/admin-helpers.js';
 import { db, withoutRequestId } from '../../support/auth-helpers.js';
 import {
@@ -37,11 +42,13 @@ describe('customer payments and booking confirmation (isolated database)', () =>
   let countryId: string;
   let alice: CustomerActor;
   let bob: CustomerActor;
+  let provider: PaymentProvider;
 
   beforeAll(async () => {
     database = await isolatedDatabase();
     env = integrationEnv({ DATABASE_URL: database.url, BOOKING_HOLD_TTL_SECONDS: '900' });
     t = await startTestApp(env);
+    provider = t.app.get<PaymentProvider>(PAYMENT_PROVIDER);
     countryId = await syntheticCountry(t.app);
     [alice, bob] = await Promise.all([customerActor(t.app), customerActor(t.app)]);
   });
@@ -50,6 +57,8 @@ describe('customer payments and booking confirmation (isolated database)', () =>
     await t.app.close();
     await database.drop();
   });
+
+  afterEach(() => vi.restoreAllMocks());
 
   const fixture = (options = {}) => bookableFixture(t.app, { countryId, ...options });
   const hold = async (
@@ -127,6 +136,59 @@ describe('customer payments and booking confirmation (isolated database)', () =>
   });
 
   describe('initiation', () => {
+    it('commits the reserved attempt and audit before calling the provider', async () => {
+      const f = await fixture();
+      const booking = await hold(alice, f, 1, 3, ['2A']);
+      const key = idempotencyKey();
+      const original = provider.createPayment.bind(provider);
+      let entered!: (request: ProviderPaymentRequest) => void;
+      let release!: () => void;
+      const providerEntered = new Promise<ProviderPaymentRequest>((resolve) => (entered = resolve));
+      const providerReleased = new Promise<void>((resolve) => (release = resolve));
+      vi.spyOn(provider, 'createPayment').mockImplementation(async (request) => {
+        entered(request);
+        await providerReleased;
+        return original(request);
+      });
+
+      const responsePromise = paymentApi(alice).create(booking.reference, { key });
+      const request = await providerEntered;
+      try {
+        const reserved = await db(t.app).payment.findUniqueOrThrow({
+          where: { reference: request.paymentReference },
+        });
+        expect(reserved).toMatchObject({
+          status: 'PENDING',
+          providerPaymentId: null,
+          idempotencyKey: key,
+        });
+        expect(
+          await db(t.app).auditEvent.count({
+            where: { action: 'PAYMENT_CREATED', resourceId: reserved.id },
+          }),
+        ).toBe(1);
+        // The reservation transaction is committed and holds no row lock
+        // while the instrumented provider call is paused.
+        const locked = await db(t.app).$queryRaw<Array<{ id: string }>>`
+          SELECT "id" FROM "payment"
+          WHERE "id" = ${reserved.id}::uuid
+          FOR UPDATE NOWAIT`;
+        expect(locked).toEqual([{ id: reserved.id }]);
+      } finally {
+        release();
+      }
+      const response = await responsePromise;
+      expect(response.status).toBe(201);
+      expect(response.body.payment.reference).toBe(request.paymentReference);
+      expect(
+        (
+          await db(t.app).payment.findUniqueOrThrow({
+            where: { reference: request.paymentReference },
+          })
+        ).providerPaymentId,
+      ).toMatch(/^sbx_[A-Za-z0-9_-]{24}$/);
+    });
+
     it('derives an exact PENDING attempt from the booking and audits it', async () => {
       const f = await fixture({ amount: () => 12_345 });
       const booking = await hold(alice, f, 1, 3, ['1A', '2B']);
@@ -243,33 +305,122 @@ describe('customer payments and booking confirmation (isolated database)', () =>
       }
     });
 
+    it('keeps a provider failure reserved and recovers it with the same key and reference', async () => {
+      const f = await fixture();
+      const booking = await hold(alice, f, 1, 3, ['2B']);
+      const key = idempotencyKey();
+      const original = provider.createPayment.bind(provider);
+      const calls = vi
+        .spyOn(provider, 'createPayment')
+        .mockRejectedValueOnce(new Error('simulated lost provider response'))
+        .mockImplementation(original);
+
+      const failed = await paymentApi(alice).create(booking.reference, { key });
+      expect(failed.status).toBe(500);
+      const reserved = await db(t.app).payment.findFirstOrThrow({
+        where: { booking: { reference: booking.reference } },
+      });
+      expect(reserved).toMatchObject({
+        status: 'PENDING',
+        providerPaymentId: null,
+        idempotencyKey: key,
+      });
+      expect(
+        await db(t.app).auditEvent.count({
+          where: { action: 'PAYMENT_CREATED', resourceId: reserved.id },
+        }),
+      ).toBe(1);
+
+      const replay = await paymentApi(alice).create(booking.reference, { key });
+      expect(replay.status).toBe(200);
+      expect(replay.body.payment.reference).toBe(reserved.reference);
+      expect(
+        await db(t.app).payment.count({ where: { booking: { reference: booking.reference } } }),
+      ).toBe(1);
+      expect(
+        (await db(t.app).payment.findUniqueOrThrow({ where: { id: reserved.id } }))
+          .providerPaymentId,
+      ).toMatch(/^sbx_[A-Za-z0-9_-]{24}$/);
+      expect(calls).toHaveBeenCalledTimes(2);
+      expect(calls.mock.calls.map(([request]) => request.paymentReference)).toEqual([
+        reserved.reference,
+        reserved.reference,
+      ]);
+    });
+
     it('refuses expired, cancelled and confirmed bookings', async () => {
+      const calls = vi.spyOn(provider, 'createPayment');
       const f = await fixture();
       const expired = await expiredHold(t.app, f, alice.id, 1, 2, ['1A']);
+      calls.mockClear();
       const late = await paymentApi(alice).create(expired.reference);
       expect(late.status).toBe(409);
       expect(late.body.code).toBe('PAYMENT_BOOKING_EXPIRED');
+      expect(calls).not.toHaveBeenCalled();
 
       const cancelled = await hold(alice, f, 2, 3, ['1A']);
       expect((await bookingApi(alice).post(`/bookings/${cancelled.reference}/cancel`)).status).toBe(
         200,
       );
+      calls.mockClear();
       const afterCancel = await paymentApi(alice).create(cancelled.reference);
       expect(afterCancel.status).toBe(409);
       expect(afterCancel.body.code).toBe('PAYMENT_BOOKING_NOT_PAYABLE');
+      expect(calls).not.toHaveBeenCalled();
 
       const confirmed = await hold(alice, f, 3, 4, ['1A']);
       const paid = await paymentApi(alice).create(confirmed.reference);
       expect((await settle(t.app, env, paid.body.payment)).status).toBe(200);
+      calls.mockClear();
       const again = await paymentApi(alice).create(confirmed.reference);
       expect(again.status).toBe(409);
       expect(again.body.code).toBe('PAYMENT_BOOKING_CONFIRMED');
+      expect(calls).not.toHaveBeenCalled();
       expect(
         await db(t.app).payment.count({
           where: { booking: { reference: { in: [expired.reference, cancelled.reference] } } },
         }),
       ).toBe(0);
     });
+
+    it('never calls the provider for a cancelled or departed trip', async () => {
+      const staff = await staffActor(t.app, ['SUPER_ADMIN']);
+      const cancelledTrip = await fixture();
+      const cancelledBooking = await hold(alice, cancelledTrip, 1, 3, ['1B']);
+      expect(
+        (
+          await adminApi(staff).post(`/trips/${cancelledTrip.tripId}/cancel`, {
+            reason: 'Voyage annulé avant paiement',
+          })
+        ).status,
+      ).toBe(200);
+      const calls = vi.spyOn(provider, 'createPayment');
+      const onCancelled = await paymentApi(alice).create(cancelledBooking.reference);
+      expect(onCancelled.status).toBe(409);
+      expect(onCancelled.body.code).toBe('PAYMENT_BOOKING_NOT_PAYABLE');
+      expect(calls).not.toHaveBeenCalled();
+
+      // A hold cannot legally outlast its trip. Use a short, guarded hold,
+      // then wait until both the hold and its trip are in the past.
+      const departingTrip = await fixture({ departureInMs: 12_000 });
+      const departedBooking = await shortHold(t.app, departingTrip, alice.id, 1, 3, ['2A'], 3_000);
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const [row] = await db(t.app).$queryRaw<Array<{ departed: boolean }>>`
+          SELECT "planned_departure_at" <= now() AS "departed"
+          FROM "trip" WHERE "id" = ${departingTrip.tripId}::uuid`;
+        if (row?.departed) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      const [departure] = await db(t.app).$queryRaw<Array<{ departed: boolean }>>`
+        SELECT "planned_departure_at" <= now() AS "departed"
+        FROM "trip" WHERE "id" = ${departingTrip.tripId}::uuid`;
+      expect(departure?.departed).toBe(true);
+      calls.mockClear();
+      const afterDeparture = await paymentApi(alice).create(departedBooking.reference);
+      expect(afterDeparture.status).toBe(409);
+      expect(afterDeparture.body.code).toBe('PAYMENT_BOOKING_EXPIRED');
+      expect(calls).not.toHaveBeenCalled();
+    }, 35_000);
 
     it('lets the owner cancel a PENDING attempt; the booking stays HELD and payable', async () => {
       const f = await fixture();

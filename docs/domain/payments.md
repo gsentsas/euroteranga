@@ -68,7 +68,12 @@ PENDING ──> SUCCEEDED   (a processed provider success event)
 The three terminal states are final: no `FAILED -> SUCCEEDED`, no
 `CANCELLED -> SUCCEEDED`, nothing after `SUCCEEDED`. A new attempt is a new
 `Payment`. SUCCEEDED and FAILED require a processed provider event in the
-database: neither STAFF nor SQL can "mark paid".
+database. An isolated `UPDATE` of `Payment` cannot mark it paid: the
+transactional pipeline requires a processed `PaymentEvent` and the atomic
+booking confirmation. Provider authenticity is verified at the webhook
+boundary by the API, not cryptographically by PostgreSQL. An actor with full
+SQL access to the payment and event tables remains part of the trusted
+computing base.
 
 Normalized failure codes (never raw provider text): `DECLINED`,
 `INSUFFICIENT_FUNDS`, `AUTHENTICATION_FAILED`, `CHECKOUT_EXPIRED`,
@@ -122,10 +127,11 @@ instead of being rounded. No float is used anywhere.
 The business services only use the internal `PaymentProvider` interface:
 
 - `createPayment(request)` registers an attempt at the provider and returns an
-  opaque `providerPaymentId` and an optional redirect URL. It is called
-  **before** the database transaction, with our new payment reference as the
-  provider-side idempotency key, so that no network call ever holds a database
-  lock;
+  opaque `providerPaymentId` and an optional redirect URL. It is called only
+  **after** the PENDING `Payment` and `PAYMENT_CREATED` audit have committed,
+  with `Payment.reference` as a mandatory provider-side idempotency key. The
+  provider must return the same provider attempt for every call carrying the
+  same reference. No network call ever holds a database lock;
 - `verifyWebhook(request, now)` authenticates a raw webhook (content type,
   size, timestamp freshness, signature in constant time);
 - `parseWebhook(rawBody)` turns an authenticated payload into a normalized
@@ -147,9 +153,11 @@ as an authenticated event, through the same pipeline a real PSP will use.
 ### SANDBOX
 
 SANDBOX contacts no external service and moves no money. `createPayment` only
-returns an opaque id `sbx_…` and no redirect: nothing is collected in the
-browser. The result is simulated by sending a signed SANDBOX event to the
-webhook. The browser and integration test harnesses do exactly that.
+returns an opaque, deterministic id `sbx_…` for a given `Payment.reference`
+and no redirect: retries therefore model the provider idempotency contract,
+and nothing is collected in the browser. The result is simulated by sending a
+signed SANDBOX event to the webhook. The browser and integration test
+harnesses do exactly that.
 
 A SANDBOX event is JSON:
 
@@ -244,6 +252,25 @@ PAYMENT_IDEMPOTENCY_KEY_REUSED`);
 Only the key itself is stored. It is not a secret and it is never logged in
 audit events: they only record whether a key was used.
 
+Initiation is deliberately split into three phases:
+
+1. **Reservation transaction:** trip `FOR SHARE`, booking `FOR UPDATE`, full
+   payable-state validation, idempotency replay, existing-PENDING check, exact
+   amount derivation, then insertion of `Payment` PENDING with
+   `providerPaymentId = NULL` and `PAYMENT_CREATED` audit; commit.
+2. **Provider call:** outside every transaction, call `createPayment` with the
+   committed `Payment.reference`.
+3. **Attachment transaction:** lock that `Payment` `FOR UPDATE`, require it to
+   remain PENDING, and attach the returned provider id once.
+
+If the provider call fails or its response is lost before Phase 3, the
+reserved row is not deleted: it stays PENDING with `providerPaymentId = NULL`.
+Replaying the same `Idempotency-Key` finds that exact row, calls the provider
+again with the same `Payment.reference`, and attaches the idempotent result.
+No second `Payment` row is created. Callers that need recovery must therefore
+send an idempotency key; a keyless retry sees the already-reserved PENDING
+attempt and is refused.
+
 ## Transactions and lock order
 
 There is one hierarchy, without cycle: **trip → payment → booking → booking
@@ -252,7 +279,8 @@ a booking.
 
 | Operation                    | Locks, in order                                                                                                                         |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Payment initiation           | trip `FOR SHARE` → booking `FOR UPDATE` → new payment row                                                                               |
+| Payment reservation          | trip `FOR SHARE` → booking `FOR UPDATE` → new payment row                                                                               |
+| Provider id attachment       | payment `FOR UPDATE`                                                                                                                    |
 | Provider event (webhook)     | payment `FOR UPDATE` → booking `FOR UPDATE` (success only)                                                                              |
 | Attempt cancellation         | payment `FOR UPDATE`                                                                                                                    |
 | Booking cancellation (PR-09) | the booking's PENDING payments `FOR UPDATE` (by id) → booking `FOR UPDATE` → seats → locks                                              |
@@ -266,6 +294,14 @@ booking: the confirmation trigger only reads the trip status. A trip
 cancellation already holds every booking of the trip, so a cancelled trip
 cannot keep a confirmable booking.
 
+The provider call sits between the two short transactions above. It holds no
+database lock. If reservation loses to booking/trip cancellation or another
+keyless PENDING attempt, it is never made. If reservation wins, cancellation
+may subsequently win before provider-id attachment; the reserved database row
+is still the durable record of the attempted external effect. A real PSP may
+add an outbox, void or compensation workflow without moving its network call
+inside a transaction.
+
 A booking cancellation locks the booking's PENDING attempts before the booking
 and cancels them together with it (`PAYMENT_CANCELLED`). If an attempt was
 created between its two lock steps, it answers `409 BOOKING_CANCEL_CONFLICT`
@@ -277,8 +313,10 @@ hold a row lock in a separate transaction so that both requests queue behind it
 in a chosen order (PostgreSQL grants row locks in arrival order), which makes
 each side win deterministically:
 
-- A: two initiations → one PENDING, one 409;
-- B: the same key three times → one attempt for all;
+- A: two keyless initiations → one PENDING, one 409, and no provider call from
+  the loser;
+- B: the same key three times → one attempt for all; every possible provider
+  call carries exactly the same `Payment.reference`;
 - C: the same event twice → one effect, one replay;
 - D: two success events → confirmed once;
 - E: success vs booking cancellation;

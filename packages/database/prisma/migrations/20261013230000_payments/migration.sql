@@ -156,8 +156,11 @@ CREATE UNIQUE INDEX "payment_event_one_processed_per_payment"
 
 -- Payment: created PENDING by the booking owner for an active hold of a
 -- SCHEDULED trip, with the exact booking total; afterwards a single terminal
--- transition. SUCCEEDED and FAILED need a processed provider event: STAFF or
--- SQL can never "mark paid". Never deleted.
+-- transition. An isolated Payment UPDATE cannot mark paid: SUCCEEDED and
+-- FAILED need a processed event, and success needs booking confirmation in the
+-- same transaction. Provider authenticity is checked by the API webhook
+-- boundary; actors with full SQL access are in the trusted computing base.
+-- Never deleted.
 CREATE FUNCTION "payment_guard"() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
