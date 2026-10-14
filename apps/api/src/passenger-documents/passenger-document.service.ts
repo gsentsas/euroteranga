@@ -299,7 +299,7 @@ export class PassengerDocumentService {
     return documentView(await this.scanQuarantined(document, actor));
   }
 
-  async adminDocuments(query: AdminDocumentListQuery) {
+  async adminDocuments(actor: AuthPrincipal, query: AdminDocumentListQuery) {
     const where: Prisma.PassengerDocumentWhereInput = {
       ...(query.cursor ? { id: { lt: query.cursor } } : {}),
       ...(query.type ? { type: query.type } : {}),
@@ -329,6 +329,28 @@ export class PassengerDocumentService {
       include: documentInclude,
     });
     const items = rows.slice(0, query.limit).map(documentView);
+    // A page names passengers next to their document types: one trace per
+    // page (not per row) records exactly which references were shown.
+    await this.database.client.$transaction((tx) =>
+      this.audit.record(
+        {
+          actor,
+          action: 'PASSENGER_DOCUMENT_ACCESSED',
+          resourceType: 'passenger_document',
+          metadata: {
+            access: 'LIST',
+            references: items.map((item) => item.reference),
+            filters: {
+              type: query.type ?? null,
+              status: query.status ?? null,
+              bookingReference: query.bookingReference ?? null,
+              passengerReference: query.passengerReference ?? null,
+            },
+          },
+        },
+        tx,
+      ),
+    );
     return {
       items,
       nextCursor: rows.length > query.limit ? (rows[query.limit - 1]?.id ?? null) : null,

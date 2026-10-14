@@ -40,12 +40,15 @@ export class AdminPassengerDocumentController {
 
   @Get()
   @Header('Cache-Control', 'no-store')
-  @ApiOkResponse({ description: 'Paginated passenger document metadata, never object bytes.' })
+  @ApiOkResponse({
+    description: 'Paginated passenger document metadata, never object bytes; each page is audited.',
+  })
   list(
+    @CurrentPrincipal() principal: AuthPrincipal,
     @Query(new ZodValidationPipe(adminDocumentListQuerySchema))
     query: z.infer<typeof adminDocumentListQuerySchema>,
   ) {
-    return this.documents.adminDocuments(query);
+    return this.documents.adminDocuments(principal, query);
   }
 
   @Get(':reference')

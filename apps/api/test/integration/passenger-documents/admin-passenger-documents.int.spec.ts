@@ -1,10 +1,20 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import type { ApiEnv } from '@euroteranga/config';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TestMalwareScanner } from '../../../src/passenger-documents/malware/malware-scanner.js';
+import {
+  generateDocumentObjectKey,
+  generateDocumentReference,
+} from '../../../src/passenger-documents/passenger-document-rules.js';
+import {
+  OBJECT_STORAGE_PROVIDER,
+  type ObjectStorageProvider,
+} from '../../../src/passenger-documents/storage/object-storage.provider.js';
 import { adminApi, staffActor, type StaffActor } from '../../support/admin-helpers.js';
 import { db } from '../../support/auth-helpers.js';
 import { customerActor, type CustomerActor } from '../../support/booking-helpers.js';
@@ -72,6 +82,29 @@ describe('staff passenger-document reads', () => {
       /objectKey|sha256|bucket|secret|scanner|failureCode|customerIdentityId|"id"/i,
     );
     expect((await adminApi(reader).get('/passenger-documents?status=APPROVED')).status).toBe(400);
+
+    // Each listed page names passengers: it leaves exactly one trace with the
+    // references shown, never a per-row amplification or document data.
+    const listAudits = await db(t.app).auditEvent.findMany({
+      where: {
+        action: 'PASSENGER_DOCUMENT_ACCESSED',
+        actorIdentityId: reader.id,
+        resourceId: null,
+      },
+    });
+    expect(listAudits.map((audit) => audit.metadata)).toEqual([
+      {
+        access: 'LIST',
+        references: [documentReference],
+        filters: {
+          type: 'NATIONAL_ID',
+          status: 'ACCEPTED',
+          bookingReference,
+          passengerReference,
+        },
+      },
+    ]);
+    expect(JSON.stringify(listAudits)).not.toMatch(/%PDF|objectKey|sha256|givenName|familyName/i);
   });
 
   it('audits sensitive metadata and exact accepted-content reads', async () => {
@@ -152,6 +185,33 @@ describe('staff passenger-document reads', () => {
     expect(
       (await adminApi(reader).get(`/passenger-documents/${rejected.reference}/download`)).status,
     ).toBe(404);
+
+    // A QUARANTINED row backed by a real, intact private object: only its
+    // status keeps the bytes away from STAFF too.
+    const passenger = await db(t.app).passenger.findUniqueOrThrow({
+      where: { reference: passengerReference },
+    });
+    const quarantined = await db(t.app).passengerDocument.create({
+      data: {
+        reference: generateDocumentReference(),
+        objectKey: generateDocumentObjectKey(),
+        passengerId: passenger.id,
+        type: 'OTHER',
+        sha256: createHash('sha256').update(SYNTHETIC_PDF).digest('hex'),
+        mimeType: 'application/pdf',
+        sizeBytes: BigInt(SYNTHETIC_PDF.length),
+      },
+    });
+    await t.app.get<ObjectStorageProvider>(OBJECT_STORAGE_PROVIDER).put({
+      key: quarantined.objectKey,
+      body: Readable.from([SYNTHETIC_PDF]),
+      sizeBytes: SYNTHETIC_PDF.length,
+      mimeType: 'application/pdf',
+    });
+    expect(
+      (await adminApi(reader).get(`/passenger-documents/${quarantined.reference}/download`)).status,
+    ).toBe(404);
+
     for (const action of ['approve', 'validate', 'mark-valid', 'compliance']) {
       expect(
         (
