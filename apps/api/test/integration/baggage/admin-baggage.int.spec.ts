@@ -180,6 +180,25 @@ describe('staff baggage workspace, RBAC, lifecycle and audit', () => {
         'BAGGAGE_ACCESSED',
       ]),
     );
+    // Every STAFF read kind is audited: detail, QR label, QR resolution and list pages.
+    expect((await staffBaggageApi(reader).qr(reference)).status).toBe(200);
+    const reads = await db(t.app).auditEvent.findMany({
+      where: { action: 'BAGGAGE_ACCESSED', resourceId: bag.id },
+      select: { metadata: true },
+    });
+    expect(new Set(reads.map((event) => (event.metadata as { access: string }).access))).toEqual(
+      new Set(['DETAIL', 'QR_LABEL']),
+    );
+    const pages = await db(t.app).auditEvent.findMany({
+      where: { action: 'BAGGAGE_ACCESSED', resourceId: null, actorIdentityId: manager.id },
+      select: { metadata: true },
+    });
+    expect(
+      pages.some((event) => {
+        const metadata = event.metadata as { access: string; references: string[] };
+        return metadata.access === 'LIST' && metadata.references.includes(reference);
+      }),
+    ).toBe(true);
     const auditJson = JSON.stringify(actions);
     expect(auditJson).not.toContain(customer.email);
     expect(auditJson).not.toContain('<svg');
