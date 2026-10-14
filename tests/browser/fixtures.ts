@@ -131,6 +131,22 @@ export const FIXTURES = {
     };
   },
 
+  /**
+   * PR-12: owner of the compliance journey. Separate from paymentCustomer so
+   * the parallel PR-10/PR-11 scenarios never see its passengers or files.
+   */
+  get complianceCustomer(): Fixture {
+    return { realm: 'CUSTOMER', email: runScoped('compliance-customer') };
+  },
+  /** PR-12: drafts, verifies and publishes synthetic regulatory rules. */
+  get complianceRuleManager(): Fixture {
+    return {
+      realm: 'STAFF',
+      email: runScoped('compliance-rule-manager'),
+      roles: ['DIRECTOR'],
+    };
+  },
+
   /** Target of the SUPER_ADMIN's role and status changes. */
   get managed(): Fixture {
     return { realm: 'STAFF', email: runScoped('managed'), roles: ['DISPATCHER'] };
@@ -155,13 +171,20 @@ export function invitationToken(): string {
 }
 
 export type PreauthenticatedFixture =
-  'paymentCustomer' | 'foreignCustomer' | 'passengerDocumentReader' | 'passengerDocumentDenied';
+  | 'paymentCustomer'
+  | 'foreignCustomer'
+  | 'passengerDocumentReader'
+  | 'passengerDocumentDenied'
+  | 'complianceRuleManager'
+  | 'complianceCustomer';
 
 const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string> = {
   paymentCustomer: 'E2E_PAYMENT_CUSTOMER_SESSION',
   foreignCustomer: 'E2E_FOREIGN_CUSTOMER_SESSION',
   passengerDocumentReader: 'E2E_PASSENGER_DOCUMENT_READER_SESSION',
   passengerDocumentDenied: 'E2E_PASSENGER_DOCUMENT_DENIED_SESSION',
+  complianceRuleManager: 'E2E_COMPLIANCE_RULE_MANAGER_SESSION',
+  complianceCustomer: 'E2E_COMPLIANCE_CUSTOMER_SESSION',
 };
 
 /**
@@ -288,6 +311,28 @@ export function bookingSeed() {
  * seeded CONFIRMED booking paid through a recorded SANDBOX event for the OPS
  * scenarios. Payments are simulated: no provider is ever contacted.
  */
+/**
+ * PR-12: a dedicated trip and confirmed booking of a dedicated customer (so
+ * the compliance scenarios share no seat, passenger or file with the
+ * PR-10/PR-11 scenarios that run in parallel), and a
+ * synthetic country reserved for the rule-manager scenario's rule.
+ */
+export function complianceSeed() {
+  const raw = process.env.E2E_RUN_ID;
+  if (!raw) throw new Error('E2E_RUN_ID is set by global-setup.ts');
+  const ruleCountry = process.env.E2E_COMPLIANCE_RULE_COUNTRY;
+  if (!ruleCountry) throw new Error('E2E_COMPLIANCE_RULE_COUNTRY is set by global-setup.ts');
+  const run = raw.toUpperCase();
+  return {
+    run,
+    tripReference: `ET-CPL-${run}`,
+    departureDate: '2030-07-01',
+    bookingReference: `ETB-E2E2${run}`,
+    paymentReference: `ETP-E2E2${run}`,
+    ruleCountry,
+  };
+}
+
 export function paymentSeed() {
   const raw = process.env.E2E_RUN_ID;
   if (!raw) throw new Error('E2E_RUN_ID is set by global-setup.ts');

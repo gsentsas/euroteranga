@@ -352,8 +352,10 @@ describe('passenger-document PostgreSQL invariants (isolated database)', () => {
     await expect(
       db(t.app).passengerDocument.delete({ where: { id: rejected.id } }),
     ).rejects.toThrow(/cannot be deleted/);
+    // CASCADE would bypass the PR-12 evidence foreign key: only the
+    // statement-level triggers can refuse it.
     await expect(
-      db(t.app).$executeRawUnsafe('TRUNCATE TABLE "passenger_document"'),
+      db(t.app).$executeRawUnsafe('TRUNCATE TABLE "passenger_document" CASCADE'),
     ).rejects.toThrow(/cannot be truncated/);
   });
 });

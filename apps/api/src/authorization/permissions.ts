@@ -32,6 +32,11 @@ export const PERMISSIONS = {
   PAYMENT_READ: 'payment.read',
   PAYMENT_MANAGE: 'payment.manage',
   PASSENGER_DOCUMENT_READ: 'passenger.document.read',
+  // PR-12: read != review != rule management.
+  COMPLIANCE_READ: 'compliance.read',
+  COMPLIANCE_REVIEW: 'compliance.review',
+  COMPLIANCE_RULE_READ: 'compliance.rule.read',
+  COMPLIANCE_RULE_MANAGE: 'compliance.rule.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

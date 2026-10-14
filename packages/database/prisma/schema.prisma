@@ -164,6 +164,53 @@ enum RouteVersionStatus {
   @@map("route_version_status")
 }
 
+/// PR-12: lifecycle of one version of a regulatory rule. PUBLISHED versions
+/// are immutable (only retirement is allowed); corrections are new versions.
+enum ComplianceRuleVersionStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+
+  @@map("compliance_rule_version_status")
+}
+
+/// PR-12: provenance check of a rule version. Only VERIFIED can be published.
+enum ComplianceVerificationStatus {
+  UNVERIFIED
+  VERIFIED
+
+  @@map("compliance_verification_status")
+}
+
+/// PR-12: outcome of one rule version for one booking passenger.
+enum ComplianceOutcome {
+  PASS
+  FAIL
+  REVIEW_REQUIRED
+  NOT_APPLICABLE
+
+  @@map("compliance_outcome")
+}
+
+/// PR-12: overall machine result. No matching or insufficient verified rule
+/// coverage is REVIEW_REQUIRED, never PASS.
+enum ComplianceResult {
+  PASS
+  FAIL
+  REVIEW_REQUIRED
+
+  @@map("compliance_result")
+}
+
+/// PR-12: decision of an authorized STAFF reviewer (reason mandatory).
+enum ComplianceReviewDecision {
+  COMPLIANT
+  NON_COMPLIANT
+  NEEDS_INFORMATION
+
+  @@map("compliance_review_decision")
+}
+
 /// An identity able to authenticate in exactly one realm. It is not a
 /// customer, passenger, staff profile or crew member: those business objects
 /// will reference it later and stay independent.
@@ -200,12 +247,18 @@ model AuthIdentity {
   staffEnrollmentGrantsIssued StaffEnrollmentGrant[]        @relation("StaffEnrollmentIssuedBy")
 
   // PR-09: holds created by this CUSTOMER identity (the booker, not a passenger).
-  bookings   Booking[]   @relation("BookingCustomer")
+  bookings                    Booking[]               @relation("BookingCustomer")
   // PR-10: payment attempts of this CUSTOMER (always the booking owner).
-  payments   Payment[]   @relation("PaymentCustomer")
+  payments                    Payment[]               @relation("PaymentCustomer")
   // PR-11: people for whom this CUSTOMER may make bookings. The account is
   // the owner/booker and remains distinct from the person travelling.
-  passengers Passenger[] @relation("PassengerOwner")
+  passengers                  Passenger[]             @relation("PassengerOwner")
+  // PR-12: provenance and decisions of regulatory compliance.
+  complianceVersionsVerified  ComplianceRuleVersion[] @relation("ComplianceVersionVerifier")
+  complianceVersionsPublished ComplianceRuleVersion[] @relation("ComplianceVersionPublisher")
+  complianceVersionsRetired   ComplianceRuleVersion[] @relation("ComplianceVersionRetirer")
+  complianceEvaluations       ComplianceEvaluation[]  @relation("ComplianceEvaluationActor")
+  complianceReviews           ComplianceReview[]      @relation("ComplianceReviewer")
 
   // The same address may exist in two realms as two unrelated identities.
   @@unique([realm, normalizedEmail])
@@ -908,8 +961,9 @@ model BookingPassenger {
   passengerId String   @map("passenger_id") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  booking   Booking   @relation(fields: [bookingId], references: [id], onDelete: Restrict)
-  passenger Passenger @relation(fields: [passengerId], references: [id], onDelete: Restrict)
+  booking               Booking                @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  passenger             Passenger              @relation(fields: [passengerId], references: [id], onDelete: Restrict)
+  complianceEvaluations ComplianceEvaluation[]
 
   @@id([bookingId, passengerId])
   @@index([passengerId, bookingId])
@@ -938,7 +992,8 @@ model PassengerDocument {
   acceptedAt  DateTime?               @map("accepted_at") @db.Timestamptz(3)
   rejectedAt  DateTime?               @map("rejected_at") @db.Timestamptz(3)
 
-  passenger Passenger @relation(fields: [passengerId], references: [id], onDelete: Restrict)
+  passenger          Passenger                      @relation(fields: [passengerId], references: [id], onDelete: Restrict)
+  complianceEvidence ComplianceEvaluationEvidence[]
 
   @@index([passengerId, id])
   @@index([status, id])
@@ -1053,4 +1108,165 @@ model PaymentEvent {
   @@unique([provider, providerEventId])
   @@index([paymentId, id])
   @@map("payment_event")
+}
+
+/// PR-12: stable identity of one regulatory rule. The source code is never the
+/// legal authority: requirements live in verified, published versions only.
+model ComplianceRule {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  /// Public, immutable reference: ETCR- + 12 CSPRNG Crockford base32 characters.
+  reference String   @unique @db.VarChar(17)
+  /// Internal administrative label, immutable after creation.
+  title     String   @db.VarChar(160)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  versions ComplianceRuleVersion[]
+
+  @@map("compliance_rule")
+}
+
+/// PR-12: one version of a rule. DRAFT content can change (and loses its
+/// verification); PUBLISHED is immutable except for retirement. Lifecycle
+/// triggers, CHECKs and the one-draft index live in the PR-12 migration.
+model ComplianceRuleVersion {
+  id                       String                       @id @default(uuid(7)) @db.Uuid
+  ruleId                   String                       @map("rule_id") @db.Uuid
+  version                  Int
+  status                   ComplianceRuleVersionStatus  @default(DRAFT)
+  /// Version of the closed rule language (`definition` grammar).
+  languageVersion          Int                          @default(1) @map("language_version")
+  /// Strict, non-executable JSON (validated server-side, never evaluated as code).
+  definition               Json                         @db.JsonB
+  /// SHA-256 of the canonical JSON of `definition`.
+  definitionSha256         String                       @map("definition_sha256") @db.Char(64)
+  /// Plain text shown to customers when the rule is not satisfied.
+  customerGuidance         String                       @map("customer_guidance") @db.VarChar(500)
+  /// Inclusive calendar dates compared with the planned travel date.
+  effectiveFrom            DateTime                     @map("effective_from") @db.Date
+  effectiveTo              DateTime?                    @map("effective_to") @db.Date
+  sourceAuthority          String?                      @map("source_authority") @db.VarChar(200)
+  sourceTitle              String?                      @map("source_title") @db.VarChar(300)
+  sourceUrl                String?                      @map("source_url") @db.VarChar(2048)
+  sourceReference          String?                      @map("source_reference") @db.VarChar(200)
+  sourceCheckedOn          DateTime?                    @map("source_checked_on") @db.Date
+  verificationStatus       ComplianceVerificationStatus @default(UNVERIFIED) @map("verification_status")
+  verifiedAt               DateTime?                    @map("verified_at") @db.Timestamptz(3)
+  verifiedByIdentityId     String?                      @map("verified_by_identity_id") @db.Uuid
+  /// The exact definition that was verified; publication requires a match.
+  verifiedDefinitionSha256 String?                      @map("verified_definition_sha256") @db.Char(64)
+  verificationNote         String?                      @map("verification_note") @db.VarChar(1000)
+  publishedAt              DateTime?                    @map("published_at") @db.Timestamptz(3)
+  publishedByIdentityId    String?                      @map("published_by_identity_id") @db.Uuid
+  retiredAt                DateTime?                    @map("retired_at") @db.Timestamptz(3)
+  retiredByIdentityId      String?                      @map("retired_by_identity_id") @db.Uuid
+  retirementReason         String?                      @map("retirement_reason") @db.VarChar(500)
+  createdAt                DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  rule        ComplianceRule               @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  verifiedBy  AuthIdentity?                @relation("ComplianceVersionVerifier", fields: [verifiedByIdentityId], references: [id], onDelete: Restrict)
+  publishedBy AuthIdentity?                @relation("ComplianceVersionPublisher", fields: [publishedByIdentityId], references: [id], onDelete: Restrict)
+  retiredBy   AuthIdentity?                @relation("ComplianceVersionRetirer", fields: [retiredByIdentityId], references: [id], onDelete: Restrict)
+  results     ComplianceEvaluationResult[]
+
+  @@unique([ruleId, version])
+  @@index([status, effectiveFrom])
+  @@index([verifiedByIdentityId])
+  @@index([publishedByIdentityId])
+  @@index([retiredByIdentityId])
+  @@map("compliance_rule_version")
+}
+
+/// PR-12: append-only machine evaluation of one booking passenger (the
+/// person on one concrete journey). Facts are server-derived and minimized.
+model ComplianceEvaluation {
+  id               String           @id @default(uuid(7)) @db.Uuid
+  /// Public, immutable reference: ETCE- + 12 CSPRNG Crockford base32 characters.
+  reference        String           @unique @db.VarChar(17)
+  bookingId        String           @map("booking_id") @db.Uuid
+  passengerId      String           @map("passenger_id") @db.Uuid
+  /// Local calendar date of departure at the booked origin stop.
+  travelDate       DateTime         @map("travel_date") @db.Date
+  /// Local calendar date of arrival at the booked destination stop.
+  arrivalDate      DateTime         @map("arrival_date") @db.Date
+  engineVersion    String           @map("engine_version") @db.VarChar(32)
+  /// Minimized fact snapshot: countries, age, document references/types/expiry.
+  facts            Json             @db.JsonB
+  factsFingerprint String           @map("facts_fingerprint") @db.Char(64)
+  rulesFingerprint String           @map("rules_fingerprint") @db.Char(64)
+  result           ComplianceResult
+  /// Evaluation-level stable codes (e.g. missing verified coverage).
+  findings         Json             @default("[]") @db.JsonB
+  actorIdentityId  String           @map("actor_identity_id") @db.Uuid
+  evaluatedAt      DateTime         @default(now()) @map("evaluated_at") @db.Timestamptz(3)
+
+  bookingPassenger BookingPassenger             @relation(fields: [bookingId, passengerId], references: [bookingId, passengerId], onDelete: Restrict)
+  actor            AuthIdentity                 @relation("ComplianceEvaluationActor", fields: [actorIdentityId], references: [id], onDelete: Restrict)
+  results          ComplianceEvaluationResult[]
+  reviews          ComplianceReview[]
+
+  @@index([bookingId, passengerId, evaluatedAt])
+  @@index([result, id])
+  @@index([travelDate, id])
+  @@index([actorIdentityId])
+  @@map("compliance_evaluation")
+}
+
+/// PR-12: outcome of one published rule version inside one evaluation.
+model ComplianceEvaluationResult {
+  id            String            @id @default(uuid(7)) @db.Uuid
+  evaluationId  String            @map("evaluation_id") @db.Uuid
+  ruleVersionId String            @map("rule_version_id") @db.Uuid
+  outcome       ComplianceOutcome
+  /// Stable machine reason code, never a free legal sentence.
+  reasonCode    String            @map("reason_code") @db.VarChar(64)
+  /// Leaf findings: stable codes and document types only.
+  details       Json              @default("[]") @db.JsonB
+
+  evaluation  ComplianceEvaluation           @relation(fields: [evaluationId], references: [id], onDelete: Restrict)
+  ruleVersion ComplianceRuleVersion          @relation(fields: [ruleVersionId], references: [id], onDelete: Restrict)
+  evidence    ComplianceEvaluationEvidence[]
+
+  @@unique([evaluationId, ruleVersionId])
+  @@index([ruleVersionId])
+  @@map("compliance_evaluation_result")
+}
+
+/// PR-12: a technically ACCEPTED document used as evidence for one result.
+/// Technical acceptance stays distinct from regulatory sufficiency.
+model ComplianceEvaluationEvidence {
+  evaluationResultId  String @map("evaluation_result_id") @db.Uuid
+  passengerDocumentId String @map("passenger_document_id") @db.Uuid
+
+  evaluationResult  ComplianceEvaluationResult @relation(fields: [evaluationResultId], references: [id], onDelete: Restrict)
+  passengerDocument PassengerDocument          @relation(fields: [passengerDocumentId], references: [id], onDelete: Restrict)
+
+  @@id([evaluationResultId, passengerDocumentId])
+  @@index([passengerDocumentId])
+  @@map("compliance_evaluation_evidence")
+}
+
+/// PR-12: append-only human decision on one evaluation. A later review
+/// supersedes exactly one earlier review of the same evaluation.
+model ComplianceReview {
+  id                 String                   @id @default(uuid(7)) @db.Uuid
+  evaluationId       String                   @map("evaluation_id") @db.Uuid
+  supersedesReviewId String?                  @unique @map("supersedes_review_id") @db.Uuid
+  decision           ComplianceReviewDecision
+  /// Internal reason (mandatory, never shown to the customer).
+  reason             String                   @db.VarChar(1000)
+  /// Optional plain text the customer may see.
+  customerMessage    String?                  @map("customer_message") @db.VarChar(500)
+  reviewerIdentityId String                   @map("reviewer_identity_id") @db.Uuid
+  reviewedAt         DateTime                 @default(now()) @map("reviewed_at") @db.Timestamptz(3)
+
+  evaluation   ComplianceEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Restrict)
+  supersedes   ComplianceReview?    @relation("ComplianceReviewChain", fields: [supersedesReviewId], references: [id], onDelete: Restrict)
+  supersededBy ComplianceReview?    @relation("ComplianceReviewChain")
+  reviewer     AuthIdentity         @relation("ComplianceReviewer", fields: [reviewerIdentityId], references: [id], onDelete: Restrict)
+
+  @@index([evaluationId, reviewedAt])
+  @@index([reviewerIdentityId])
+  @@map("compliance_review")
 }

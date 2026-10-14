@@ -101,3 +101,23 @@
   gap: var(--et-space-1);
   margin: 0 0 var(--et-space-3);
 }
+
+/* PR-12: labelled navigation groups (e.g. Conformité). */
+.et-nav-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--et-space-2);
+}
+
+.et-nav-group-label {
+  font-weight: 600;
+}
+
+/* PR-12: rule definitions and evaluation facts are shown as read-only JSON. */
+.et-json {
+  max-height: 20rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -16,6 +16,10 @@ const EXPECTED_MATRIX: Record<
       'audit.read',
       'booking.manage',
       'booking.read',
+      'compliance.read',
+      'compliance.review',
+      'compliance.rule.manage',
+      'compliance.rule.read',
       'fleet.manage',
       'fleet.read',
       'identity.read',
@@ -47,6 +51,10 @@ const EXPECTED_MATRIX: Record<
       'audit.read',
       'booking.manage',
       'booking.read',
+      'compliance.read',
+      'compliance.review',
+      'compliance.rule.manage',
+      'compliance.rule.read',
       'fleet.manage',
       'fleet.read',
       'identity.read',
@@ -76,6 +84,7 @@ const EXPECTED_MATRIX: Record<
     permissions: [
       'booking.manage',
       'booking.read',
+      'compliance.read',
       'fleet.manage',
       'fleet.read',
       'identity.read',
@@ -126,10 +135,15 @@ const EXPECTED_MATRIX: Record<
     ],
   },
   // COMPLIANCE_AGENT has no pricing permission by default (PR-08 matrix).
+  // PR-12: reads and reviews passenger compliance and reads rules; rule
+  // publication stays with SUPER_ADMIN and DIRECTOR.
   COMPLIANCE_AGENT: {
     realm: 'STAFF',
     privileged: false,
     permissions: [
+      'compliance.read',
+      'compliance.review',
+      'compliance.rule.read',
       'fleet.read',
       'network.read',
       'ops.access',
@@ -165,6 +179,7 @@ const EXPECTED_MATRIX: Record<
     privileged: false,
     permissions: [
       'audit.read',
+      'compliance.rule.read',
       'fleet.read',
       'identity.read',
       'network.read',
@@ -253,6 +268,18 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['GET', '/v1/admin/passenger-documents'],
   ['GET', '/v1/admin/passenger-documents/ETD-000000000000'],
   ['GET', '/v1/admin/passenger-documents/ETD-000000000000/download'],
+  ['GET', '/v1/admin/compliance/rules'],
+  ['GET', '/v1/admin/compliance/rules/ETCR-000000000000'],
+  ['POST', '/v1/admin/compliance/rules'],
+  ['POST', '/v1/admin/compliance/rules/ETCR-000000000000/versions'],
+  ['POST', '/v1/admin/compliance/rules/ETCR-000000000000/versions/1'],
+  ['POST', '/v1/admin/compliance/rules/ETCR-000000000000/versions/1/verify'],
+  ['POST', '/v1/admin/compliance/rules/ETCR-000000000000/versions/1/publish'],
+  ['POST', '/v1/admin/compliance/rules/ETCR-000000000000/versions/1/retire'],
+  ['GET', '/v1/admin/compliance/booking-passengers'],
+  ['GET', '/v1/admin/compliance/evaluations/ETCE-000000000000'],
+  ['POST', '/v1/admin/compliance/evaluations'],
+  ['POST', '/v1/admin/compliance/evaluations/ETCE-000000000000/reviews'],
 ];
 
 describe('server-side RBAC', () => {
@@ -347,6 +374,14 @@ describe('server-side RBAC', () => {
       );
       expect((await api.get('/bookings')).status).toBe(allowed('booking.read') ? 200 : 403);
       expect((await api.get('/payments')).status).toBe(allowed('payment.read') ? 200 : 403);
+      // PR-12: passenger compliance and the rule catalogue are separate grants;
+      // booking.read, payment.read or passenger.document.read never imply them.
+      expect((await api.get('/compliance/booking-passengers')).status).toBe(
+        allowed('compliance.read') ? 200 : 403,
+      );
+      expect((await api.get('/compliance/rules')).status).toBe(
+        allowed('compliance.rule.read') ? 200 : 403,
+      );
     },
   );
 

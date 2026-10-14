@@ -2,7 +2,8 @@
 
 > Implemented in PR-11. **Not production deployed.** Passenger-document
 > storage and scanning are disabled unless both are explicitly configured.
-> **TECHNICALLY_ACCEPTED != REGULATORY_VALID.** PR-12 will own Compliance.
+> **TECHNICALLY_ACCEPTED != REGULATORY_VALID.** PR-12 owns Compliance: see
+> [compliance.md](compliance.md).
 
 PR-11 introduces the person travelling independently from the authenticated
 CUSTOMER who booked, plus a private technical file pipeline. It does not

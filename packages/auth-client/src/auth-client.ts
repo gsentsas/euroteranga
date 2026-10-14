@@ -985,6 +985,215 @@ export interface PrivateDownload {
   mimeType: string;
 }
 
+/**
+ * PR-12 compliance. TECHNICALLY_ACCEPTED != REGULATORY_VALID and
+ * NO_MATCHING_RULE != COMPLIANT: a stale evaluation is never current.
+ */
+export type ComplianceStatus =
+  | 'NOT_EVALUATED'
+  | 'STALE'
+  | 'REVIEW_REQUIRED'
+  | 'COMPLIANT_BY_RULES'
+  | 'NON_COMPLIANT_BY_RULES'
+  | 'COMPLIANT'
+  | 'NON_COMPLIANT'
+  | 'NEEDS_INFORMATION';
+export type ComplianceResult = 'PASS' | 'FAIL' | 'REVIEW_REQUIRED';
+export type ComplianceOutcome = ComplianceResult | 'NOT_APPLICABLE';
+export type ComplianceReviewDecision = 'COMPLIANT' | 'NON_COMPLIANT' | 'NEEDS_INFORMATION';
+
+export interface ComplianceFinding {
+  code: string;
+  documentType?: PassengerDocumentType | null;
+  country?: string;
+}
+
+export interface CustomerPassengerCompliance {
+  passenger: { reference: string; givenName: string; familyName: string };
+  status: ComplianceStatus;
+  evaluation: {
+    reference: string;
+    evaluatedAt: string;
+    travelDate: string;
+    result: ComplianceResult;
+    current: boolean;
+  } | null;
+  review: {
+    decision: ComplianceReviewDecision;
+    reviewedAt: string;
+    customerMessage: string | null;
+  } | null;
+  requirements: Array<{
+    outcome: 'FAIL' | 'REVIEW_REQUIRED';
+    guidance: string;
+    findings: Array<{ code: string; documentType: PassengerDocumentType | null }>;
+  }>;
+  findings: ComplianceFinding[];
+  documents: Array<{
+    reference: string;
+    type: PassengerDocumentType;
+    technicalStatus: PassengerDocumentStatus;
+  }>;
+}
+
+export interface CustomerBookingCompliance {
+  bookingReference: string;
+  items: CustomerPassengerCompliance[];
+}
+
+export type ComplianceRuleVersionStatus = 'DRAFT' | 'PUBLISHED' | 'RETIRED';
+
+export interface ComplianceRuleSourceInput {
+  authority: string | null;
+  title: string | null;
+  url: string | null;
+  reference: string | null;
+}
+
+export interface ComplianceRuleVersionInput {
+  /** Rule language v1 JSON; validated by the server, never executed. */
+  definition: unknown;
+  customerGuidance: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  source: ComplianceRuleSourceInput;
+}
+
+export interface ComplianceRuleVersion {
+  version: number;
+  status: ComplianceRuleVersionStatus;
+  languageVersion: number;
+  definition: unknown;
+  definitionSha256: string;
+  customerGuidance: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  source: ComplianceRuleSourceInput & { checkedOn: string | null };
+  verification: {
+    status: 'UNVERIFIED' | 'VERIFIED';
+    verifiedAt: string | null;
+    verifiedBy: string | null;
+    note: string | null;
+  };
+  publishedAt: string | null;
+  publishedBy: string | null;
+  retiredAt: string | null;
+  retiredBy: string | null;
+  retirementReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ComplianceRule {
+  reference: string;
+  title: string;
+  createdAt: string;
+  versions: ComplianceRuleVersion[];
+}
+
+export interface ComplianceRuleSummary {
+  reference: string;
+  title: string;
+  createdAt: string;
+  versions: Array<{
+    version: number;
+    status: ComplianceRuleVersionStatus;
+    verificationStatus: 'UNVERIFIED' | 'VERIFIED';
+    effectiveFrom: string;
+    effectiveTo: string | null;
+  }>;
+}
+
+export interface ComplianceQueueItem {
+  bookingReference: string;
+  tripReference: string;
+  departureAt: string;
+  passenger: { reference: string; givenName: string; familyName: string };
+  status: ComplianceStatus;
+  evaluation: {
+    reference: string;
+    result: ComplianceResult;
+    evaluatedAt: string;
+    current: boolean;
+  } | null;
+  review: { decision: ComplianceReviewDecision; reviewedAt: string; current: boolean } | null;
+}
+
+export interface ComplianceQueueOptions {
+  cursor?: string;
+  limit?: number;
+  status?: ComplianceStatus;
+  tripReference?: string;
+  bookingReference?: string;
+  passengerReference?: string;
+  departureFrom?: string;
+  departureTo?: string;
+}
+
+export interface ComplianceEvaluationDetail {
+  reference: string;
+  bookingReference: string;
+  tripReference: string;
+  passenger: {
+    reference: string;
+    givenName: string;
+    familyName: string;
+    nationality: { iso2: string; name: string };
+  };
+  travelDate: string;
+  arrivalDate: string;
+  evaluatedAt: string;
+  triggeredBy: 'CUSTOMER' | 'STAFF' | 'CREW';
+  engineVersion: string;
+  facts: unknown;
+  factsFingerprint: string;
+  rulesFingerprint: string;
+  result: ComplianceResult;
+  findings: ComplianceFinding[];
+  latestEvaluationReference: string | null;
+  current: boolean;
+  status: ComplianceStatus;
+  results: Array<{
+    rule: { reference: string; title: string };
+    version: {
+      version: number;
+      status: ComplianceRuleVersionStatus;
+      effectiveFrom: string;
+      effectiveTo: string | null;
+      customerGuidance: string;
+      source: ComplianceRuleSourceInput & { checkedOn: string | null };
+    };
+    outcome: ComplianceOutcome;
+    reasonCode: string;
+    details: ComplianceFinding[];
+    evidence: Array<{
+      reference: string;
+      type: PassengerDocumentType;
+      technicalStatus: PassengerDocumentStatus;
+      expiresAt: string | null;
+    }>;
+  }>;
+  reviews: Array<{
+    id: string;
+    decision: ComplianceReviewDecision;
+    reason: string;
+    customerMessage: string | null;
+    reviewer: string;
+    reviewedAt: string;
+    supersedesReviewId: string | null;
+    current: boolean;
+  }>;
+}
+
+export interface ComplianceReviewInput {
+  decision: ComplianceReviewDecision;
+  /** Mandatory internal justification (10-1000 characters). */
+  reason: string;
+  customerMessage?: string;
+  /** The latest review the reviewer saw, or null if there was none. */
+  previousReviewId: string | null;
+}
+
 function query(values: Record<string, string | number | undefined>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
@@ -1306,6 +1515,18 @@ export function createAuthClient(baseUrl: string) {
         downloadDocument: (documentReference: string) =>
           privateDownload(
             `/v1/booking/documents/${encodeURIComponent(documentReference)}/download`,
+          ),
+        /** PR-12: compliance of the caller's own booking passengers (no side effect). */
+        compliance: (bookingReference: string) =>
+          call<CustomerBookingCompliance>(
+            'GET',
+            `/v1/booking/bookings/${encodeURIComponent(bookingReference)}/compliance`,
+          ),
+        /** PR-12: evaluates from server-side facts; deduplicated when nothing changed. */
+        evaluateCompliance: (bookingReference: string, passengerReference: string) =>
+          withCsrf<CustomerPassengerCompliance>(
+            'customer',
+            `/v1/booking/bookings/${encodeURIComponent(bookingReference)}/passengers/${encodeURIComponent(passengerReference)}/compliance-evaluations`,
           ),
       },
     },
@@ -1681,6 +1902,98 @@ export function createAuthClient(baseUrl: string) {
         download: (reference: string) =>
           privateDownload(
             `/v1/admin/passenger-documents/${encodeURIComponent(reference)}/download`,
+          ),
+      },
+      /**
+       * PR-12: compliance.read / compliance.review for passengers;
+       * compliance.rule.read / compliance.rule.manage for the rule catalogue.
+       */
+      compliance: {
+        rules: (
+          options: { cursor?: string; limit?: number; status?: ComplianceRuleVersionStatus } = {},
+        ) =>
+          call<Page<ComplianceRuleSummary>>(
+            'GET',
+            `/v1/admin/compliance/rules?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              status: options.status,
+            })}`,
+          ),
+        rule: (reference: string) =>
+          call<ComplianceRule>(
+            'GET',
+            `/v1/admin/compliance/rules/${encodeURIComponent(reference)}`,
+          ),
+        createRule: (input: { title: string; version: ComplianceRuleVersionInput }) =>
+          withCsrf<ComplianceRule>('staff', '/v1/admin/compliance/rules', input),
+        createVersion: (reference: string, version?: ComplianceRuleVersionInput) =>
+          withCsrf<ComplianceRule>(
+            'staff',
+            `/v1/admin/compliance/rules/${encodeURIComponent(reference)}/versions`,
+            version ? { version } : {},
+          ),
+        updateVersion: (reference: string, version: number, input: ComplianceRuleVersionInput) =>
+          withCsrf<ComplianceRule>(
+            'staff',
+            `/v1/admin/compliance/rules/${encodeURIComponent(reference)}/versions/${version}`,
+            input,
+          ),
+        verifyVersion: (
+          reference: string,
+          version: number,
+          input: { definitionSha256: string; sourceCheckedOn: string; note?: string },
+        ) =>
+          withCsrf<ComplianceRule>(
+            'staff',
+            `/v1/admin/compliance/rules/${encodeURIComponent(reference)}/versions/${version}/verify`,
+            input,
+          ),
+        publishVersion: (reference: string, version: number, definitionSha256: string) =>
+          withCsrf<ComplianceRule>(
+            'staff',
+            `/v1/admin/compliance/rules/${encodeURIComponent(reference)}/versions/${version}/publish`,
+            { definitionSha256 },
+          ),
+        retireVersion: (reference: string, version: number, reason: string) =>
+          withCsrf<ComplianceRule>(
+            'staff',
+            `/v1/admin/compliance/rules/${encodeURIComponent(reference)}/versions/${version}/retire`,
+            { reason },
+          ),
+        queue: (options: ComplianceQueueOptions = {}) =>
+          call<Page<ComplianceQueueItem>>(
+            'GET',
+            `/v1/admin/compliance/booking-passengers?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              status: options.status,
+              tripReference: options.tripReference,
+              bookingReference: options.bookingReference,
+              passengerReference: options.passengerReference,
+              departureFrom: options.departureFrom,
+              departureTo: options.departureTo,
+            })}`,
+          ),
+        evaluation: (reference: string) =>
+          call<ComplianceEvaluationDetail>(
+            'GET',
+            `/v1/admin/compliance/evaluations/${encodeURIComponent(reference)}`,
+          ),
+        evaluate: (bookingReference: string, passengerReference: string) =>
+          withCsrf<{ reference: string; created: boolean }>(
+            'staff',
+            '/v1/admin/compliance/evaluations',
+            { bookingReference, passengerReference },
+          ),
+        review: (evaluationReference: string, input: ComplianceReviewInput) =>
+          withCsrf<{
+            evaluationReference: string;
+            review: { id: string; decision: ComplianceReviewDecision; reviewedAt: string };
+          }>(
+            'staff',
+            `/v1/admin/compliance/evaluations/${encodeURIComponent(evaluationReference)}/reviews`,
+            input,
           ),
       },
     },

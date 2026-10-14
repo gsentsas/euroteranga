@@ -38,4 +38,10 @@ export const RATE_LIMITS = {
     limit: 20,
     windowMs: HOUR,
   },
+  /** Compliance evaluations requested per authenticated CUSTOMER identity (PR-12). */
+  complianceEvaluationIdentity: {
+    action: 'compliance-evaluation:identity',
+    limit: 30,
+    windowMs: HOUR,
+  },
 } as const satisfies Record<string, RateLimitRule>;

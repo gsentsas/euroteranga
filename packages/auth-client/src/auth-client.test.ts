@@ -25,6 +25,9 @@ import {
   type Passenger,
   type PassengerDocument,
   type PrivateDownload,
+  type ComplianceEvaluationDetail,
+  type CustomerBookingCompliance,
+  type CustomerPassengerCompliance,
 } from './index.js';
 
 type Call = { url: string; init: RequestInit };
@@ -156,6 +159,91 @@ describe('passenger-document client', () => {
     expectTypeOf<PassengerDocument['status']>().toEqualTypeOf<
       'QUARANTINED' | 'ACCEPTED' | 'REJECTED'
     >();
+  });
+});
+
+describe('compliance client (PR-12)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reads compliance without side effect and evaluates through the CSRF flow', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { bookingReference: 'ETB-A', items: [] } },
+      { status: 200, body: { csrfToken: 'v1.compliance.csrf' } },
+      { status: 200, body: {} },
+    ]);
+    const client = createAuthClient('http://api.test');
+    await client.booking.customer.compliance('ETB-A/../B');
+    await client.booking.customer.evaluateCompliance('ETB-A', 'ETV-A/../B');
+    expect(calls[0]?.url).toBe('http://api.test/v1/booking/bookings/ETB-A%2F..%2FB/compliance');
+    expect(calls[0]?.init.method).toBe('GET');
+    expect(calls[1]?.url).toBe('http://api.test/v1/auth/customer/csrf');
+    expect(calls[2]?.url).toBe(
+      'http://api.test/v1/booking/bookings/ETB-A/passengers/ETV-A%2F..%2FB/compliance-evaluations',
+    );
+    expect(calls[2]?.init).toMatchObject({
+      method: 'POST',
+      headers: expect.objectContaining({ 'X-CSRF-Token': 'v1.compliance.csrf' }),
+    });
+    // The client sends no facts or result: the server derives everything.
+    expect(calls[2]?.init.body).toBe('{}');
+  });
+
+  it('separates rule management, queue reads and reasoned reviews (staff realm CSRF)', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { items: [], nextCursor: null } },
+      { status: 200, body: { csrfToken: 'v1.staff.csrf' } },
+      { status: 200, body: {} },
+      { status: 200, body: { csrfToken: 'v1.staff.csrf' } },
+      { status: 201, body: {} },
+    ]);
+    const client = createAuthClient('http://api.test');
+    await client.admin.compliance.queue({
+      status: 'REVIEW_REQUIRED',
+      bookingReference: 'ETB-A',
+      limit: 10,
+    });
+    await client.admin.compliance.publishVersion('ETCR-A/../B', 2, 'a'.repeat(64));
+    await client.admin.compliance.review('ETCE-A', {
+      decision: 'NEEDS_INFORMATION',
+      reason: 'Motif interne obligatoire.',
+      previousReviewId: null,
+    });
+    expect(calls[0]?.url).toBe(
+      'http://api.test/v1/admin/compliance/booking-passengers?limit=10&status=REVIEW_REQUIRED&bookingReference=ETB-A',
+    );
+    expect(calls[1]?.url).toBe('http://api.test/v1/auth/staff/csrf');
+    expect(calls[2]?.url).toBe(
+      'http://api.test/v1/admin/compliance/rules/ETCR-A%2F..%2FB/versions/2/publish',
+    );
+    expect(JSON.parse(calls[2]?.init.body as string)).toEqual({ definitionSha256: 'a'.repeat(64) });
+    expect(calls[4]?.url).toBe('http://api.test/v1/admin/compliance/evaluations/ETCE-A/reviews');
+    expect(JSON.parse(calls[4]?.init.body as string)).toEqual({
+      decision: 'NEEDS_INFORMATION',
+      reason: 'Motif interne obligatoire.',
+      previousReviewId: null,
+    });
+  });
+
+  it('types compliance strictly and offers no bypass or override', () => {
+    const client = createAuthClient('http://api.test');
+    expectTypeOf(client.booking.customer.compliance).returns.resolves.toEqualTypeOf<
+      ApiResult<CustomerBookingCompliance>
+    >();
+    expectTypeOf(client.booking.customer.evaluateCompliance).returns.resolves.toEqualTypeOf<
+      ApiResult<CustomerPassengerCompliance>
+    >();
+    expectTypeOf(client.admin.compliance.evaluation).returns.resolves.toEqualTypeOf<
+      ApiResult<ComplianceEvaluationDetail>
+    >();
+    expectTypeOf(client.admin.compliance).not.toHaveProperty('override');
+    expectTypeOf(client.admin.compliance).not.toHaveProperty('bypass');
+    expectTypeOf(client.booking.customer).not.toHaveProperty('review');
+    expectTypeOf<CustomerPassengerCompliance>().not.toHaveProperty('rulesFingerprint');
+    expectTypeOf<CustomerPassengerCompliance['review']>().toEqualTypeOf<{
+      decision: 'COMPLIANT' | 'NON_COMPLIANT' | 'NEEDS_INFORMATION';
+      reviewedAt: string;
+      customerMessage: string | null;
+    } | null>();
   });
 });
 

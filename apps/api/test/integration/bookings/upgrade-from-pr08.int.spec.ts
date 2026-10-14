@@ -73,9 +73,9 @@ const SNAPSHOTS = {
   fares: `SELECT json_agg(f ORDER BY f.id)::text AS value FROM fare_entry f`,
   fareVersions: `SELECT json_agg(v ORDER BY v.id)::text AS value FROM fare_table_version v`,
   vehicle: `SELECT row_to_json(v)::text AS value FROM (SELECT id, status, seat_map_version_id FROM vehicle) v`,
-  // Grants added by later migrations (booking.*, payment.* and PR-11
-  // passenger-document reads) aside.
-  grants: `SELECT json_agg(g ORDER BY g.role_key, g.permission_key)::text AS value FROM authorization_role_permission g WHERE g.permission_key NOT LIKE 'booking.%' AND g.permission_key NOT LIKE 'payment.%' AND g.permission_key <> 'passenger.document.read'`,
+  // Grants added by later migrations (booking.*, payment.*, PR-11
+  // passenger-document reads and PR-12 compliance.*) aside.
+  grants: `SELECT json_agg(g ORDER BY g.role_key, g.permission_key)::text AS value FROM authorization_role_permission g WHERE g.permission_key NOT LIKE 'booking.%' AND g.permission_key NOT LIKE 'payment.%' AND g.permission_key <> 'passenger.document.read' AND g.permission_key NOT LIKE 'compliance.%'`,
 };
 
 function deploy(config: string | null, url: string) {
