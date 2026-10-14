@@ -1,4 +1,5 @@
 import type { ApiEnv } from '@euroteranga/config';
+import type { Prisma } from '@euroteranga/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { isolatedDatabase, staffActor, type StaffActor } from '../../support/admin-helpers.js';
 import { db } from '../../support/auth-helpers.js';
@@ -470,6 +471,72 @@ describe('baggage PostgreSQL invariants, idempotence and true concurrency', () =
       'DAMAGED',
       'EXCEPTION_RESOLVED',
       'CHECKED_IN',
+    ]);
+  });
+
+  it('refuses a batch of events appended before the projection follows', async () => {
+    const { row } = await createBag();
+    const insert = (tx: Prisma.TransactionClient, sequence: number) =>
+      tx.$executeRaw`
+        INSERT INTO "baggage_event" ("id", "baggage_id", "sequence", "type", "lifecycle_status",
+          "occurred_at", "actor_identity_id", "payload_fingerprint")
+        VALUES (gen_random_uuid(), ${row.id}::uuid, ${sequence}, 'CHECKED_IN', 'CHECKED_IN',
+          now(), ${manager.id}::uuid, ${'f'.repeat(64)})`;
+    // Two CHECKED_IN events validated against the same stale projection would
+    // duplicate a transition; the guard requires each event to be projected first.
+    await expect(
+      db(t.app).$transaction(async (tx) => {
+        await insert(tx, 2);
+        await insert(tx, 3);
+        await tx.$executeRaw`
+          UPDATE "baggage" SET "lifecycle_status" = 'CHECKED_IN' WHERE "id" = ${row.id}::uuid`;
+      }),
+    ).rejects.toThrow(/projection must be updated before the next event/);
+    expect(await db(t.app).baggageEvent.count({ where: { baggageId: row.id } })).toBe(1);
+  });
+
+  it('serializes concurrent direct writers on the bag row and re-validates the second', async () => {
+    const { row } = await createBag();
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    let inserted!: () => void;
+    const isInserted = new Promise<void>((resolve) => (inserted = resolve));
+    const first = db(t.app).$transaction(
+      async (tx) => {
+        await tx.$executeRaw`
+          INSERT INTO "baggage_event" ("id", "baggage_id", "sequence", "type", "lifecycle_status",
+            "occurred_at", "actor_identity_id", "payload_fingerprint")
+          VALUES (gen_random_uuid(), ${row.id}::uuid, 2, 'CHECKED_IN', 'CHECKED_IN',
+            now(), ${manager.id}::uuid, ${'1'.repeat(64)})`;
+        await tx.$executeRaw`
+          UPDATE "baggage" SET "lifecycle_status" = 'CHECKED_IN' WHERE "id" = ${row.id}::uuid`;
+        inserted();
+        await released;
+      },
+      { timeout: 30_000, maxWait: 10_000 },
+    );
+    await isInserted;
+    const second = directEvent(row.id, {
+      sequence: 2,
+      type: 'MISSING',
+      lifecycleStatus: 'REGISTERED',
+      exceptionStatus: 'MISSING',
+    }).then(
+      () => null,
+      (error: unknown) => String(error),
+    );
+    await waitForWaiters(1);
+    release();
+    await first;
+    // The trigger waited on the bag row lock, then saw the committed event.
+    expect(await second).toMatch(/baggage event sequence must be 3/);
+    const events = await db(t.app).baggageEvent.findMany({
+      where: { baggageId: row.id },
+      orderBy: { sequence: 'asc' },
+    });
+    expect(events.map((event) => [event.sequence, event.type])).toEqual([
+      [1, 'REGISTERED'],
+      [2, 'CHECKED_IN'],
     ]);
   });
 

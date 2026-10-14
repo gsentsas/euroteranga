@@ -127,6 +127,23 @@ describe('baggage event projection', () => {
     ).toThrow(BaggageTransitionError);
   });
 
+  it('requires a valid weight that differs from the current exact weight', () => {
+    const weighed = projectBaggageEvent(registered(), 'WEIGHT_UPDATED', '12.3');
+    expect(weighed.measuredWeightKg).toBe('12.300');
+    for (const same of ['12.3', '12.300']) {
+      expect(() => projectBaggageEvent(weighed, 'WEIGHT_UPDATED', same)).toThrow(
+        BaggageTransitionError,
+      );
+    }
+    expect(() => projectBaggageEvent(weighed, 'WEIGHT_UPDATED', '1e2')).toThrow(
+      BaggageTransitionError,
+    );
+    expect(() => projectBaggageEvent(weighed, 'WEIGHT_UPDATED')).toThrow(BaggageTransitionError);
+    expect(projectBaggageEvent(weighed, 'WEIGHT_UPDATED', '12.301').measuredWeightKg).toBe(
+      '12.301',
+    );
+  });
+
   it('makes REMOVED terminal for weight, exception and lifecycle events', () => {
     const removed = projectBaggageEvent(registered(), 'REMOVED');
     for (const event of [
@@ -155,5 +172,9 @@ describe('baggage event projection', () => {
       fingerprint,
     );
     expect(baggageEventFingerprint({ ...base, type: 'ARRIVED' })).not.toBe(fingerprint);
+    expect(
+      baggageEventFingerprint({ ...base, occurredAt: new Date('2030-01-02T03:04:06.000Z') }),
+    ).not.toBe(fingerprint);
+    expect(baggageEventFingerprint({ ...base, measuredWeightKg: '1.000' })).not.toBe(fingerprint);
   });
 });

@@ -58,6 +58,18 @@ describe('staff baggage workspace, RBAC, lifecycle and audit', () => {
     expect((await staffBaggageApi(denied).detail(reference)).status).toBe(403);
     expect(
       (
+        await staffBaggageApi(reader).register({
+          bookingReference: subject.bookingReference,
+          passengerReference: subject.passengerReference,
+          type: 'OTHER',
+        })
+      ).status,
+    ).toBe(403);
+    expect((await staffBaggageApi(reader).event(reference, { type: 'CHECKED_IN' })).status).toBe(
+      403,
+    );
+    expect(
+      (
         await staffBaggageApi(manager).weight(
           reference,
           { measuredWeightKg: '12.345' },
