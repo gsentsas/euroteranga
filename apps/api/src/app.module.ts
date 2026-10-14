@@ -10,6 +10,7 @@ import { FleetModule } from './fleet/fleet.module.js';
 import { HealthModule } from './health/health.module.js';
 import { NetworkModule } from './network/network.module.js';
 import { PaymentModule } from './payments/payment.module.js';
+import { PassengerDocumentModule } from './passenger-documents/passenger-document.module.js';
 import { PricingModule } from './pricing/pricing.module.js';
 import { SeatMapModule } from './seat-maps/seat-map.module.js';
 import { TripModule } from './trips/trip.module.js';
@@ -41,6 +42,7 @@ export class AppModule {
         PricingModule,
         BookingModule,
         PaymentModule,
+        PassengerDocumentModule,
       ],
       controllers: options.extraControllers ?? [],
     };

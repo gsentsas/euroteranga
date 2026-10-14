@@ -917,6 +917,74 @@ export interface AdminBookingListOptions {
   reference?: string;
 }
 
+export type PassengerDocumentType =
+  'PASSPORT' | 'NATIONAL_ID' | 'RESIDENCE_PERMIT' | 'VISA' | 'PARENTAL_AUTHORIZATION' | 'OTHER';
+
+/** Technical file-security state; ACCEPTED is never regulatory validity. */
+export type PassengerDocumentStatus = 'QUARANTINED' | 'ACCEPTED' | 'REJECTED';
+
+export interface Passenger {
+  reference: string;
+  givenName: string;
+  familyName: string;
+  /** ISO calendar date. */
+  dateOfBirth: string;
+  nationality: { iso2: string; iso3: string; name: string };
+  bookingReferences: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PassengerCountry {
+  id: string;
+  iso2: string;
+  name: string;
+}
+
+export interface PassengerCreateInput {
+  givenName: string;
+  familyName: string;
+  dateOfBirth: string;
+  nationalityCountryId: string;
+}
+
+export interface PassengerDocument {
+  reference: string;
+  passenger: { reference: string; givenName: string; familyName: string };
+  bookingReferences: string[];
+  type: PassengerDocumentType;
+  mimeType: 'application/pdf' | 'image/jpeg' | 'image/png';
+  sizeBytes: number;
+  status: PassengerDocumentStatus;
+  expiresAt: string | null;
+  createdAt: string;
+  acceptedAt: string | null;
+  rejectedAt: string | null;
+}
+
+export interface PassengerDocumentUploadInput {
+  type: PassengerDocumentType;
+  file: File;
+  expiresAt?: string;
+}
+
+export interface AdminPassengerDocumentListOptions {
+  cursor?: string;
+  limit?: number;
+  type?: PassengerDocumentType;
+  status?: PassengerDocumentStatus;
+  createdFrom?: string;
+  createdTo?: string;
+  bookingReference?: string;
+  passengerReference?: string;
+}
+
+export interface PrivateDownload {
+  blob: Blob;
+  filename: string;
+  mimeType: string;
+}
+
 function query(values: Record<string, string | number | undefined>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
@@ -986,6 +1054,64 @@ export function createAuthClient(baseUrl: string) {
         message: typeof body.message === 'string' ? body.message : UNEXPECTED_ERROR,
       },
     };
+  }
+
+  function errorResult(response: Response, payload: unknown): ApiResult<never> {
+    const body = (payload ?? {}) as Partial<ApiError>;
+    return {
+      ok: false,
+      error: {
+        status: response.status,
+        code: typeof body.code === 'string' ? body.code : 'UNKNOWN_ERROR',
+        message: typeof body.message === 'string' ? body.message : UNEXPECTED_ERROR,
+      },
+    };
+  }
+
+  async function withCsrfMultipart<T>(
+    realm: Realm,
+    path: string,
+    form: FormData,
+  ): Promise<ApiResult<T>> {
+    const csrf = await call<{ csrfToken: string }>('GET', `/v1/auth/${realm}/csrf`);
+    if (!csrf.ok) return csrf;
+    let response: Response;
+    try {
+      response = await fetch(`${root}${path}`, {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrf.data.csrfToken },
+        credentials: 'include',
+        cache: 'no-store',
+        // The browser sets the boundary. Setting Content-Type here would make
+        // the multipart body invalid.
+        body: form,
+      });
+    } catch {
+      return { ok: false, error: NETWORK_ERROR };
+    }
+    const payload: unknown = await response.json().catch(() => undefined);
+    return response.ok ? { ok: true, data: payload as T } : errorResult(response, payload);
+  }
+
+  async function privateDownload(path: string): Promise<ApiResult<PrivateDownload>> {
+    let response: Response;
+    try {
+      response = await fetch(`${root}${path}`, {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-store',
+      });
+    } catch {
+      return { ok: false, error: NETWORK_ERROR };
+    }
+    if (!response.ok) {
+      const payload: unknown = await response.json().catch(() => undefined);
+      return errorResult(response, payload);
+    }
+    const disposition = response.headers.get('content-disposition') ?? '';
+    const filename = /filename="([A-Za-z0-9._-]+)"/u.exec(disposition)?.[1] ?? 'document';
+    const mimeType = response.headers.get('content-type') ?? 'application/octet-stream';
+    return { ok: true, data: { blob: await response.blob(), filename, mimeType } };
   }
 
   async function withCsrf<T>(
@@ -1106,6 +1232,8 @@ export function createAuthClient(baseUrl: string) {
           ),
       },
       customer: {
+        passengerCountries: () =>
+          call<{ items: PassengerCountry[] }>('GET', '/v1/booking/passenger-countries'),
         createHold: (input: CreateBookingInput) =>
           withCsrf<CustomerBooking>('customer', '/v1/booking/bookings', input),
         bookings: (options: { cursor?: string; limit?: number } = {}) =>
@@ -1142,6 +1270,42 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<CustomerPayment>(
             'customer',
             `/v1/booking/payments/${encodeURIComponent(paymentReference)}/cancel`,
+          ),
+        createPassenger: (bookingReference: string, input: PassengerCreateInput) =>
+          withCsrf<Passenger>(
+            'customer',
+            `/v1/booking/bookings/${encodeURIComponent(bookingReference)}/passengers`,
+            input,
+          ),
+        passengers: (bookingReference: string) =>
+          call<{ items: Passenger[] }>(
+            'GET',
+            `/v1/booking/bookings/${encodeURIComponent(bookingReference)}/passengers`,
+          ),
+        passenger: (passengerReference: string) =>
+          call<Passenger>(
+            'GET',
+            `/v1/booking/passengers/${encodeURIComponent(passengerReference)}`,
+          ),
+        documents: (passengerReference: string) =>
+          call<{ items: PassengerDocument[] }>(
+            'GET',
+            `/v1/booking/passengers/${encodeURIComponent(passengerReference)}/documents`,
+          ),
+        uploadDocument: (passengerReference: string, input: PassengerDocumentUploadInput) => {
+          const form = new FormData();
+          form.append('type', input.type);
+          if (input.expiresAt) form.append('expiresAt', input.expiresAt);
+          form.append('file', input.file, input.file.name);
+          return withCsrfMultipart<PassengerDocument>(
+            'customer',
+            `/v1/booking/passengers/${encodeURIComponent(passengerReference)}/documents`,
+            form,
+          );
+        },
+        downloadDocument: (documentReference: string) =>
+          privateDownload(
+            `/v1/booking/documents/${encodeURIComponent(documentReference)}/download`,
           ),
       },
     },
@@ -1491,6 +1655,32 @@ export function createAuthClient(baseUrl: string) {
             'staff',
             `/v1/admin/payments/${encodeURIComponent(paymentId)}/cancel`,
             { reason },
+          ),
+      },
+      /** passenger.document.read; technical status only, no compliance action. */
+      passengerDocuments: {
+        list: (options: AdminPassengerDocumentListOptions = {}) =>
+          call<Page<PassengerDocument>>(
+            'GET',
+            `/v1/admin/passenger-documents?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              type: options.type,
+              status: options.status,
+              createdFrom: options.createdFrom,
+              createdTo: options.createdTo,
+              bookingReference: options.bookingReference,
+              passengerReference: options.passengerReference,
+            })}`,
+          ),
+        detail: (reference: string) =>
+          call<PassengerDocument>(
+            'GET',
+            `/v1/admin/passenger-documents/${encodeURIComponent(reference)}`,
+          ),
+        download: (reference: string) =>
+          privateDownload(
+            `/v1/admin/passenger-documents/${encodeURIComponent(reference)}/download`,
           ),
       },
     },

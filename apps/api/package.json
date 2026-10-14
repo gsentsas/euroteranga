@@ -15,6 +15,7 @@
     "auth:bootstrap-super-admin": "node --enable-source-maps --env-file-if-exists=../../.env dist/cli/bootstrap-super-admin.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "catalog:",
     "@euroteranga/config": "workspace:*",
     "@euroteranga/database": "workspace:*",
     "@euroteranga/logger": "workspace:*",
@@ -23,6 +24,7 @@
     "@nestjs/platform-express": "catalog:",
     "@nestjs/swagger": "catalog:",
     "@node-rs/argon2": "catalog:",
+    "busboy": "catalog:",
     "cookie": "catalog:",
     "helmet": "catalog:",
     "nodemailer": "catalog:",
@@ -34,6 +36,7 @@
   "devDependencies": {
     "@nestjs/testing": "catalog:",
     "@swc/core": "catalog:",
+    "@types/busboy": "catalog:",
     "@types/express": "catalog:",
     "@types/node": "catalog:",
     "@types/supertest": "catalog:",

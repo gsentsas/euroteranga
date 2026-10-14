@@ -2,6 +2,7 @@ import { FoundationShell } from '@euroteranga/ui';
 import type { Metadata } from 'next';
 import { AccountView } from '../../components/account-view';
 import { CustomerBookings } from '../../components/customer-bookings';
+import { CustomerPassengers } from '../../components/customer-passengers';
 import { publicEnv } from '../../lib/env';
 
 export const metadata: Metadata = { title: 'Mon compte — EURO TERANGA Client' };
@@ -16,6 +17,7 @@ export default function Page() {
       <div className="et-account-sections">
         <AccountView />
         <CustomerBookings />
+        <CustomerPassengers />
       </div>
     </FoundationShell>
   );

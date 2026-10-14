@@ -3,6 +3,7 @@ import { ConfigValidationError, describeIssues } from './errors.js';
 import { authEnvShape, refineAuthEnv } from './auth-env.js';
 import { bookingEnvShape } from './booking-env.js';
 import { paymentEnvShape, refinePaymentEnv } from './payment-env.js';
+import { passengerDocumentEnvShape, refinePassengerDocumentEnv } from './passenger-document-env.js';
 import { appEnvSchema, booleanFlag, originListSchema } from './schemas.js';
 
 export const apiEnvSchema = z
@@ -33,10 +34,12 @@ export const apiEnvSchema = z
     ...authEnvShape,
     ...bookingEnvShape,
     ...paymentEnvShape,
+    ...passengerDocumentEnvShape,
   })
   .superRefine((env, ctx) => {
     refineAuthEnv(env, ctx);
     refinePaymentEnv(env, ctx);
+    refinePassengerDocumentEnv(env, ctx);
   });
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;

@@ -10,6 +10,7 @@ written yet.
 | [ADR-002](ADR-002-postgresql.md)                                        | PostgreSQL, Prisma and baseline                       | Accepted |
 | [ADR-003](ADR-003-nestjs-api.md)                                        | NestJS Core API                                       | Accepted |
 | [ADR-004](ADR-004-refine-backoffice.md)                                 | Refine Community for back-office                      | Accepted |
+| [ADR-005](ADR-005-private-object-storage-quarantine.md)                 | Private object storage, scanning and quarantine       | Accepted |
 | [ADR-010](ADR-010-plesk-deployment-target.md)                           | Plesk deployment target                               | Proposed |
 | [ADR-011](ADR-011-monorepo-tooling.md)                                  | Monorepo tooling                                      | Accepted |
 | [ADR-012](ADR-012-identity-realms.md)                                   | Identity realms                                       | Accepted |
@@ -29,9 +30,8 @@ written yet.
 | [ADR-026](ADR-026-segment-inventory-booking-holds.md)                   | Segment-based seat inventory and customer holds       | Accepted |
 | [ADR-027](ADR-027-payment-provider-abstraction-booking-confirmation.md) | Payment provider abstraction and booking confirmation | Accepted |
 
-Planned: ADR-005 Object Storage, ADR-007 Offline Crew,
-ADR-009 Regulatory Versioning. The planned ADR-008 (Payment Abstraction) is
-covered by ADR-027. ADR-006
+Planned: ADR-007 Offline Crew and ADR-009 Regulatory Versioning. The planned
+ADR-008 (Payment Abstraction) is covered by ADR-027. ADR-006
 (Authentication) is covered in detail by ADR-012 to ADR-016; authorization
 by ADR-017 to ADR-020.
 
@@ -41,3 +41,5 @@ lifecycle and immutable scheduled timetable), ADR-024 (seat-map versioning
 and historical trip layout), ADR-025 (versioned fare tables and historical
 trip pricing), ADR-026 (segment-based inventory and customer booking holds)
 and ADR-027 (payment provider abstraction and booking confirmation).
+ADR-005 covers the cross-cutting private object-store, malware-scanning and
+logical-quarantine boundary used by passenger documents.

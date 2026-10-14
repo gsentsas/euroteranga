@@ -132,6 +132,30 @@ enum PaymentEventType {
   @@map("payment_event_type")
 }
 
+/// PR-11: descriptive category only. It carries no legal or regulatory
+/// conclusion; PR-12 owns compliance rules.
+enum PassengerDocumentType {
+  PASSPORT
+  NATIONAL_ID
+  RESIDENCE_PERMIT
+  VISA
+  PARENTAL_AUTHORIZATION
+  OTHER
+
+  @@map("passenger_document_type")
+}
+
+/// PR-11: technical file-security lifecycle only. ACCEPTED means that the
+/// upload passed the configured technical checks, never that it is legally
+/// valid or sufficient for travel.
+enum PassengerDocumentStatus {
+  QUARANTINED
+  ACCEPTED
+  REJECTED
+
+  @@map("passenger_document_status")
+}
+
 enum RouteVersionStatus {
   DRAFT
   PUBLISHED
@@ -176,9 +200,12 @@ model AuthIdentity {
   staffEnrollmentGrantsIssued StaffEnrollmentGrant[]        @relation("StaffEnrollmentIssuedBy")
 
   // PR-09: holds created by this CUSTOMER identity (the booker, not a passenger).
-  bookings Booking[] @relation("BookingCustomer")
+  bookings   Booking[]   @relation("BookingCustomer")
   // PR-10: payment attempts of this CUSTOMER (always the booking owner).
-  payments Payment[] @relation("PaymentCustomer")
+  payments   Payment[]   @relation("PaymentCustomer")
+  // PR-11: people for whom this CUSTOMER may make bookings. The account is
+  // the owner/booker and remains distinct from the person travelling.
+  passengers Passenger[] @relation("PassengerOwner")
 
   // The same address may exist in two realms as two unrelated identities.
   @@unique([realm, normalizedEmail])
@@ -463,6 +490,7 @@ model Country {
   stops       Stop[]
   checkpoints Checkpoint[]
   vehicles    Vehicle[]
+  passengers  Passenger[]  @relation("PassengerNationality")
 
   @@index([active, id])
   @@map("country")
@@ -830,13 +858,14 @@ model Booking {
   createdAt                  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  customerIdentity         AuthIdentity  @relation("BookingCustomer", fields: [customerIdentityId], references: [id], onDelete: Restrict)
-  trip                     Trip          @relation(fields: [tripId], references: [id], onDelete: Restrict)
-  originRouteWaypoint      RouteWaypoint @relation("BookingOrigin", fields: [originRouteWaypointId], references: [id], onDelete: Restrict)
-  destinationRouteWaypoint RouteWaypoint @relation("BookingDestination", fields: [destinationRouteWaypointId], references: [id], onDelete: Restrict)
-  fareEntry                FareEntry     @relation(fields: [fareEntryId], references: [id], onDelete: Restrict)
+  customerIdentity         AuthIdentity       @relation("BookingCustomer", fields: [customerIdentityId], references: [id], onDelete: Restrict)
+  trip                     Trip               @relation(fields: [tripId], references: [id], onDelete: Restrict)
+  originRouteWaypoint      RouteWaypoint      @relation("BookingOrigin", fields: [originRouteWaypointId], references: [id], onDelete: Restrict)
+  destinationRouteWaypoint RouteWaypoint      @relation("BookingDestination", fields: [destinationRouteWaypointId], references: [id], onDelete: Restrict)
+  fareEntry                FareEntry          @relation(fields: [fareEntryId], references: [id], onDelete: Restrict)
   seats                    BookingSeat[]
   payments                 Payment[]
+  passengers               BookingPassenger[]
 
   @@index([customerIdentityId, id])
   @@index([tripId, id])
@@ -845,6 +874,77 @@ model Booking {
   @@index([destinationRouteWaypointId])
   @@index([fareEntryId])
   @@map("booking")
+}
+
+/// PR-11: minimal person-travelling foundation. This is deliberately not an
+/// authentication identity and contains no document number or file bytes.
+model Passenger {
+  id                      String   @id @default(uuid(7)) @db.Uuid
+  /// Public, immutable, unpredictable reference: ETV- + 12 CSPRNG Crockford base32 characters.
+  reference               String   @unique @db.VarChar(16)
+  ownerCustomerIdentityId String   @map("owner_customer_identity_id") @db.Uuid
+  givenName               String   @map("given_name") @db.VarChar(100)
+  familyName              String   @map("family_name") @db.VarChar(100)
+  dateOfBirth             DateTime @map("date_of_birth") @db.Date
+  nationalityCountryId    String   @map("nationality_country_id") @db.Uuid
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  ownerCustomerIdentity AuthIdentity        @relation("PassengerOwner", fields: [ownerCustomerIdentityId], references: [id], onDelete: Restrict)
+  nationalityCountry    Country             @relation("PassengerNationality", fields: [nationalityCountryId], references: [id], onDelete: Restrict)
+  bookings              BookingPassenger[]
+  documents             PassengerDocument[]
+
+  @@index([ownerCustomerIdentityId, id])
+  @@index([nationalityCountryId])
+  @@map("passenger")
+}
+
+/// PR-11: historical association between a confirmed booking and one person
+/// travelling. The database trigger serializes inserts on the Booking row and
+/// prevents the number of passengers from exceeding its booked seats.
+model BookingPassenger {
+  bookingId   String   @map("booking_id") @db.Uuid
+  passengerId String   @map("passenger_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  booking   Booking   @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  passenger Passenger @relation(fields: [passengerId], references: [id], onDelete: Restrict)
+
+  @@id([bookingId, passengerId])
+  @@index([passengerId, bookingId])
+  @@map("booking_passenger")
+}
+
+/// PR-11: metadata of a private object. PostgreSQL never stores the binary,
+/// original filename, scanner output, signed URL or document number.
+model PassengerDocument {
+  id          String                  @id @default(uuid(7)) @db.Uuid
+  /// Public, immutable, unpredictable reference: ETD- + 12 CSPRNG Crockford base32 characters.
+  reference   String                  @unique @db.VarChar(16)
+  passengerId String                  @map("passenger_id") @db.Uuid
+  type        PassengerDocumentType
+  objectKey   String                  @unique @map("object_key") @db.VarChar(128)
+  sha256      String                  @db.Char(64)
+  mimeType    String                  @map("mime_type") @db.VarChar(64)
+  sizeBytes   BigInt                  @map("size_bytes")
+  status      PassengerDocumentStatus @default(QUARANTINED)
+  /// Stable technical code only; never a raw scanner response.
+  failureCode String?                 @map("failure_code") @db.VarChar(48)
+  /// Optional document date supplied as metadata; PR-11 draws no compliance conclusion from it.
+  expiresAt   DateTime?               @map("expires_at") @db.Date
+  createdAt   DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  acceptedAt  DateTime?               @map("accepted_at") @db.Timestamptz(3)
+  rejectedAt  DateTime?               @map("rejected_at") @db.Timestamptz(3)
+
+  passenger Passenger @relation(fields: [passengerId], references: [id], onDelete: Restrict)
+
+  @@index([passengerId, id])
+  @@index([status, id])
+  @@index([type, id])
+  @@index([createdAt, id])
+  @@map("passenger_document")
 }
 
 /// PR-09: one seat chosen by a booking. Historical: never deleted; released

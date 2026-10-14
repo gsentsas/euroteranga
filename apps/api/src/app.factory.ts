@@ -65,7 +65,9 @@ function configureApp(app: NestExpressApplication, { env, logger }: CreateAppOpt
     credentials: true,
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'X-Request-Id', 'Idempotency-Key'],
-    exposedHeaders: ['X-Request-Id', 'Retry-After'],
+    // Document filenames are server-generated public references; no object key
+    // or signed URL is exposed.
+    exposedHeaders: ['X-Request-Id', 'Retry-After', 'Content-Disposition'],
   });
 
   // Business endpoints will live under /v1/...; health checks are version neutral.

@@ -1,0 +1,56 @@
+import type { Readable } from 'node:stream';
+
+export const OBJECT_STORAGE_PROVIDER = Symbol('OBJECT_STORAGE_PROVIDER');
+
+export const PASSENGER_DOCUMENT_OBJECT_KEY = /^passenger-documents\/[0-9a-f]{2}\/[0-9a-f]{64}$/;
+
+export type ObjectStorageErrorCode = 'UNAVAILABLE' | 'NOT_FOUND' | 'CONFLICT' | 'INVALID_KEY';
+
+/** Stable infrastructure error; provider responses and endpoints stay private. */
+export class ObjectStorageError extends Error {
+  constructor(readonly code: ObjectStorageErrorCode) {
+    super(`object storage ${code.toLowerCase()}`);
+    this.name = 'ObjectStorageError';
+  }
+}
+
+export interface StoredObject {
+  body: Readable;
+  sizeBytes: number;
+}
+
+/** Provider-neutral private object operations used by the document domain. */
+export interface ObjectStorageProvider {
+  put(input: { key: string; body: Readable; sizeBytes: number; mimeType: string }): Promise<void>;
+  get(key: string): Promise<StoredObject>;
+  head(key: string): Promise<{ sizeBytes: number }>;
+  /** Idempotent: deleting an already absent object succeeds. */
+  delete(key: string): Promise<void>;
+}
+
+export function assertPassengerDocumentObjectKey(key: string): void {
+  if (!PASSENGER_DOCUMENT_OBJECT_KEY.test(key)) throw new ObjectStorageError('INVALID_KEY');
+}
+
+/** Fail-safe provider used when the document feature is explicitly disabled. */
+export class DisabledObjectStorageProvider implements ObjectStorageProvider {
+  private unavailable(): never {
+    throw new ObjectStorageError('UNAVAILABLE');
+  }
+
+  put(): Promise<void> {
+    return Promise.reject(this.unavailable());
+  }
+
+  get(): Promise<StoredObject> {
+    return Promise.reject(this.unavailable());
+  }
+
+  head(): Promise<{ sizeBytes: number }> {
+    return Promise.reject(this.unavailable());
+  }
+
+  delete(): Promise<void> {
+    return Promise.reject(this.unavailable());
+  }
+}

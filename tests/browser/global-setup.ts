@@ -17,6 +17,13 @@ import {
 
 const DAY_MS = 24 * 3_600_000;
 
+const PREAUTHENTICATED_SESSIONS = {
+  paymentCustomer: 'E2E_PAYMENT_CUSTOMER_SESSION',
+  foreignCustomer: 'E2E_FOREIGN_CUSTOMER_SESSION',
+  passengerDocumentReader: 'E2E_PASSENGER_DOCUMENT_READER_SESSION',
+  passengerDocumentDenied: 'E2E_PASSENGER_DOCUMENT_DENIED_SESSION',
+} as const;
+
 /**
  * Seeds the fixture identities before each run. STAFF fixtures start without
  * MFA but with a one-time enrollment grant (what an accepted invitation
@@ -80,6 +87,20 @@ export default async function globalSetup(): Promise<void> {
           data: { identityId: identity.id, roleKey, grantReason: 'browser test fixture' },
         });
       }
+      const sessionEnvironment = preauthenticatedSessionEnvironment(fixture);
+      if (sessionEnvironment) {
+        const sessionToken = randomBytes(32).toString('base64url');
+        process.env[sessionEnvironment] = sessionToken;
+        await db.authSession.create({
+          data: {
+            identityId: identity.id,
+            tokenHash: new Uint8Array(createHash('sha256').update(sessionToken).digest()),
+            authVersion: identity.authVersion,
+            idleExpiresAt: expiresAt,
+            absoluteExpiresAt: expiresAt,
+          },
+        });
+      }
       if (fixture.realm !== 'STAFF') continue;
       if (fixture.invited) {
         await db.staffInvitation.create({
@@ -107,6 +128,27 @@ export default async function globalSetup(): Promise<void> {
   } finally {
     await db.$disconnect();
   }
+}
+
+/**
+ * PR-11 tests exercise document ownership and RBAC, not login itself. Seed
+ * their sessions directly so adding these scenarios does not consume the
+ * suite-wide login-IP rate-limit budget used by the authentication tests.
+ */
+function preauthenticatedSessionEnvironment(fixture: Fixture): string | undefined {
+  if (fixture.email === FIXTURES.paymentCustomer.email) {
+    return PREAUTHENTICATED_SESSIONS.paymentCustomer;
+  }
+  if (fixture.email === FIXTURES.customer.email) {
+    return PREAUTHENTICATED_SESSIONS.foreignCustomer;
+  }
+  if (fixture.email === FIXTURES.passengerDocumentReader.email) {
+    return PREAUTHENTICATED_SESSIONS.passengerDocumentReader;
+  }
+  if (fixture.email === FIXTURES.passengerDocumentDenied.email) {
+    return PREAUTHENTICATED_SESSIONS.passengerDocumentDenied;
+  }
+  return undefined;
 }
 
 /** A complete scheduled trip and one active hold, scoped to the browser-test run. */

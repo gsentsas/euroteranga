@@ -25,6 +25,7 @@ const EXPECTED_MATRIX: Record<
       'network.manage',
       'network.read',
       'ops.access',
+      'passenger.document.read',
       'payment.manage',
       'payment.read',
       'pricing.manage',
@@ -55,6 +56,7 @@ const EXPECTED_MATRIX: Record<
       'network.manage',
       'network.read',
       'ops.access',
+      'passenger.document.read',
       'payment.manage',
       'payment.read',
       'pricing.manage',
@@ -80,6 +82,7 @@ const EXPECTED_MATRIX: Record<
       'network.manage',
       'network.read',
       'ops.access',
+      'passenger.document.read',
       'payment.read',
       'pricing.manage',
       'pricing.read',
@@ -126,7 +129,14 @@ const EXPECTED_MATRIX: Record<
   COMPLIANCE_AGENT: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['fleet.read', 'network.read', 'ops.access', 'seatmap.read', 'trip.read'],
+    permissions: [
+      'fleet.read',
+      'network.read',
+      'ops.access',
+      'passenger.document.read',
+      'seatmap.read',
+      'trip.read',
+    ],
   },
   // FINANCE: no network (PR-04), fleet (PR-05), trip (PR-06) nor seat map (PR-07)
   // permission by default; pricing.read only (PR-08).
@@ -240,6 +250,9 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['GET', '/v1/admin/payments'],
   ['GET', '/v1/admin/payments/01900000-0000-7000-8000-000000000000'],
   ['POST', '/v1/admin/payments/01900000-0000-7000-8000-000000000000/cancel'],
+  ['GET', '/v1/admin/passenger-documents'],
+  ['GET', '/v1/admin/passenger-documents/ETD-000000000000'],
+  ['GET', '/v1/admin/passenger-documents/ETD-000000000000/download'],
 ];
 
 describe('server-side RBAC', () => {

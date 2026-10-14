@@ -51,6 +51,10 @@ export function integrationEnv(overrides: Record<string, string> = {}): ApiEnv {
     // PR-10: the local test-only provider, with a fresh webhook key.
     PAYMENT_PROVIDER: 'SANDBOX',
     PAYMENT_SANDBOX_WEBHOOK_SECRET: randomKey(),
+    // PR-11: private, disposable test adapter and deterministic harmless scanner.
+    OBJECT_STORAGE_PROVIDER: 'LOCAL',
+    OBJECT_STORAGE_LOCAL_ROOT: `/tmp/euroteranga-integration-documents-${process.pid}`,
+    MALWARE_SCANNER: 'TEST',
     ...overrides,
   });
 }
@@ -71,6 +75,10 @@ export function productionLikeEnv(overrides: Record<string, string> = {}): ApiEn
     OPS_PUBLIC_URL: 'https://ops.example.test',
     // SANDBOX is refused in production: payments are disabled there.
     PAYMENT_PROVIDER: 'DISABLED',
+    // Production provisioning is deliberately outside PR-11: disabled is the
+    // only safe default until a private bucket and scanner are configured.
+    OBJECT_STORAGE_PROVIDER: 'DISABLED',
+    MALWARE_SCANNER: 'DISABLED',
     ...overrides,
   });
 }
