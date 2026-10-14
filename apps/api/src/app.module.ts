@@ -2,6 +2,7 @@ import type { ApiEnv } from '@euroteranga/config';
 import type { Logger } from '@euroteranga/logger';
 import { Module, type DynamicModule, type Type } from '@nestjs/common';
 import { AuthorizationModule } from './authorization/authorization.module.js';
+import { BaggageModule } from './baggage/baggage.module.js';
 import { BookingModule } from './bookings/booking.module.js';
 import { ComplianceModule } from './compliance/compliance.module.js';
 import type { AuthMailProvider } from './auth/mail/auth-mail.provider.js';
@@ -45,6 +46,7 @@ export class AppModule {
         PaymentModule,
         PassengerDocumentModule,
         ComplianceModule,
+        BaggageModule,
       ],
       controllers: options.extraControllers ?? [],
     };

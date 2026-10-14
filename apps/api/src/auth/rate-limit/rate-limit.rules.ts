@@ -44,4 +44,16 @@ export const RATE_LIMITS = {
     limit: 30,
     windowMs: HOUR,
   },
+  /** Customer baggage pre-registrations per authenticated identity (PR-13). */
+  baggageRegistrationIdentity: {
+    action: 'baggage-registration:identity',
+    limit: 30,
+    windowMs: HOUR,
+  },
+  /** STAFF operational scans/events: high enough for loading, finite for abuse. */
+  baggageOperationIdentity: {
+    action: 'baggage-operation:identity',
+    limit: 600,
+    windowMs: 15 * MINUTE,
+  },
 } as const satisfies Record<string, RateLimitRule>;

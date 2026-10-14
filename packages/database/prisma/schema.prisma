@@ -211,6 +211,58 @@ enum ComplianceReviewDecision {
   @@map("compliance_review_decision")
 }
 
+/// PR-13: descriptive only; it never implies an allowance or a tariff.
+enum BaggageType {
+  SUITCASE
+  TRAVEL_BAG
+  BOX
+  OTHER
+
+  @@map("baggage_type")
+}
+
+/// PR-13: the normal operational projection. REMOVED is historical and
+/// terminal; it never means physical deletion.
+enum BaggageLifecycleStatus {
+  REGISTERED
+  CHECKED_IN
+  LOADED
+  IN_TRANSIT
+  ARRIVED
+  DELIVERED
+  REMOVED
+
+  @@map("baggage_lifecycle_status")
+}
+
+/// PR-13: an active exception stays separate from the normal stage.
+enum BaggageExceptionStatus {
+  MISSING
+  DAMAGED
+  HELD_BY_CUSTOMS
+
+  @@map("baggage_exception_status")
+}
+
+/// PR-13 append-only business events. Projection snapshots on every event
+/// make lifecycle, exception resolution and weight history independently auditable.
+enum BaggageEventType {
+  REGISTERED
+  WEIGHT_UPDATED
+  CHECKED_IN
+  LOADED
+  IN_TRANSIT
+  ARRIVED
+  DELIVERED
+  MISSING
+  DAMAGED
+  HELD_BY_CUSTOMS
+  EXCEPTION_RESOLVED
+  REMOVED
+
+  @@map("baggage_event_type")
+}
+
 /// An identity able to authenticate in exactly one realm. It is not a
 /// customer, passenger, staff profile or crew member: those business objects
 /// will reference it later and stay independent.
@@ -259,6 +311,7 @@ model AuthIdentity {
   complianceVersionsRetired   ComplianceRuleVersion[] @relation("ComplianceVersionRetirer")
   complianceEvaluations       ComplianceEvaluation[]  @relation("ComplianceEvaluationActor")
   complianceReviews           ComplianceReview[]      @relation("ComplianceReviewer")
+  baggageEvents               BaggageEvent[]          @relation("BaggageEventActor")
 
   // The same address may exist in two realms as two unrelated identities.
   @@unique([realm, normalizedEmail])
@@ -645,14 +698,15 @@ model RouteWaypoint {
   boardingAllowed  Boolean @default(false) @map("boarding_allowed")
   alightingAllowed Boolean @default(false) @map("alighting_allowed")
 
-  routeVersion RouteVersion         @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
-  stop         Stop?                @relation(fields: [stopId], references: [id], onDelete: Restrict)
-  checkpoint   Checkpoint?          @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
-  timings      TripWaypointTiming[]
-  faresFrom    FareEntry[]          @relation("FareOrigin")
-  faresTo      FareEntry[]          @relation("FareDestination")
-  bookingsFrom Booking[]            @relation("BookingOrigin")
-  bookingsTo   Booking[]            @relation("BookingDestination")
+  routeVersion  RouteVersion         @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  stop          Stop?                @relation(fields: [stopId], references: [id], onDelete: Restrict)
+  checkpoint    Checkpoint?          @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
+  timings       TripWaypointTiming[]
+  faresFrom     FareEntry[]          @relation("FareOrigin")
+  faresTo       FareEntry[]          @relation("FareDestination")
+  bookingsFrom  Booking[]            @relation("BookingOrigin")
+  bookingsTo    Booking[]            @relation("BookingDestination")
+  baggageEvents BaggageEvent[]
 
   @@unique([routeVersionId, sequence])
   @@index([stopId])
@@ -964,10 +1018,73 @@ model BookingPassenger {
   booking               Booking                @relation(fields: [bookingId], references: [id], onDelete: Restrict)
   passenger             Passenger              @relation(fields: [passengerId], references: [id], onDelete: Restrict)
   complianceEvaluations ComplianceEvaluation[]
+  baggage               Baggage[]
 
   @@id([bookingId, passengerId])
   @@index([passengerId, bookingId])
   @@map("booking_passenger")
+}
+
+/// PR-13: one physical bag on one concrete BookingPassenger. Booking, trip,
+/// CUSTOMER owner and passenger are derived through the composite relation;
+/// they are never independently selected by a browser.
+model Baggage {
+  id                       String                  @id @default(uuid(7)) @db.Uuid
+  /// Public, immutable, unpredictable reference: ETG- + 12 Crockford characters.
+  reference                String                  @unique @db.VarChar(16)
+  bookingId                String                  @map("booking_id") @db.Uuid
+  passengerId              String                  @map("passenger_id") @db.Uuid
+  type                     BaggageType
+  lifecycleStatus          BaggageLifecycleStatus  @default(REGISTERED) @map("lifecycle_status")
+  exceptionStatus          BaggageExceptionStatus? @map("exception_status")
+  /// Official STAFF measurement. Public views serialize the exact decimal as a string.
+  measuredWeightKg         Decimal?                @map("measured_weight_kg") @db.Decimal(6, 3)
+  /// Reserved server snapshots for a future versioned allowance policy. PR-13
+  /// never populates them and never creates a payment from them.
+  includedWeightKg         Decimal?                @map("included_weight_kg") @db.Decimal(6, 3)
+  excessWeightKg           Decimal?                @map("excess_weight_kg") @db.Decimal(6, 3)
+  excessChargeMinor        BigInt?                 @map("excess_charge_minor")
+  excessChargeCurrencyCode String?                 @map("excess_charge_currency_code") @db.VarChar(3)
+  createdAt                DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  bookingPassenger BookingPassenger @relation(fields: [bookingId, passengerId], references: [bookingId, passengerId], onDelete: Restrict)
+  events           BaggageEvent[]
+
+  @@index([bookingId, passengerId, id])
+  @@index([lifecycleStatus, id])
+  @@index([exceptionStatus, id])
+  @@index([createdAt, id])
+  @@map("baggage")
+}
+
+/// PR-13: immutable event stream and resulting projection snapshots. The
+/// database serializes inserts on Baggage and validates the final projection.
+model BaggageEvent {
+  id                 String                  @id @default(uuid(7)) @db.Uuid
+  baggageId          String                  @map("baggage_id") @db.Uuid
+  sequence           Int
+  type               BaggageEventType
+  lifecycleStatus    BaggageLifecycleStatus  @map("lifecycle_status")
+  exceptionStatus    BaggageExceptionStatus? @map("exception_status")
+  measuredWeightKg   Decimal?                @map("measured_weight_kg") @db.Decimal(6, 3)
+  occurredAt         DateTime                @map("occurred_at") @db.Timestamptz(3)
+  recordedAt         DateTime                @default(now()) @map("recorded_at") @db.Timestamptz(3)
+  actorIdentityId    String                  @map("actor_identity_id") @db.Uuid
+  routeWaypointId    String?                 @map("route_waypoint_id") @db.Uuid
+  clientEventId      String?                 @map("client_event_id") @db.VarChar(64)
+  payloadFingerprint String                  @map("payload_fingerprint") @db.Char(64)
+
+  baggage       Baggage        @relation(fields: [baggageId], references: [id], onDelete: Restrict)
+  actor         AuthIdentity   @relation("BaggageEventActor", fields: [actorIdentityId], references: [id], onDelete: Restrict)
+  routeWaypoint RouteWaypoint? @relation(fields: [routeWaypointId], references: [id], onDelete: Restrict)
+
+  @@unique([baggageId, sequence])
+  @@unique([baggageId, clientEventId])
+  @@index([actorIdentityId, recordedAt])
+  @@index([routeWaypointId])
+  @@index([type, recordedAt])
+  @@map("baggage_event")
 }
 
 /// PR-11: metadata of a private object. PostgreSQL never stores the binary,

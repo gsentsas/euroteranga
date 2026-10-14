@@ -37,6 +37,8 @@ export const PERMISSIONS = {
   COMPLIANCE_REVIEW: 'compliance.review',
   COMPLIANCE_RULE_READ: 'compliance.rule.read',
   COMPLIANCE_RULE_MANAGE: 'compliance.rule.manage',
+  BAGGAGE_READ: 'baggage.read',
+  BAGGAGE_MANAGE: 'baggage.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

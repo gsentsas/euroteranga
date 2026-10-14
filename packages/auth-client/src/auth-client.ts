@@ -985,6 +985,107 @@ export interface PrivateDownload {
   mimeType: string;
 }
 
+export type BaggageType = 'SUITCASE' | 'TRAVEL_BAG' | 'BOX' | 'OTHER';
+export type BaggageLifecycleStatus =
+  'REGISTERED' | 'CHECKED_IN' | 'LOADED' | 'IN_TRANSIT' | 'ARRIVED' | 'DELIVERED' | 'REMOVED';
+export type BaggageExceptionStatus = 'MISSING' | 'DAMAGED' | 'HELD_BY_CUSTOMS';
+export type BaggageOperationalEventType =
+  Exclude<BaggageLifecycleStatus, 'REGISTERED'> | BaggageExceptionStatus | 'EXCEPTION_RESOLVED';
+export type BaggageEventType = 'REGISTERED' | BaggageOperationalEventType | 'WEIGHT_UPDATED';
+
+export interface BaggageLocation {
+  sequence: number;
+  kind: 'STOP' | 'CHECKPOINT';
+  code: string;
+  name: string;
+  checkpointType: NetworkCheckpointType | null;
+}
+
+export interface BaggageEvent {
+  sequence: number;
+  type: BaggageEventType;
+  lifecycleStatus: BaggageLifecycleStatus;
+  exceptionStatus: BaggageExceptionStatus | null;
+  /** Exact kilograms, always three decimals; null before STAFF measurement. */
+  measuredWeightKg: string | null;
+  occurredAt: string;
+  recordedAt: string;
+  location: BaggageLocation | null;
+}
+
+export interface Baggage {
+  reference: string;
+  /** PII-free opaque payload. It is an identifier, never authorization. */
+  qrPayload: string;
+  type: BaggageType;
+  lifecycleStatus: BaggageLifecycleStatus;
+  exceptionStatus: BaggageExceptionStatus | null;
+  /** Exact kilograms, always three decimals; null before STAFF measurement. */
+  measuredWeightKg: string | null;
+  allowance: {
+    includedWeightKg: string | null;
+    excessWeightKg: string | null;
+    excessCharge: { amountMinor: string; currencyCode: string } | null;
+  };
+  passenger: { reference: string; givenName: string; familyName: string };
+  booking: {
+    reference: string;
+    trip: {
+      reference: string;
+      route: { code: string; name: string };
+      plannedDepartureAt: string | null;
+      plannedArrivalAt: string | null;
+    };
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BaggageDetail extends Baggage {
+  events: BaggageEvent[];
+}
+
+export interface BaggageQr {
+  reference: string;
+  /** Locally generated SVG; callers must render it as an image, not executable markup. */
+  svg: string;
+}
+
+export interface BaggageEventResult {
+  /** false means an identical clientEventId replay returned the original event. */
+  created: boolean;
+  event: BaggageEvent;
+}
+
+export interface BaggageEventInput {
+  type: BaggageOperationalEventType;
+  occurredAt?: string;
+  routeWaypointId?: string | null;
+  clientEventId?: string;
+}
+
+export interface BaggageWeightInput {
+  /** Exact decimal string; CUSTOMER APIs never accept this input. */
+  measuredWeightKg: string;
+  occurredAt?: string;
+  routeWaypointId?: string | null;
+  clientEventId?: string;
+}
+
+export interface BaggageListOptions {
+  cursor?: string;
+  limit?: number;
+  reference?: string;
+  bookingReference?: string;
+  passengerReference?: string;
+  tripReference?: string;
+  type?: BaggageType;
+  lifecycleStatus?: BaggageLifecycleStatus;
+  exceptionStatus?: BaggageExceptionStatus;
+  createdFrom?: string;
+  createdTo?: string;
+}
+
 /**
  * PR-12 compliance. TECHNICALLY_ACCEPTED != REGULATORY_VALID and
  * NO_MATCHING_RULE != COMPLIANT: a stale evaluation is never current.
@@ -1516,6 +1617,26 @@ export function createAuthClient(baseUrl: string) {
           privateDownload(
             `/v1/booking/documents/${encodeURIComponent(documentReference)}/download`,
           ),
+        /** PR-13: the server derives BookingPassenger, trip and CUSTOMER ownership. */
+        registerBaggage: (
+          bookingReference: string,
+          passengerReference: string,
+          input: { type: BaggageType },
+        ) =>
+          withCsrf<BaggageDetail>(
+            'customer',
+            `/v1/booking/bookings/${encodeURIComponent(bookingReference)}/passengers/${encodeURIComponent(passengerReference)}/baggage`,
+            input,
+          ),
+        baggageForBooking: (bookingReference: string) =>
+          call<{ items: Baggage[] }>(
+            'GET',
+            `/v1/booking/bookings/${encodeURIComponent(bookingReference)}/baggage`,
+          ),
+        baggage: (reference: string) =>
+          call<BaggageDetail>('GET', `/v1/booking/baggage/${encodeURIComponent(reference)}`),
+        baggageQr: (reference: string) =>
+          call<BaggageQr>('GET', `/v1/booking/baggage/${encodeURIComponent(reference)}/qr`),
         /** PR-12: compliance of the caller's own booking passengers (no side effect). */
         compliance: (bookingReference: string) =>
           call<CustomerBookingCompliance>(
@@ -1903,6 +2024,54 @@ export function createAuthClient(baseUrl: string) {
           privateDownload(
             `/v1/admin/passenger-documents/${encodeURIComponent(reference)}/download`,
           ),
+      },
+      /** baggage.read for reads; every mutation additionally requires baggage.manage. */
+      baggage: {
+        list: (options: BaggageListOptions = {}) =>
+          call<Page<Baggage>>(
+            'GET',
+            `/v1/admin/baggage?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              reference: options.reference,
+              bookingReference: options.bookingReference,
+              passengerReference: options.passengerReference,
+              tripReference: options.tripReference,
+              type: options.type,
+              lifecycleStatus: options.lifecycleStatus,
+              exceptionStatus: options.exceptionStatus,
+              createdFrom: options.createdFrom,
+              createdTo: options.createdTo,
+            })}`,
+          ),
+        detail: (reference: string) =>
+          call<BaggageDetail>('GET', `/v1/admin/baggage/${encodeURIComponent(reference)}`),
+        qr: (reference: string) =>
+          call<BaggageQr>('GET', `/v1/admin/baggage/${encodeURIComponent(reference)}/qr`),
+        register: (input: {
+          bookingReference: string;
+          passengerReference: string;
+          type: BaggageType;
+        }) => withCsrf<BaggageDetail>('staff', '/v1/admin/baggage', input),
+        updateWeight: (reference: string, input: BaggageWeightInput) =>
+          withCsrf<BaggageEventResult>(
+            'staff',
+            `/v1/admin/baggage/${encodeURIComponent(reference)}/weight`,
+            input,
+          ),
+        recordEvent: (reference: string, input: BaggageEventInput) =>
+          withCsrf<BaggageEventResult>(
+            'staff',
+            `/v1/admin/baggage/${encodeURIComponent(reference)}/events`,
+            input,
+          ),
+        scan: (qrPayload: string, input: BaggageEventInput) =>
+          withCsrf<BaggageEventResult>('staff', '/v1/admin/baggage/scan', {
+            qrPayload,
+            ...input,
+          }),
+        resolveQr: (qrPayload: string) =>
+          withCsrf<BaggageDetail>('staff', '/v1/admin/baggage/resolve-qr', { qrPayload }),
       },
       /**
        * PR-12: compliance.read / compliance.review for passengers;
