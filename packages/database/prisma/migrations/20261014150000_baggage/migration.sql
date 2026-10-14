@@ -458,6 +458,9 @@ CREATE TRIGGER "baggage_event_no_truncate"
 
 -- Explicit least-privilege catalogue. Customer access is ownership-based;
 -- these permissions apply only to authenticated STAFF in the OPS app.
+-- Baggage views name the passenger, so only roles that handle travellers read
+-- them: AUDITOR (no passenger PII grant since PR-11), FINANCE and
+-- COMPLIANCE_AGENT receive none. CUSTOMER_SUPPORT reads to answer customers.
 INSERT INTO "authorization_permission" ("key", "description") VALUES
   ('baggage.read', 'Read baggage identity, projections, QR payload and event history'),
   ('baggage.manage', 'Register baggage and record weight, lifecycle and exception events');
@@ -473,5 +476,4 @@ INSERT INTO "authorization_role_permission" ("role_key", "permission_key") VALUE
   ('DISPATCHER', 'baggage.manage'),
   ('BOOKING_AGENT', 'baggage.read'),
   ('BOOKING_AGENT', 'baggage.manage'),
-  ('CUSTOMER_SUPPORT', 'baggage.read'),
-  ('AUDITOR', 'baggage.read');
+  ('CUSTOMER_SUPPORT', 'baggage.read');

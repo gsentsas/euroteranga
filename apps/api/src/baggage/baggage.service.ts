@@ -1,6 +1,5 @@
 import { Prisma } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
-import { renderSVG } from 'uqr';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { RATE_LIMITS } from '../auth/rate-limit/rate-limit.rules.js';
 import { RateLimitService } from '../auth/rate-limit/rate-limit.service.js';
@@ -17,11 +16,11 @@ import type {
 import { BaggageErrors } from './baggage.errors.js';
 import {
   baggageEventFingerprint,
-  baggageQrPayload,
   BaggageTransitionError,
   normalizeBaggageReference,
   parseBaggageQrPayload,
   projectBaggageEvent,
+  renderBaggageQrSvg,
   withFreshBaggageReference,
   type BaggageEvent,
 } from './baggage-rules.js';
@@ -53,7 +52,7 @@ function databaseDomainError(error: unknown): never {
     message.includes('baggage removal') ||
     message.includes('active baggage exception') ||
     message.includes('EXCEPTION_RESOLVED') ||
-    message.includes('exception cannot') ||
+    message.includes('cannot open this exception') ||
     message.includes('REMOVED is terminal') ||
     message.includes('projection must be updated before') ||
     message.includes('WEIGHT_UPDATED')
@@ -232,7 +231,7 @@ export class BaggageService {
 
   async customerQr(actor: AuthPrincipal, rawReference: string) {
     const baggage = await this.customerBaggage(actor, rawReference);
-    return { reference: baggage.reference, svg: this.renderQr(baggage.reference) };
+    return { reference: baggage.reference, svg: renderBaggageQrSvg(baggage.reference) };
   }
 
   async adminList(actor: AuthPrincipal, query: BaggageListQuery) {
@@ -325,7 +324,7 @@ export class BaggageService {
 
   async adminQr(actor: AuthPrincipal, rawReference: string) {
     const baggage = await this.adminBaggage(actor, rawReference, 'QR_LABEL');
-    return { reference: baggage.reference, svg: this.renderQr(baggage.reference) };
+    return { reference: baggage.reference, svg: renderBaggageQrSvg(baggage.reference) };
   }
 
   async updateWeight(actor: AuthPrincipal, rawReference: string, input: BaggageWeightInput) {
@@ -472,16 +471,5 @@ export class BaggageService {
     });
     if (!row) throw BaggageErrors.notFound();
     return row;
-  }
-
-  private renderQr(reference: string): string {
-    return renderSVG(baggageQrPayload(reference), {
-      ecc: 'M',
-      boostEcc: true,
-      border: 4,
-      pixelSize: 6,
-      blackColor: '#111827',
-      whiteColor: '#ffffff',
-    });
   }
 }

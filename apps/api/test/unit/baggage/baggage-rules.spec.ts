@@ -1,5 +1,7 @@
+import { renderSVG } from 'uqr';
 import { describe, expect, it } from 'vitest';
 import {
+  BAGGAGE_QR_RENDER_OPTIONS,
   BAGGAGE_REFERENCE_PATTERN,
   baggageEventFingerprint,
   baggageQrPayload,
@@ -9,6 +11,7 @@ import {
   normalizeWeightKg,
   parseBaggageQrPayload,
   projectBaggageEvent,
+  renderBaggageQrSvg,
   withFreshBaggageReference,
   type BaggageProjection,
 } from '../../../src/baggage/baggage-rules.js';
@@ -27,6 +30,17 @@ describe('baggage public identity and QR', () => {
     expect(parseBaggageQrPayload(`ETG2:${reference}`)).toBeNull();
     expect(parseBaggageQrPayload(`${payload}:passenger@example.test`)).toBeNull();
     expect(payload).not.toMatch(/@|awa|passenger|booking/iu);
+  });
+
+  it('renders locally the SVG of exactly the versioned payload, nothing more', () => {
+    const reference = 'ETG-0123456789AB';
+    const svg = renderBaggageQrSvg(reference);
+    expect(svg).toBe(renderSVG(`ETG1:${reference}`, BAGGAGE_QR_RENDER_OPTIONS));
+    expect(svg).not.toBe(renderSVG(`ETG1:${reference}:Awa Ndiaye`, BAGGAGE_QR_RENDER_OPTIONS));
+    expect(svg).toMatch(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/u);
+    // Static shapes only: no script, event handler or external reference.
+    expect(svg).not.toMatch(/<script|<foreignObject|\son[a-z]+=|href=/iu);
+    expect(() => renderBaggageQrSvg('ETB-0123456789AB')).toThrow('invalid baggage reference');
   });
 
   it('retries reference collisions, but never masks a different failure', async () => {

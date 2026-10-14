@@ -1,4 +1,5 @@
 import { createHash, randomInt } from 'node:crypto';
+import { renderSVG } from 'uqr';
 import { BOOKING_REFERENCE_ALPHABET } from '../bookings/booking-rules.js';
 
 export const BAGGAGE_REFERENCE_PATTERN = /^ETG-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{12}$/;
@@ -44,6 +45,20 @@ export function baggageQrPayload(reference: string): string {
 
 export function parseBaggageQrPayload(value: string): string | null {
   return value.trim().toUpperCase().match(BAGGAGE_QR_PATTERN)?.[1] ?? null;
+}
+
+export const BAGGAGE_QR_RENDER_OPTIONS = {
+  ecc: 'M',
+  boostEcc: true,
+  border: 4,
+  pixelSize: 6,
+  blackColor: '#111827',
+  whiteColor: '#ffffff',
+} as const;
+
+/** Local SVG rendering (no network service) of the versioned payload only. */
+export function renderBaggageQrSvg(reference: string): string {
+  return renderSVG(baggageQrPayload(reference), BAGGAGE_QR_RENDER_OPTIONS);
 }
 
 /**
