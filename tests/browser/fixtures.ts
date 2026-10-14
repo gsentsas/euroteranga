@@ -147,6 +147,19 @@ export const FIXTURES = {
     };
   },
 
+  /** PR-13: owner of the baggage journey (dedicated booking and traveller). */
+  get baggageCustomer(): Fixture {
+    return { realm: 'CUSTOMER', email: runScoped('baggage-customer') };
+  },
+  /** PR-13: baggage.read and baggage.manage, without any booking permission. */
+  get baggageManager(): Fixture {
+    return { realm: 'STAFF', email: runScoped('baggage-manager'), roles: ['DISPATCHER'] };
+  },
+  /** PR-13: compliance and passenger-document reads, but no baggage permission. */
+  get baggageDenied(): Fixture {
+    return { realm: 'STAFF', email: runScoped('baggage-denied'), roles: ['COMPLIANCE_AGENT'] };
+  },
+
   /** Target of the SUPER_ADMIN's role and status changes. */
   get managed(): Fixture {
     return { realm: 'STAFF', email: runScoped('managed'), roles: ['DISPATCHER'] };
@@ -176,7 +189,10 @@ export type PreauthenticatedFixture =
   | 'passengerDocumentReader'
   | 'passengerDocumentDenied'
   | 'complianceRuleManager'
-  | 'complianceCustomer';
+  | 'complianceCustomer'
+  | 'baggageCustomer'
+  | 'baggageManager'
+  | 'baggageDenied';
 
 const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string> = {
   paymentCustomer: 'E2E_PAYMENT_CUSTOMER_SESSION',
@@ -185,6 +201,9 @@ const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string
   passengerDocumentDenied: 'E2E_PASSENGER_DOCUMENT_DENIED_SESSION',
   complianceRuleManager: 'E2E_COMPLIANCE_RULE_MANAGER_SESSION',
   complianceCustomer: 'E2E_COMPLIANCE_CUSTOMER_SESSION',
+  baggageCustomer: 'E2E_BAGGAGE_CUSTOMER_SESSION',
+  baggageManager: 'E2E_BAGGAGE_MANAGER_SESSION',
+  baggageDenied: 'E2E_BAGGAGE_DENIED_SESSION',
 };
 
 /**
@@ -330,6 +349,26 @@ export function complianceSeed() {
     bookingReference: `ETB-E2E2${run}`,
     paymentReference: `ETP-E2E2${run}`,
     ruleCountry,
+  };
+}
+
+/**
+ * PR-13: a dedicated trip and confirmed booking of the baggage customer, with
+ * one synthetic traveller already linked to it.
+ */
+export function baggageSeed() {
+  const raw = process.env.E2E_RUN_ID;
+  if (!raw) throw new Error('E2E_RUN_ID is set by global-setup.ts');
+  const run = raw.toUpperCase();
+  return {
+    run,
+    tripReference: `ET-BAG-${run}`,
+    departureDate: '2030-07-02',
+    bookingReference: `ETB-E2E3${run}`,
+    paymentReference: `ETP-E2E3${run}`,
+    passengerReference: `ETV-E2E3${run}`,
+    passengerGivenName: 'Coumba',
+    passengerFamilyName: 'Bagages',
   };
 }
 
