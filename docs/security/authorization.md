@@ -51,20 +51,24 @@ ADR-017 to ADR-020. This document contains no secret value.
 | `payment.read`             | Reading payment attempts and provider events (PR-10)       |
 | `payment.manage`           | Cancelling a PENDING attempt (never marking one paid)      |
 | `passenger.document.read`  | Reading passenger-document metadata and accepted bytes     |
+| `compliance.read`          | Reading passenger compliance evaluations and reviews       |
+| `compliance.review`        | Evaluating a booking passenger, reasoned human review      |
+| `compliance.rule.read`     | Reading regulatory rules, versions and provenance          |
+| `compliance.rule.manage`   | Drafting, verifying, publishing and retiring rule versions |
 
 ### Role matrix
 
-| Role                                | Realm | Privileged | Permissions                                                                                                                                                                                                                                                                             |
-| ----------------------------------- | ----- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SUPER_ADMIN`                       | STAFF | yes        | all twenty-five                                                                                                                                                                                                                                                                         |
-| `DIRECTOR`                          | STAFF | no         | all except `privileged.manage`                                                                                                                                                                                                                                                          |
-| `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage`, `trip.read`, `trip.manage`, `seatmap.read`, `seatmap.manage`, `pricing.read`, `pricing.manage`, `booking.read`, `booking.manage`, `payment.read`, `passenger.document.read` |
-| `DISPATCHER`                        | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `trip.manage`, `seatmap.read`, `pricing.read`                                                                                                                                                                                  |
-| `AUDITOR`                           | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `pricing.read`, `payment.read`                                                                                                                                     |
-| `COMPLIANCE_AGENT`                  | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `passenger.document.read` (no pricing or payment permission)                                                                                                                                                   |
-| `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`, `trip.read`, `seatmap.read`, `pricing.read`, `booking.read`, `booking.manage`, `payment.read` (no fleet permission by default)                                                                                                                            |
-| `FINANCE`                           | STAFF | no         | `ops.access`, `pricing.read`, `payment.read`, `payment.manage` (no network, fleet, trip, seat-map or booking permission by default)                                                                                                                                                     |
-| `DRIVER`, `CREW`                    | CREW  | no         | none yet                                                                                                                                                                                                                                                                                |
+| Role                                | Realm | Privileged | Permissions                                                                                                                                                                                                                                                                                                |
+| ----------------------------------- | ----- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPER_ADMIN`                       | STAFF | yes        | all twenty-nine                                                                                                                                                                                                                                                                                            |
+| `DIRECTOR`                          | STAFF | no         | all except `privileged.manage`                                                                                                                                                                                                                                                                             |
+| `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage`, `trip.read`, `trip.manage`, `seatmap.read`, `seatmap.manage`, `pricing.read`, `pricing.manage`, `booking.read`, `booking.manage`, `payment.read`, `passenger.document.read`, `compliance.read` |
+| `DISPATCHER`                        | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `trip.manage`, `seatmap.read`, `pricing.read`                                                                                                                                                                                                     |
+| `AUDITOR`                           | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `pricing.read`, `payment.read`, `compliance.rule.read`                                                                                                                                |
+| `COMPLIANCE_AGENT`                  | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `passenger.document.read`, `compliance.read`, `compliance.review`, `compliance.rule.read` (no pricing or payment permission)                                                                                                      |
+| `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`, `trip.read`, `seatmap.read`, `pricing.read`, `booking.read`, `booking.manage`, `payment.read` (no fleet permission by default)                                                                                                                                               |
+| `FINANCE`                           | STAFF | no         | `ops.access`, `pricing.read`, `payment.read`, `payment.manage` (no network, fleet, trip, seat-map or booking permission by default)                                                                                                                                                                        |
+| `DRIVER`, `CREW`                    | CREW  | no         | none yet                                                                                                                                                                                                                                                                                                   |
 
 A STAFF identity without any role, or with roles lacking `ops.access`, can
 sign in (password + TOTP) but gets **Accès refusé** in OPS and 403 from every
@@ -160,6 +164,14 @@ There is **no public STAFF or CREW registration** and no bootstrap endpoint.
   `METADATA` (detail) or `CONTENT` (download), with stable references only;
   no bytes, original filename, object key, digest or scanner output is
   audited.
+- Compliance (PR-12) adds `COMPLIANCE_RULE_CREATED`,
+  `COMPLIANCE_RULE_VERSION_CREATED`, `COMPLIANCE_RULE_VERSION_UPDATED`,
+  `COMPLIANCE_RULE_VERIFIED`, `COMPLIANCE_RULE_PUBLISHED`,
+  `COMPLIANCE_RULE_RETIRED`, `COMPLIANCE_EVALUATED` and `COMPLIANCE_REVIEWED`.
+  STAFF reads add `COMPLIANCE_ACCESSED` (`LIST` per queue page, `DETAIL`)
+  before the data is returned. Events carry references, digests, results and
+  decisions; never names, birth dates, file data or the internal review
+  reason.
 - `before`, `after` and `metadata` go through the same redaction as logs:
   tokens, passwords, TOTP secrets and recovery codes are never written.
 - Read through `GET /v1/admin/audit` (`audit.read`), newest first, keyset
@@ -169,28 +181,36 @@ There is **no public STAFF or CREW registration** and no bootstrap endpoint.
 
 All under `/v1/admin`, STAFF session, `ops.access` plus:
 
-| Method | Path                                                              | Permission(s)                             |
-| ------ | ----------------------------------------------------------------- | ----------------------------------------- |
-| GET    | `/access/me`                                                      | session only (own access)                 |
-| GET    | `/roles`                                                          | `role.read`                               |
-| GET    | `/identities?realm=staff\|crew&cursor&limit`                      | `identity.read`                           |
-| GET    | `/identities/:id/access`                                          | `identity.read`, `role.read`              |
-| POST   | `/identities/:id/roles`                                           | `role.assign` (+ CSRF)                    |
-| POST   | `/identities/:id/roles/revoke`                                    | `role.assign` (+ CSRF)                    |
-| POST   | `/identities/:id/status`                                          | `identity.status.manage` (+ CSRF)         |
-| POST   | `/identities/:id/sessions/revoke-all`                             | `session.revoke.any` (+ CSRF)             |
-| POST   | `/staff/invitations`                                              | `identity.staff.provision`, `role.assign` |
-| POST   | `/staff/:id/mfa/enrollment-authorization`                         | `mfa.enrollment.authorize`                |
-| GET    | `/audit?cursor&limit`                                             | `audit.read`                              |
-| GET    | `/bookings?cursor&limit&status&tripId&reference`                  | `booking.read`                            |
-| GET    | `/bookings/:id`                                                   | `booking.read`                            |
-| POST   | `/bookings/:id/cancel`                                            | `booking.manage` (+ CSRF, reason)         |
-| GET    | `/payments?cursor&limit&status&bookingReference&paymentReference` | `payment.read`                            |
-| GET    | `/payments/:id`                                                   | `payment.read`                            |
-| POST   | `/payments/:id/cancel`                                            | `payment.manage` (+ CSRF, reason)         |
-| GET    | `/passenger-documents`                                            | `passenger.document.read` (+ page audit)  |
-| GET    | `/passenger-documents/:reference`                                 | `passenger.document.read` (+ read audit)  |
-| GET    | `/passenger-documents/:reference/download`                        | `passenger.document.read` (+ read audit)  |
+| Method | Path                                                               | Permission(s)                             |
+| ------ | ------------------------------------------------------------------ | ----------------------------------------- |
+| GET    | `/access/me`                                                       | session only (own access)                 |
+| GET    | `/roles`                                                           | `role.read`                               |
+| GET    | `/identities?realm=staff\|crew&cursor&limit`                       | `identity.read`                           |
+| GET    | `/identities/:id/access`                                           | `identity.read`, `role.read`              |
+| POST   | `/identities/:id/roles`                                            | `role.assign` (+ CSRF)                    |
+| POST   | `/identities/:id/roles/revoke`                                     | `role.assign` (+ CSRF)                    |
+| POST   | `/identities/:id/status`                                           | `identity.status.manage` (+ CSRF)         |
+| POST   | `/identities/:id/sessions/revoke-all`                              | `session.revoke.any` (+ CSRF)             |
+| POST   | `/staff/invitations`                                               | `identity.staff.provision`, `role.assign` |
+| POST   | `/staff/:id/mfa/enrollment-authorization`                          | `mfa.enrollment.authorize`                |
+| GET    | `/audit?cursor&limit`                                              | `audit.read`                              |
+| GET    | `/bookings?cursor&limit&status&tripId&reference`                   | `booking.read`                            |
+| GET    | `/bookings/:id`                                                    | `booking.read`                            |
+| POST   | `/bookings/:id/cancel`                                             | `booking.manage` (+ CSRF, reason)         |
+| GET    | `/payments?cursor&limit&status&bookingReference&paymentReference`  | `payment.read`                            |
+| GET    | `/payments/:id`                                                    | `payment.read`                            |
+| POST   | `/payments/:id/cancel`                                             | `payment.manage` (+ CSRF, reason)         |
+| GET    | `/passenger-documents`                                             | `passenger.document.read` (+ page audit)  |
+| GET    | `/passenger-documents/:reference`                                  | `passenger.document.read` (+ read audit)  |
+| GET    | `/passenger-documents/:reference/download`                         | `passenger.document.read` (+ read audit)  |
+| GET    | `/compliance/rules`, `/compliance/rules/:reference`                | `compliance.rule.read`                    |
+| POST   | `/compliance/rules`, `/compliance/rules/:reference/versions`       | `compliance.rule.manage` (+ CSRF)         |
+| POST   | `/compliance/rules/:reference/versions/:n` (draft edit)            | `compliance.rule.manage` (+ CSRF)         |
+| POST   | `/compliance/rules/:reference/versions/:n/verify\|publish\|retire` | `compliance.rule.manage` (+ CSRF)         |
+| GET    | `/compliance/booking-passengers`                                   | `compliance.read` (+ page audit)          |
+| GET    | `/compliance/evaluations/:reference`                               | `compliance.read` (+ read audit)          |
+| POST   | `/compliance/evaluations`                                          | `compliance.review` (+ CSRF)              |
+| POST   | `/compliance/evaluations/:reference/reviews`                       | `compliance.review` (+ CSRF, reason)      |
 
 The booking detail (`GET /bookings/:id`) includes the booking's payment
 attempts only for callers holding `payment.read`: `booking.read` alone gives no

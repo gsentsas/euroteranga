@@ -289,11 +289,39 @@ pipeline:
 LOCAL storage and the deterministic TEST scanner are local/CI only and are
 refused in deployed environments. S3 and ClamAV adapters exist, but PR-11
 provisions neither in production; incomplete configuration fails safely.
-**TECHNICALLY_ACCEPTED != REGULATORY_VALID. PR-12 will own Compliance.** See
+**TECHNICALLY_ACCEPTED != REGULATORY_VALID. PR-12 owns Compliance** (below). See
 [`docs/domain/passenger-documents.md`](../domain/passenger-documents.md),
 [`docs/security/passenger-documents.md`](../security/passenger-documents.md)
 and
 [ADR-005](../adr/ADR-005-private-object-storage-quarantine.md).
+
+## Regulatory compliance (PR-12)
+
+`apps/api/src/compliance` decides whether one passenger, on one booked
+journey, meets the regulatory rules that authorized STAFF entered from
+official sources, verified and published:
+
+- `ComplianceRule` / `ComplianceRuleVersion`: `DRAFT → PUBLISHED → RETIRED`,
+  provenance and verification pinned to a definition digest, inclusive
+  effective dates compared with the planned travel date; published versions
+  are immutable (PostgreSQL triggers);
+- a closed JSON rule language (v1) and a pure deterministic engine
+  (`compliance-engine/1`) over server-derived facts (booking → trip → route
+  waypoints → countries; passenger nationality and age; technically ACCEPTED
+  documents);
+- append-only `ComplianceEvaluation` per booking passenger with facts and
+  rules fingerprints; staleness is recomputed, never stored;
+- append-only `ComplianceReview` (reason mandatory) on the latest current
+  evaluation, as a linear chain;
+- `compliance.read`, `compliance.review`, `compliance.rule.read`,
+  `compliance.rule.manage`; audited STAFF reads.
+
+**CODE_IS_NOT_LEGAL_AUTHORITY. NO_MATCHING_RULE != COMPLIANT.
+TECHNICALLY_ACCEPTED != REGULATORY_VALID.** No regulatory rule is shipped.
+Permits (PR-16) and trip readiness (PR-17) are separate future domains. See
+[`docs/domain/compliance.md`](../domain/compliance.md),
+[`docs/security/compliance.md`](../security/compliance.md) and
+[ADR-009](../adr/ADR-009-versioned-regulatory-rule-engine.md).
 
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
@@ -308,7 +336,8 @@ route versioning (ADR-021), vehicle lifecycle (ADR-022), trip lifecycle
 (ADR-023), seat-map versioning (ADR-024) and versioned fare tables with
 historical trip pricing (ADR-025), segment inventory/customer holds
 (ADR-026), and the payment provider abstraction with booking confirmation
-(ADR-027), plus private object storage/scanning/quarantine (ADR-005).
+(ADR-027), plus private object storage/scanning/quarantine (ADR-005) and the
+versioned regulatory rule engine (ADR-009).
 
 Still open: production object-storage and malware-scanner provisioning,
 offline crew synchronisation, the choice and integration of a real payment
