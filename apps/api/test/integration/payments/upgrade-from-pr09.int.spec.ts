@@ -20,7 +20,7 @@ const DATABASE_PACKAGE = fileURLToPath(
 const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const BOOKING_MIGRATION = '20261013210000_booking';
 const PAYMENT_MIGRATION = '20261013230000_payments';
-const BAGGAGE_MIGRATION = '20261014150000_baggage';
+const CHECK_IN_MIGRATION = '20261014190000_check_in_boarding';
 
 const CUSTOMER = '01900000-0000-7000-8000-000000000a01';
 const TRIP = '01900000-0000-7000-8000-000000000a81';
@@ -104,7 +104,7 @@ const SNAPSHOTS = {
   seats: `SELECT json_agg(s ORDER BY s.id)::text AS value FROM booking_seat s`,
   locks: `SELECT json_agg(l ORDER BY l.booking_seat_id, l.segment_sequence)::text AS value FROM (SELECT booking_seat_id, trip_id, seat_map_cell_id, segment_sequence, created_at FROM seat_inventory_lock) l`,
   trip: `SELECT row_to_json(t)::text AS value FROM (SELECT id, status, seat_map_version_id, fare_table_version_id, planned_departure_at, updated_at FROM trip) t`,
-  grants: `SELECT json_agg(g ORDER BY g.role_key, g.permission_key)::text AS value FROM authorization_role_permission g WHERE g.permission_key NOT LIKE 'payment.%' AND g.permission_key <> 'passenger.document.read' AND g.permission_key NOT LIKE 'compliance.%' AND g.permission_key NOT LIKE 'baggage.%'`,
+  grants: `SELECT json_agg(g ORDER BY g.role_key, g.permission_key)::text AS value FROM authorization_role_permission g WHERE g.permission_key NOT LIKE 'payment.%' AND g.permission_key <> 'passenger.document.read' AND g.permission_key NOT LIKE 'compliance.%' AND g.permission_key NOT LIKE 'baggage.%' AND g.permission_key NOT LIKE 'checkin.%' AND g.permission_key NOT LIKE 'boarding.%'`,
 };
 
 function deploy(config: string | null, url: string) {
@@ -247,8 +247,8 @@ describe('upgrade from a PR-09 database (isolated database)', () => {
     expect(afterPaymentSnapshot).toEqual(before);
 
     const applied = await appliedMigrations();
-    expect(applied).toHaveLength(13);
-    expect(applied.at(-1)).toBe(BAGGAGE_MIGRATION);
+    expect(applied).toHaveLength(14);
+    expect(applied.at(-1)).toBe(CHECK_IN_MIGRATION);
     expect(await snapshot()).toEqual(before);
     expect(
       await count(`SELECT count(*) AS count FROM booking WHERE confirmed_at IS NOT NULL`),

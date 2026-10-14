@@ -27,6 +27,7 @@ const DATABASE_PACKAGE = fileURLToPath(
 const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const COMPLIANCE_MIGRATION = '20261014120000_compliance';
 const BAGGAGE_MIGRATION = '20261014150000_baggage';
+const CHECK_IN_MIGRATION = '20261014190000_check_in_boarding';
 const HISTORICAL_TABLES = [
   'trip',
   'booking',
@@ -71,6 +72,11 @@ describe('upgrade from a real PR-12 database', () => {
   let workDir: string;
   let storageRoot: string;
   let before: Record<string, string | null>;
+  let afterBaggage: {
+    applied: string[];
+    snapshot: Record<string, string | null>;
+    counts: number[];
+  };
   const name = `et_pr12_${randomBytes(6).toString('hex')}`;
 
   const applied = async () =>
@@ -185,8 +191,31 @@ describe('upgrade from a real PR-12 database', () => {
     expect(await count('compliance_review')).toBe(1);
     before = await snapshot();
 
-    // The real migration directory now contains exactly PR-13 as pending.
+    // PR-13 alone first, measured on its own; then the real directory (PR-14
+    // and any later additive migration).
+    const pr13 = join(workDir, 'migrations-pr13');
+    for (const entry of readdirSync(MIGRATIONS)) {
+      if (entry <= BAGGAGE_MIGRATION) {
+        cpSync(join(MIGRATIONS, entry), join(pr13, entry), { recursive: true });
+      }
+    }
+    const pr13Config = join(workDir, 'prisma.pr13.config.mjs');
+    writeFileSync(
+      pr13Config,
+      `export default ${JSON.stringify({
+        schema: join(DATABASE_PACKAGE, 'prisma', 'schema.prisma'),
+        migrations: { path: pr13 },
+        datasource: { url },
+      })};\n`,
+    );
+    deploy(pr13Config, url);
+    afterBaggage = {
+      applied: await applied(),
+      snapshot: await snapshot(),
+      counts: [await count('baggage'), await count('baggage_event')],
+    };
     deploy(null, url);
+    // Three `prisma migrate deploy` processes now, as in the PR-11 upgrade test.
   }, 60_000);
 
   afterAll(async () => {
@@ -199,9 +228,14 @@ describe('upgrade from a real PR-12 database', () => {
   });
 
   it('applies only PR-13, preserves every populated historical row and backfills nothing', async () => {
+    expect(afterBaggage.applied).toHaveLength(13);
+    expect(afterBaggage.applied.at(-1)).toBe(BAGGAGE_MIGRATION);
+    expect(afterBaggage.snapshot).toEqual(before);
+    expect(afterBaggage.counts).toEqual([0, 0]);
+    // Still true once the later migrations are applied.
     const migrations = await applied();
-    expect(migrations).toHaveLength(13);
-    expect(migrations.at(-1)).toBe(BAGGAGE_MIGRATION);
+    expect(migrations).toHaveLength(14);
+    expect(migrations.at(-1)).toBe(CHECK_IN_MIGRATION);
     expect(await snapshot()).toEqual(before);
     expect(await count('baggage')).toBe(0);
     expect(await count('baggage_event')).toBe(0);
@@ -241,6 +275,6 @@ describe('upgrade from a real PR-12 database', () => {
       encoding: 'utf8',
     });
     expect(status).toContain('Database schema is up to date');
-    expect(await applied()).toHaveLength(13);
+    expect(await applied()).toHaveLength(14);
   });
 });

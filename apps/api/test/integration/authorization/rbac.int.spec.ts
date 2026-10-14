@@ -16,8 +16,12 @@ const EXPECTED_MATRIX: Record<
       'audit.read',
       'baggage.manage',
       'baggage.read',
+      'boarding.read',
+      'boarding.scan',
       'booking.manage',
       'booking.read',
+      'checkin.manage',
+      'checkin.read',
       'compliance.read',
       'compliance.review',
       'compliance.rule.manage',
@@ -53,8 +57,12 @@ const EXPECTED_MATRIX: Record<
       'audit.read',
       'baggage.manage',
       'baggage.read',
+      'boarding.read',
+      'boarding.scan',
       'booking.manage',
       'booking.read',
+      'checkin.manage',
+      'checkin.read',
       'compliance.read',
       'compliance.review',
       'compliance.rule.manage',
@@ -88,8 +96,12 @@ const EXPECTED_MATRIX: Record<
     permissions: [
       'baggage.manage',
       'baggage.read',
+      'boarding.read',
+      'boarding.scan',
       'booking.manage',
       'booking.read',
+      'checkin.manage',
+      'checkin.read',
       'compliance.read',
       'fleet.manage',
       'fleet.read',
@@ -117,6 +129,10 @@ const EXPECTED_MATRIX: Record<
     permissions: [
       'baggage.manage',
       'baggage.read',
+      'boarding.read',
+      'boarding.scan',
+      'checkin.manage',
+      'checkin.read',
       'fleet.read',
       'network.read',
       'ops.access',
@@ -138,6 +154,8 @@ const EXPECTED_MATRIX: Record<
       'baggage.read',
       'booking.manage',
       'booking.read',
+      'checkin.manage',
+      'checkin.read',
       'network.read',
       'ops.access',
       'payment.read',
@@ -164,6 +182,9 @@ const EXPECTED_MATRIX: Record<
       'trip.read',
     ],
   },
+  // PR-14: counter check-in for BOOKING_AGENT and DISPATCHER, boarding for
+  // DISPATCHER; CUSTOMER_SUPPORT only reads check-in state. COMPLIANCE_AGENT,
+  // FINANCE and AUDITOR get no check-in or boarding permission.
   // PR-13: COMPLIANCE_AGENT, FINANCE and AUDITOR have no baggage permission:
   // baggage views name the passenger and they have no traveller-handling duty.
   // FINANCE: no network (PR-04), fleet (PR-05), trip (PR-06) nor seat map (PR-07)
@@ -181,6 +202,7 @@ const EXPECTED_MATRIX: Record<
       'baggage.read',
       'booking.manage',
       'booking.read',
+      'checkin.read',
       'network.read',
       'ops.access',
       'payment.read',
@@ -303,6 +325,13 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['POST', '/v1/admin/baggage/scan'],
   ['POST', '/v1/admin/baggage/ETG-000000000000/weight'],
   ['POST', '/v1/admin/baggage/ETG-000000000000/events'],
+  ['GET', '/v1/admin/check-in/booking-passengers'],
+  ['GET', '/v1/admin/check-in/bookings/ETB-000000000000/passengers/ETV-000000000000'],
+  ['POST', '/v1/admin/check-in/bookings/ETB-000000000000/passengers/ETV-000000000000/seat'],
+  ['POST', '/v1/admin/check-in/bookings/ETB-000000000000/passengers/ETV-000000000000/check-in'],
+  ['GET', '/v1/admin/check-in/check-ins/ETK-000000000000/qr'],
+  ['POST', '/v1/admin/boarding/resolve'],
+  ['POST', '/v1/admin/boarding/scan'],
 ];
 
 describe('server-side RBAC', () => {
@@ -412,6 +441,30 @@ describe('server-side RBAC', () => {
       expect(
         (await api.post('/baggage/ETG-000000000000/events', { type: 'CHECKED_IN' })).status,
       ).toBe(allowed('baggage.read') && allowed('baggage.manage') ? 404 : 403);
+      // PR-14: check-in and boarding are their own grants; checkin.manage is
+      // not boarding.scan, and no other permission implies them.
+      expect((await api.get('/check-in/booking-passengers')).status).toBe(
+        allowed('checkin.read') ? 200 : 403,
+      );
+      expect(
+        (
+          await api.post(
+            '/check-in/bookings/ETB-000000000000/passengers/ETV-000000000000/check-in',
+            {},
+          )
+        ).status,
+      ).toBe(allowed('checkin.read') && allowed('checkin.manage') ? 404 : 403);
+      expect(
+        (await api.post('/boarding/resolve', { qrPayload: 'ETPAX1:ETQ-0000000000000000' })).status,
+      ).toBe(allowed('boarding.read') ? 404 : 403);
+      expect(
+        (
+          await api.post('/boarding/scan', {
+            qrPayload: 'ETPAX1:ETQ-0000000000000000',
+            deviceId: 'rbac-gate',
+          })
+        ).status,
+      ).toBe(allowed('boarding.read') && allowed('boarding.scan') ? 404 : 403);
     },
   );
 
