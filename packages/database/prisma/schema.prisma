@@ -1048,7 +1048,7 @@ model Baggage {
   createdAt                DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  bookingPassenger BookingPassenger @relation(fields: [bookingId, passengerId], references: [bookingId, passengerId], onDelete: Restrict)
+  bookingPassenger BookingPassenger @relation(fields: [bookingId, passengerId], references: [bookingId, passengerId], onDelete: Restrict, map: "baggage_booking_passenger_fkey")
   events           BaggageEvent[]
 
   @@index([bookingId, passengerId, id])
