@@ -30,6 +30,7 @@ written yet.
 | [ADR-025](ADR-025-versioned-fare-tables-historical-trip-pricing.md)     | Versioned fare tables and historical trip pricing     | Accepted |
 | [ADR-026](ADR-026-segment-inventory-booking-holds.md)                   | Segment-based seat inventory and customer holds       | Accepted |
 | [ADR-027](ADR-027-payment-provider-abstraction-booking-confirmation.md) | Payment provider abstraction and booking confirmation | Accepted |
+| [ADR-028](ADR-028-baggage-identity-event-history.md)                    | Baggage identity, exact weight and append-only events | Accepted |
 
 Planned: ADR-007 Offline Crew. The planned
 ADR-008 (Payment Abstraction) is covered by ADR-027. ADR-006
@@ -46,3 +47,5 @@ ADR-005 covers the cross-cutting private object-store, malware-scanning and
 logical-quarantine boundary used by passenger documents.
 ADR-009 covers the PR-12 versioned regulatory rule engine, evaluation and
 human review of passenger compliance.
+ADR-028 covers the PR-13 baggage identity, PII-free QR payload, exact weight
+and append-only event history.
