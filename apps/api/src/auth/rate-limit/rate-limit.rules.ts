@@ -32,4 +32,10 @@ export const RATE_LIMITS = {
   staffInvitationIp: { action: 'staff-invitation:ip', limit: 20, windowMs: 15 * MINUTE },
   /** Wrong current passwords per authenticated identity. */
   passwordChangeIdentity: { action: 'password-change:identity', limit: 5, windowMs: 15 * MINUTE },
+  /** Passenger-document uploads per authenticated CUSTOMER identity (PR-11). */
+  passengerDocumentUploadIdentity: {
+    action: 'passenger-document-upload:identity',
+    limit: 20,
+    windowMs: HOUR,
+  },
 } as const satisfies Record<string, RateLimitRule>;

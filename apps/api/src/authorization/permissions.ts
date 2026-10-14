@@ -31,6 +31,7 @@ export const PERMISSIONS = {
   BOOKING_MANAGE: 'booking.manage',
   PAYMENT_READ: 'payment.read',
   PAYMENT_MANAGE: 'payment.manage',
+  PASSENGER_DOCUMENT_READ: 'passenger.document.read',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

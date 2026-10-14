@@ -7,6 +7,11 @@ export {
 } from './booking-env.js';
 export { EXAMPLE_PAYMENT_SANDBOX_WEBHOOK_SECRET, PAYMENT_PROVIDERS } from './payment-env.js';
 export {
+  MALWARE_SCANNERS,
+  OBJECT_STORAGE_PROVIDERS,
+  PASSENGER_DOCUMENT_MAX_BYTES_BOUNDS,
+} from './passenger-document-env.js';
+export {
   assertNoSensitivePublicEnv,
   loadPublicEnv,
   publicEnvSchema,

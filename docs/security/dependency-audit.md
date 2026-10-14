@@ -5,6 +5,31 @@ CI runs `pnpm audit:dependencies` in the `security` job. It fails on any
 exception names one advisory (never "all unfixable") and must be re-evaluated
 whenever the dependency is upgraded.
 
+## PR-11 additions
+
+All direct versions remain exact catalog pins (`pnpm-workspace.yaml`). The
+repository defines no minimum-release-age setting. Registry publish dates,
+checked on 2026-10-14: `@aws-sdk/client-s3` 3.1146.0 on 2026-10-02,
+`busboy` 1.6.0 on 2022-04-19, `@types/busboy` 1.5.4 on 2024-05-02. The AWS
+SDK is released very frequently; PR-11 keeps the pinned version rather than
+chasing newer releases, and future upgrades go through the usual
+Dependabot/audit review.
+
+`pnpm audit:dependencies` (high and critical) reports no advisory for these
+packages or their transitive trees; the only reported finding remains the
+pre-existing, reviewed exception below.
+
+| Package                       | Purpose                                             | License    | Maintenance/security                                                                                                           | Alternatives and runtime impact                                                                                                                                  |
+| ----------------------------- | --------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@aws-sdk/client-s3` 3.1146.0 | Private S3-compatible `put/get/head/delete` adapter | Apache-2.0 | Official modular AWS SDK, actively maintained; covered by `pnpm audit` and contract tests                                      | Raw SigV4 or a vendor SDK would add bespoke security/vendor coupling. This is the only new material runtime tree and loads only in the API; no SaaS is required. |
+| `busboy` 1.6.0                | Bounded streaming multipart parser                  | MIT        | Mature, small parser used directly so upload limits/part counts stay explicit; covered by hostile-shape tests and `pnpm audit` | Buffering middleware was rejected because document bodies must stream and global body parsing would broaden attack surface. Runtime dependency, no native build. |
+| `@types/busboy` 1.5.4         | Compile-time declarations for Busboy                | MIT        | DefinitelyTyped release; typecheck only, absent from production runtime                                                        | Local handwritten declarations would drift from the parser API. Dev-only, zero runtime impact.                                                                   |
+
+MinIO and a ClamAV npm wrapper were not added. The S3 adapter is tested at its
+command boundary, and the ClamAV adapter implements the small clamd `INSTREAM`
+protocol with Node's built-in TCP streams. This avoids extra runtime packages,
+containers and a mandatory external service in deterministic CI.
+
 ## Overrides (fixed by forcing a patched version)
 
 Declared in `pnpm-workspace.yaml` → `overrides`.

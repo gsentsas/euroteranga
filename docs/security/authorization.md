@@ -50,20 +50,21 @@ ADR-017 to ADR-020. This document contains no secret value.
 | `booking.manage`           | Cancelling active customer holds with a reason             |
 | `payment.read`             | Reading payment attempts and provider events (PR-10)       |
 | `payment.manage`           | Cancelling a PENDING attempt (never marking one paid)      |
+| `passenger.document.read`  | Reading passenger-document metadata and accepted bytes     |
 
 ### Role matrix
 
-| Role                                | Realm | Privileged | Permissions                                                                                                                                                                                                                                                  |
-| ----------------------------------- | ----- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SUPER_ADMIN`                       | STAFF | yes        | all twenty-four                                                                                                                                                                                                                                              |
-| `DIRECTOR`                          | STAFF | no         | all except `privileged.manage`                                                                                                                                                                                                                               |
-| `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage`, `trip.read`, `trip.manage`, `seatmap.read`, `seatmap.manage`, `pricing.read`, `pricing.manage`, `booking.read`, `booking.manage`, `payment.read` |
-| `DISPATCHER`                        | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `trip.manage`, `seatmap.read`, `pricing.read`                                                                                                                                                       |
-| `AUDITOR`                           | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `pricing.read`, `payment.read`                                                                                                          |
-| `COMPLIANCE_AGENT`                  | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read` (no pricing or payment permission)                                                                                                                                                   |
-| `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`, `trip.read`, `seatmap.read`, `pricing.read`, `booking.read`, `booking.manage`, `payment.read` (no fleet permission by default)                                                                                                 |
-| `FINANCE`                           | STAFF | no         | `ops.access`, `pricing.read`, `payment.read`, `payment.manage` (no network, fleet, trip, seat-map or booking permission by default)                                                                                                                          |
-| `DRIVER`, `CREW`                    | CREW  | no         | none yet                                                                                                                                                                                                                                                     |
+| Role                                | Realm | Privileged | Permissions                                                                                                                                                                                                                                                                             |
+| ----------------------------------- | ----- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPER_ADMIN`                       | STAFF | yes        | all twenty-five                                                                                                                                                                                                                                                                         |
+| `DIRECTOR`                          | STAFF | no         | all except `privileged.manage`                                                                                                                                                                                                                                                          |
+| `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage`, `trip.read`, `trip.manage`, `seatmap.read`, `seatmap.manage`, `pricing.read`, `pricing.manage`, `booking.read`, `booking.manage`, `payment.read`, `passenger.document.read` |
+| `DISPATCHER`                        | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `trip.manage`, `seatmap.read`, `pricing.read`                                                                                                                                                                                  |
+| `AUDITOR`                           | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `pricing.read`, `payment.read`                                                                                                                                     |
+| `COMPLIANCE_AGENT`                  | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `passenger.document.read` (no pricing or payment permission)                                                                                                                                                   |
+| `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`, `trip.read`, `seatmap.read`, `pricing.read`, `booking.read`, `booking.manage`, `payment.read` (no fleet permission by default)                                                                                                                            |
+| `FINANCE`                           | STAFF | no         | `ops.access`, `pricing.read`, `payment.read`, `payment.manage` (no network, fleet, trip, seat-map or booking permission by default)                                                                                                                                                     |
+| `DRIVER`, `CREW`                    | CREW  | no         | none yet                                                                                                                                                                                                                                                                                |
 
 A STAFF identity without any role, or with roles lacking `ops.access`, can
 sign in (password + TOTP) but gets **Accès refusé** in OPS and 403 from every
@@ -151,6 +152,14 @@ There is **no public STAFF or CREW registration** and no bootstrap endpoint.
   and `BOOKING_CONFIRMED`. The last three have a system actor (null): they
   come from a signed provider event and carry its id, never a signature or a
   secret. An audit failure rolls back the whole event processing.
+- Passenger documents (PR-11) add `PASSENGER_CREATED`,
+  `BOOKING_PASSENGER_ATTACHED`, `PASSENGER_DOCUMENT_UPLOADED`,
+  `PASSENGER_DOCUMENT_ACCEPTED` and `PASSENGER_DOCUMENT_REJECTED`. Sensitive
+  reads add `PASSENGER_DOCUMENT_ACCESSED` before the data is returned: `LIST`
+  (one event per STAFF page, with the references shown and the filters),
+  `METADATA` (detail) or `CONTENT` (download), with stable references only;
+  no bytes, original filename, object key, digest or scanner output is
+  audited.
 - `before`, `after` and `metadata` go through the same redaction as logs:
   tokens, passwords, TOTP secrets and recovery codes are never written.
 - Read through `GET /v1/admin/audit` (`audit.read`), newest first, keyset
@@ -179,11 +188,17 @@ All under `/v1/admin`, STAFF session, `ops.access` plus:
 | GET    | `/payments?cursor&limit&status&bookingReference&paymentReference` | `payment.read`                            |
 | GET    | `/payments/:id`                                                   | `payment.read`                            |
 | POST   | `/payments/:id/cancel`                                            | `payment.manage` (+ CSRF, reason)         |
+| GET    | `/passenger-documents`                                            | `passenger.document.read` (+ page audit)  |
+| GET    | `/passenger-documents/:reference`                                 | `passenger.document.read` (+ read audit)  |
+| GET    | `/passenger-documents/:reference/download`                        | `passenger.document.read` (+ read audit)  |
 
 The booking detail (`GET /bookings/:id`) includes the booking's payment
 attempts only for callers holding `payment.read`: `booking.read` alone gives no
 financial payment detail. No route can mark an attempt paid: SUCCEEDED only
 comes from a provider event (see [payments.md](../domain/payments.md)).
+Passenger-document routes are read-only; technical `ACCEPTED` is not a staff
+approval or regulatory decision (see
+[passenger-documents.md](passenger-documents.md)).
 
 Public: `POST /v1/auth/staff/invitation/accept` (rate limited per IP).
 
@@ -200,4 +215,6 @@ See ADR-020 and [the runbook](../runbooks/bootstrap-super-admin.md).
 - No STAFF/CREW password reset flow; no CREW provisioning UI yet.
 - Roles and permissions are managed by migrations, not editable at runtime.
 - Dispatch, refund and accounting permissions arrive with their domains.
+- Regulatory document review/approval is deferred to PR-12; PR-11 exposes
+  technical read access only.
 - Not deployed; nothing has been validated against production.

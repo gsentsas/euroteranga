@@ -163,6 +163,11 @@ jobs:
       OPS_PUBLIC_URL: http://localhost:3004
       # PR-10: the local, test-only SANDBOX payment provider (no external call).
       PAYMENT_PROVIDER: SANDBOX
+      # PR-11: private runner-local storage and a harmless deterministic scanner.
+      # Both adapters are refused in staging/production by configuration.
+      OBJECT_STORAGE_PROVIDER: LOCAL
+      OBJECT_STORAGE_LOCAL_ROOT: /tmp/euroteranga-browser-documents
+      MALWARE_SCANNER: TEST
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -184,6 +189,9 @@ jobs:
         run: pnpm --filter @euroteranga/browser-tests exec playwright install --with-deps chromium
       - name: Browser tests (frontends + Core API + PostgreSQL)
         run: pnpm test:e2e
+      - name: Remove private document test objects
+        if: always()
+        run: rm -rf /tmp/euroteranga-browser-documents
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

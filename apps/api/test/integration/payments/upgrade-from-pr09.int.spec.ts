@@ -20,6 +20,7 @@ const DATABASE_PACKAGE = fileURLToPath(
 const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const BOOKING_MIGRATION = '20261013210000_booking';
 const PAYMENT_MIGRATION = '20261013230000_payments';
+const PASSENGER_DOCUMENT_MIGRATION = '20261014010000_passenger_documents';
 
 const CUSTOMER = '01900000-0000-7000-8000-000000000a01';
 const TRIP = '01900000-0000-7000-8000-000000000a81';
@@ -103,7 +104,7 @@ const SNAPSHOTS = {
   seats: `SELECT json_agg(s ORDER BY s.id)::text AS value FROM booking_seat s`,
   locks: `SELECT json_agg(l ORDER BY l.booking_seat_id, l.segment_sequence)::text AS value FROM (SELECT booking_seat_id, trip_id, seat_map_cell_id, segment_sequence, created_at FROM seat_inventory_lock) l`,
   trip: `SELECT row_to_json(t)::text AS value FROM (SELECT id, status, seat_map_version_id, fare_table_version_id, planned_departure_at, updated_at FROM trip) t`,
-  grants: `SELECT json_agg(g ORDER BY g.role_key, g.permission_key)::text AS value FROM authorization_role_permission g WHERE g.permission_key NOT LIKE 'payment.%'`,
+  grants: `SELECT json_agg(g ORDER BY g.role_key, g.permission_key)::text AS value FROM authorization_role_permission g WHERE g.permission_key NOT LIKE 'payment.%' AND g.permission_key <> 'passenger.document.read'`,
 };
 
 function deploy(config: string | null, url: string) {
@@ -115,8 +116,9 @@ function deploy(config: string | null, url: string) {
 }
 
 /**
- * Upgrade of an existing PR-09 database: only the payment migration is
- * applied by `prisma migrate deploy`, on HELD bookings with their inventory.
+ * Upgrade of an existing PR-09 database: the payment migration is measured in
+ * isolation on HELD bookings with their inventory. Later migrations are then
+ * applied, as a current deployment would, before the API starts.
  */
 describe('upgrade from a PR-09 database (isolated database)', () => {
   let t: TestApp;
@@ -128,6 +130,8 @@ describe('upgrade from a PR-09 database (isolated database)', () => {
   let raw: ReturnType<typeof createDatabaseClient>;
   const name = `et_upg_${randomBytes(6).toString('hex')}`;
   const before: Record<string, string> = {};
+  let afterPaymentApplied: string[] = [];
+  let afterPaymentSnapshot: Record<string, string> = {};
 
   const snapshot = async () =>
     Object.fromEntries(
@@ -187,7 +191,27 @@ describe('upgrade from a PR-09 database (isolated database)', () => {
     }
     Object.assign(before, await snapshot());
 
-    // The real directory: only the payment migration is pending.
+    // Apply and measure exactly the PR-10 migration set first.
+    const pr10 = join(workDir, 'pr10', 'migrations');
+    for (const entry of readdirSync(MIGRATIONS)) {
+      if (entry <= PAYMENT_MIGRATION) {
+        cpSync(join(MIGRATIONS, entry), join(pr10, entry), { recursive: true });
+      }
+    }
+    const pr10Config = join(workDir, 'pr10', 'prisma.config.mjs');
+    writeFileSync(
+      pr10Config,
+      `export default ${JSON.stringify({
+        schema: join(DATABASE_PACKAGE, 'prisma', 'schema.prisma'),
+        migrations: { path: pr10 },
+        datasource: { url },
+      })};\n`,
+    );
+    deploy(pr10Config, url);
+    afterPaymentApplied = await appliedMigrations();
+    afterPaymentSnapshot = await snapshot();
+
+    // The current directory: PR-11 and any later additive migrations.
     deploy(null, url);
     env = integrationEnv({ DATABASE_URL: url });
     t = await startTestApp(env);
@@ -207,7 +231,7 @@ describe('upgrade from a PR-09 database (isolated database)', () => {
         ((await http.get('/v1/auth/customer/csrf', cookie)).body as { csrfToken: string })
           .csrfToken,
     };
-  });
+  }, 60_000);
 
   afterAll(async () => {
     await t?.app.close();
@@ -218,9 +242,13 @@ describe('upgrade from a PR-09 database (isolated database)', () => {
   });
 
   it('applies only the payment migration and leaves PR-09 bookings untouched', async () => {
+    expect(afterPaymentApplied).toHaveLength(10);
+    expect(afterPaymentApplied.at(-1)).toBe(PAYMENT_MIGRATION);
+    expect(afterPaymentSnapshot).toEqual(before);
+
     const applied = await appliedMigrations();
-    expect(applied).toHaveLength(10);
-    expect(applied.at(-1)).toBe(PAYMENT_MIGRATION);
+    expect(applied).toHaveLength(11);
+    expect(applied.at(-1)).toBe(PASSENGER_DOCUMENT_MIGRATION);
     expect(await snapshot()).toEqual(before);
     expect(
       await count(`SELECT count(*) AS count FROM booking WHERE confirmed_at IS NOT NULL`),

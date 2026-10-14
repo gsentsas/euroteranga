@@ -14,6 +14,10 @@ import { AuthErrors } from './public-api-error.js';
 import { AUTH_REALM_KEY, type AuthRequest } from './request-context.js';
 
 export const CSRF_HEADER = 'x-csrf-token';
+export const MULTIPART_ROUTE_KEY = 'euroteranga:multipart-route';
+
+/** Allows multipart on one explicitly marked POST route; CSRF still applies. */
+export const MultipartRoute = () => SetMetadata(MULTIPART_ROUTE_KEY, true);
 
 /** Marks a route that works without a session (e.g. idempotent logout). */
 export const SESSION_OPTIONAL_KEY = 'euroteranga:session-optional';
@@ -34,8 +38,9 @@ function routeRealm(reflector: Reflector, context: ExecutionContext): Realm {
  * Browser request checks for every auth route:
  * - when an Origin header is present it must be one of the realm's exact
  *   origins (a customer page cannot drive the staff realm);
- * - POST bodies must be JSON, which forces a CORS preflight for any
- *   cross-origin caller and rules out HTML-form CSRF.
+ * - POST bodies must be JSON, except an explicitly marked multipart upload.
+ *   Both use a non-simple CSRF header, forcing a CORS preflight; merely
+ *   submitting an HTML form never authorizes an upload.
  */
 @Injectable()
 export class AuthRequestGuard implements CanActivate {
@@ -52,8 +57,14 @@ export class AuthRequestGuard implements CanActivate {
     if (origin !== undefined && !this.config.realms[realm].origins.includes(origin)) {
       throw AuthErrors.origin();
     }
-    if (request.method === 'POST' && !request.is('application/json')) {
-      throw AuthErrors.unsupportedMediaType();
+    if (request.method === 'POST') {
+      const multipart = this.reflector.getAllAndOverride<boolean>(MULTIPART_ROUTE_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
+      const allowed =
+        request.is('application/json') || (multipart && request.is('multipart/form-data'));
+      if (!allowed) throw AuthErrors.unsupportedMediaType();
     }
     return true;
   }

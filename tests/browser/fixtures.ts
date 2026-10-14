@@ -114,6 +114,22 @@ export const FIXTURES = {
   get paymentCustomer(): Fixture {
     return { realm: 'CUSTOMER', email: runScoped('payment-customer') };
   },
+  /** PR-11: can inspect private passenger documents, but cannot mutate them. */
+  get passengerDocumentReader(): Fixture {
+    return {
+      realm: 'STAFF',
+      email: runScoped('passenger-document-reader'),
+      roles: ['COMPLIANCE_AGENT'],
+    };
+  },
+  /** PR-11: has OPS access but no passenger.document.read permission. */
+  get passengerDocumentDenied(): Fixture {
+    return {
+      realm: 'STAFF',
+      email: runScoped('passenger-document-denied'),
+      roles: ['BOOKING_AGENT'],
+    };
+  },
 
   /** Target of the SUPER_ADMIN's role and status changes. */
   get managed(): Fixture {
@@ -135,6 +151,28 @@ export function bookingReaderRole(): string {
 export function invitationToken(): string {
   const token = process.env.E2E_INVITATION_TOKEN;
   if (!token) throw new Error('E2E_INVITATION_TOKEN is set by global-setup.ts');
+  return token;
+}
+
+export type PreauthenticatedFixture =
+  'paymentCustomer' | 'foreignCustomer' | 'passengerDocumentReader' | 'passengerDocumentDenied';
+
+const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string> = {
+  paymentCustomer: 'E2E_PAYMENT_CUSTOMER_SESSION',
+  foreignCustomer: 'E2E_FOREIGN_CUSTOMER_SESSION',
+  passengerDocumentReader: 'E2E_PASSENGER_DOCUMENT_READER_SESSION',
+  passengerDocumentDenied: 'E2E_PASSENGER_DOCUMENT_DENIED_SESSION',
+};
+
+/**
+ * Raw, run-scoped session created in the disposable database by global setup.
+ * These fixtures keep domain E2E scenarios from consuming the shared login-IP
+ * budget; the password, cookie and STAFF MFA paths remain covered by auth.spec.
+ */
+export function preauthenticatedSession(name: PreauthenticatedFixture): string {
+  const token = process.env[preauthenticatedSessionEnvironment[name]];
+  if (!token)
+    throw new Error(`${preauthenticatedSessionEnvironment[name]} is set by global-setup.ts`);
   return token;
 }
 

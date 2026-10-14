@@ -22,6 +22,9 @@ import {
   type TripFareTableIdentity,
   type NetworkRouteVersion,
   type NetworkWaypointReplacement,
+  type Passenger,
+  type PassengerDocument,
+  type PrivateDownload,
 } from './index.js';
 
 type Call = { url: string; init: RequestInit };
@@ -45,6 +48,115 @@ function mockFetch(responses: Array<{ status: number; body?: unknown }>) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('passenger-document client', () => {
+  it('uses browser multipart boundaries and the existing in-memory CSRF flow', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { csrfToken: 'v1.passenger.csrf' } },
+      { status: 201, body: { reference: 'ETD-AAAAAAAAAAAA', status: 'ACCEPTED' } },
+    ]);
+    const file = new File(['%PDF-1.7\nsynthetic'], 'identity.pdf', {
+      type: 'application/pdf',
+    });
+    const result = await createAuthClient('http://api.test').booking.customer.uploadDocument(
+      'ETV-A/../B',
+      { type: 'PASSPORT', expiresAt: '2032-05-09', file },
+    );
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.url).toBe('http://api.test/v1/auth/customer/csrf');
+    expect(calls[1]?.url).toBe('http://api.test/v1/booking/passengers/ETV-A%2F..%2FB/documents');
+    expect(calls[1]?.init).toMatchObject({
+      method: 'POST',
+      credentials: 'include',
+      cache: 'no-store',
+      headers: { 'X-CSRF-Token': 'v1.passenger.csrf' },
+    });
+    expect((calls[1]?.init.headers as Record<string, string>)['Content-Type']).toBeUndefined();
+    const form = calls[1]?.init.body as FormData;
+    expect(form).toBeInstanceOf(FormData);
+    expect(form.get('type')).toBe('PASSPORT');
+    expect(form.get('expiresAt')).toBe('2032-05-09');
+    const formFile = form.get('file') as File;
+    expect(formFile).toMatchObject({
+      name: 'identity.pdf',
+      type: 'application/pdf',
+      size: file.size,
+    });
+    expect(await formFile.text()).toBe(await file.text());
+  });
+
+  it('downloads private bytes with credentials and only a safe server filename', async () => {
+    const bytes = new Blob(['%PDF-1.7\nprivate'], { type: 'application/pdf' });
+    const calls: Call[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        calls.push({ url, init });
+        return new Response(bytes, {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'attachment; filename="ETD-AAAAAAAAAAAA.pdf"',
+          },
+        });
+      }),
+    );
+    const result =
+      await createAuthClient('http://api.test').booking.customer.downloadDocument('ETD-A/../B');
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('download failed');
+    expect(result.data.filename).toBe('ETD-AAAAAAAAAAAA.pdf');
+    expect(result.data.mimeType).toBe('application/pdf');
+    expect(await result.data.blob.text()).toContain('%PDF-1.7');
+    expect(calls[0]).toMatchObject({
+      url: 'http://api.test/v1/booking/documents/ETD-A%2F..%2FB/download',
+      init: { method: 'GET', credentials: 'include', cache: 'no-store' },
+    });
+  });
+
+  it('builds customer and staff URLs without undefined filters', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { items: [] } },
+      { status: 200, body: { items: [], nextCursor: null } },
+      { status: 200, body: { reference: 'ETD-A' } },
+    ]);
+    const client = createAuthClient('http://api.test');
+    await client.booking.customer.passengers('ETB-A/../B');
+    await client.admin.passengerDocuments.list({
+      type: 'VISA',
+      status: 'REJECTED',
+      bookingReference: 'ETB-A',
+      passengerReference: 'ETV-A',
+      limit: 20,
+    });
+    await client.admin.passengerDocuments.detail('ETD-A/../B');
+    expect(calls[0]?.url).toBe('http://api.test/v1/booking/bookings/ETB-A%2F..%2FB/passengers');
+    expect(calls[1]?.url).toBe(
+      'http://api.test/v1/admin/passenger-documents?limit=20&type=VISA&status=REJECTED&bookingReference=ETB-A&passengerReference=ETV-A',
+    );
+    expect(calls[2]?.url).toBe('http://api.test/v1/admin/passenger-documents/ETD-A%2F..%2FB');
+  });
+
+  it('exposes technical types and no compliance mutation', () => {
+    const client = createAuthClient('http://api.test');
+    expectTypeOf(client.booking.customer.createPassenger).returns.resolves.toEqualTypeOf<
+      ApiResult<Passenger>
+    >();
+    expectTypeOf(client.booking.customer.uploadDocument).returns.resolves.toEqualTypeOf<
+      ApiResult<PassengerDocument>
+    >();
+    expectTypeOf(client.booking.customer.downloadDocument).returns.resolves.toEqualTypeOf<
+      ApiResult<PrivateDownload>
+    >();
+    expectTypeOf(client.admin.passengerDocuments.detail).returns.resolves.toEqualTypeOf<
+      ApiResult<PassengerDocument>
+    >();
+    expectTypeOf(client.admin.passengerDocuments).not.toHaveProperty('approve');
+    expectTypeOf<PassengerDocument['status']>().toEqualTypeOf<
+      'QUARANTINED' | 'ACCEPTED' | 'REJECTED'
+    >();
+  });
 });
 
 describe('auth client', () => {

@@ -262,6 +262,39 @@ Refunds, ticketing, passengers and real PSP integration remain deferred. See
 [`docs/domain/payments.md`](../domain/payments.md) and
 [ADR-027](../adr/ADR-027-payment-provider-abstraction-booking-confirmation.md).
 
+## Passengers and private documents (PR-11)
+
+`apps/api/src/passenger-documents` separates the person travelling from the
+authenticated CUSTOMER/booker and provides a fail-closed private file
+pipeline:
+
+- `Passenger` is owned by one CUSTOMER; `BookingPassenger` attaches that
+  person to an owned confirmed booking and serializes the seat-capacity rule
+  in PostgreSQL;
+- `PassengerDocument` holds immutable metadata only. Binary bytes live behind
+  `ObjectStorageProvider`; generated opaque keys and the original filename are
+  unrelated;
+- the streamed upload validates multipart shape, size, filename/extension,
+  MIME and magic bytes, computes SHA-256, writes to private storage, then
+  scans the stored stream through `MalwareScanner`;
+- logical lifecycle is `QUARANTINED → ACCEPTED | REJECTED`. Failure of storage,
+  integrity or scanner never accepts a file, and no storage/scanner call holds
+  a database transaction;
+- CUSTOMER access is owner-scoped. OPS is read-only under
+  `passenger.document.read`; all metadata/detail and content reads stay behind
+  the API and sensitive reads are audited;
+- downloads stream from private storage with attachment, `nosniff` and
+  `private, no-store` headers. No public or signed URL exists in PR-11.
+
+LOCAL storage and the deterministic TEST scanner are local/CI only and are
+refused in deployed environments. S3 and ClamAV adapters exist, but PR-11
+provisions neither in production; incomplete configuration fails safely.
+**TECHNICALLY_ACCEPTED != REGULATORY_VALID. PR-12 will own Compliance.** See
+[`docs/domain/passenger-documents.md`](../domain/passenger-documents.md),
+[`docs/security/passenger-documents.md`](../security/passenger-documents.md)
+and
+[ADR-005](../adr/ADR-005-private-object-storage-quarantine.md).
+
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
 
@@ -275,8 +308,9 @@ route versioning (ADR-021), vehicle lifecycle (ADR-022), trip lifecycle
 (ADR-023), seat-map versioning (ADR-024) and versioned fare tables with
 historical trip pricing (ADR-025), segment inventory/customer holds
 (ADR-026), and the payment provider abstraction with booking confirmation
-(ADR-027).
+(ADR-027), plus private object storage/scanning/quarantine (ADR-005).
 
-Still open: object storage provider, offline crew synchronisation, the choice
-and integration of a real payment provider (with refunds), regulatory rule
-versioning, and the production deployment model.
+Still open: production object-storage and malware-scanner provisioning,
+offline crew synchronisation, the choice and integration of a real payment
+provider (with refunds), regulatory rule versioning, and the production
+deployment model.
