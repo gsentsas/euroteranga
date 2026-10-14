@@ -28,6 +28,7 @@ const DATABASE_PACKAGE = fileURLToPath(
 const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const PAYMENT_MIGRATION = '20261013230000_payments';
 const PASSENGER_DOCUMENT_MIGRATION = '20261014010000_passenger_documents';
+const COMPLIANCE_MIGRATION = '20261014120000_compliance';
 
 function deploy(config: string | null, url: string) {
   execFileSync(
@@ -50,6 +51,9 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
   let workDir: string;
   let storageRoot: string;
   let before: Record<string, string | null>;
+  let afterPassengerDocuments: string[] = [];
+  let afterPassengerSnapshot: Record<string, string | null> = {};
+  let afterPassengerCounts: number[] = [];
   const name = `et_pr10_${randomBytes(6).toString('hex')}`;
 
   const applied = async () =>
@@ -149,9 +153,34 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
 
     before = await snapshot();
 
-    // The real migration directory now has exactly PR-11 pending.
+    // Apply and measure exactly the PR-11 migration set first.
+    const pr11 = join(workDir, 'pr11', 'migrations');
+    for (const entry of readdirSync(MIGRATIONS)) {
+      if (entry <= PASSENGER_DOCUMENT_MIGRATION) {
+        cpSync(join(MIGRATIONS, entry), join(pr11, entry), { recursive: true });
+      }
+    }
+    const pr11Config = join(workDir, 'pr11', 'prisma.config.mjs');
+    writeFileSync(
+      pr11Config,
+      `export default ${JSON.stringify({
+        schema: join(DATABASE_PACKAGE, 'prisma', 'schema.prisma'),
+        migrations: { path: pr11 },
+        datasource: { url },
+      })};\n`,
+    );
+    deploy(pr11Config, url);
+    afterPassengerDocuments = await applied();
+    afterPassengerSnapshot = await snapshot();
+    afterPassengerCounts = [
+      await count('passenger'),
+      await count('booking_passenger'),
+      await count('passenger_document'),
+    ];
+
+    // The current directory: PR-12 and any later additive migrations.
     deploy(null, url);
-  });
+  }, 60_000);
 
   afterAll(async () => {
     await t?.app.close();
@@ -163,9 +192,13 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
   });
 
   it('applies only PR-11 and preserves every PR-10 booking/payment/seat value', async () => {
+    expect(afterPassengerDocuments).toHaveLength(11);
+    expect(afterPassengerDocuments.at(-1)).toBe(PASSENGER_DOCUMENT_MIGRATION);
+    expect(afterPassengerSnapshot).toEqual(before);
+    expect(afterPassengerCounts).toEqual([0, 0, 0]);
     const migrations = await applied();
-    expect(migrations).toHaveLength(11);
-    expect(migrations.at(-1)).toBe(PASSENGER_DOCUMENT_MIGRATION);
+    expect(migrations).toHaveLength(12);
+    expect(migrations.at(-1)).toBe(COMPLIANCE_MIGRATION);
     // The comparison is only meaningful if every PR-10 state is really present.
     const rows = (value: string | null) =>
       JSON.parse(value ?? '[]') as Array<Record<string, unknown>>;
@@ -213,6 +246,6 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
       encoding: 'utf8',
     });
     expect(status).toContain('Database schema is up to date');
-    expect(await applied()).toHaveLength(11);
+    expect(await applied()).toHaveLength(12);
   });
 });
