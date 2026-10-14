@@ -21,6 +21,14 @@ describe('exact money helpers', () => {
     expect(plain(formatMoney(100, 'ZZZ', 2))).toBe('1,00 ZZZ');
   });
 
+  it('displays payment totals beyond 32 bits exactly (PR-10)', () => {
+    // 20 seats at the largest fare: a BIGINT payment amount, still a safe integer.
+    const total = multiplyAmountMinor(MAX_AMOUNT_MINOR, 20);
+    expect(total).toBe(42_949_672_940);
+    expect(plain(formatMoney(total, 'EUR', 2))).toBe('429 496 729,40 EUR');
+    expect(plain(formatMoney(total, 'XOF', 0))).toBe('42 949 672 940 XOF');
+  });
+
   it('keeps large amounts exact (no float rounding)', () => {
     expect(minorToDecimalString(2_147_483_647, 2)).toBe('21474836.47');
     expect(plain(formatMoney(2_147_483_647, 'EUR', 2))).toBe('21 474 836,47 EUR');

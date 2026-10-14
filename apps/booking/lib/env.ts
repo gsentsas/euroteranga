@@ -13,3 +13,10 @@ if (!publicEnv.NEXT_PUBLIC_CLIENT_URL) {
 
 /** Customer account app: sign-up and "Mes réservations". */
 export const clientAppUrl = publicEnv.NEXT_PUBLIC_CLIENT_URL.replace(/\/+$/, '');
+
+/**
+ * The only payment provider of this release, SANDBOX, runs in local and ci
+ * only (refused in staging and production): payments there are simulated.
+ */
+export const paymentTestEnvironment =
+  publicEnv.NEXT_PUBLIC_APP_ENV === 'local' || publicEnv.NEXT_PUBLIC_APP_ENV === 'ci';

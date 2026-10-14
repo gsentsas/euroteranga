@@ -8,10 +8,12 @@ import {
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { PAYMENT_STATUS_LABELS } from '../payments/payment-format';
 import { useCan } from '../staff-access';
 
 const STATUS_LABELS: Record<CustomerBookingStatus, string> = {
   HELD: 'Provisoire',
+  CONFIRMED: 'Confirmée',
   EXPIRED: 'Expirée',
   CANCELLED: 'Annulée',
 };
@@ -105,7 +107,37 @@ function BookingDetail({
             <dd>{booking.cancellationReason}</dd>
           </>
         ) : null}
+        {booking.confirmedAt ? (
+          <>
+            <dt>Confirmée le</dt>
+            <dd>{formatAt(booking.confirmedAt, booking.origin.stop?.timezone)}</dd>
+          </>
+        ) : null}
       </dl>
+      {booking.payments ? (
+        <section aria-labelledby={`booking-payments-${booking.id}`} data-testid="booking-payments">
+          <h3 id={`booking-payments-${booking.id}`}>Paiements</h3>
+          {booking.payments.length === 0 ? (
+            <p>Aucune tentative de paiement.</p>
+          ) : (
+            <ul>
+              {booking.payments.map((payment) => (
+                <li key={payment.id}>
+                  <span className="et-code">{payment.reference}</span> ·{' '}
+                  {PAYMENT_STATUS_LABELS[payment.status]} ·{' '}
+                  {formatMoney(
+                    payment.amountMinor,
+                    payment.currencyCode,
+                    payment.currencyMinorUnit,
+                  )}{' '}
+                  · créé le {formatAt(payment.createdAt)}
+                  {payment.succeededAt ? ` · réussi le ${formatAt(payment.succeededAt)}` : ''}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
       {canManage && booking.status === 'HELD' ? (
         <form
           className="et-form"
@@ -201,8 +233,9 @@ export function BookingsAdmin() {
   return (
     <div className="et-network" data-testid="bookings-workspace">
       <p>
-        Consultez les retenues provisoires. L’annulation libère les sièges et exige un motif ; elle
-        ne représente ni remboursement ni traitement de paiement.
+        Consultez les réservations. L’annulation d’une retenue provisoire libère les sièges et exige
+        un motif ; une réservation confirmée (payée) ne peut pas être annulée tant que le
+        remboursement n’existe pas.
       </p>
       <FormAlert message={error} />
       {notice ? (
@@ -256,7 +289,7 @@ export function BookingsAdmin() {
         {bookings ? (
           <div className="et-table-wrap">
             <table className="et-table">
-              <caption>Retenues provisoires des clients</caption>
+              <caption>Réservations des clients</caption>
               <thead>
                 <tr>
                   <th scope="col">Référence</th>

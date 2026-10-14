@@ -151,6 +151,8 @@ describe('booking database invariants (isolated database)', () => {
         ORDER BY conname`;
       expect(checks.map((check) => check.conname)).toEqual([
         'booking_cancellation_consistent',
+        // PR-10: a confirmation is never a cancellation and happens within the hold.
+        'booking_confirmation_consistent',
         'booking_currency_code_format',
         'booking_currency_minor_unit_range',
         'booking_hold_after_creation',

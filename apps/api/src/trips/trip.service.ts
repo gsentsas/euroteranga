@@ -497,16 +497,20 @@ export class TripService {
         }
         if (trip.status === 'CANCELLED') throw TripErrors.cancelled();
         // PR-09: release every active hold first (trip already FOR UPDATE).
+        // PR-10: refused when a booking is CONFIRMED (no refund workflow yet);
+        // PENDING payment attempts are cancelled with their holds.
         const reference = await tx.trip.findUniqueOrThrow({
           where: { id },
           select: { reference: true },
         });
-        const cancelledBookingCount = await cancelTripHolds(tx, this.audit, {
+        const cascade = await cancelTripHolds(tx, this.audit, {
           tripId: id,
           tripReference: reference.reference,
           actor,
           reason: input.reason,
         });
+        if (cascade.confirmedBookingCount > 0) throw TripErrors.hasConfirmedBookings();
+        const { cancelledBookingCount, cancelledPaymentCount } = cascade;
         const cancelledAt = new Date();
         await tx.trip.update({ where: { id }, data: { status: 'CANCELLED', cancelledAt } });
         await this.audit.record(
@@ -517,7 +521,7 @@ export class TripService {
             resourceId: id,
             before: { status: trip.status },
             after: { status: 'CANCELLED', cancelledAt },
-            metadata: { reason: input.reason, cancelledBookingCount },
+            metadata: { reason: input.reason, cancelledBookingCount, cancelledPaymentCount },
           },
           tx,
         );

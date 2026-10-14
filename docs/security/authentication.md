@@ -126,6 +126,30 @@ identity is taken only from that session. The Booking sign-in component keeps
 the in-progress trip/seat selection in React memory and never writes a token
 or selection to localStorage, sessionStorage, IndexedDB or a URL.
 
+### Payments (PR-10)
+
+- **CUSTOMER payment actions** use the same CUSTOMER session and session-bound
+  CSRF token: starting an attempt, and cancelling an attempt. Starting an
+  attempt may also send an `Idempotency-Key` header, which CORS now allows
+  next to `Content-Type`, `X-CSRF-Token` and `X-Request-Id`. The key is a
+  random value kept in page memory for one payment intent: neither a secret nor
+  a credential, never written to web storage or a URL.
+- **The provider webhook** (`POST /v1/payments/webhooks/sandbox`) is the only
+  route without a session or CSRF token. It is server-to-server and
+  authenticated by an HMAC-SHA256 signature of the provider over the raw body,
+  compared in constant time, with a timestamp within ±300 s and an 8 KiB
+  limit. Replays are refused by the unique provider event id. For this, the API
+  keeps the raw bytes of JSON bodies (`rawBody`). A CUSTOMER cookie or CSRF
+  token is never a substitute for the signature.
+- **Payment trust boundary:** an isolated `UPDATE` of `Payment` cannot mark it
+  paid; the transactional pipeline requires `PaymentEvent` plus booking
+  confirmation. Provider authenticity is verified at the webhook boundary by
+  the API. PostgreSQL enforces structural and transactional invariants, but it
+  does not cryptographically authenticate the PSP; full SQL access to these
+  tables is in the trusted computing base.
+- **Oversized bodies:** a body above the global 32 KiB JSON limit is answered
+  `413 PAYLOAD_TOO_LARGE`; it used to surface as an internal error.
+
 ## Rate limiting
 
 PostgreSQL fixed windows (`auth_rate_limit_bucket`), keyed by
@@ -175,15 +199,19 @@ the recovery path above is the documented strategy.
 
 ## Secrets
 
-| Variable                   | Purpose                              | Format                   |
-| -------------------------- | ------------------------------------ | ------------------------ |
-| `AUTH_CSRF_KEY`            | CSRF token MAC                       | base64, ≥ 32 bytes       |
-| `AUTH_HMAC_KEY`            | rate-limit keys, log pseudonyms      | base64, ≥ 32 bytes       |
-| `AUTH_TOTP_ENCRYPTION_KEY` | TOTP secret encryption (AES-256-GCM) | base64, exactly 32 bytes |
-| `SMTP_PASSWORD`            | SMTP authentication                  | optional                 |
+| Variable                         | Purpose                              | Format                                                   |
+| -------------------------------- | ------------------------------------ | -------------------------------------------------------- |
+| `AUTH_CSRF_KEY`                  | CSRF token MAC                       | base64, ≥ 32 bytes                                       |
+| `AUTH_HMAC_KEY`                  | rate-limit keys, log pseudonyms      | base64, ≥ 32 bytes                                       |
+| `AUTH_TOTP_ENCRYPTION_KEY`       | TOTP secret encryption (AES-256-GCM) | base64, exactly 32 bytes                                 |
+| `SMTP_PASSWORD`                  | SMTP authentication                  | optional                                                 |
+| `PAYMENT_SANDBOX_WEBHOOK_SECRET` | SANDBOX webhook HMAC (PR-10)         | base64, ≥ 32 bytes; only with `PAYMENT_PROVIDER=SANDBOX` |
 
 Startup fails if a key is missing, badly encoded, too short, reused for two
 purposes, or — in staging/production — equal to the public example value.
+`PAYMENT_PROVIDER=SANDBOX` itself is refused in staging and production, so the
+published development value of the SANDBOX webhook key can never protect a
+deployed environment.
 Generate with `openssl rand -base64 32`. Rotation impact: see
 [`docs/runbooks/authentication-incident.md`](../runbooks/authentication-incident.md).
 

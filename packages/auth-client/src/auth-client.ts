@@ -764,8 +764,52 @@ export interface BookingAvailability {
   cells: BookingAvailabilityCell[];
 }
 
-/** Derived from the database clock: never stored. */
-export type CustomerBookingStatus = 'HELD' | 'EXPIRED' | 'CANCELLED';
+/**
+ * Derived, never stored: CANCELLED, else CONFIRMED (a payment succeeded; the
+ * seats stay occupied after the hold expiry), else EXPIRED (database clock),
+ * else HELD.
+ */
+export type CustomerBookingStatus = 'HELD' | 'CONFIRMED' | 'EXPIRED' | 'CANCELLED';
+
+/** One payment attempt: PENDING, then a single terminal state. */
+export type PaymentStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+
+/**
+ * A payment attempt of the signed-in customer. The amount is derived by the
+ * server from the booking (exact integer, minor units); no provider id,
+ * failure detail, signature or card data is ever exposed.
+ */
+export interface CustomerPayment {
+  reference: string;
+  status: PaymentStatus;
+  amountMinor: number;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  createdAt: string;
+  succeededAt: string | null;
+  failedAt: string | null;
+  cancelledAt: string | null;
+}
+
+/**
+ * A started attempt. SANDBOX (development, tests, CI only) collects nothing in
+ * the browser: no redirect, no card; the result arrives as a provider event.
+ */
+export interface CreatePaymentResult {
+  payment: CustomerPayment;
+  checkout: { provider: 'SANDBOX'; testMode: boolean; redirectUrl: string | null };
+}
+
+/** Normalized failure codes (never raw provider text). */
+export type PaymentFailureCode =
+  | 'DECLINED'
+  | 'INSUFFICIENT_FUNDS'
+  | 'AUTHENTICATION_FAILED'
+  | 'CHECKOUT_EXPIRED'
+  | 'PROVIDER_ERROR'
+  | 'UNKNOWN'
+  | 'BOOKING_EXPIRED'
+  | 'BOOKING_NOT_PAYABLE';
 
 export interface CustomerBookingSeat {
   seatLabel: string | null;
@@ -775,7 +819,10 @@ export interface CustomerBookingSeat {
   releasedAt: string | null;
 }
 
-/** A provisional hold of the signed-in customer: not paid, not a ticket. */
+/**
+ * A booking of the signed-in customer: a provisional hold until a payment
+ * confirms it (CONFIRMED is paid, but not yet a ticket).
+ */
 export interface CustomerBooking {
   reference: string;
   status: CustomerBookingStatus;
@@ -791,6 +838,10 @@ export interface CustomerBooking {
   currencyMinorUnit: number;
   holdExpiresAt: string;
   cancelledAt: string | null;
+  /** Set once, when a payment succeeded. */
+  confirmedAt: string | null;
+  /** Latest payment attempt (the succeeded one once CONFIRMED), or null. */
+  payment: CustomerPayment | null;
   createdAt: string;
 }
 
@@ -806,13 +857,54 @@ export interface AdminBookingSeat extends CustomerBookingSeat {
   seatMapCellId: string;
 }
 
-/** STAFF view (booking.read): no customer email, an opaque identity id. */
-export interface AdminBooking extends Omit<CustomerBooking, 'seats'> {
+/**
+ * STAFF view (booking.read): no customer email, an opaque identity id. Its
+ * payment attempts are present only for callers holding payment.read.
+ */
+export interface AdminBooking extends Omit<CustomerBooking, 'seats' | 'payment'> {
   id: string;
   customerIdentityId: string;
   tripStatus: TripStatus;
   seats: AdminBookingSeat[];
   cancellationReason: string | null;
+  payments?: AdminPayment[];
+}
+
+/** STAFF view of a payment attempt (payment.read). */
+export interface AdminPayment extends CustomerPayment {
+  id: string;
+  provider: 'SANDBOX';
+  /** The provider's opaque id, for reconciliation (not a secret). */
+  providerPaymentId: string | null;
+  booking: { id: string; reference: string; status: CustomerBookingStatus };
+  customerIdentityId: string;
+  failureCode: PaymentFailureCode | null;
+}
+
+/** A provider event as recorded: what happened and when, never its payload. */
+export interface AdminPaymentEvent {
+  id: string;
+  type: 'PAYMENT_SUCCEEDED' | 'PAYMENT_FAILED';
+  providerEventId: string;
+  receivedAt: string;
+  /** Set when the event moved the attempt out of PENDING. */
+  processedAt: string | null;
+  /** Why a recorded event changed nothing. */
+  rejectionCode: string | null;
+}
+
+export interface AdminPaymentDetail extends AdminPayment {
+  events: AdminPaymentEvent[];
+}
+
+export type PaymentPage = Page<AdminPayment>;
+
+export interface AdminPaymentListOptions {
+  cursor?: string;
+  limit?: number;
+  status?: PaymentStatus;
+  bookingReference?: string;
+  paymentReference?: string;
 }
 
 export type AdminBookingPage = Page<AdminBooking>;
@@ -862,9 +954,9 @@ export function createAuthClient(baseUrl: string) {
   async function call<T>(
     method: 'GET' | 'POST',
     path: string,
-    options: { body?: unknown; csrf?: string } = {},
+    options: { body?: unknown; csrf?: string; headers?: Record<string, string> } = {},
   ): Promise<ApiResult<T>> {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...options.headers };
     if (method === 'POST') headers['Content-Type'] = 'application/json';
     if (options.csrf) headers['X-CSRF-Token'] = options.csrf;
 
@@ -900,10 +992,15 @@ export function createAuthClient(baseUrl: string) {
     realm: Realm,
     path: string,
     body: unknown = {},
+    headers?: Record<string, string>,
   ): Promise<ApiResult<T>> {
     const csrf = await call<{ csrfToken: string }>('GET', `/v1/auth/${realm}/csrf`);
     if (!csrf.ok) return csrf;
-    return call<T>('POST', path, { body, csrf: csrf.data.csrfToken });
+    return call<T>('POST', path, {
+      body,
+      csrf: csrf.data.csrfToken,
+      ...(headers ? { headers } : {}),
+    });
   }
 
   return {
@@ -1022,6 +1119,29 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<CustomerBooking>(
             'customer',
             `/v1/booking/bookings/${encodeURIComponent(reference)}/cancel`,
+          ),
+        /**
+         * Starts a payment attempt for a HELD booking (PR-10). Reuse the same
+         * idempotency key when retrying the same intent: the API then returns
+         * the same attempt instead of creating another one.
+         */
+        createPayment: (reference: string, idempotencyKey?: string) =>
+          withCsrf<CreatePaymentResult>(
+            'customer',
+            `/v1/booking/bookings/${encodeURIComponent(reference)}/payments`,
+            {},
+            idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+          ),
+        listPayments: (reference: string) =>
+          call<{ items: CustomerPayment[] }>(
+            'GET',
+            `/v1/booking/bookings/${encodeURIComponent(reference)}/payments`,
+          ),
+        /** Gives up a PENDING attempt; the booking stays HELD. */
+        cancelPayment: (paymentReference: string) =>
+          withCsrf<CustomerPayment>(
+            'customer',
+            `/v1/booking/payments/${encodeURIComponent(paymentReference)}/cancel`,
           ),
       },
     },
@@ -1348,6 +1468,28 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<AdminBooking>(
             'staff',
             `/v1/admin/bookings/${encodeURIComponent(bookingId)}/cancel`,
+            { reason },
+          ),
+      },
+      /** payment.read; payment.manage only gives up PENDING attempts (no "mark paid"). */
+      payments: {
+        listPayments: (options: AdminPaymentListOptions = {}) =>
+          call<PaymentPage>(
+            'GET',
+            `/v1/admin/payments?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              status: options.status,
+              bookingReference: options.bookingReference,
+              paymentReference: options.paymentReference,
+            })}`,
+          ),
+        getPayment: (paymentId: string) =>
+          call<AdminPaymentDetail>('GET', `/v1/admin/payments/${encodeURIComponent(paymentId)}`),
+        cancelPayment: (paymentId: string, reason: string) =>
+          withCsrf<AdminPaymentDetail>(
+            'staff',
+            `/v1/admin/payments/${encodeURIComponent(paymentId)}/cancel`,
             { reason },
           ),
       },

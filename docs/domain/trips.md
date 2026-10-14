@@ -167,6 +167,25 @@ cancelled trip.
 Trip history itself remains independent of the booking list. See
 [bookings.md](bookings.md).
 
+## Payments and confirmed bookings (PR-10)
+
+A booking becomes CONFIRMED when its payment succeeds. Refunds do not exist
+yet, so a trip with at least one confirmed booking **cannot be cancelled**:
+`409 TRIP_HAS_CONFIRMED_BOOKINGS` from the API, and the refusal is also
+enforced by `trip_lifecycle_guard`. Nothing changes: the trip, its holds and
+their payment attempts stay as they are. A future Refund PR will lift this
+restriction.
+
+A trip whose bookings are only HELD is still cancelled atomically, as in PR-09.
+The cancellation locks the trip, then the PENDING payment attempts of its
+bookings, then its bookings (by id). It cancels each attempt
+(`PAYMENT_CANCELLED`) together with its hold, and records
+`cancelledPaymentCount` with `cancelledBookingCount` on `TRIP_CANCELLED`.
+Payment initiation takes the trip `FOR SHARE`, so no new attempt can appear
+during a cancellation. A success racing a cancellation ends either with a
+confirmed booking and a refused cancellation, or with a cancelled trip whose
+attempt can no longer succeed. See [payments.md](payments.md).
+
 ## Enforcement in PostgreSQL
 
 The migration `20261013120000_trips_timetable` enforces the rules for every
@@ -240,6 +259,7 @@ offset**. Errors:
 | `TRIP_REFERENCE_CONFLICT`                                        | 409  | duplicate reference                               |
 | `TRIP_NOT_DRAFT`                                                 | 409  | timetable change or scheduling outside DRAFT      |
 | `TRIP_CANCELLED`                                                 | 409  | any change to a cancelled trip                    |
+| `TRIP_HAS_CONFIRMED_BOOKINGS`                                    | 409  | cancellation with a confirmed (paid) booking      |
 | `TRIP_STATUS_CONFLICT`                                           | 409  | `expectedStatus` differs                          |
 | `TRIP_VEHICLE_CONFLICT`                                          | 409  | `expectedVehicleId` differs                       |
 | `TRIP_ROUTE_VERSION_NOT_PUBLISHED`                               | 422  | route version never published                     |

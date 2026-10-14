@@ -1,19 +1,23 @@
 import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import type { AuditService } from '../authorization/audit.service.js';
+import { cancelPendingPayments, lockPendingPayments } from '../payments/payment-transitions.js';
 import { BookingErrors } from './booking.errors.js';
 
 /**
  * Inventory operations shared by bookings and trip cancellation. They run in
- * the caller's transaction. Lock order (no cycle, see docs/domain/bookings.md):
+ * the caller's transaction. Lock hierarchy (no cycle, see
+ * docs/domain/bookings.md): trip -> payment -> booking -> booking seats ->
+ * seat locks.
  *
  * - booking creation: trip FOR SHARE -> expired bookings FOR UPDATE (by id)
  *   -> new booking -> booking seats -> seat locks (sorted);
- * - booking cancellation: booking FOR UPDATE -> booking seats -> seat locks;
- * - trip cancellation: trip FOR UPDATE -> bookings FOR UPDATE (by id) ->
- *   booking seats -> seat locks.
+ * - booking cancellation: PENDING payments FOR UPDATE (by id) -> booking FOR
+ *   UPDATE -> booking seats -> seat locks;
+ * - trip cancellation: trip FOR UPDATE -> PENDING payments FOR UPDATE (by id)
+ *   -> bookings FOR UPDATE (by id) -> booking seats -> seat locks.
  *
- * No path takes the trip after a booking.
+ * No path takes the trip after a booking, or a payment after a booking.
  */
 
 /** Current time of the database transaction (the clock every rule uses). */
@@ -90,8 +94,9 @@ export async function readBookableTrip(
 
 /**
  * Seats occupied on at least one segment of [origin, destination): a lock
- * counts only while its hold is active (not cancelled, not expired by the
- * database clock), so a stale lock of an expired hold never blocks a seat.
+ * counts while its booking is CONFIRMED (PR-10: for good, whatever the hold
+ * expiry) or an active hold (not cancelled, not expired by the database
+ * clock), so a stale lock of an expired hold never blocks a seat.
  */
 export async function occupiedSeatCells(
   client: DatabaseTransaction,
@@ -108,7 +113,7 @@ export async function occupiedSeatCells(
       AND l."segment_sequence" >= ${originSequence}::int
       AND l."segment_sequence" < ${destinationSequence}::int
       AND b."cancelled_at" IS NULL
-      AND b."hold_expires_at" > now()
+      AND (b."confirmed_at" IS NOT NULL OR b."hold_expires_at" > now())
   `;
   return new Set(rows.map((row) => row.id));
 }
@@ -116,7 +121,8 @@ export async function occupiedSeatCells(
 /**
  * Physically releases the inventory of the trip's expired holds: their seats
  * are marked released at the hold expiry and their locks deleted. The
- * bookings themselves stay (EXPIRED is derived). Bookings are locked FOR
+ * bookings themselves stay (EXPIRED is derived). A CONFIRMED booking is never
+ * an expired hold (PR-10): its seats stay occupied. Bookings are locked FOR
  * UPDATE in id order, so concurrent cleanups cannot deadlock.
  */
 export async function releaseExpiredHolds(
@@ -128,6 +134,7 @@ export async function releaseExpiredHolds(
     FROM "booking" b
     WHERE b."trip_id" = ${tripId}::uuid
       AND b."cancelled_at" IS NULL
+      AND b."confirmed_at" IS NULL
       AND b."hold_expires_at" <= now()
       AND (
         EXISTS (
@@ -198,31 +205,66 @@ export async function seatLabelsOf(tx: DatabaseTransaction, bookingId: string): 
 
 const MAX_REASON = 500;
 
+export interface TripHoldsCancellation {
+  /** CONFIRMED (paid) bookings found: the trip must not be cancelled (nothing changed). */
+  confirmedBookingCount: number;
+  cancelledBookingCount: number;
+  cancelledPaymentCount: number;
+}
+
 /**
  * Trip cancellation cascade, inside the trip's transaction (trip already
- * locked FOR UPDATE): every active hold is cancelled, its seats released and
- * its locks deleted, each with a BOOKING_CANCELLED_BY_TRIP audit event by the
- * STAFF member cancelling the trip. Expired holds only get their inventory
- * released. Returns the number of holds cancelled.
+ * locked FOR UPDATE). Lock order: the trip's PENDING payments, then every
+ * non-cancelled booking of the trip (both by id). When a booking is
+ * CONFIRMED, nothing changes and the caller refuses the cancellation (no
+ * refund workflow yet). Otherwise the PENDING attempts are cancelled
+ * (PAYMENT_CANCELLED), expired holds release their inventory, and every
+ * active hold is cancelled with its seats and locks released
+ * (BOOKING_CANCELLED_BY_TRIP), all by the STAFF member cancelling the trip.
  */
 export async function cancelTripHolds(
   tx: DatabaseTransaction,
   audit: AuditService,
   input: { tripId: string; tripReference: string; actor: AuthPrincipal; reason: string },
-): Promise<number> {
+): Promise<TripHoldsCancellation> {
+  // Payment initiation holds the trip FOR SHARE: no new attempt can appear now.
+  const pendingPayments = await lockPendingPayments(tx, { tripId: input.tripId });
+  const bookings = await tx.$queryRaw<Array<{ id: string; confirmed: boolean }>>`
+    SELECT b."id", b."confirmed_at" IS NOT NULL AS "confirmed"
+    FROM "booking" b
+    WHERE b."trip_id" = ${input.tripId}::uuid AND b."cancelled_at" IS NULL
+    ORDER BY b."id"
+    FOR UPDATE OF b
+  `;
+  const confirmedBookingCount = bookings.filter((booking) => booking.confirmed).length;
+  if (confirmedBookingCount > 0) {
+    return { confirmedBookingCount, cancelledBookingCount: 0, cancelledPaymentCount: 0 };
+  }
+  const reason = `Voyage annulé : ${input.reason}`.slice(0, MAX_REASON).trim();
+  await cancelPendingPayments(tx, audit, pendingPayments, {
+    actor: input.actor,
+    reason,
+    cancelledBy: 'TRIP',
+  });
   await releaseExpiredHolds(tx, input.tripId);
   const active = await tx.$queryRaw<Array<{ id: string; reference: string }>>`
     SELECT b."id", b."reference"
     FROM "booking" b
     WHERE b."trip_id" = ${input.tripId}::uuid
       AND b."cancelled_at" IS NULL
+      AND b."confirmed_at" IS NULL
       AND b."hold_expires_at" > now()
     ORDER BY b."id"
     FOR UPDATE OF b
   `;
-  if (active.length === 0) return 0;
+  if (active.length === 0) {
+    return {
+      confirmedBookingCount: 0,
+      cancelledBookingCount: 0,
+      cancelledPaymentCount: pendingPayments.length,
+    };
+  }
   const now = await databaseNow(tx);
-  const reason = `Voyage annulé : ${input.reason}`.slice(0, MAX_REASON).trim();
   for (const booking of active) {
     const seatLabels = await seatLabelsOf(tx, booking.id);
     await releaseCancelledHold(tx, booking.id, now, reason);
@@ -245,5 +287,9 @@ export async function cancelTripHolds(
       tx,
     );
   }
-  return active.length;
+  return {
+    confirmedBookingCount: 0,
+    cancelledBookingCount: active.length,
+    cancelledPaymentCount: pendingPayments.length,
+  };
 }

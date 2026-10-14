@@ -60,6 +60,22 @@ describe('public error redaction', () => {
     },
   );
 
+  it('answers an oversized body with a clean 413, not an internal error', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/auth/customer/login')
+      .set('Origin', 'http://localhost:3002')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ email: 'x'.repeat(40_000), password: 'oversized body' }));
+    expect(response.status).toBe(413);
+    // Refused by the JSON parser, before the request-id middleware runs.
+    expect(response.body).toEqual({
+      code: 'PAYLOAD_TOO_LARGE',
+      message: 'The request payload is too large',
+      requestId: null,
+    });
+    expect(response.text).not.toContain('xxxxxxxx');
+  });
+
   it('keeps the cause in server logs, with credentials redacted', () => {
     const errors = logs.lines.filter((line) => line.message === 'request failed');
     expect(errors.length).toBeGreaterThanOrEqual(2);

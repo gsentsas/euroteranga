@@ -5,6 +5,7 @@ export {
   BOOKING_HOLD_TTL_SECONDS_BOUNDS,
   BOOKING_MAX_SEATS_PER_HOLD_BOUNDS,
 } from './booking-env.js';
+export { EXAMPLE_PAYMENT_SANDBOX_WEBHOOK_SECRET, PAYMENT_PROVIDERS } from './payment-env.js';
 export {
   assertNoSensitivePublicEnv,
   loadPublicEnv,

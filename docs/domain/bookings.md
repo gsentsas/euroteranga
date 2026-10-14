@@ -1,12 +1,15 @@
 # Booking domain
 
-> Implemented in PR-09 for provisional CUSTOMER holds and STAFF administration.
+> Implemented in PR-09 for provisional CUSTOMER holds and STAFF administration;
+> PR-10 adds payment and confirmation ([payments.md](payments.md)).
 > **NOT PRODUCTION DEPLOYED.** The repository contains no real journey, customer
 > booking or passenger data. Browser and integration tests use synthetic data.
 
 PR-09 lets an authenticated CUSTOMER temporarily retain seats for one journey
-of a scheduled trip. A booking in this release is a **provisional hold**. It is
-not paid, not confirmed travel, and not a ticket.
+of a scheduled trip, as a **provisional hold**. PR-10 lets the CUSTOMER pay a
+HELD booking through the payment abstraction (SANDBOX only, no real money). A
+success makes the booking **CONFIRMED**: paid and confirmed, but still not a
+ticket.
 
 ## Scope
 
@@ -21,7 +24,7 @@ Included:
 - trip cancellation cascading to active holds in the same transaction;
 - Booking, Client and OPS interfaces, plus real-browser coverage.
 
-Deferred: passengers, guest booking, customer profiles, payment/PSP, refunds,
+Deferred: passengers, guest booking, customer profiles, a real PSP, refunds,
 tickets, QR codes, check-in, boarding, baggage, manifests, crew, dispatch,
 promotions, coupons, fare classes and seat supplements.
 
@@ -49,8 +52,10 @@ immutable, unique and safe to show to the customer; internal ids remain UUIDv7.
 Status is never stored separately:
 
 1. `CANCELLED` when `cancelledAt` is set;
-2. otherwise `EXPIRED` when `holdExpiresAt <= database now()`;
-3. otherwise `HELD`.
+2. otherwise `CONFIRMED` when `confirmedAt` is set (PR-10: a payment
+   succeeded; the hold expiry no longer matters);
+3. otherwise `EXPIRED` when `holdExpiresAt <= database now()`;
+4. otherwise `HELD`.
 
 The API database clock is authoritative. `BOOKING_HOLD_TTL_SECONDS` (60–3600,
 default 900) defines a new hold's lifetime, capped at the trip departure.
@@ -58,7 +63,10 @@ default 900) defines a new hold's lifetime, capped at the trip departure.
 browser limit is only an ergonomic mirror.
 
 Expired holds need no scheduled job to become invalid: every occupancy query
-requires an unexpired, non-cancelled booking. Before creating a hold, the
+requires a non-cancelled booking that is either CONFIRMED or an unexpired
+hold. A CONFIRMED booking keeps its seats occupied after `holdExpiresAt`. The
+cleanup never selects it, and PostgreSQL refuses to release its seats or delete
+its locks. Before creating a hold, the
 service locks and releases expired holds of that trip: `BookingSeat.releasedAt`
 is set and their `SeatInventoryLock` rows are deleted. This bounded lazy cleanup
 makes the seats reusable while keeping history.
@@ -126,14 +134,29 @@ trip.
 
 ### Lock hierarchy
 
-| Operation               | Locks, in order                                                                                       |
-| ----------------------- | ----------------------------------------------------------------------------------------------------- |
-| Hold creation           | trip `FOR SHARE` → expired bookings `FOR UPDATE` (by id) → new booking → booking seats → sorted locks |
-| Customer / STAFF cancel | booking `FOR UPDATE` → booking seats → locks deleted                                                  |
-| Trip cancellation       | trip `FOR UPDATE` → expired bookings, then active bookings `FOR UPDATE` (by id) → seats → locks       |
+PR-10 extends the hierarchy to **trip → payment → booking → booking seats →
+seat locks** (details in [payments.md](payments.md)):
 
-No path takes the trip after a booking, so no cycle can form with trip
-cancellation; the concurrency tests run these races on PostgreSQL.
+| Operation               | Locks, in order                                                                                            |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Hold creation           | trip `FOR SHARE` → expired bookings `FOR UPDATE` (by id) → new booking → booking seats → sorted locks      |
+| Customer / STAFF cancel | the booking's PENDING payments `FOR UPDATE` (by id) → booking `FOR UPDATE` → booking seats → locks deleted |
+| Trip cancellation       | trip `FOR UPDATE` → PENDING payments (by id) → non-cancelled bookings `FOR UPDATE` (by id) → seats → locks |
+
+No path takes the trip after a booking, or a payment after a booking, so no
+cycle can form; the concurrency tests run these races on PostgreSQL.
+
+PR-10 rules for cancellations:
+
+- a CONFIRMED booking cannot be cancelled by its CUSTOMER or by STAFF:
+  `409 BOOKING_CONFIRMED`, until a refund workflow exists;
+- a trip with a CONFIRMED booking cannot be cancelled:
+  `409 TRIP_HAS_CONFIRMED_BOOKINGS`;
+- cancelling a HELD booking also cancels its PENDING payment attempt
+  (`PAYMENT_CANCELLED`), so that no attempt survives on a cancelled booking. If
+  an attempt was created between the payment and booking locks, the
+  cancellation answers `409 BOOKING_CANCEL_CONFLICT` instead of inverting the
+  lock order.
 
 ## PostgreSQL guards
 
@@ -158,6 +181,15 @@ Migration `20261013210000_booking` enforces the rules for every writer:
 - `TRUNCATE` refused on the three tables;
 - `trip_lifecycle_guard` (`CREATE OR REPLACE`, PR-06 to PR-08 rules kept):
   a trip with active holds cannot become CANCELLED.
+
+Migration `20261013230000_payments` (PR-10) replaces these functions, keeping
+every PR-09 rule:
+
+- bookings are created unconfirmed;
+- `confirmedAt` is set once, on an active hold, by a succeeded payment;
+- a confirmed booking can neither be cancelled nor release, gain or delete
+  seats and locks;
+- a trip with a confirmed booking cannot be cancelled.
 
 ## API
 
@@ -206,6 +238,8 @@ behind the separate identity permissions.
 | `BOOKING_TOO_MANY_SEATS`                                            | 422  | more than `BOOKING_MAX_SEATS_PER_HOLD`                   |
 | `BOOKING_SEAT_UNAVAILABLE`                                          | 409  | a seat is held on an overlapping segment                 |
 | `BOOKING_CANCELLED`, `BOOKING_EXPIRED`                              | 409  | cancelling a cancelled or expired hold                   |
+| `BOOKING_CONFIRMED`                                                 | 409  | cancelling a confirmed (paid) booking (PR-10)            |
+| `BOOKING_CANCEL_CONFLICT`                                           | 409  | the booking changed during the cancellation              |
 
 No raw Prisma or PostgreSQL error is ever returned.
 
@@ -233,8 +267,10 @@ reason, never an email, password, session, token or cookie.
   hold creation and a clearly labelled **Réservation provisoire** confirmation.
   A seat-race response reloads server availability and keeps selections that
   remain valid.
-- **Client `/compte`**: owned HELD, EXPIRED and CANCELLED reservations, with
-  server totals and cancellation of active holds. It reloads after mutation.
+- **Client `/compte`**: owned HELD, CONFIRMED, EXPIRED and CANCELLED
+  reservations, with server totals and cancellation of active holds. It reloads
+  after mutation. From PR-10, HELD bookings can be paid, and CONFIRMED ones show
+  their payment, without a cancellation button.
 - **OPS `/bookings`**: navigation and reads need `booking.read`; cancellation
   controls exist only with `booking.manage`, require a reason, and remain
   protected by the API when called directly.

@@ -61,18 +61,20 @@ export function journeySegments(originSequence: number, destinationSequence: num
   return segments;
 }
 
-export type BookingStatus = 'HELD' | 'EXPIRED' | 'CANCELLED';
+export type BookingStatus = 'HELD' | 'CONFIRMED' | 'EXPIRED' | 'CANCELLED';
 
 /**
- * Derived, never stored: CANCELLED when cancelled, else EXPIRED once the hold
- * time has passed (database clock), else HELD. No background job is needed
- * for inventory safety.
+ * Derived, never stored: CANCELLED when cancelled, else CONFIRMED once a
+ * payment succeeded (PR-10; the hold expiry no longer matters), else EXPIRED
+ * once the hold time has passed (database clock), else HELD. No background
+ * job is needed for inventory safety.
  */
 export function bookingStatus(
-  booking: { cancelledAt: Date | null; holdExpiresAt: Date },
+  booking: { cancelledAt: Date | null; confirmedAt?: Date | null; holdExpiresAt: Date },
   now: Date,
 ): BookingStatus {
   if (booking.cancelledAt) return 'CANCELLED';
+  if (booking.confirmedAt) return 'CONFIRMED';
   return booking.holdExpiresAt.getTime() <= now.getTime() ? 'EXPIRED' : 'HELD';
 }
 

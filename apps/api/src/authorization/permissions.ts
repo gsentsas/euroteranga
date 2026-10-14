@@ -29,6 +29,8 @@ export const PERMISSIONS = {
   PRICING_MANAGE: 'pricing.manage',
   BOOKING_READ: 'booking.read',
   BOOKING_MANAGE: 'booking.manage',
+  PAYMENT_READ: 'payment.read',
+  PAYMENT_MANAGE: 'payment.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

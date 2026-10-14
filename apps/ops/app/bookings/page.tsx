@@ -7,7 +7,10 @@ export const metadata: Metadata = { title: 'Réservations — EURO TERANGA Ops' 
 
 export default function Page() {
   return (
-    <OpsShell title="Réservations" subtitle="Retenues provisoires des clients">
+    <OpsShell
+      title="Réservations"
+      subtitle="Retenues provisoires et réservations confirmées des clients"
+    >
       <RequirePermission permission="booking.read">
         <BookingsAdmin />
       </RequirePermission>

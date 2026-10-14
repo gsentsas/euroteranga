@@ -8,9 +8,10 @@ import {
   type CustomerBooking,
 } from '@euroteranga/auth-client';
 import { FormAlert, FormStatus } from '@euroteranga/ui';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { auth } from '../lib/auth';
 import { clientAppUrl } from '../lib/env';
+import { BookingPayment } from './booking-payment';
 import { CustomerLogin } from './customer-login';
 import { formatAt, seatsLabel, stopLabel } from './format';
 import { SeatMapPicker } from './seat-map';
@@ -25,11 +26,80 @@ function utcDayRange(date: string): { departureFrom: string; departureTo: string
   return { departureFrom: departureFrom.toISOString(), departureTo: departureTo.toISOString() };
 }
 
-function HoldConfirmation({
+/** A paid booking: confirmed, its seats kept. Not (yet) a ticket. */
+function ConfirmedBooking({
   booking,
   onRestart,
 }: {
   booking: CustomerBooking;
+  onRestart: () => void;
+}) {
+  const payment = booking.payment;
+  return (
+    <section className="et-booking-confirmation" aria-labelledby="booking-confirmation-title">
+      <h2 id="booking-confirmation-title">Réservation confirmée</h2>
+      <FormStatus>
+        <p>Votre paiement a été reçu : vos sièges vous sont réservés pour ce voyage.</p>
+      </FormStatus>
+      <dl className="et-booking-summary">
+        <dt>Référence</dt>
+        <dd>
+          <strong className="et-code" data-testid="booking-reference">
+            {booking.reference}
+          </strong>
+        </dd>
+        <dt>Voyage</dt>
+        <dd>
+          {booking.trip.reference} · {booking.trip.route.code} — {booking.trip.route.name}
+        </dd>
+        <dt>Origine</dt>
+        <dd>
+          {stopLabel(booking.origin.stop)} ·{' '}
+          {formatAt(booking.origin.plannedDepartureAt, booking.origin.stop)}
+        </dd>
+        <dt>Destination</dt>
+        <dd>
+          {stopLabel(booking.destination.stop)} ·{' '}
+          {formatAt(booking.destination.plannedArrivalAt, booking.destination.stop)}
+        </dd>
+        <dt>Sièges</dt>
+        <dd>{booking.seats.map((seat) => seat.seatLabel ?? '—').join(', ')}</dd>
+        <dt>Montant payé</dt>
+        <dd data-testid="booking-paid-amount">
+          <strong>
+            {formatMoney(
+              payment?.amountMinor ?? booking.totalAmountMinor,
+              booking.currencyCode,
+              booking.currencyMinorUnit,
+            )}
+          </strong>
+        </dd>
+        <dt>Référence du paiement</dt>
+        <dd className="et-code" data-testid="payment-reference">
+          {payment?.reference ?? '—'}
+        </dd>
+        <dt>Confirmée le</dt>
+        <dd>{formatAt(booking.confirmedAt, booking.origin.stop)}</dd>
+      </dl>
+      <div className="et-actions">
+        <a className="et-button et-booking-link-button" href={`${clientAppUrl}/compte`}>
+          Mes réservations
+        </a>
+        <button type="button" className="et-button et-button--secondary" onClick={onRestart}>
+          Nouvelle recherche
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function HoldConfirmation({
+  booking,
+  onBooking,
+  onRestart,
+}: {
+  booking: CustomerBooking;
+  onBooking: (booking: CustomerBooking) => void;
   onRestart: () => void;
 }) {
   const [now, setNow] = useState(() => Date.now());
@@ -37,6 +107,9 @@ function HoldConfirmation({
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(timer);
   }, []);
+  if (booking.status === 'CONFIRMED') {
+    return <ConfirmedBooking booking={booking} onRestart={onRestart} />;
+  }
   const expired = booking.status === 'EXPIRED' || new Date(booking.holdExpiresAt).getTime() <= now;
   return (
     <section className="et-booking-confirmation" aria-labelledby="booking-confirmation-title">
@@ -93,6 +166,9 @@ function HoldConfirmation({
           {formatAt(booking.holdExpiresAt, booking.origin.stop)}
         </dd>
       </dl>
+      {!expired && booking.status === 'HELD' ? (
+        <BookingPayment booking={booking} onBooking={onBooking} />
+      ) : null}
       <div className="et-actions">
         <a className="et-button et-booking-link-button" href={`${clientAppUrl}/compte`}>
           Mes réservations
@@ -126,6 +202,7 @@ export function BookingFlow() {
   const total = availability
     ? multiplyAmountMinor(availability.fare.amountMinor, selected.size)
     : 0;
+  const updateBooking = useCallback((next: CustomerBooking) => setBooking(next), []);
 
   const resetAfterSearch = () => {
     setTrip(null);
@@ -247,6 +324,7 @@ export function BookingFlow() {
     return (
       <HoldConfirmation
         booking={booking}
+        onBooking={updateBooking}
         onRestart={() => {
           setResults(null);
           resetAfterSearch();

@@ -219,9 +219,48 @@ creation/list/detail/cancellation; and permissioned STAFF administration.
 - Booking and Client expose the CUSTOMER flow; OPS exposes **Réservations**
   with `booking.read` / `booking.manage`.
 
-This is a provisional hold only: payment, ticketing, passengers and check-in
-remain deferred. See [`docs/domain/bookings.md`](../domain/bookings.md) and
+In PR-09 this is a provisional hold only; PR-10 adds payment and
+confirmation. Ticketing, passengers and check-in remain deferred. See
+[`docs/domain/bookings.md`](../domain/bookings.md) and
 [ADR-026](../adr/ADR-026-segment-inventory-booking-holds.md).
+
+## Payments and booking confirmation (PR-10)
+
+`apps/api/src/payments` (PaymentModule) provides:
+
+- CUSTOMER payment attempts for HELD bookings, idempotent per customer key;
+- the provider webhook pipeline;
+- permissioned STAFF reading.
+
+How it works:
+
+- **Provider abstraction:** business services use an internal
+  `PaymentProvider` interface (`createPayment`, `verifyWebhook`,
+  `parseWebhook`). The only provider is **SANDBOX**: local, test-only, with no
+  external call and no real money, refused in staging and production
+  (`PAYMENT_PROVIDER=DISABLED` by default). No PSP SDK, no card data.
+- **Initiation order:** a short transaction reserves the PENDING Payment and
+  audit first; `createPayment` then runs without a database lock, using the
+  committed Payment reference as its idempotency key; a final short
+  transaction attaches the provider id. A failed provider call leaves the
+  reservation recoverable with the same client idempotency key.
+- **Amounts:** the server derives them from the booking (fare × seats, BIGINT /
+  `BigInt`); PostgreSQL checks them against the booking.
+- **Results:** they arrive only as signed, idempotent provider events
+  (`PaymentEvent`). A success atomically sets `Payment` SUCCEEDED and
+  `Booking.confirmedAt`, with audit; it applies only to a still active hold.
+- **Confirmed bookings:**
+  - they keep their seats after the hold expiry;
+  - they cannot be cancelled (no refund yet);
+  - they block the cancellation of their trip (`TRIP_HAS_CONFIRMED_BOOKINGS`).
+- **Lock hierarchy:** trip → payment → booking → seats → locks.
+- **Interfaces:** Booking and Client let the customer pay in a clearly
+  labelled test environment. OPS exposes **Paiements** with `payment.read`;
+  `payment.manage` only gives up PENDING attempts, never "marks paid".
+
+Refunds, ticketing, passengers and real PSP integration remain deferred. See
+[`docs/domain/payments.md`](../domain/payments.md) and
+[ADR-027](../adr/ADR-027-payment-provider-abstraction-booking-confirmation.md).
 
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
@@ -234,9 +273,10 @@ deployment target — not yet decided (ADR-010), monorepo tooling (ADR-011),
 authentication (ADR-012 to ADR-016), authorization (ADR-017 to ADR-020),
 route versioning (ADR-021), vehicle lifecycle (ADR-022), trip lifecycle
 (ADR-023), seat-map versioning (ADR-024) and versioned fare tables with
-historical trip pricing (ADR-025), and segment inventory/customer holds
-(ADR-026).
+historical trip pricing (ADR-025), segment inventory/customer holds
+(ADR-026), and the payment provider abstraction with booking confirmation
+(ADR-027).
 
-Still open: object storage provider, offline crew
-synchronisation, payment provider abstraction, regulatory rule versioning, and
-the production deployment model.
+Still open: object storage provider, offline crew synchronisation, the choice
+and integration of a real payment provider (with refunds), regulatory rule
+versioning, and the production deployment model.

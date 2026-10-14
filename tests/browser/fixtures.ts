@@ -110,6 +110,11 @@ export const FIXTURES = {
   get auditor(): Fixture {
     return { realm: 'STAFF', email: runScoped('auditor'), roles: ['AUDITOR'] };
   },
+  /** PR-10: the customer paying through the SANDBOX provider. */
+  get paymentCustomer(): Fixture {
+    return { realm: 'CUSTOMER', email: runScoped('payment-customer') };
+  },
+
   /** Target of the SUPER_ADMIN's role and status changes. */
   get managed(): Fixture {
     return { realm: 'STAFF', email: runScoped('managed'), roles: ['DISPATCHER'] };
@@ -235,6 +240,26 @@ export function bookingSeed() {
     tripReference: `ET-BK-${run}`,
     staffBookingReference: `ETB-E2E0${run}`,
     departureDate: '2030-06-15',
+    unitAmountMinor: 12_345,
+  };
+}
+
+/**
+ * PR-10 payment scenarios: a second trip on the booking-seed route, seat map
+ * and fare table (another date, so PR-09 searches never see it), and one
+ * seeded CONFIRMED booking paid through a recorded SANDBOX event for the OPS
+ * scenarios. Payments are simulated: no provider is ever contacted.
+ */
+export function paymentSeed() {
+  const raw = process.env.E2E_RUN_ID;
+  if (!raw) throw new Error('E2E_RUN_ID is set by global-setup.ts');
+  const run = raw.toUpperCase();
+  return {
+    run,
+    tripReference: `ET-PAY-${run}`,
+    departureDate: '2030-06-16',
+    confirmedBookingReference: `ETB-E2E1${run}`,
+    paymentReference: `ETP-E2E0${run}`,
     unitAmountMinor: 12_345,
   };
 }
