@@ -1,6 +1,7 @@
 import { FoundationShell } from '@euroteranga/ui';
 import type { Metadata } from 'next';
 import { AccountView } from '../../components/account-view';
+import { CustomerBaggage } from '../../components/customer-baggage';
 import { CustomerBookings } from '../../components/customer-bookings';
 import { CustomerCompliance } from '../../components/customer-compliance';
 import { CustomerPassengers } from '../../components/customer-passengers';
@@ -20,6 +21,7 @@ export default function Page() {
         <CustomerBookings />
         <CustomerPassengers />
         <CustomerCompliance />
+        <CustomerBaggage />
       </div>
     </FoundationShell>
   );

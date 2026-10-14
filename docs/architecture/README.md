@@ -323,6 +323,28 @@ Permits (PR-16) and trip readiness (PR-17) are separate future domains. See
 [`docs/security/compliance.md`](../security/compliance.md) and
 [ADR-009](../adr/ADR-009-versioned-regulatory-rule-engine.md).
 
+## Baggage (PR-13)
+
+`apps/api/src/baggage` identifies and follows a traveller's bags:
+
+- `Baggage` belongs to one `BookingPassenger` of a confirmed booking on a
+  scheduled trip. Its public reference is `ETG-…` and its QR payload is
+  `ETG1:<reference>`: no PII, rendered locally, never an authorization;
+- the exact measured weight is `numeric(6,3)`, exchanged as a decimal string
+  and written only by STAFF with `baggage.manage`;
+- an append-only `BaggageEvent` history has a gapless per-bag sequence. The
+  status (lifecycle plus a separate active exception, terminal `REMOVED`) is a
+  projection checked against the latest event by PostgreSQL triggers;
+- every event locks the bag row; an optional `client_event_id` makes retries
+  idempotent;
+- `baggage.read` and `baggage.manage`; audited STAFF reads.
+
+There is no baggage tariff, allowance or payment. Check-in, boarding,
+manifests and the offline Crew scanner are later PRs. See
+[`docs/domain/baggage.md`](../domain/baggage.md),
+[`docs/security/baggage.md`](../security/baggage.md) and
+[ADR-028](../adr/ADR-028-baggage-identity-event-history.md).
+
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
 
@@ -336,8 +358,9 @@ route versioning (ADR-021), vehicle lifecycle (ADR-022), trip lifecycle
 (ADR-023), seat-map versioning (ADR-024) and versioned fare tables with
 historical trip pricing (ADR-025), segment inventory/customer holds
 (ADR-026), and the payment provider abstraction with booking confirmation
-(ADR-027), plus private object storage/scanning/quarantine (ADR-005) and the
-versioned regulatory rule engine (ADR-009).
+(ADR-027), plus private object storage/scanning/quarantine (ADR-005), the
+versioned regulatory rule engine (ADR-009) and baggage identity with its
+append-only event history (ADR-028).
 
 Still open: production object-storage and malware-scanner provisioning,
 offline crew synchronisation, the choice and integration of a real payment

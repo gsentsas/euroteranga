@@ -77,3 +77,18 @@
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+.et-baggage-qr {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+  margin: 1rem 0 0;
+}
+
+.et-baggage-qr img {
+  background: #ffffff;
+  border: 1px solid var(--et-color-border);
+  border-radius: 0.35rem;
+  height: auto;
+  max-width: 100%;
+}

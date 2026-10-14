@@ -28,6 +28,10 @@ import {
   type ComplianceEvaluationDetail,
   type CustomerBookingCompliance,
   type CustomerPassengerCompliance,
+  type Baggage,
+  type BaggageDetail,
+  type BaggageEventResult,
+  type BaggageQr,
 } from './index.js';
 
 type Call = { url: string; init: RequestInit };
@@ -51,6 +55,101 @@ function mockFetch(responses: Array<{ status: number; body?: unknown }>) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('baggage client (PR-13)', () => {
+  it('keeps customer registration narrow and encodes every public reference', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { csrfToken: 'v1.baggage.csrf' } },
+      { status: 201, body: { reference: 'ETG-AAAAAAAAAAAA' } },
+      { status: 200, body: { items: [] } },
+      { status: 200, body: { reference: 'ETG-A' } },
+      { status: 200, body: { reference: 'ETG-A', svg: '<svg />' } },
+    ]);
+    const customer = createAuthClient('http://api.test').booking.customer;
+    await customer.registerBaggage('ETB-A/../B', 'ETV-C/../D', { type: 'SUITCASE' });
+    await customer.baggageForBooking('ETB-A/../B');
+    await customer.baggage('ETG-A/../B');
+    await customer.baggageQr('ETG-A/../B');
+
+    expect(calls[1]?.url).toBe(
+      'http://api.test/v1/booking/bookings/ETB-A%2F..%2FB/passengers/ETV-C%2F..%2FD/baggage',
+    );
+    expect(calls[1]?.init).toMatchObject({
+      method: 'POST',
+      headers: expect.objectContaining({ 'X-CSRF-Token': 'v1.baggage.csrf' }),
+    });
+    expect(JSON.parse(calls[1]?.init.body as string)).toEqual({ type: 'SUITCASE' });
+    expect(calls[2]?.url).toBe('http://api.test/v1/booking/bookings/ETB-A%2F..%2FB/baggage');
+    expect(calls[3]?.url).toBe('http://api.test/v1/booking/baggage/ETG-A%2F..%2FB');
+    expect(calls[4]?.url).toBe('http://api.test/v1/booking/baggage/ETG-A%2F..%2FB/qr');
+  });
+
+  it('builds bounded staff filters and protects weight/events with staff CSRF', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { items: [], nextCursor: null } },
+      { status: 200, body: { csrfToken: 'v1.staff.csrf' } },
+      { status: 201, body: { created: true } },
+      { status: 200, body: { csrfToken: 'v1.staff.csrf' } },
+      { status: 201, body: { created: true } },
+    ]);
+    const baggage = createAuthClient('http://api.test').admin.baggage;
+    await baggage.list({
+      limit: 25,
+      bookingReference: 'ETB-A',
+      type: 'BOX',
+      lifecycleStatus: 'CHECKED_IN',
+    });
+    await baggage.updateWeight('ETG-A/../B', {
+      measuredWeightKg: '12.345',
+      occurredAt: '2030-01-01T00:00:00.000Z',
+      clientEventId: 'weight-event-0001',
+    });
+    await baggage.scan('ETG1:ETG-AAAAAAAAAAAA', {
+      type: 'LOADED',
+      occurredAt: '2030-01-01T00:01:00.000Z',
+      clientEventId: 'scan-event-00001',
+    });
+
+    expect(calls[0]?.url).toBe(
+      'http://api.test/v1/admin/baggage?limit=25&bookingReference=ETB-A&type=BOX&lifecycleStatus=CHECKED_IN',
+    );
+    expect(calls[2]?.url).toBe('http://api.test/v1/admin/baggage/ETG-A%2F..%2FB/weight');
+    expect(JSON.parse(calls[2]?.init.body as string)).toEqual({
+      measuredWeightKg: '12.345',
+      occurredAt: '2030-01-01T00:00:00.000Z',
+      clientEventId: 'weight-event-0001',
+    });
+    expect(calls[4]?.url).toBe('http://api.test/v1/admin/baggage/scan');
+    expect(JSON.parse(calls[4]?.init.body as string)).toEqual({
+      qrPayload: 'ETG1:ETG-AAAAAAAAAAAA',
+      type: 'LOADED',
+      occurredAt: '2030-01-01T00:01:00.000Z',
+      clientEventId: 'scan-event-00001',
+    });
+  });
+
+  it('exposes exact safe types and no customer weight/status mutation', () => {
+    const client = createAuthClient('http://api.test');
+    expectTypeOf(client.booking.customer.registerBaggage).returns.resolves.toEqualTypeOf<
+      ApiResult<BaggageDetail>
+    >();
+    expectTypeOf(client.booking.customer.baggageForBooking).returns.resolves.toEqualTypeOf<
+      ApiResult<{ items: Baggage[] }>
+    >();
+    expectTypeOf(client.booking.customer.baggageQr).returns.resolves.toEqualTypeOf<
+      ApiResult<BaggageQr>
+    >();
+    expectTypeOf(client.booking.customer).not.toHaveProperty('updateBaggageWeight');
+    expectTypeOf(client.booking.customer).not.toHaveProperty('recordBaggageEvent');
+    expectTypeOf(client.admin.baggage.updateWeight).returns.resolves.toEqualTypeOf<
+      ApiResult<BaggageEventResult>
+    >();
+    expectTypeOf<Baggage['measuredWeightKg']>().toEqualTypeOf<string | null>();
+    expectTypeOf<Baggage>().not.toHaveProperty('id');
+    expectTypeOf<BaggageDetail['events'][number]>().not.toHaveProperty('actorIdentityId');
+    expectTypeOf<BaggageDetail['events'][number]>().not.toHaveProperty('clientEventId');
+  });
 });
 
 describe('passenger-document client', () => {

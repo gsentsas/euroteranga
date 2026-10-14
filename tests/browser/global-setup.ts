@@ -7,6 +7,7 @@ import {
   FIXTURE_PASSWORD,
   FIXTURES,
   networkSpecCountryCodes,
+  baggageSeed,
   complianceSeed,
   paymentSeed,
   pricingSeed,
@@ -25,6 +26,9 @@ const PREAUTHENTICATED_SESSIONS = {
   passengerDocumentDenied: 'E2E_PASSENGER_DOCUMENT_DENIED_SESSION',
   complianceRuleManager: 'E2E_COMPLIANCE_RULE_MANAGER_SESSION',
   complianceCustomer: 'E2E_COMPLIANCE_CUSTOMER_SESSION',
+  baggageCustomer: 'E2E_BAGGAGE_CUSTOMER_SESSION',
+  baggageManager: 'E2E_BAGGAGE_MANAGER_SESSION',
+  baggageDenied: 'E2E_BAGGAGE_DENIED_SESSION',
 } as const;
 
 /**
@@ -130,6 +134,7 @@ export default async function globalSetup(): Promise<void> {
     await seedPaymentData(db);
     await seedComplianceRuleCountry(db);
     await seedComplianceData(db);
+    await seedBaggageData(db);
   } finally {
     await db.$disconnect();
   }
@@ -158,6 +163,15 @@ function preauthenticatedSessionEnvironment(fixture: Fixture): string | undefine
   }
   if (fixture.email === FIXTURES.complianceCustomer.email) {
     return PREAUTHENTICATED_SESSIONS.complianceCustomer;
+  }
+  if (fixture.email === FIXTURES.baggageCustomer.email) {
+    return PREAUTHENTICATED_SESSIONS.baggageCustomer;
+  }
+  if (fixture.email === FIXTURES.baggageManager.email) {
+    return PREAUTHENTICATED_SESSIONS.baggageManager;
+  }
+  if (fixture.email === FIXTURES.baggageDenied.email) {
+    return PREAUTHENTICATED_SESSIONS.baggageDenied;
   }
   return undefined;
 }
@@ -546,20 +560,32 @@ async function seedComplianceRuleCountry(
   throw new Error('no free user-assigned country code for the compliance rule scenario');
 }
 
+interface ConfirmedBookingSeed {
+  run: string;
+  /** Short tag kept in the synthetic SANDBOX identifiers. */
+  tag: string;
+  customerEmail: string;
+  tripReference: string;
+  departureDate: string;
+  bookingReference: string;
+  paymentReference: string;
+}
+
 /**
- * PR-12: its own SCHEDULED trip (copied from the booking template) with one
- * CONFIRMED booking of the compliance customer, written under every guard like
- * the PR-10 seed; and one unused synthetic country (user-assigned X? code)
- * for the rule-manager scenario, so its published rule covers no journey.
+ * Its own SCHEDULED trip (copied from the booking template) with one
+ * CONFIRMED booking of a dedicated customer on seat 1A, written under every
+ * guard like the PR-10 seed. Scenarios that run in parallel never share it.
  */
-async function seedComplianceData(db: ReturnType<typeof createDatabaseClient>): Promise<void> {
+async function seedConfirmedBooking(
+  db: ReturnType<typeof createDatabaseClient>,
+  seed: ConfirmedBookingSeed,
+): Promise<{ bookingId: string; customerId: string }> {
   const booking = bookingSeed();
-  const seed = complianceSeed();
   const customer = await db.authIdentity.findUniqueOrThrow({
     where: {
       realm_normalizedEmail: {
         realm: 'CUSTOMER',
-        normalizedEmail: FIXTURES.complianceCustomer.email,
+        normalizedEmail: seed.customerEmail,
       },
     },
   });
@@ -613,7 +639,7 @@ async function seedComplianceData(db: ReturnType<typeof createDatabaseClient>): 
   const seat = await db.seatMapCell.findFirstOrThrow({
     where: { seatMapVersionId: template.seatMapVersionId!, seatLabel: '1A' },
   });
-  await db.$transaction(async (tx) => {
+  return db.$transaction(async (tx) => {
     const [{ now }] = await tx.$queryRaw<[{ now: Date }]>`SELECT now() AS "now"`;
     const held = await tx.booking.create({
       data: {
@@ -649,7 +675,7 @@ async function seedComplianceData(db: ReturnType<typeof createDatabaseClient>): 
         bookingId: held.id,
         customerIdentityId: customer.id,
         provider: 'SANDBOX',
-        providerPaymentId: `sbx_e2e_cpl_${seed.run.toLowerCase()}`,
+        providerPaymentId: `sbx_e2e_${seed.tag}_${seed.run.toLowerCase()}`,
         amountMinor: BigInt(fare.amountMinor),
         currencyCode: 'EUR',
         currencyMinorUnit: 2,
@@ -660,10 +686,10 @@ async function seedComplianceData(db: ReturnType<typeof createDatabaseClient>): 
       data: {
         paymentId: payment.id,
         provider: 'SANDBOX',
-        providerEventId: `evt_e2e_cpl_${seed.run.toLowerCase()}`,
+        providerEventId: `evt_e2e_${seed.tag}_${seed.run.toLowerCase()}`,
         type: 'PAYMENT_SUCCEEDED',
         payloadHash: createHash('sha256')
-          .update(`synthetic compliance e2e ${seed.run}`)
+          .update(`synthetic ${seed.tag} e2e ${seed.run}`)
           .digest('hex'),
         receivedAt: now,
         processedAt: now,
@@ -674,7 +700,50 @@ async function seedComplianceData(db: ReturnType<typeof createDatabaseClient>): 
       data: { status: 'SUCCEEDED', succeededAt: now },
     });
     await tx.booking.update({ where: { id: held.id }, data: { confirmedAt: now } });
+    return { bookingId: held.id, customerId: customer.id };
   });
+}
+
+/**
+ * PR-12: a dedicated confirmed journey of the compliance customer (no seat,
+ * passenger or file shared with the PR-10/PR-11 scenarios); the rule-manager
+ * scenario uses an unused synthetic country (user-assigned X? code), so its
+ * published rule covers no journey.
+ */
+async function seedComplianceData(db: ReturnType<typeof createDatabaseClient>): Promise<void> {
+  const seed = complianceSeed();
+  await seedConfirmedBooking(db, {
+    ...seed,
+    tag: 'cpl',
+    customerEmail: FIXTURES.complianceCustomer.email,
+  });
+}
+
+/**
+ * PR-13: a dedicated confirmed journey of the baggage customer with one
+ * synthetic traveller already on it, so the baggage scenarios share no
+ * booking, passenger or bag with the PR-10/PR-11/PR-12 scenarios.
+ */
+async function seedBaggageData(db: ReturnType<typeof createDatabaseClient>): Promise<void> {
+  const seed = baggageSeed();
+  const { bookingId, customerId } = await seedConfirmedBooking(db, {
+    ...seed,
+    tag: 'bag',
+    customerEmail: FIXTURES.baggageCustomer.email,
+  });
+  // The synthetic booking-seed country (its code may have been shifted).
+  const origin = await db.stop.findUniqueOrThrow({ where: { code: bookingSeed().originCode } });
+  const passenger = await db.passenger.create({
+    data: {
+      reference: seed.passengerReference,
+      ownerCustomerIdentityId: customerId,
+      givenName: seed.passengerGivenName,
+      familyName: seed.passengerFamilyName,
+      dateOfBirth: new Date('1990-03-12T00:00:00.000Z'),
+      nationalityCountryId: origin.countryId,
+    },
+  });
+  await db.bookingPassenger.create({ data: { bookingId, passengerId: passenger.id } });
 }
 
 /**
