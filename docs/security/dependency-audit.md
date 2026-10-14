@@ -7,9 +7,17 @@ whenever the dependency is upgraded.
 
 ## PR-11 additions
 
-All direct versions remain exact catalog pins. The selected AWS SDK and type
-package releases predate this change by more than the repository's review
-window; no minimum-release-age exception is used.
+All direct versions remain exact catalog pins (`pnpm-workspace.yaml`). The
+repository defines no minimum-release-age setting. Registry publish dates,
+checked on 2026-10-14: `@aws-sdk/client-s3` 3.1146.0 on 2026-10-02,
+`busboy` 1.6.0 on 2022-04-19, `@types/busboy` 1.5.4 on 2024-05-02. The AWS
+SDK is released very frequently; PR-11 keeps the pinned version rather than
+chasing newer releases, and future upgrades go through the usual
+Dependabot/audit review.
+
+`pnpm audit:dependencies` (high and critical) reports no advisory for these
+packages or their transitive trees; the only reported finding remains the
+pre-existing, reviewed exception below.
 
 | Package                       | Purpose                                             | License    | Maintenance/security                                                                                                           | Alternatives and runtime impact                                                                                                                                  |
 | ----------------------------- | --------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |

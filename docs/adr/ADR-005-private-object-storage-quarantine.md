@@ -15,6 +15,11 @@ The first implementation must work deterministically in local development and
 CI while leaving a safe path to private S3-compatible production storage. It
 must not pretend that a technically clean file is legally valid.
 
+**TECHNICALLY_ACCEPTED != REGULATORY_VALID.** `ACCEPTED` only records that a
+file passed this pipeline's technical checks. PR-12 owns Compliance /
+regulatory validation (document validity, visas, travel eligibility, country
+rules); PR-11 has no approval state, permission, endpoint or button.
+
 ## Decision
 
 1. The business domain uses two provider-neutral interfaces:
@@ -40,7 +45,12 @@ must not pretend that a technically clean file is legally valid.
    makes uploads unavailable.
 7. Production provisioning, bucket policy, credential rotation, encryption,
    retention and ClamAV operations require a separate infrastructure decision
-   before enablement. PR-11 makes no production change.
+   before enablement. PR-11 makes no production change: production has no
+   provisioned S3 bucket and no ClamAV service, and the default
+   `DISABLED`/`DISABLED` configuration keeps uploads unavailable there.
+8. Every read of document data is audited before it is returned:
+   `PASSENGER_DOCUMENT_ACCESSED` with `LIST` (one event per STAFF page),
+   `METADATA` or `CONTENT`.
 
 ## Required production properties
 

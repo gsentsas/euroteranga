@@ -81,11 +81,17 @@ HTML, SVG, archives, executables, office documents, extra files/fields,
 control characters, path separators, double extensions, empty files and
 MIME/magic mismatches are rejected. The server derives the actual MIME and
 limits the stream to `PASSENGER_DOCUMENT_MAX_BYTES` (10 MiB by default,
-1 KiB–25 MiB allowed). It never trusts a browser-supplied status or MIME.
+1 KiB–25 MiB allowed); an oversized stream is drained, then answered 413. It
+never trusts a browser-supplied status, MIME, key or scanner field: any field
+other than `type` and `expiresAt` makes the upload invalid. File names are
+decoded as UTF-8 (so `’`, `œ` or `–` are accepted), validated and then
+discarded; a truncated or malformed body is answered 422.
 
 The scanner interface consumes a stream. `CLAMAV` implements clamd `INSTREAM`
 over TCP without a shell or temporary command. Timeout, unavailable service,
-invalid response and unknown errors all fail closed. `TEST` recognizes only a
+invalid response and unknown errors all fail closed. The timeout is an idle
+timeout: it destroys the socket and the source stream, so a clamd that stops
+reading or a stalled stored object ends the scan as `SCANNER_TIMEOUT`. `TEST` recognizes only a
 harmless synthetic marker and is refused in staging/production.
 
 ## Storage and download
@@ -93,9 +99,11 @@ harmless synthetic marker and is refused in staging/production.
 The domain depends only on `ObjectStorageProvider` (`put`, `get`, `head`,
 `delete`). See [ADR-005](../adr/ADR-005-private-object-storage-quarantine.md).
 
-- `LOCAL` is development/CI only. Its configured absolute root cannot be a
-  public/static/upload path; roots and shards cannot be symlinks; directories
-  are owner-only `0700`, objects `0600`.
+- `LOCAL` is development/CI only. Its configured root must be absolute and
+  normalized (no `.`/`..`/`//`, never `/`), and cannot be a
+  public/static/upload path (`public`, `public_html`, `htdocs`, `httpdocs`,
+  `static`, `uploads`); the adapter also refuses `/` itself. Roots and shards
+  cannot be symlinks; directories are owner-only `0700`, objects `0600`.
 - `S3` uses an explicitly configured endpoint/bucket/credentials, emits no
   public ACL and no signed URL, and marks objects `private, no-store`.
 - `DISABLED` is the safe default. Enabling storage without a scanner is a
@@ -118,6 +126,7 @@ holds a PostgreSQL transaction open:
 | DB insert succeeds, process/network fails before scan | row stays `QUARANTINED` and cannot be downloaded                      | investigate/re-scan through a future controlled recovery job; never force-accept                   |
 | scanner fails or finds malware                        | transaction marks `REJECTED`; object is deleted best effort           | retry deletion if the private object remains                                                       |
 | scanner succeeds, terminal DB transaction fails       | row stays `QUARANTINED`                                               | do not expose; controlled re-scan may retry                                                        |
+| stored object differs from the upload before scan     | row becomes `REJECTED` (`STORAGE_INTEGRITY_ERROR`), never accepted    | delete the private object (idempotent); investigate storage integrity                              |
 | accepted object is missing or has wrong size          | API returns 503, emits no bytes                                       | restore the exact object or investigate storage; never replace under the key without hash evidence |
 | network interruption during download                  | no state change; the audited access may have started                  | client retries through authorization                                                               |
 
@@ -138,8 +147,8 @@ and `COMPLIANCE_AGENT`; it grants no document mutation or compliance approval.
 
 Audit actions are `PASSENGER_CREATED`, `BOOKING_PASSENGER_ATTACHED`,
 `PASSENGER_DOCUMENT_UPLOADED`, `PASSENGER_DOCUMENT_ACCEPTED`,
-`PASSENGER_DOCUMENT_REJECTED` and `PASSENGER_DOCUMENT_ACCESSED` (`METADATA` or
-`CONTENT`). Audit/log data includes stable references, normalized technical
+`PASSENGER_DOCUMENT_REJECTED` and `PASSENGER_DOCUMENT_ACCESSED` (`LIST` once per
+STAFF list page with the references shown, `METADATA`, or `CONTENT`). Audit/log data includes stable references, normalized technical
 codes and sizes, never bytes, original filenames, object-store credentials,
 scanner output or document numbers.
 

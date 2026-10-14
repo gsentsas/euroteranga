@@ -155,9 +155,11 @@ There is **no public STAFF or CREW registration** and no bootstrap endpoint.
 - Passenger documents (PR-11) add `PASSENGER_CREATED`,
   `BOOKING_PASSENGER_ATTACHED`, `PASSENGER_DOCUMENT_UPLOADED`,
   `PASSENGER_DOCUMENT_ACCEPTED` and `PASSENGER_DOCUMENT_REJECTED`. Sensitive
-  detail/content reads add `PASSENGER_DOCUMENT_ACCESSED` with only the stable
-  reference and `METADATA`/`CONTENT`; no bytes, original filename, object key,
-  digest or scanner output is audited.
+  reads add `PASSENGER_DOCUMENT_ACCESSED` before the data is returned: `LIST`
+  (one event per STAFF page, with the references shown and the filters),
+  `METADATA` (detail) or `CONTENT` (download), with stable references only;
+  no bytes, original filename, object key, digest or scanner output is
+  audited.
 - `before`, `after` and `metadata` go through the same redaction as logs:
   tokens, passwords, TOTP secrets and recovery codes are never written.
 - Read through `GET /v1/admin/audit` (`audit.read`), newest first, keyset
@@ -186,7 +188,7 @@ All under `/v1/admin`, STAFF session, `ops.access` plus:
 | GET    | `/payments?cursor&limit&status&bookingReference&paymentReference` | `payment.read`                            |
 | GET    | `/payments/:id`                                                   | `payment.read`                            |
 | POST   | `/payments/:id/cancel`                                            | `payment.manage` (+ CSRF, reason)         |
-| GET    | `/passenger-documents`                                            | `passenger.document.read`                 |
+| GET    | `/passenger-documents`                                            | `passenger.document.read` (+ page audit)  |
 | GET    | `/passenger-documents/:reference`                                 | `passenger.document.read` (+ read audit)  |
 | GET    | `/passenger-documents/:reference/download`                        | `passenger.document.read` (+ read audit)  |
 
