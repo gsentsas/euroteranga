@@ -156,6 +156,23 @@ describe('baggage PostgreSQL invariants, idempotence and true concurrency', () =
         .find((permission) => permission.key === 'baggage.manage')
         ?.roles.map((role) => role.roleKey),
     ).not.toContain('CUSTOMER_SUPPORT');
+
+    const unique = await db(t.app).$queryRaw<Array<{ name: string; definition: string }>>`
+      SELECT indexname AS name, indexdef AS definition FROM pg_indexes
+      WHERE schemaname = 'public' AND tablename IN ('baggage', 'baggage_event')
+        AND indexdef LIKE 'CREATE UNIQUE INDEX%'
+      ORDER BY indexname`;
+    expect(unique.map((index) => index.definition)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          'baggage_event_baggage_id_client_event_id_key ON public.baggage_event USING btree (baggage_id, client_event_id)',
+        ),
+        expect.stringContaining(
+          'baggage_event_baggage_id_sequence_key ON public.baggage_event USING btree (baggage_id, sequence)',
+        ),
+        expect.stringContaining('baggage_reference_key ON public.baggage USING btree (reference)'),
+      ]),
+    );
   });
 
   it('requires one valid initial event and protects subject, identity and policy snapshots', async () => {
@@ -214,7 +231,30 @@ describe('baggage PostgreSQL invariants, idempotence and true concurrency', () =
       }),
     ).rejects.toThrow(/Foreign key constraint|foreign key/i);
 
+    await expect(
+      db(t.app).baggage.create({
+        data: {
+          reference: 'ETG-000000000004',
+          bookingId: pair.bookingId,
+          passengerId: pair.passengerId,
+          type: 'SUITCASE',
+          measuredWeightKg: '12.345',
+        },
+      }),
+    ).rejects.toThrow(/registered without operational/);
+
     const { row } = await createBag();
+    // The public reference is unique: a second bag cannot reuse it.
+    await expect(
+      db(t.app).baggage.create({
+        data: {
+          reference: row.reference,
+          bookingId: pair.bookingId,
+          passengerId: pair.passengerId,
+          type: 'BOX',
+        },
+      }),
+    ).rejects.toThrow(/Unique constraint failed/);
     await expect(
       db(t.app).baggage.update({ where: { id: row.id }, data: { reference: 'ETG-111111111111' } }),
     ).rejects.toThrow(/identity, subject, type and reference are immutable/);
@@ -289,19 +329,26 @@ describe('baggage PostgreSQL invariants, idempotence and true concurrency', () =
     expect(events.map((event) => event.sequence)).toEqual([1, 2]);
   });
 
-  it('stores 0.001, 12.345 and 99.999 exactly and enforces numeric bounds in SQL', async () => {
+  it('stores exact weights as three-decimal strings and enforces numeric bounds in SQL', async () => {
     const { reference, row } = await createBag('BOX');
-    for (const weight of ['0.001', '12.345', '99.999']) {
+    for (const [input, weight] of [
+      ['0.001', '0.001'],
+      ['12.345', '12.345'],
+      ['99.999', '99.999'],
+      ['20.5', '20.500'],
+      ['999.999', '999.999'],
+    ]) {
       const response = await staffBaggageApi(manager).weight(reference, {
-        measuredWeightKg: weight,
+        measuredWeightKg: input,
       });
-      expect(response.status, `${weight}: ${response.text}`).toBe(201);
+      expect(response.status, `${input}: ${response.text}`).toBe(201);
       expect(response.body.event.measuredWeightKg).toBe(weight);
       expect(
         (
           await db(t.app).baggage.findUniqueOrThrow({ where: { id: row.id } })
         ).measuredWeightKg?.toFixed(3),
       ).toBe(weight);
+      expect((await staffBaggageApi(manager).detail(reference)).body.measuredWeightKg).toBe(weight);
     }
     await expect(
       db(t.app).$executeRaw`
@@ -311,7 +358,7 @@ describe('baggage PostgreSQL invariants, idempotence and true concurrency', () =
       db(t.app).baggageEvent.create({
         data: {
           baggageId: row.id,
-          sequence: 5,
+          sequence: 7,
           type: 'WEIGHT_UPDATED',
           lifecycleStatus: 'REGISTERED',
           measuredWeightKg: '-0.001',
@@ -321,6 +368,135 @@ describe('baggage PostgreSQL invariants, idempotence and true concurrency', () =
         },
       }),
     ).rejects.toThrow(/baggage_event_weight_valid|check constraint/i);
+  });
+
+  /** One direct-SQL event with its projection, bypassing the API checks. */
+  async function directEvent(
+    baggageId: string,
+    data: {
+      sequence: number;
+      type: string;
+      lifecycleStatus: string;
+      exceptionStatus?: string | null;
+      measuredWeightKg?: string | null;
+      clientEventId?: string;
+      actorIdentityId?: string;
+    },
+  ) {
+    await db(t.app).$transaction(async (tx) => {
+      await tx.$executeRaw`
+        INSERT INTO "baggage_event" ("id", "baggage_id", "sequence", "type", "lifecycle_status",
+          "exception_status", "measured_weight_kg", "occurred_at", "actor_identity_id",
+          "client_event_id", "payload_fingerprint")
+        VALUES (gen_random_uuid(), ${baggageId}::uuid, ${data.sequence},
+          ${data.type}::"baggage_event_type", ${data.lifecycleStatus}::"baggage_lifecycle_status",
+          ${data.exceptionStatus ?? null}::"baggage_exception_status",
+          ${data.measuredWeightKg ?? null}::numeric, now(),
+          ${data.actorIdentityId ?? manager.id}::uuid, ${data.clientEventId ?? null},
+          ${'e'.repeat(64)})`;
+      await tx.$executeRaw`
+        UPDATE "baggage" SET "lifecycle_status" = ${data.lifecycleStatus}::"baggage_lifecycle_status",
+          "exception_status" = ${data.exceptionStatus ?? null}::"baggage_exception_status",
+          "measured_weight_kg" = ${data.measuredWeightKg ?? null}::numeric
+        WHERE "id" = ${baggageId}::uuid`;
+    });
+  }
+
+  it('enforces the transition matrix and actor rules in PostgreSQL, not only in the API', async () => {
+    const { row, reference } = await createBag();
+    await expect(
+      directEvent(row.id, { sequence: 2, type: 'DELIVERED', lifecycleStatus: 'DELIVERED' }),
+    ).rejects.toThrow(/invalid baggage lifecycle transition from REGISTERED to DELIVERED/);
+    await expect(
+      directEvent(row.id, { sequence: 2, type: 'REGISTERED', lifecycleStatus: 'REGISTERED' }),
+    ).rejects.toThrow(/REGISTERED is only valid as the first baggage event/);
+    await expect(
+      directEvent(row.id, {
+        sequence: 2,
+        type: 'CHECKED_IN',
+        lifecycleStatus: 'CHECKED_IN',
+        actorIdentityId: customer.id,
+      }),
+    ).rejects.toThrow(/only active STAFF may record operational baggage events/);
+    await expect(
+      directEvent(row.id, {
+        sequence: 2,
+        type: 'WEIGHT_UPDATED',
+        lifecycleStatus: 'CHECKED_IN',
+        measuredWeightKg: '1.000',
+      }),
+    ).rejects.toThrow(/WEIGHT_UPDATED must change only the exact measured weight/);
+
+    expect((await staffBaggageApi(manager).event(reference, { type: 'DAMAGED' })).status).toBe(201);
+    await expect(
+      directEvent(row.id, {
+        sequence: 3,
+        type: 'CHECKED_IN',
+        lifecycleStatus: 'CHECKED_IN',
+        exceptionStatus: 'DAMAGED',
+      }),
+    ).rejects.toThrow(/resolve the active baggage exception before normal progression/);
+    await expect(
+      directEvent(row.id, {
+        sequence: 3,
+        type: 'MISSING',
+        lifecycleStatus: 'REGISTERED',
+        exceptionStatus: 'MISSING',
+      }),
+    ).rejects.toThrow(/baggage cannot open this exception/);
+    await expect(
+      directEvent(row.id, {
+        sequence: 3,
+        type: 'EXCEPTION_RESOLVED',
+        lifecycleStatus: 'REGISTERED',
+        exceptionStatus: 'DAMAGED',
+      }),
+    ).rejects.toThrow(/EXCEPTION_RESOLVED requires and clears one active exception/);
+
+    // A valid direct event is accepted: the guards are the matrix, not a lock-out.
+    await directEvent(row.id, {
+      sequence: 3,
+      type: 'EXCEPTION_RESOLVED',
+      lifecycleStatus: 'REGISTERED',
+    });
+    await directEvent(row.id, { sequence: 4, type: 'CHECKED_IN', lifecycleStatus: 'CHECKED_IN' });
+    const stored = await db(t.app).baggage.findUniqueOrThrow({
+      where: { id: row.id },
+      include: { events: { orderBy: { sequence: 'asc' } } },
+    });
+    expect(stored.lifecycleStatus).toBe('CHECKED_IN');
+    expect(stored.events.map((event) => event.type)).toEqual([
+      'REGISTERED',
+      'DAMAGED',
+      'EXCEPTION_RESOLVED',
+      'CHECKED_IN',
+    ]);
+  });
+
+  it('keeps clientEventId unique per bag in PostgreSQL', async () => {
+    const { row, reference } = await createBag();
+    const first = await staffBaggageApi(manager).event(reference, {
+      type: 'CHECKED_IN',
+      occurredAt: new Date().toISOString(),
+      clientEventId: 'evt-unique-sql-0001',
+    });
+    expect(first.status, first.text).toBe(201);
+    await expect(
+      directEvent(row.id, {
+        sequence: 3,
+        type: 'LOADED',
+        lifecycleStatus: 'LOADED',
+        clientEventId: 'evt-unique-sql-0001',
+      }),
+    ).rejects.toThrow(/baggage_event_baggage_id_client_event_id_key|duplicate key/);
+    // The same id on another bag is a different logical event.
+    const other = await createBag();
+    await directEvent(other.row.id, {
+      sequence: 2,
+      type: 'CHECKED_IN',
+      lifecycleStatus: 'CHECKED_IN',
+      clientEventId: 'evt-unique-sql-0001',
+    });
   });
 
   it('deduplicates simultaneous clientEventId retries and rejects payload reuse', async () => {
