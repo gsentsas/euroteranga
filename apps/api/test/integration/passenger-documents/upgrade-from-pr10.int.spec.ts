@@ -8,7 +8,13 @@ import type { ApiEnv } from '@euroteranga/config';
 import { createDatabaseClient } from '@euroteranga/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { CustomerActor } from '../../support/booking-helpers.js';
-import { customerActor } from '../../support/booking-helpers.js';
+import {
+  bookableFixture,
+  bookingApi,
+  customerActor,
+  holdBody,
+} from '../../support/booking-helpers.js';
+import { paymentApi, settle } from '../../support/payment-helpers.js';
 import {
   confirmedBooking,
   createPassenger,
@@ -123,6 +129,24 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
     const confirmed = await confirmedBooking(t.app, env, customer, ['1A', '1B']);
     bookingReference = confirmed.reference;
     countryId = confirmed.fixture.countryId;
+
+    // Every other PR-10 state the migration must leave untouched: a failed
+    // attempt with its processed event, a still PENDING retry on that hold,
+    // and a customer-cancelled hold (cancelled_at set, seats released).
+    const fixture = await bookableFixture(t.app, { amount: () => 1_250 });
+    const retried = await bookingApi(customer).post('/bookings', holdBody(fixture, 1, 3, ['2A']));
+    if (retried.status !== 201) throw new Error(`hold fixture failed: ${retried.text}`);
+    const failed = await paymentApi(customer).create(retried.body.reference as string);
+    if (failed.status !== 201) throw new Error(`payment fixture failed: ${failed.text}`);
+    const failure = await settle(t.app, env, failed.body.payment, 'payment.failed');
+    if (failure.status !== 200) throw new Error(`failure fixture failed: ${failure.text}`);
+    const pending = await paymentApi(customer).create(retried.body.reference as string);
+    if (pending.status !== 201) throw new Error(`pending fixture failed: ${pending.text}`);
+    const cancelled = await bookingApi(customer).post('/bookings', holdBody(fixture, 2, 4, ['2B']));
+    if (cancelled.status !== 201) throw new Error(`hold fixture failed: ${cancelled.text}`);
+    const cancel = await bookingApi(customer).post(`/bookings/${cancelled.body.reference}/cancel`);
+    if (cancel.status !== 200) throw new Error(`cancel fixture failed: ${cancel.text}`);
+
     before = await snapshot();
 
     // The real migration directory now has exactly PR-11 pending.
@@ -142,6 +166,23 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
     const migrations = await applied();
     expect(migrations).toHaveLength(11);
     expect(migrations.at(-1)).toBe(PASSENGER_DOCUMENT_MIGRATION);
+    // The comparison is only meaningful if every PR-10 state is really present.
+    const rows = (value: string | null) =>
+      JSON.parse(value ?? '[]') as Array<Record<string, unknown>>;
+    const bookings = rows(before.bookings!);
+    expect(bookings.filter((row) => row.confirmed_at !== null)).toHaveLength(1);
+    expect(bookings.filter((row) => row.cancelled_at !== null)).toHaveLength(1);
+    expect(bookings.every((row) => typeof row.hold_expires_at === 'string')).toBe(true);
+    expect(
+      rows(before.payments!)
+        .map((row) => row.status)
+        .sort(),
+    ).toEqual(['FAILED', 'PENDING', 'SUCCEEDED']);
+    expect(rows(before.paymentEvents!).length).toBeGreaterThanOrEqual(2);
+    expect(rows(before.seats!).length).toBeGreaterThanOrEqual(4);
+    expect(rows(before.locks!).length).toBeGreaterThanOrEqual(1);
+    // Full rows (amounts, statuses, references, confirmed/expiry/cancel times,
+    // booking-seat and booking-payment links) are byte-for-byte identical.
     expect(await snapshot()).toEqual(before);
     expect(await count('passenger')).toBe(0);
     expect(await count('booking_passenger')).toBe(0);
