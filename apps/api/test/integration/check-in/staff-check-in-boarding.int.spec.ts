@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { ApiEnv } from '@euroteranga/config';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { staffActor, type StaffActor } from '../../support/admin-helpers.js';
+import { createTestRole, staffActor, type StaffActor } from '../../support/admin-helpers.js';
 import { db, withoutRequestId } from '../../support/auth-helpers.js';
 import { customerBaggageApi, staffBaggageApi } from '../../support/baggage-helpers.js';
 import { customerActor, type CustomerActor } from '../../support/booking-helpers.js';
@@ -86,6 +86,14 @@ describe('staff check-in and authenticated boarding', () => {
       (await boardingApi(agent).scan({ qrPayload: payload, deviceId: 'counter-01' })).status,
     ).toBe(403);
     expect((await boardingApi(support).resolve(payload)).status).toBe(403);
+    // boarding.read resolves a QR but never boards without boarding.scan.
+    const readOnly = await staffActor(t.app, [
+      await createTestRole(t.app, ['ops.access', 'checkin.read', 'boarding.read']),
+    ]);
+    expect((await boardingApi(readOnly).resolve(payload)).status).toBe(200);
+    expect(
+      (await boardingApi(readOnly).scan({ qrPayload: payload, deviceId: 'reader-01' })).status,
+    ).toBe(403);
     expect(
       (
         await boardingApi(dispatcher).scan(

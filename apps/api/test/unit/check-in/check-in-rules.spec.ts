@@ -211,6 +211,8 @@ describe('check-in readiness gates', () => {
       { check: 'BAGGAGE', code: 'BAGGAGE_EXCEPTION_ACTIVE', reference: 'ETG-000000000003' },
     ]);
     expect(readiness.checks[5]!.status).toBe('PENDING_REVIEW');
+    // A pending review still blocks: only an empty blocker list is eligible.
+    expect(readiness.eligible).toBe(false);
     facts.baggage = [];
     expect(deriveReadiness(facts).eligible).toBe(true);
   });
