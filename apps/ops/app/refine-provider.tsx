@@ -57,6 +57,11 @@ export function RefineProvider({ children }: { children: ReactNode }) {
             list: '/payments',
             meta: { label: 'Paiements', permission: 'payment.read' },
           },
+          {
+            name: 'baggage',
+            list: '/baggage',
+            meta: { label: 'Bagages', permission: 'baggage.read' },
+          },
           // Compliance group: PR-11 technical files, PR-12 rules and reviews.
           // Permits (PR-16) and trip readiness (PR-17) do not exist yet.
           {
