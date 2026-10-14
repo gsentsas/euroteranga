@@ -40,9 +40,7 @@ describe('staff baggage workspace, RBAC, lifecycle and audit', () => {
       { type: 'BOX' },
     );
     if (created.status !== 201) {
-      throw new Error(
-        `baggage fixture failed: ${created.text}\n${t.logs.raw.slice(-3).join('')}`,
-      );
+      throw new Error(`baggage fixture failed: ${created.text}\n${t.logs.raw.slice(-3).join('')}`);
     }
     reference = created.body.reference as string;
   }, 60_000);
@@ -191,5 +189,79 @@ describe('staff baggage workspace, RBAC, lifecycle and audit', () => {
     const access = await adminApi(reader).get('/access/me');
     expect(access.body.permissions).toContain('baggage.read');
     expect(access.body.permissions).not.toContain('baggage.manage');
+  });
+
+  it('records authenticated QR scans idempotently, even after later events', async () => {
+    const registered = await staffBaggageApi(manager).register({
+      bookingReference: subject.bookingReference,
+      passengerReference: subject.passengerReference,
+      type: 'TRAVEL_BAG',
+    });
+    expect(registered.status, registered.text).toBe(201);
+    const bag = registered.body.reference as string;
+    const scan = {
+      type: 'CHECKED_IN',
+      occurredAt: new Date().toISOString(),
+      clientEventId: 'scan-checkin-0001',
+    };
+    // A QR payload is an identifier, never an authorization.
+    expect((await staffBaggageApi(reader).scan({ qrPayload: `ETG1:${bag}`, ...scan })).status).toBe(
+      403,
+    );
+    expect((await staffBaggageApi(manager).scan({ qrPayload: bag, ...scan })).status).toBe(422);
+    expect(
+      (await staffBaggageApi(manager).scan({ qrPayload: `ETG2:${bag}`, ...scan })).status,
+    ).toBe(422);
+
+    const first = await staffBaggageApi(manager).scan({ qrPayload: `ETG1:${bag}`, ...scan });
+    expect(first.status, first.text).toBe(201);
+    expect(first.body).toMatchObject({ created: true, event: { sequence: 2, type: 'CHECKED_IN' } });
+    expect((await staffBaggageApi(manager).event(bag, { type: 'LOADED' })).status).toBe(201);
+
+    // The offline retry arrives after LOADED: same logical event, no 409.
+    const replay = await staffBaggageApi(manager).scan({ qrPayload: `ETG1:${bag}`, ...scan });
+    expect(replay.status).toBe(201);
+    expect(replay.body).toEqual({ created: false, event: first.body.event });
+    const conflict = await staffBaggageApi(manager).scan({
+      qrPayload: `ETG1:${bag}`,
+      ...scan,
+      type: 'IN_TRANSIT',
+    });
+    expect(conflict.status).toBe(409);
+    expect(conflict.body.code).toBe('BAGGAGE_CLIENT_EVENT_ID_REUSED');
+
+    const stored = await db(t.app).baggage.findUniqueOrThrow({
+      where: { reference: bag },
+      include: { events: { orderBy: { sequence: 'asc' } } },
+    });
+    expect(stored.lifecycleStatus).toBe('LOADED');
+    expect(stored.events.map((event) => event.type)).toEqual([
+      'REGISTERED',
+      'CHECKED_IN',
+      'LOADED',
+    ]);
+  });
+
+  it('records REMOVED as audited terminal history and never deletes the bag', async () => {
+    const registered = await staffBaggageApi(manager).register({
+      bookingReference: subject.bookingReference,
+      passengerReference: subject.passengerReference,
+      type: 'SUITCASE',
+    });
+    expect(registered.status, registered.text).toBe(201);
+    const bag = registered.body.reference as string;
+    const removed = await staffBaggageApi(manager).event(bag, { type: 'REMOVED' });
+    expect(removed.status, removed.text).toBe(201);
+    expect(removed.body.event).toMatchObject({ type: 'REMOVED', lifecycleStatus: 'REMOVED' });
+    const row = await db(t.app).baggage.findUniqueOrThrow({ where: { reference: bag } });
+    expect(row.lifecycleStatus).toBe('REMOVED');
+    const audits = await db(t.app).auditEvent.findMany({
+      where: { resourceId: row.id, action: 'BAGGAGE_REMOVED' },
+      select: { metadata: true },
+    });
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.metadata).toMatchObject({ reference: bag, event: 'REMOVED', sequence: 2 });
+    expect((await staffBaggageApi(manager).detail(bag)).body.lifecycleStatus).toBe('REMOVED');
+    expect((await staffBaggageApi(manager).event(bag, { type: 'CHECKED_IN' })).status).toBe(409);
   });
 });

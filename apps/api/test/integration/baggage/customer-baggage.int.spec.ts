@@ -1,8 +1,9 @@
 import type { ApiEnv } from '@euroteranga/config';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { db, withoutRequestId } from '../../support/auth-helpers.js';
+import { renderBaggageQrSvg } from '../../../src/baggage/baggage-rules.js';
+import { client, db, withoutRequestId } from '../../support/auth-helpers.js';
 import { confirmedPassenger, customerBaggageApi } from '../../support/baggage-helpers.js';
-import { customerActor, type CustomerActor } from '../../support/booking-helpers.js';
+import { bookingApi, customerActor, type CustomerActor } from '../../support/booking-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
 
 describe('customer baggage registration and ownership', () => {
@@ -78,7 +79,62 @@ describe('customer baggage registration and ownership', () => {
     expect(qr.headers['x-content-type-options']).toBe('nosniff');
     expect(qr.body.svg).not.toContain(owner.email);
     expect(qr.body.svg).not.toContain('Awa');
+    // The SVG encodes exactly the versioned reference payload, nothing else.
+    expect(qr.body.svg).toBe(renderBaggageQrSvg(reference));
     expect(detail.body.qrPayload).toBe(`ETG1:${reference}`);
+    // No internal identifier, actor or idempotency key reaches the customer.
+    const serialized = JSON.stringify(detail.body);
+    for (const forbidden of ['"id"', 'actorIdentityId', 'clientEventId', 'payloadFingerprint']) {
+      expect(serialized).not.toContain(forbidden);
+    }
+    expect(detail.body.allowance).toEqual({
+      includedWeightKg: null,
+      excessWeightKg: null,
+      excessCharge: null,
+    });
+  });
+
+  it('refuses an owned booking with an owned passenger of another booking (no pair)', async () => {
+    const second = await confirmedPassenger(t.app, env, owner);
+    const mismatched = await customerBaggageApi(owner).register(
+      subject.bookingReference,
+      second.passengerReference,
+    );
+    const unknown = await customerBaggageApi(owner).register(
+      'ETB-ZZZZZZZZZZZZ',
+      'ETV-ZZZZZZZZZZZZ',
+    );
+    expect(mismatched.status).toBe(404);
+    expect(withoutRequestId(mismatched.body)).toEqual(withoutRequestId(unknown.body));
+    expect(
+      await db(t.app).baggage.count({
+        where: { bookingPassenger: { passenger: { reference: second.passengerReference } } },
+      }),
+    ).toBe(0);
+  });
+
+  it('gives a CUSTOMER session no STAFF route and no event or weight authority', async () => {
+    const staff = client(t.app, 'staff');
+    for (const path of ['/v1/admin/baggage', `/v1/admin/baggage/${reference}`]) {
+      expect((await staff.get(path, owner.cookie)).status, path).toBe(401);
+    }
+    const weight = await staff.post(
+      `/v1/admin/baggage/${reference}/weight`,
+      { measuredWeightKg: '1.000' },
+      owner.cookie,
+    );
+    expect(weight.status).toBe(401);
+    for (const path of [`/baggage/${reference}/events`, `/baggage/${reference}/weight`]) {
+      const response = await bookingApi(owner).post(path, { type: 'DELIVERED' });
+      expect(response.status, path).toBe(404);
+    }
+    const stored = await db(t.app).baggage.findUniqueOrThrow({
+      where: { reference },
+      include: { events: true },
+    });
+    expect(stored.lifecycleStatus).toBe('REGISTERED');
+    expect(stored.measuredWeightKg).toBeNull();
+    expect(stored.events).toHaveLength(1);
   });
 
   it('makes a foreign reference indistinguishable from an unknown one', async () => {
