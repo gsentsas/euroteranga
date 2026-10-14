@@ -57,10 +57,30 @@ export function RefineProvider({ children }: { children: ReactNode }) {
             list: '/payments',
             meta: { label: 'Paiements', permission: 'payment.read' },
           },
+          // Compliance group: PR-11 technical files, PR-12 rules and reviews.
+          // Permits (PR-16) and trip readiness (PR-17) do not exist yet.
           {
             name: 'passenger-documents',
             list: '/passenger-documents',
-            meta: { label: 'Documents passagers', permission: 'passenger.document.read' },
+            meta: {
+              label: 'Documents passagers',
+              permission: 'passenger.document.read',
+              group: 'Conformité',
+            },
+          },
+          {
+            name: 'compliance-rules',
+            list: '/compliance/rules',
+            meta: {
+              label: 'Règles réglementaires',
+              permission: 'compliance.rule.read',
+              group: 'Conformité',
+            },
+          },
+          {
+            name: 'compliance-reviews',
+            list: '/compliance/reviews',
+            meta: { label: 'Revues passagers', permission: 'compliance.read', group: 'Conformité' },
           },
           // `permission` only filters the navigation; the API authorizes every call.
           {
