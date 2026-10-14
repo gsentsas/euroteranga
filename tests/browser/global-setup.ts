@@ -7,6 +7,7 @@ import {
   FIXTURE_PASSWORD,
   FIXTURES,
   networkSpecCountryCodes,
+  complianceSeed,
   paymentSeed,
   pricingSeed,
   seatMapSeed,
@@ -22,6 +23,8 @@ const PREAUTHENTICATED_SESSIONS = {
   foreignCustomer: 'E2E_FOREIGN_CUSTOMER_SESSION',
   passengerDocumentReader: 'E2E_PASSENGER_DOCUMENT_READER_SESSION',
   passengerDocumentDenied: 'E2E_PASSENGER_DOCUMENT_DENIED_SESSION',
+  complianceRuleManager: 'E2E_COMPLIANCE_RULE_MANAGER_SESSION',
+  complianceCustomer: 'E2E_COMPLIANCE_CUSTOMER_SESSION',
 } as const;
 
 /**
@@ -125,6 +128,8 @@ export default async function globalSetup(): Promise<void> {
     await seedTripData(db);
     await seedBookingData(db);
     await seedPaymentData(db);
+    await seedComplianceRuleCountry(db);
+    await seedComplianceData(db);
   } finally {
     await db.$disconnect();
   }
@@ -147,6 +152,12 @@ function preauthenticatedSessionEnvironment(fixture: Fixture): string | undefine
   }
   if (fixture.email === FIXTURES.passengerDocumentDenied.email) {
     return PREAUTHENTICATED_SESSIONS.passengerDocumentDenied;
+  }
+  if (fixture.email === FIXTURES.complianceRuleManager.email) {
+    return PREAUTHENTICATED_SESSIONS.complianceRuleManager;
+  }
+  if (fixture.email === FIXTURES.complianceCustomer.email) {
+    return PREAUTHENTICATED_SESSIONS.complianceCustomer;
   }
   return undefined;
 }
@@ -500,6 +511,160 @@ async function seedPaymentData(db: ReturnType<typeof createDatabaseClient>): Pro
         providerEventId: `evt_e2e_${seed.run.toLowerCase()}`,
         type: 'PAYMENT_SUCCEEDED',
         payloadHash: createHash('sha256').update(`synthetic e2e event ${seed.run}`).digest('hex'),
+        receivedAt: now,
+        processedAt: now,
+      },
+    });
+    await tx.payment.update({
+      where: { id: payment.id },
+      data: { status: 'SUCCEEDED', succeededAt: now },
+    });
+    await tx.booking.update({ where: { id: held.id }, data: { confirmedAt: now } });
+  });
+}
+
+/**
+ * PR-12: a synthetic country from the ISO user-assigned range (X?), never a
+ * real one, unused by any journey: the rule-manager scenario's synthetic rule
+ * targets it and therefore changes no other scenario's evaluation.
+ */
+async function seedComplianceRuleCountry(
+  db: ReturnType<typeof createDatabaseClient>,
+): Promise<void> {
+  for (let letter = 0; letter < 26; letter += 1) {
+    const iso2 = `X${String.fromCharCode(65 + letter)}`;
+    const iso3 = `X${String.fromCharCode(65 + letter)}R`;
+    const taken = await db.country.findFirst({
+      where: { OR: [{ iso2 }, { iso3 }] },
+      select: { id: true },
+    });
+    if (taken) continue;
+    await db.country.create({ data: { iso2, iso3, name: 'Pays de règle synthétique' } });
+    process.env.E2E_COMPLIANCE_RULE_COUNTRY = iso2;
+    return;
+  }
+  throw new Error('no free user-assigned country code for the compliance rule scenario');
+}
+
+/**
+ * PR-12: its own SCHEDULED trip (copied from the booking template) with one
+ * CONFIRMED booking of the compliance customer, written under every guard like
+ * the PR-10 seed; and one unused synthetic country (user-assigned X? code)
+ * for the rule-manager scenario, so its published rule covers no journey.
+ */
+async function seedComplianceData(db: ReturnType<typeof createDatabaseClient>): Promise<void> {
+  const booking = bookingSeed();
+  const seed = complianceSeed();
+  const customer = await db.authIdentity.findUniqueOrThrow({
+    where: {
+      realm_normalizedEmail: {
+        realm: 'CUSTOMER',
+        normalizedEmail: FIXTURES.complianceCustomer.email,
+      },
+    },
+  });
+  const template = await db.trip.findUniqueOrThrow({
+    where: { reference: booking.tripReference },
+    include: { timings: { orderBy: { sequence: 'asc' } } },
+  });
+  const [origin, destination] = template.timings;
+  const trip = await db.trip.create({
+    data: {
+      reference: seed.tripReference,
+      routeVersionId: template.routeVersionId,
+      seatMapVersionId: template.seatMapVersionId,
+      fareTableVersionId: template.fareTableVersionId,
+    },
+  });
+  const departure = new Date(`${seed.departureDate}T08:00:00.000Z`);
+  const arrival = new Date(`${seed.departureDate}T12:00:00.000Z`);
+  await db.tripWaypointTiming.createMany({
+    data: [
+      {
+        tripId: trip.id,
+        routeWaypointId: origin!.routeWaypointId,
+        sequence: 1,
+        plannedDepartureAt: departure,
+      },
+      {
+        tripId: trip.id,
+        routeWaypointId: destination!.routeWaypointId,
+        sequence: 2,
+        plannedArrivalAt: arrival,
+      },
+    ],
+  });
+  await db.trip.update({
+    where: { id: trip.id },
+    data: {
+      plannedDepartureAt: departure,
+      plannedArrivalAt: arrival,
+      status: 'SCHEDULED',
+      scheduledAt: new Date(),
+    },
+  });
+  const fare = await db.fareEntry.findFirstOrThrow({
+    where: {
+      fareTableVersionId: template.fareTableVersionId!,
+      originRouteWaypointId: origin!.routeWaypointId,
+      destinationRouteWaypointId: destination!.routeWaypointId,
+    },
+  });
+  const seat = await db.seatMapCell.findFirstOrThrow({
+    where: { seatMapVersionId: template.seatMapVersionId!, seatLabel: '1A' },
+  });
+  await db.$transaction(async (tx) => {
+    const [{ now }] = await tx.$queryRaw<[{ now: Date }]>`SELECT now() AS "now"`;
+    const held = await tx.booking.create({
+      data: {
+        reference: seed.bookingReference,
+        customerIdentityId: customer.id,
+        tripId: trip.id,
+        originRouteWaypointId: origin!.routeWaypointId,
+        destinationRouteWaypointId: destination!.routeWaypointId,
+        originSequence: 1,
+        destinationSequence: 2,
+        fareEntryId: fare.id,
+        unitAmountMinor: fare.amountMinor,
+        currencyCode: 'EUR',
+        currencyMinorUnit: 2,
+        createdAt: now,
+        holdExpiresAt: new Date(now.getTime() + 30 * 60_000),
+      },
+    });
+    const bookingSeat = await tx.bookingSeat.create({
+      data: { bookingId: held.id, seatMapCellId: seat.id, createdAt: now },
+    });
+    await tx.seatInventoryLock.create({
+      data: {
+        bookingSeatId: bookingSeat.id,
+        tripId: trip.id,
+        seatMapCellId: seat.id,
+        segmentSequence: 1,
+      },
+    });
+    const payment = await tx.payment.create({
+      data: {
+        reference: seed.paymentReference,
+        bookingId: held.id,
+        customerIdentityId: customer.id,
+        provider: 'SANDBOX',
+        providerPaymentId: `sbx_e2e_cpl_${seed.run.toLowerCase()}`,
+        amountMinor: BigInt(fare.amountMinor),
+        currencyCode: 'EUR',
+        currencyMinorUnit: 2,
+        createdAt: now,
+      },
+    });
+    await tx.paymentEvent.create({
+      data: {
+        paymentId: payment.id,
+        provider: 'SANDBOX',
+        providerEventId: `evt_e2e_cpl_${seed.run.toLowerCase()}`,
+        type: 'PAYMENT_SUCCEEDED',
+        payloadHash: createHash('sha256')
+          .update(`synthetic compliance e2e ${seed.run}`)
+          .digest('hex'),
         receivedAt: now,
         processedAt: now,
       },
