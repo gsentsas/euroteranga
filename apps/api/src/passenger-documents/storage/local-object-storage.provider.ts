@@ -19,6 +19,8 @@ export class LocalObjectStorageProvider implements ObjectStorageProvider {
 
   constructor(root: string) {
     this.root = resolve(root);
+    // Defense in depth behind configuration: never chmod or populate "/".
+    if (this.root === sep) throw new Error('local object storage needs a dedicated root');
   }
 
   async put(input: {

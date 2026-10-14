@@ -73,6 +73,15 @@ describe('passenger-document configuration', () => {
     ['web root', '/srv/httpdocs/private', /OBJECT_STORAGE_LOCAL_ROOT: must not be a public/],
     ['public root', '/srv/app/public/documents', /OBJECT_STORAGE_LOCAL_ROOT: must not be a public/],
     ['upload root', '/srv/uploads/documents', /OBJECT_STORAGE_LOCAL_ROOT: must not be a public/],
+    [
+      'cPanel web root',
+      '/home/site/public_html/d',
+      /OBJECT_STORAGE_LOCAL_ROOT: must not be a public/,
+    ],
+    ['Apache web root', '/opt/lampp/htdocs/d', /OBJECT_STORAGE_LOCAL_ROOT: must not be a public/],
+    ['root via dot-dot', '/tmp/..', /OBJECT_STORAGE_LOCAL_ROOT: must be a normalized path/],
+    ['root via double slash', '//', /OBJECT_STORAGE_LOCAL_ROOT: must be a normalized path/],
+    ['dot segment', '/tmp/./documents', /OBJECT_STORAGE_LOCAL_ROOT: must be a normalized path/],
   ])('refuses a LOCAL %s', (_label, root, message) => {
     expect(() =>
       loadApiEnv(
@@ -111,6 +120,31 @@ describe('passenger-document configuration', () => {
           }),
         ),
       ).toThrow(/OBJECT_STORAGE_PROVIDER: LOCAL is refused|MALWARE_SCANNER: TEST is refused/);
+    },
+  );
+
+  it.each(['staging', 'production'] as const)(
+    'refuses LOCAL storage on its own in %s, even with a real scanner',
+    (appEnv) => {
+      expect(() =>
+        loadApiEnv(
+          deployed(appEnv, {
+            OBJECT_STORAGE_PROVIDER: 'LOCAL',
+            OBJECT_STORAGE_LOCAL_ROOT: '/srv/euroteranga-private-documents',
+            MALWARE_SCANNER: 'CLAMAV',
+            CLAMAV_HOST: 'clamav.internal',
+          }),
+        ),
+      ).toThrow(/OBJECT_STORAGE_PROVIDER: LOCAL is refused in staging and production/);
+    },
+  );
+
+  it.each(['staging', 'production'] as const)(
+    'refuses the TEST scanner on its own in %s, even with private S3',
+    (appEnv) => {
+      expect(() => loadApiEnv(deployed(appEnv, { ...s3, MALWARE_SCANNER: 'TEST' }))).toThrow(
+        /MALWARE_SCANNER: TEST is refused in staging and production/,
+      );
     },
   );
 

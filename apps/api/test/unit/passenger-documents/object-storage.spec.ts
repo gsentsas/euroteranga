@@ -114,6 +114,26 @@ describe('private local object storage', () => {
     });
   });
 
+  it.each(['/', '/tmp/..', '//'])('refuses %s as its root even behind configuration', (root) => {
+    expect(() => new LocalObjectStorageProvider(root)).toThrow(/dedicated root/);
+  });
+
+  it('refuses a symbolic-link root and writes nothing through it', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'et-object-root-outside-'));
+    const parent = await mkdtemp(join(tmpdir(), 'et-object-root-link-'));
+    roots.push(outside, parent);
+    const linkedRoot = join(parent, 'documents');
+    await symlink(outside, linkedRoot);
+    const storage = new LocalObjectStorageProvider(linkedRoot);
+    await expect(
+      storage.put({ key, body: Readable.from([Buffer.from('x')]), sizeBytes: 1, mimeType: 'x' }),
+    ).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    await expect(storage.get(key)).rejects.toBeInstanceOf(ObjectStorageError);
+    await expect(lstat(join(outside, 'passenger-documents'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
   it('refuses a symbolic-link namespace before creating a shard outside its root', async () => {
     const { root, storage } = await provider();
     const outside = await mkdtemp(join(tmpdir(), 'et-object-namespace-outside-'));
