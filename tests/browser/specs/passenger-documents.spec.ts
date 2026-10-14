@@ -85,7 +85,8 @@ test.describe('PR-11 passenger documents', () => {
       .getByLabel('Date d’expiration (facultative, sans validation réglementaire)')
       .fill('2032-12-31');
     await workspace.getByLabel('Fichier PDF, JPEG ou PNG — 10 Mio maximum').setInputFiles({
-      name: 'passeport-synthetique.pdf',
+      // A real browser sends this name as raw UTF-8 (`’`, `é`): it must be accepted.
+      name: 'passeport synthétique d’Awa.pdf',
       mimeType: 'application/pdf',
       buffer: SAFE_PDF,
     });

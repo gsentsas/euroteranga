@@ -45,7 +45,7 @@ function expectedFile(filename: string): (typeof ALLOWED)[AllowedExtension] {
     normalized.length < 3 ||
     normalized.length > 255 ||
     normalized !== normalized.trim() ||
-    /[/\\\0\p{Cc}\p{Cf}]/u.test(normalized)
+    /[/\\\0\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(normalized)
   ) {
     throw new UploadValidationError('UNSAFE_FILENAME');
   }
@@ -101,6 +101,9 @@ export async function parsePassengerDocumentUpload(
         parser = Busboy({
           headers: request.headers,
           preservePath: true,
+          // Browsers send raw UTF-8 names. Busboy's latin1 default would turn
+          // "’" or "œ" into C1 control characters and refuse ordinary names.
+          defParamCharset: 'utf8',
           limits: {
             // Busboy emits its *Limit event when the configured count is
             // reached, not only when it is exceeded. Configure one sentinel
@@ -146,6 +149,12 @@ export async function parsePassengerDocumentUpload(
       });
 
       parser.on('file', (name, file, info) => {
+        // A truncated body makes Busboy destroy the file stream with an error,
+        // possibly before the iterator below is attached (the temporary file
+        // is still being opened) or on an ignored part. Without a listener
+        // that error would be uncaught and stop the process. The iterator and
+        // the parser 'error' handler still observe and report it.
+        file.on('error', () => undefined);
         if (fileSeen || name !== 'file') {
           duplicateOrUnexpected = true;
           file.resume();
