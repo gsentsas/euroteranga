@@ -14,6 +14,8 @@ const EXPECTED_MATRIX: Record<
     privileged: true,
     permissions: [
       'audit.read',
+      'baggage.manage',
+      'baggage.read',
       'booking.manage',
       'booking.read',
       'compliance.read',
@@ -49,6 +51,8 @@ const EXPECTED_MATRIX: Record<
     privileged: false,
     permissions: [
       'audit.read',
+      'baggage.manage',
+      'baggage.read',
       'booking.manage',
       'booking.read',
       'compliance.read',
@@ -82,6 +86,8 @@ const EXPECTED_MATRIX: Record<
     realm: 'STAFF',
     privileged: false,
     permissions: [
+      'baggage.manage',
+      'baggage.read',
       'booking.manage',
       'booking.read',
       'compliance.read',
@@ -109,6 +115,8 @@ const EXPECTED_MATRIX: Record<
     realm: 'STAFF',
     privileged: false,
     permissions: [
+      'baggage.manage',
+      'baggage.read',
       'fleet.read',
       'network.read',
       'ops.access',
@@ -120,10 +128,14 @@ const EXPECTED_MATRIX: Record<
   },
   // BOOKING_AGENT and CUSTOMER_SUPPORT have no fleet permission (PR-05 matrix);
   // they read and cancel customer holds (PR-09).
+  // PR-13: BOOKING_AGENT registers and weighs bags at the counter, DISPATCHER
+  // records loading and transit; CUSTOMER_SUPPORT only reads baggage.
   BOOKING_AGENT: {
     realm: 'STAFF',
     privileged: false,
     permissions: [
+      'baggage.manage',
+      'baggage.read',
       'booking.manage',
       'booking.read',
       'network.read',
@@ -152,6 +164,8 @@ const EXPECTED_MATRIX: Record<
       'trip.read',
     ],
   },
+  // PR-13: COMPLIANCE_AGENT, FINANCE and AUDITOR have no baggage permission:
+  // baggage views name the passenger and they have no traveller-handling duty.
   // FINANCE: no network (PR-04), fleet (PR-05), trip (PR-06) nor seat map (PR-07)
   // permission by default; pricing.read only (PR-08).
   // PR-10: FINANCE reads payments and may cancel a PENDING attempt.
@@ -164,6 +178,7 @@ const EXPECTED_MATRIX: Record<
     realm: 'STAFF',
     privileged: false,
     permissions: [
+      'baggage.read',
       'booking.manage',
       'booking.read',
       'network.read',
@@ -280,6 +295,14 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['GET', '/v1/admin/compliance/evaluations/ETCE-000000000000'],
   ['POST', '/v1/admin/compliance/evaluations'],
   ['POST', '/v1/admin/compliance/evaluations/ETCE-000000000000/reviews'],
+  ['GET', '/v1/admin/baggage'],
+  ['GET', '/v1/admin/baggage/ETG-000000000000'],
+  ['GET', '/v1/admin/baggage/ETG-000000000000/qr'],
+  ['POST', '/v1/admin/baggage'],
+  ['POST', '/v1/admin/baggage/resolve-qr'],
+  ['POST', '/v1/admin/baggage/scan'],
+  ['POST', '/v1/admin/baggage/ETG-000000000000/weight'],
+  ['POST', '/v1/admin/baggage/ETG-000000000000/events'],
 ];
 
 describe('server-side RBAC', () => {
@@ -382,6 +405,13 @@ describe('server-side RBAC', () => {
       expect((await api.get('/compliance/rules')).status).toBe(
         allowed('compliance.rule.read') ? 200 : 403,
       );
+      // PR-13: baggage is its own grant; booking.read, payment.read,
+      // compliance.read or passenger.document.read never imply it, and
+      // baggage.read never implies baggage.manage.
+      expect((await api.get('/baggage')).status).toBe(allowed('baggage.read') ? 200 : 403);
+      expect(
+        (await api.post('/baggage/ETG-000000000000/events', { type: 'CHECKED_IN' })).status,
+      ).toBe(allowed('baggage.read') && allowed('baggage.manage') ? 404 : 403);
     },
   );
 

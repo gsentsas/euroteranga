@@ -9,9 +9,16 @@ import { createDatabaseClient } from '@euroteranga/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminApi, staffActor, type StaffActor } from '../../support/admin-helpers.js';
 import { confirmedPassenger, customerBaggageApi } from '../../support/baggage-helpers.js';
-import { customerActor, type CustomerActor } from '../../support/booking-helpers.js';
+import {
+  bookableFixture,
+  bookingApi,
+  customerActor,
+  holdBody,
+  type CustomerActor,
+} from '../../support/booking-helpers.js';
 import { complianceApi } from '../../support/compliance-helpers.js';
 import { uploadDocument } from '../../support/passenger-document-helpers.js';
+import { paymentApi, settle } from '../../support/payment-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
@@ -21,6 +28,7 @@ const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const COMPLIANCE_MIGRATION = '20261014120000_compliance';
 const BAGGAGE_MIGRATION = '20261014150000_baggage';
 const HISTORICAL_TABLES = [
+  'trip',
   'booking',
   'booking_seat',
   'seat_inventory_lock',
@@ -35,6 +43,7 @@ const HISTORICAL_TABLES = [
   'compliance_evaluation_result',
   'compliance_evaluation_evidence',
   'compliance_review',
+  'audit_event',
 ] as const;
 
 function deploy(config: string | null, url: string) {
@@ -151,8 +160,26 @@ describe('upgrade from a real PR-12 database', () => {
     );
     if (reviewed.status !== 201) throw new Error(`review fixture failed: ${reviewed.text}`);
 
-    expect(await count('payment')).toBe(1);
-    expect(await count('payment_event')).toBe(1);
+    // Other PR-10 states: a FAILED attempt with its event, a PENDING retry and
+    // a customer-cancelled hold.
+    const fixture = await bookableFixture(t.app, { amount: () => 1_250 });
+    const retried = await bookingApi(customer).post('/bookings', holdBody(fixture, 1, 3, ['2A']));
+    const failed = await paymentApi(customer).create(retried.body.reference as string);
+    await settle(t.app, env, failed.body.payment, 'payment.failed');
+    await paymentApi(customer).create(retried.body.reference as string);
+    const cancelled = await bookingApi(customer).post('/bookings', holdBody(fixture, 2, 4, ['2B']));
+    await bookingApi(customer).post(`/bookings/${cancelled.body.reference}/cancel`);
+
+    expect(await applied()).toHaveLength(12);
+    expect((await applied()).at(-1)).toBe(COMPLIANCE_MIGRATION);
+    expect(
+      (
+        await raw.$queryRawUnsafe<Array<{ status: string }>>(
+          'SELECT status::text AS status FROM payment ORDER BY status',
+        )
+      ).map((row) => row.status),
+    ).toEqual(['FAILED', 'PENDING', 'SUCCEEDED']);
+    expect(await count('payment_event')).toBeGreaterThanOrEqual(2);
     expect(await count('passenger_document')).toBe(1);
     expect(await count('compliance_evaluation')).toBe(1);
     expect(await count('compliance_review')).toBe(1);
