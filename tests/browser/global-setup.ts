@@ -8,6 +8,7 @@ import {
   FIXTURES,
   networkSpecCountryCodes,
   baggageSeed,
+  checkInSeed,
   complianceSeed,
   paymentSeed,
   pricingSeed,
@@ -29,6 +30,11 @@ const PREAUTHENTICATED_SESSIONS = {
   baggageCustomer: 'E2E_BAGGAGE_CUSTOMER_SESSION',
   baggageManager: 'E2E_BAGGAGE_MANAGER_SESSION',
   baggageDenied: 'E2E_BAGGAGE_DENIED_SESSION',
+  checkInCustomer: 'E2E_CHECK_IN_CUSTOMER_SESSION',
+  checkInReviewer: 'E2E_CHECK_IN_REVIEWER_SESSION',
+  checkInAgent: 'E2E_CHECK_IN_AGENT_SESSION',
+  boardingOperator: 'E2E_BOARDING_OPERATOR_SESSION',
+  checkInDenied: 'E2E_CHECK_IN_DENIED_SESSION',
 } as const;
 
 /**
@@ -135,6 +141,7 @@ export default async function globalSetup(): Promise<void> {
     await seedComplianceRuleCountry(db);
     await seedComplianceData(db);
     await seedBaggageData(db);
+    await seedCheckInData(db);
   } finally {
     await db.$disconnect();
   }
@@ -172,6 +179,15 @@ function preauthenticatedSessionEnvironment(fixture: Fixture): string | undefine
   }
   if (fixture.email === FIXTURES.baggageDenied.email) {
     return PREAUTHENTICATED_SESSIONS.baggageDenied;
+  }
+  for (const name of [
+    'checkInCustomer',
+    'checkInReviewer',
+    'checkInAgent',
+    'boardingOperator',
+    'checkInDenied',
+  ] as const) {
+    if (fixture.email === FIXTURES[name].email) return PREAUTHENTICATED_SESSIONS[name];
   }
   return undefined;
 }
@@ -569,6 +585,8 @@ interface ConfirmedBookingSeed {
   departureDate: string;
   bookingReference: string;
   paymentReference: string;
+  /** Booked seat labels (default one seat, 1A); the amount is fare x seats. */
+  seats?: string[];
 }
 
 /**
@@ -636,9 +654,13 @@ async function seedConfirmedBooking(
       destinationRouteWaypointId: destination!.routeWaypointId,
     },
   });
-  const seat = await db.seatMapCell.findFirstOrThrow({
-    where: { seatMapVersionId: template.seatMapVersionId!, seatLabel: '1A' },
-  });
+  const cells = await Promise.all(
+    (seed.seats ?? ['1A']).map((seatLabel) =>
+      db.seatMapCell.findFirstOrThrow({
+        where: { seatMapVersionId: template.seatMapVersionId!, seatLabel },
+      }),
+    ),
+  );
   return db.$transaction(async (tx) => {
     const [{ now }] = await tx.$queryRaw<[{ now: Date }]>`SELECT now() AS "now"`;
     const held = await tx.booking.create({
@@ -658,17 +680,19 @@ async function seedConfirmedBooking(
         holdExpiresAt: new Date(now.getTime() + 30 * 60_000),
       },
     });
-    const bookingSeat = await tx.bookingSeat.create({
-      data: { bookingId: held.id, seatMapCellId: seat.id, createdAt: now },
-    });
-    await tx.seatInventoryLock.create({
-      data: {
-        bookingSeatId: bookingSeat.id,
-        tripId: trip.id,
-        seatMapCellId: seat.id,
-        segmentSequence: 1,
-      },
-    });
+    for (const cell of cells) {
+      const bookingSeat = await tx.bookingSeat.create({
+        data: { bookingId: held.id, seatMapCellId: cell.id, createdAt: now },
+      });
+      await tx.seatInventoryLock.create({
+        data: {
+          bookingSeatId: bookingSeat.id,
+          tripId: trip.id,
+          seatMapCellId: cell.id,
+          segmentSequence: 1,
+        },
+      });
+    }
     const payment = await tx.payment.create({
       data: {
         reference: seed.paymentReference,
@@ -676,7 +700,7 @@ async function seedConfirmedBooking(
         customerIdentityId: customer.id,
         provider: 'SANDBOX',
         providerPaymentId: `sbx_e2e_${seed.tag}_${seed.run.toLowerCase()}`,
-        amountMinor: BigInt(fare.amountMinor),
+        amountMinor: BigInt(fare.amountMinor) * BigInt(cells.length),
         currencyCode: 'EUR',
         currencyMinorUnit: 2,
         createdAt: now,
@@ -724,6 +748,60 @@ async function seedComplianceData(db: ReturnType<typeof createDatabaseClient>): 
  * synthetic traveller already on it, so the baggage scenarios share no
  * booking, passenger or bag with the PR-10/PR-11/PR-12 scenarios.
  */
+/** One synthetic traveller of the booking customer, linked to the booking. */
+async function seedPassenger(
+  db: ReturnType<typeof createDatabaseClient>,
+  booking: { bookingId: string; customerId: string },
+  passenger: { reference: string; givenName: string; familyName: string },
+): Promise<void> {
+  // The synthetic booking-seed country (its code may have been shifted).
+  const stop = await db.stop.findUniqueOrThrow({ where: { code: bookingSeed().originCode } });
+  const created = await db.passenger.create({
+    data: {
+      ...passenger,
+      ownerCustomerIdentityId: booking.customerId,
+      dateOfBirth: new Date('1990-03-12T00:00:00.000Z'),
+      nationalityCountryId: stop.countryId,
+    },
+  });
+  await db.bookingPassenger.create({
+    data: { bookingId: booking.bookingId, passengerId: created.id },
+  });
+}
+
+/**
+ * PR-14: two dedicated confirmed bookings of the check-in customer (own
+ * trips, so nothing is shared with PR-10..PR-13 scenarios). Booking A has a
+ * traveller to make ready and one left blocked; booking B has the traveller
+ * checked in at the OPS counter and then boarded.
+ */
+async function seedCheckInData(db: ReturnType<typeof createDatabaseClient>): Promise<void> {
+  const seed = checkInSeed();
+  const customerEmail = FIXTURES.checkInCustomer.email;
+  const a = await seedConfirmedBooking(db, {
+    run: seed.run,
+    tag: 'chka',
+    customerEmail,
+    tripReference: seed.customerTripReference,
+    departureDate: '2030-07-03',
+    bookingReference: seed.customerBookingReference,
+    paymentReference: seed.customerPaymentReference,
+    seats: ['1A', '1B'],
+  });
+  await seedPassenger(db, a, seed.readyPassenger);
+  await seedPassenger(db, a, seed.blockedPassenger);
+  const b = await seedConfirmedBooking(db, {
+    run: seed.run,
+    tag: 'chkb',
+    customerEmail,
+    tripReference: seed.counterTripReference,
+    departureDate: '2030-07-04',
+    bookingReference: seed.counterBookingReference,
+    paymentReference: seed.counterPaymentReference,
+  });
+  await seedPassenger(db, b, seed.counterPassenger);
+}
+
 async function seedBaggageData(db: ReturnType<typeof createDatabaseClient>): Promise<void> {
   const seed = baggageSeed();
   const { bookingId, customerId } = await seedConfirmedBooking(db, {
