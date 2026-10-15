@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 const uuid = z.uuid();
 const pageLimit = z.coerce.number().int().min(1).max(100).default(50);
-const STATUSES = ['DRAFT', 'SCHEDULED', 'CANCELLED'] as const;
+const STATUSES = ['DRAFT', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as const;
 
 /** ISO 8601 with an explicit offset (e.g. 2030-01-15T08:00:00Z); stored in UTC. */
 const instant = z.iso.datetime({ offset: true }).transform((value) => new Date(value));

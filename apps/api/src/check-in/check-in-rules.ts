@@ -123,7 +123,10 @@ const DOCUMENT_PROBLEMS = new Set([
 /** Server-derived facts of one BookingPassenger. Nothing comes from a browser. */
 export interface ReadinessFacts {
   booking: { reference: string; confirmed: boolean; cancelled: boolean };
-  trip: { reference: string; status: 'DRAFT' | 'SCHEDULED' | 'CANCELLED' };
+  trip: {
+    reference: string;
+    status: 'DRAFT' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  };
   /** Reference of the booking's SUCCEEDED payment (PR-10: at most one). */
   payment: { reference: string } | null;
   seat: { bookingSeatId: string; label: string; released: boolean } | null;

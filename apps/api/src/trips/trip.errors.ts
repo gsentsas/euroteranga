@@ -33,6 +33,12 @@ export const TripErrors = {
     ),
   cancelled: () =>
     new PublicApiError(409, 'TRIP_CANCELLED', 'Un voyage annulé ne peut plus être modifié.'),
+  dispatchStarted: () =>
+    new PublicApiError(
+      409,
+      'TRIP_DISPATCH_STARTED',
+      'Le voyage a déjà commencé : son exploitation est désormais figée.',
+    ),
   statusConflict: () =>
     new PublicApiError(
       409,

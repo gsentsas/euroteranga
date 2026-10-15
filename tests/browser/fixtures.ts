@@ -303,6 +303,7 @@ export function tripSeed() {
     vehicleCode: `VH_TRIP_${run}`,
     vehicleLabel: 'Constructeur synthétique Autocar voyages',
     seededTripReference: `ET-TEST-SEED-${run}`,
+    departureTripReference: `ET-TEST-DEP-${run}`,
   };
 }
 

@@ -310,3 +310,7 @@ audit insert fails, the mutation rolls back.
 `prisma migrate diff` covers what Prisma models (tables, columns, indexes,
 foreign keys). It does **not** see CHECK constraints, triggers or functions;
 those are proven by the database tests and their mutation checks.
+
+## Dispatch lifecycle (PR-17)
+
+PR-17 extends the lifecycle with `SCHEDULED -> IN_PROGRESS -> COMPLETED`. Actual departure requires current server-derived readiness plus a matching immutable departure authorization; actual departure and arrival clocks are database-owned. From `IN_PROGRESS` onward the vehicle and the historical trip configuration are frozen, and cancellation is refused. See [departure-readiness.md](departure-readiness.md).

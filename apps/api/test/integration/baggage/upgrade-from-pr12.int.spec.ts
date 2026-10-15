@@ -27,7 +27,7 @@ const DATABASE_PACKAGE = fileURLToPath(
 const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const COMPLIANCE_MIGRATION = '20261014120000_compliance';
 const BAGGAGE_MIGRATION = '20261014150000_baggage';
-const REGULATORY_PERMIT_MIGRATION = '20261015120000_regulatory_permits';
+const DEPARTURE_MIGRATION = '20261015180000_departure_readiness';
 const HISTORICAL_TABLES = [
   'trip',
   'booking',
@@ -100,8 +100,12 @@ describe('upgrade from a real PR-12 database', () => {
     Object.fromEntries(
       await Promise.all(
         HISTORICAL_TABLES.map(async (table) => {
+          const historicalJson =
+            table === 'trip'
+              ? "to_jsonb(x) - ARRAY['actual_departure_at', 'actual_arrival_at', 'departure_authorization_id']"
+              : 'to_jsonb(x)';
           const [row] = await raw.$queryRawUnsafe<Array<{ value: string | null }>>(
-            `SELECT jsonb_agg(to_jsonb(x) ORDER BY to_jsonb(x))::text AS value FROM (SELECT * FROM "${table}") x`,
+            `SELECT jsonb_agg(${historicalJson} ORDER BY ${historicalJson})::text AS value FROM (SELECT * FROM "${table}") x`,
           );
           return [table, row!.value] as const;
         }),
@@ -234,8 +238,8 @@ describe('upgrade from a real PR-12 database', () => {
     expect(afterBaggage.counts).toEqual([0, 0]);
     // Still true once the later migrations are applied.
     const migrations = await applied();
-    expect(migrations).toHaveLength(16);
-    expect(migrations.at(-1)).toBe(REGULATORY_PERMIT_MIGRATION);
+    expect(migrations).toHaveLength(17);
+    expect(migrations.at(-1)).toBe(DEPARTURE_MIGRATION);
     expect(await snapshot()).toEqual(before);
     expect(await count('baggage')).toBe(0);
     expect(await count('baggage_event')).toBe(0);
@@ -275,6 +279,6 @@ describe('upgrade from a real PR-12 database', () => {
       encoding: 'utf8',
     });
     expect(status).toContain('Database schema is up to date');
-    expect(await applied()).toHaveLength(16);
+    expect(await applied()).toHaveLength(17);
   });
 });

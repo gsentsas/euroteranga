@@ -17,7 +17,7 @@ const DATABASE_PACKAGE = fileURLToPath(
 );
 const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const PR14_MIGRATION = '20261014190000_check_in_boarding';
-const PR16_MIGRATION = '20261015120000_regulatory_permits';
+const DEPARTURE_MIGRATION = '20261015180000_departure_readiness';
 const HISTORICAL_TABLES = [
   'trip',
   'booking',
@@ -70,8 +70,12 @@ describe('upgrade from a real PR-14 database', () => {
     // Keep this upgrade test friendly to small disposable PostgreSQL pools:
     // the suite already runs several isolated historical upgrades in parallel.
     for (const table of HISTORICAL_TABLES) {
+      const historicalJson =
+        table === 'trip'
+          ? "to_jsonb(x) - ARRAY['actual_departure_at', 'actual_arrival_at', 'departure_authorization_id']"
+          : 'to_jsonb(x)';
       const [row] = await raw.$queryRawUnsafe<Array<{ value: string | null }>>(
-        `SELECT jsonb_agg(to_jsonb(x) ORDER BY to_jsonb(x))::text AS value FROM (SELECT * FROM "${table}") x`,
+        `SELECT jsonb_agg(${historicalJson} ORDER BY ${historicalJson})::text AS value FROM (SELECT * FROM "${table}") x`,
       );
       rows.push([table, row!.value] as const);
     }
@@ -135,8 +139,8 @@ describe('upgrade from a real PR-14 database', () => {
 
   it('applies only PR-15, preserves PR-14 rows and backfills no manifest', async () => {
     const migrations = await applied();
-    expect(migrations).toHaveLength(16);
-    expect(migrations.at(-1)).toBe(PR16_MIGRATION);
+    expect(migrations).toHaveLength(17);
+    expect(migrations.at(-1)).toBe(DEPARTURE_MIGRATION);
     expect(await snapshot()).toEqual(before);
     const [manifestCount, permissionCount, grantCount] = await Promise.all([
       raw.$queryRawUnsafe<Array<{ count: bigint }>>(
@@ -154,9 +158,9 @@ describe('upgrade from a real PR-14 database', () => {
     expect(Number(grantCount[0]!.count)).toBe(12);
   });
 
-  it('is idempotent under a second deploy and reports all 16 migrations applied', async () => {
+  it('is idempotent under a second deploy and reports all 17 migrations applied', async () => {
     deploy(null, url);
-    expect(await applied()).toHaveLength(16);
+    expect(await applied()).toHaveLength(17);
     const status = execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'status'], {
       cwd: DATABASE_PACKAGE,
       env: { ...process.env, DATABASE_URL: url },

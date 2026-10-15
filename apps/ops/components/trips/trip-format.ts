@@ -3,6 +3,8 @@ import type { AdminTripRouteWaypoint, TripStatus } from '@euroteranga/auth-clien
 export const TRIP_STATUS_LABELS: Record<TripStatus, string> = {
   DRAFT: 'Brouillon',
   SCHEDULED: 'Planifié',
+  IN_PROGRESS: 'En cours',
+  COMPLETED: 'Terminé',
   CANCELLED: 'Annulé',
 };
 
@@ -13,6 +15,8 @@ export const TRIP_ACTION_LABELS: Record<string, string> = {
   TRIP_CANCELLED: 'Annulation',
   TRIP_VEHICLE_CHANGED: 'Changement de véhicule',
   TRIP_FARE_TABLE_CHANGED: 'Changement de tarification',
+  TRIP_DEPARTED: 'Départ réel',
+  TRIP_COMPLETED: 'Arrivée / clôture',
 };
 
 const utcFormat = new Intl.DateTimeFormat('fr-FR', {

@@ -243,6 +243,9 @@ export async function bookableFixture(
       ...(options.withSeatMap === false ? {} : { seatMapVersionId: seatVersion.id }),
       ...(options.withPricing === false ? {} : { fareTableVersionId: fareVersion.id }),
     },
+    // Historical upgrade suites exercise this helper against pre-PR-17 schemas.
+    // Return only fields that existed before dispatch columns were introduced.
+    select: { id: true, reference: true },
   });
   const at = (index: number) => new Date(departure + index * HOUR);
   await prisma.tripWaypointTiming.createMany({
@@ -260,11 +263,13 @@ export async function bookableFixture(
   await prisma.trip.update({
     where: { id: trip.id },
     data: { plannedDepartureAt: at(0), plannedArrivalAt: at(rows.length - 1) },
+    select: { id: true },
   });
   if (options.status !== 'DRAFT') {
     await prisma.trip.update({
       where: { id: trip.id },
       data: { status: 'SCHEDULED', scheduledAt: new Date() },
+      select: { id: true },
     });
   }
   return {

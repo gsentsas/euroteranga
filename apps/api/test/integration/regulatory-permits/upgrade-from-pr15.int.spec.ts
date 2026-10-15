@@ -19,7 +19,7 @@ const DATABASE_PACKAGE = fileURLToPath(
 );
 const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const PR15_MIGRATION = '20261015090000_passenger_manifests';
-const PR16_MIGRATION = '20261015120000_regulatory_permits';
+const DEPARTURE_MIGRATION = '20261015180000_departure_readiness';
 const HISTORICAL_TABLES = [
   'auth_identity',
   'country',
@@ -61,8 +61,12 @@ describe('upgrade from a real PR-15 database', () => {
   const snapshot = async () => {
     const rows: Array<readonly [string, string | null]> = [];
     for (const table of HISTORICAL_TABLES) {
+      const historicalJson =
+        table === 'trip'
+          ? "to_jsonb(x) - ARRAY['actual_departure_at', 'actual_arrival_at', 'departure_authorization_id']"
+          : 'to_jsonb(x)';
       const [row] = await raw.$queryRawUnsafe<Array<{ value: string | null }>>(
-        `SELECT jsonb_agg(to_jsonb(x) ORDER BY to_jsonb(x))::text AS value FROM (SELECT * FROM "${table}") x`,
+        `SELECT jsonb_agg(${historicalJson} ORDER BY ${historicalJson})::text AS value FROM (SELECT * FROM "${table}") x`,
       );
       rows.push([table, row!.value] as const);
     }
@@ -136,8 +140,8 @@ describe('upgrade from a real PR-15 database', () => {
 
   it('applies only PR-16, preserves PR-15 rows and backfills no permit', async () => {
     const migrations = await applied();
-    expect(migrations).toHaveLength(16);
-    expect(migrations.at(-1)).toBe(PR16_MIGRATION);
+    expect(migrations).toHaveLength(17);
+    expect(migrations.at(-1)).toBe(DEPARTURE_MIGRATION);
     expect(await snapshot()).toEqual(before);
 
     const [permitCount, permissionCount, grantCount] = await Promise.all([
@@ -159,9 +163,9 @@ describe('upgrade from a real PR-15 database', () => {
     ).toBe(1);
   });
 
-  it('is idempotent under a second deploy and reports all 16 migrations applied', async () => {
+  it('is idempotent under a second deploy and reports all 17 migrations applied', async () => {
     deploy(null, url);
-    expect(await applied()).toHaveLength(16);
+    expect(await applied()).toHaveLength(17);
     const status = execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'status'], {
       cwd: DATABASE_PACKAGE,
       env: { ...process.env, DATABASE_URL: url },

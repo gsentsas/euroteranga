@@ -91,6 +91,8 @@ enum SeatMapCellKind {
 enum TripStatus {
   DRAFT
   SCHEDULED
+  IN_PROGRESS
+  COMPLETED
   CANCELLED
 
   @@map("trip_status")
@@ -285,6 +287,16 @@ enum RegulatoryPermitScopeType {
   @@map("regulatory_permit_scope_type")
 }
 
+/// PR-17: transient construction state is never exposed by the service; a
+/// successful policy publication creates and publishes the whole version in
+/// one transaction. PUBLISHED versions are immutable.
+enum DeparturePermitPolicyStatus {
+  DRAFT
+  PUBLISHED
+
+  @@map("departure_permit_policy_status")
+}
+
 /// An identity able to authenticate in exactly one realm. It is not a
 /// customer, passenger, staff profile or crew member: those business objects
 /// will reference it later and stay independent.
@@ -321,27 +333,29 @@ model AuthIdentity {
   staffEnrollmentGrantsIssued StaffEnrollmentGrant[]        @relation("StaffEnrollmentIssuedBy")
 
   // PR-09: holds created by this CUSTOMER identity (the booker, not a passenger).
-  bookings                    Booking[]               @relation("BookingCustomer")
+  bookings                         Booking[]                @relation("BookingCustomer")
   // PR-10: payment attempts of this CUSTOMER (always the booking owner).
-  payments                    Payment[]               @relation("PaymentCustomer")
+  payments                         Payment[]                @relation("PaymentCustomer")
   // PR-11: people for whom this CUSTOMER may make bookings. The account is
   // the owner/booker and remains distinct from the person travelling.
-  passengers                  Passenger[]             @relation("PassengerOwner")
+  passengers                       Passenger[]              @relation("PassengerOwner")
   // PR-12: provenance and decisions of regulatory compliance.
-  complianceVersionsVerified  ComplianceRuleVersion[] @relation("ComplianceVersionVerifier")
-  complianceVersionsPublished ComplianceRuleVersion[] @relation("ComplianceVersionPublisher")
-  complianceVersionsRetired   ComplianceRuleVersion[] @relation("ComplianceVersionRetirer")
-  complianceEvaluations       ComplianceEvaluation[]  @relation("ComplianceEvaluationActor")
-  complianceReviews           ComplianceReview[]      @relation("ComplianceReviewer")
-  baggageEvents               BaggageEvent[]          @relation("BaggageEventActor")
-  seatAssignments             BookingPassengerSeat[]  @relation("BookingPassengerSeatAssigner")
-  passengerCheckIns           PassengerCheckIn[]      @relation("PassengerCheckInActor")
-  passengerBoardings          PassengerBoarding[]     @relation("PassengerBoardingActor")
-  passengerManifests          PassengerManifest[]     @relation("PassengerManifestGenerator")
-  permitsCreated              RegulatoryPermit[]      @relation("RegulatoryPermitCreator")
-  permitsUpdated              RegulatoryPermit[]      @relation("RegulatoryPermitUpdater")
-  permitsActivated            RegulatoryPermit[]      @relation("RegulatoryPermitActivator")
-  permitsRevoked              RegulatoryPermit[]      @relation("RegulatoryPermitRevoker")
+  complianceVersionsVerified       ComplianceRuleVersion[]  @relation("ComplianceVersionVerifier")
+  complianceVersionsPublished      ComplianceRuleVersion[]  @relation("ComplianceVersionPublisher")
+  complianceVersionsRetired        ComplianceRuleVersion[]  @relation("ComplianceVersionRetirer")
+  complianceEvaluations            ComplianceEvaluation[]   @relation("ComplianceEvaluationActor")
+  complianceReviews                ComplianceReview[]       @relation("ComplianceReviewer")
+  baggageEvents                    BaggageEvent[]           @relation("BaggageEventActor")
+  seatAssignments                  BookingPassengerSeat[]   @relation("BookingPassengerSeatAssigner")
+  passengerCheckIns                PassengerCheckIn[]       @relation("PassengerCheckInActor")
+  passengerBoardings               PassengerBoarding[]      @relation("PassengerBoardingActor")
+  passengerManifests               PassengerManifest[]      @relation("PassengerManifestGenerator")
+  permitsCreated                   RegulatoryPermit[]       @relation("RegulatoryPermitCreator")
+  permitsUpdated                   RegulatoryPermit[]       @relation("RegulatoryPermitUpdater")
+  permitsActivated                 RegulatoryPermit[]       @relation("RegulatoryPermitActivator")
+  permitsRevoked                   RegulatoryPermit[]       @relation("RegulatoryPermitRevoker")
+  departurePermitPoliciesPublished DeparturePermitPolicy[]  @relation("DeparturePermitPolicyPublisher")
+  departureAuthorizations          DepartureAuthorization[] @relation("DepartureAuthorizationActor")
 
   // The same address may exist in two realms as two unrelated identities.
   @@unique([realm, normalizedEmail])
@@ -623,12 +637,13 @@ model Country {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  stops               Stop[]
-  checkpoints         Checkpoint[]
-  vehicles            Vehicle[]
-  passengers          Passenger[]        @relation("PassengerNationality")
-  permitJurisdictions RegulatoryPermit[] @relation("RegulatoryPermitJurisdiction")
-  permitScopes        RegulatoryPermit[] @relation("RegulatoryPermitCountryScope")
+  stops                       Stop[]
+  checkpoints                 Checkpoint[]
+  vehicles                    Vehicle[]
+  passengers                  Passenger[]                  @relation("PassengerNationality")
+  permitJurisdictions         RegulatoryPermit[]           @relation("RegulatoryPermitJurisdiction")
+  permitScopes                RegulatoryPermit[]           @relation("RegulatoryPermitCountryScope")
+  departurePermitRequirements DeparturePermitRequirement[]
 
   @@index([active, id])
   @@map("country")
@@ -785,34 +800,43 @@ model Vehicle {
 /// The lifecycle, the frozen timetable and the scheduling validation are
 /// enforced by triggers in the PR-06 migration.
 model Trip {
-  id                 String     @id @default(uuid(7)) @db.Uuid
+  id                       String     @id @default(uuid(7)) @db.Uuid
   /// Public, immutable reference (e.g. ET-TEST-2030-0001 in tests).
-  reference          String     @unique @db.VarChar(32)
-  routeVersionId     String     @map("route_version_id") @db.Uuid
-  vehicleId          String?    @map("vehicle_id") @db.Uuid
+  reference                String     @unique @db.VarChar(32)
+  routeVersionId           String     @map("route_version_id") @db.Uuid
+  vehicleId                String?    @map("vehicle_id") @db.Uuid
   /// Historical seat map of this trip; frozen once SCHEDULED.
-  seatMapVersionId   String?    @map("seat_map_version_id") @db.Uuid
+  seatMapVersionId         String?    @map("seat_map_version_id") @db.Uuid
   /// Historical pricing of this trip; frozen once SCHEDULED.
-  fareTableVersionId String?    @map("fare_table_version_id") @db.Uuid
-  status             TripStatus @default(DRAFT)
+  fareTableVersionId       String?    @map("fare_table_version_id") @db.Uuid
+  status                   TripStatus @default(DRAFT)
   /// Departure of the first waypoint (UTC), copied from the timetable.
-  plannedDepartureAt DateTime?  @map("planned_departure_at") @db.Timestamptz(3)
+  plannedDepartureAt       DateTime?  @map("planned_departure_at") @db.Timestamptz(3)
   /// Arrival at the last waypoint (UTC), copied from the timetable.
-  plannedArrivalAt   DateTime?  @map("planned_arrival_at") @db.Timestamptz(3)
-  scheduledAt        DateTime?  @map("scheduled_at") @db.Timestamptz(3)
-  cancelledAt        DateTime?  @map("cancelled_at") @db.Timestamptz(3)
-  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  plannedArrivalAt         DateTime?  @map("planned_arrival_at") @db.Timestamptz(3)
+  scheduledAt              DateTime?  @map("scheduled_at") @db.Timestamptz(3)
+  cancelledAt              DateTime?  @map("cancelled_at") @db.Timestamptz(3)
+  /// Authoritative database clock set on SCHEDULED -> IN_PROGRESS.
+  actualDepartureAt        DateTime?  @map("actual_departure_at") @db.Timestamptz(3)
+  /// Authoritative database clock set on IN_PROGRESS -> COMPLETED.
+  actualArrivalAt          DateTime?  @map("actual_arrival_at") @db.Timestamptz(3)
+  /// Exact immutable authorization consumed by the departure transition.
+  departureAuthorizationId String?    @unique @map("departure_authorization_id") @db.Uuid
+  createdAt                DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  routeVersion       RouteVersion         @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
-  vehicle            Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  seatMapVersion     SeatMapVersion?      @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
-  fareTableVersion   FareTableVersion?    @relation(fields: [fareTableVersionId], references: [id], onDelete: Restrict)
-  timings            TripWaypointTiming[]
-  bookings           Booking[]
-  seatLocks          SeatInventoryLock[]
-  passengerManifests PassengerManifest[]
-  regulatoryPermits  RegulatoryPermit[]
+  routeVersion            RouteVersion             @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  vehicle                 Vehicle?                 @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  seatMapVersion          SeatMapVersion?          @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
+  fareTableVersion        FareTableVersion?        @relation(fields: [fareTableVersionId], references: [id], onDelete: Restrict)
+  timings                 TripWaypointTiming[]
+  bookings                Booking[]
+  seatLocks               SeatInventoryLock[]
+  passengerManifests      PassengerManifest[]
+  regulatoryPermits       RegulatoryPermit[]
+  departurePermitPolicies DeparturePermitPolicy[]
+  departureAuthorizations DepartureAuthorization[] @relation("TripDepartureAuthorizations")
+  departureAuthorization  DepartureAuthorization?  @relation("TripUsedDepartureAuthorization", fields: [departureAuthorizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([status, id])
   @@index([routeVersionId, id])
@@ -820,6 +844,8 @@ model Trip {
   @@index([vehicleId])
   @@index([seatMapVersionId])
   @@index([fareTableVersionId])
+  @@index([actualDepartureAt, id])
+  @@index([actualArrivalAt, id])
   @@map("trip")
 }
 
@@ -1604,4 +1630,72 @@ model RegulatoryPermit {
   @@index([activatedByIdentityId])
   @@index([revokedByIdentityId])
   @@map("regulatory_permit")
+}
+
+/// PR-17: one immutable published permit-requirement policy version for one
+/// trip. The service constructs DRAFT + requirements + PUBLISHED atomically;
+/// a published empty version explicitly means “no operational permits required”.
+model DeparturePermitPolicy {
+  id                    String                      @id @default(uuid(7)) @db.Uuid
+  tripId                String                      @map("trip_id") @db.Uuid
+  version               Int
+  status                DeparturePermitPolicyStatus @default(DRAFT)
+  schemaVersion         String                      @map("schema_version") @db.VarChar(40)
+  contentHash           String?                     @map("content_hash") @db.Char(64)
+  requirementCount      Int?                        @map("requirement_count")
+  publishedByIdentityId String?                     @map("published_by_identity_id") @db.Uuid
+  publishedAt           DateTime?                   @map("published_at") @db.Timestamptz(3)
+  createdAt             DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  trip         Trip                         @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  publishedBy  AuthIdentity?                @relation("DeparturePermitPolicyPublisher", fields: [publishedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  requirements DeparturePermitRequirement[]
+
+  @@unique([tripId, version])
+  @@index([publishedAt, id])
+  @@index([publishedByIdentityId])
+  @@map("departure_permit_policy")
+}
+
+/// One explicit generic requirement within a policy. OPERATOR, VEHICLE,
+/// ROUTE_VERSION and TRIP resolve against the policy trip; COUNTRY points to
+/// one concrete Country row. No hierarchy or legal inference exists here.
+model DeparturePermitRequirement {
+  policyId       String                    @map("policy_id") @db.Uuid
+  sequence       Int
+  permitType     String                    @map("permit_type") @db.VarChar(64)
+  scopeType      RegulatoryPermitScopeType @map("scope_type")
+  scopeCountryId String?                   @map("scope_country_id") @db.Uuid
+
+  policy       DeparturePermitPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  scopeCountry Country?              @relation(fields: [scopeCountryId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([policyId, sequence])
+  @@index([permitType, scopeType])
+  @@index([scopeCountryId])
+  @@map("departure_permit_requirement")
+}
+
+/// PR-17: immutable proof that an authorized STAFF identity explicitly
+/// approved one currently-ready trip. Facts are minimized and fingerprinted;
+/// a later facts change requires a newer authorization before departure.
+model DepartureAuthorization {
+  id                     String   @id @default(uuid(7)) @db.Uuid
+  reference              String   @unique @db.VarChar(17)
+  tripId                 String   @map("trip_id") @db.Uuid
+  version                Int
+  engineVersion          String   @map("engine_version") @db.VarChar(40)
+  readinessFingerprint   String   @map("readiness_fingerprint") @db.Char(64)
+  readinessSnapshot      Json     @map("readiness_snapshot") @db.JsonB
+  authorizedByIdentityId String   @map("authorized_by_identity_id") @db.Uuid
+  authorizedAt           DateTime @default(now()) @map("authorized_at") @db.Timestamptz(3)
+
+  trip         Trip         @relation("TripDepartureAuthorizations", fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  authorizedBy AuthIdentity @relation("DepartureAuthorizationActor", fields: [authorizedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  usedByTrip   Trip?        @relation("TripUsedDepartureAuthorization")
+
+  @@unique([tripId, version])
+  @@index([authorizedAt, id])
+  @@index([authorizedByIdentityId])
+  @@map("departure_authorization")
 }

@@ -289,3 +289,7 @@ See ADR-020 and [the runbook](../runbooks/bootstrap-super-admin.md).
   baggage views name the passenger (PR-13). Auditors follow baggage changes
   through the audit trail.
 - Not deployed; nothing has been validated against production.
+
+## PR-17 departure permissions
+
+PR-17 adds `departure.read`, `departure.authorize` and `departure.manage`. SUPER_ADMIN, DIRECTOR, OPS_MANAGER and DISPATCHER hold all three; AUDITOR holds read only; other default roles, including DRIVER and CREW, hold none. All departure mutations require CSRF. The STAFF API routes are under `/v1/admin/departure/trips/:tripReference`; read exposes minimized readiness facts, while policy publication, authorization, departure and completion are separately permission-checked and audited. PR-18 is required before Crew/device access exists.

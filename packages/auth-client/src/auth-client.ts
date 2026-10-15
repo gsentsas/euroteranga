@@ -351,7 +351,7 @@ export interface VehicleStatusTransitionInput {
   expectedStatus?: VehicleStatus;
 }
 
-export type TripStatus = 'DRAFT' | 'SCHEDULED' | 'CANCELLED';
+export type TripStatus = 'DRAFT' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 
 export interface AdminTripSummary {
   id: string;
@@ -364,6 +364,9 @@ export interface AdminTripSummary {
   plannedArrivalAt: string | null;
   scheduledAt: string | null;
   cancelledAt: string | null;
+  /** Database-owned operational clocks from PR-17 dispatch. */
+  actualDepartureAt: string | null;
+  actualArrivalAt: string | null;
   createdAt: string;
   updatedAt: string;
   routeVersion: {
@@ -1399,6 +1402,121 @@ export interface RegulatoryPermitListOptions {
   routeVersion?: number;
   tripReference?: string;
   reference?: string;
+}
+
+/** PR-17 whole-trip departure readiness and dispatch. */
+export type DepartureGate = 'TRIP' | 'VEHICLE' | 'PASSENGERS' | 'MANIFEST' | 'PERMITS';
+export type DepartureBlockerCode =
+  | 'TRIP_NOT_SCHEDULED'
+  | 'VEHICLE_NOT_ASSIGNED'
+  | 'VEHICLE_NOT_ACTIVE'
+  | 'VEHICLE_SEAT_MAP_MISMATCH'
+  | 'PASSENGER_NOT_CHECKED_IN'
+  | 'PASSENGER_NOT_BOARDED'
+  | 'PASSENGER_READINESS_STALE'
+  | 'MANIFEST_MISSING'
+  | 'MANIFEST_STALE'
+  | 'PERMIT_POLICY_MISSING'
+  | 'PERMIT_POLICY_STALE'
+  | 'PERMIT_REQUIREMENT_UNSATISFIED';
+
+export interface DepartureBlocker {
+  gate: DepartureGate;
+  code: DepartureBlockerCode;
+  reference?: string;
+  sequence?: number;
+}
+
+export interface DeparturePermitRequirementInput {
+  permitType: string;
+  scopeType: RegulatoryPermitScopeType;
+  countryIso2?: string;
+}
+
+export interface DeparturePermitRequirement extends DeparturePermitRequirementInput {
+  sequence: number;
+  satisfied?: boolean;
+  permitReference?: string;
+}
+
+export interface DeparturePermitPolicy {
+  tripReference: string;
+  version: number;
+  schemaVersion: 'departure-permit-policy/1';
+  contentHash: string;
+  requirementCount: number;
+  publishedAt: string;
+  requirements: Array<Omit<DeparturePermitRequirement, 'satisfied' | 'permitReference'>>;
+}
+
+export interface DepartureReadinessSnapshot {
+  engineVersion: 'departure-readiness/1';
+  status: 'READY' | 'BLOCKED';
+  trip: { reference: string; status: TripStatus };
+  vehicle: { code: string; active: boolean; seatMapCompatible: boolean } | null;
+  passengers: {
+    total: number;
+    checkedIn: number;
+    boarded: number;
+    currentReady: number;
+    factsFingerprint: string;
+  };
+  manifest: {
+    reference: string;
+    version: number;
+    contentHash: string;
+    currentContentHash: string | null;
+    passengerCount: number;
+    boardedCount: number;
+  } | null;
+  permitPolicy: {
+    version: number;
+    contentHash: string;
+    currentContentHash: string;
+    requirementCount: number;
+    requirements: DeparturePermitRequirement[];
+  } | null;
+  gates: Array<{
+    gate: DepartureGate;
+    status: 'PASS' | 'BLOCKED';
+    blockers: DepartureBlockerCode[];
+  }>;
+  blockers: DepartureBlocker[];
+}
+
+export interface DepartureAuthorization {
+  reference: string;
+  version: number;
+  engineVersion: 'departure-readiness/1';
+  readinessFingerprint: string;
+  authorizedAt: string;
+}
+
+export interface DepartureReadinessResponse {
+  trip: {
+    reference: string;
+    status: TripStatus;
+    actualDepartureAt: string | null;
+    actualArrivalAt: string | null;
+  };
+  readiness: DepartureReadinessSnapshot;
+  fingerprint: string;
+  latestAuthorization: (DepartureAuthorization & { current: boolean }) | null;
+}
+
+export interface DepartureAuthorizationResult {
+  created: boolean;
+  authorization: DepartureAuthorization;
+}
+
+export interface DepartureDispatchResult {
+  trip: {
+    reference: string;
+    status: TripStatus;
+    actualDepartureAt: string | null;
+    actualArrivalAt: string | null;
+  };
+  authorizationReference: string | null;
 }
 
 /**
@@ -2490,6 +2608,38 @@ export function createAuthClient(baseUrl: string) {
           ),
         exportCsv: (reference: string) =>
           privateDownload(`/v1/admin/manifests/${encodeURIComponent(reference)}/export.csv`),
+      },
+      /** PR-17: whole-trip readiness and dispatch; the server is the authority. */
+      departure: {
+        readiness: (tripReference: string) =>
+          call<DepartureReadinessResponse>(
+            'GET',
+            `/v1/admin/departure/trips/${encodeURIComponent(tripReference)}/readiness`,
+          ),
+        publishPermitPolicy: (
+          tripReference: string,
+          input: { requirements: DeparturePermitRequirementInput[] },
+        ) =>
+          withCsrf<DeparturePermitPolicy>(
+            'staff',
+            `/v1/admin/departure/trips/${encodeURIComponent(tripReference)}/permit-policy`,
+            input,
+          ),
+        authorize: (tripReference: string) =>
+          withCsrf<DepartureAuthorizationResult>(
+            'staff',
+            `/v1/admin/departure/trips/${encodeURIComponent(tripReference)}/authorize`,
+          ),
+        depart: (tripReference: string) =>
+          withCsrf<DepartureDispatchResult>(
+            'staff',
+            `/v1/admin/departure/trips/${encodeURIComponent(tripReference)}/depart`,
+          ),
+        complete: (tripReference: string) =>
+          withCsrf<DepartureDispatchResult>(
+            'staff',
+            `/v1/admin/departure/trips/${encodeURIComponent(tripReference)}/complete`,
+          ),
       },
       /** PR-16: intrinsic permit validity only; PR-17 owns trip readiness. */
       regulatoryPermits: {

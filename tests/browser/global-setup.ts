@@ -876,6 +876,48 @@ async function seedTripData(db: ReturnType<typeof createDatabaseClient>): Promis
   await db.trip.create({
     data: { reference: seed.seededTripReference, routeVersionId: version.id },
   });
+
+  // PR-17 browser fixture: a scheduled trip with no confirmed travellers.
+  // The test explicitly generates an empty manifest and publishes an empty
+  // permit policy before authorizing dispatch; no legal rule is inferred.
+  const departureTrip = await db.trip.create({
+    data: {
+      reference: seed.departureTripReference,
+      routeVersionId: version.id,
+      vehicleId: vehicle.id,
+    },
+  });
+  const waypoints = await db.routeWaypoint.findMany({
+    where: { routeVersionId: version.id },
+    orderBy: { sequence: 'asc' },
+  });
+  const departureAt = new Date('2030-12-01T08:00:00.000Z');
+  const arrivalAt = new Date('2030-12-01T12:00:00.000Z');
+  await db.tripWaypointTiming.createMany({
+    data: [
+      {
+        tripId: departureTrip.id,
+        routeWaypointId: waypoints[0]!.id,
+        sequence: 1,
+        plannedDepartureAt: departureAt,
+      },
+      {
+        tripId: departureTrip.id,
+        routeWaypointId: waypoints[1]!.id,
+        sequence: 2,
+        plannedArrivalAt: arrivalAt,
+      },
+    ],
+  });
+  await db.trip.update({
+    where: { id: departureTrip.id },
+    data: {
+      plannedDepartureAt: departureAt,
+      plannedArrivalAt: arrivalAt,
+      status: 'SCHEDULED',
+      scheduledAt: new Date(),
+    },
+  });
   await seedSeatMapData(db, version.id);
   await seedPricingData(db, route.id, version.id);
 }
