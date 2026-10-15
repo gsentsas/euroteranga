@@ -115,22 +115,46 @@ describe('check-in readiness gates', () => {
   it.each([
     [
       'cancelled booking',
-      (f: ReadinessFacts) => (f.booking.cancelled = true),
+      (f: ReadinessFacts) => {
+        f.booking.cancelled = true;
+      },
       ['BOOKING_CANCELLED'],
     ],
     [
       'unconfirmed booking',
-      (f: ReadinessFacts) => (f.booking.confirmed = false),
+      (f: ReadinessFacts) => {
+        f.booking.confirmed = false;
+      },
       ['BOOKING_NOT_CONFIRMED'],
     ],
     [
       'trip not scheduled',
-      (f: ReadinessFacts) => (f.trip.status = 'CANCELLED'),
+      (f: ReadinessFacts) => {
+        f.trip.status = 'CANCELLED';
+      },
       ['TRIP_NOT_SCHEDULED'],
     ],
-    ['no succeeded payment', (f: ReadinessFacts) => (f.payment = null), ['PAYMENT_NOT_SUCCEEDED']],
-    ['no seat', (f: ReadinessFacts) => (f.seat = null), ['SEAT_NOT_ASSIGNED']],
-    ['released seat', (f: ReadinessFacts) => (f.seat!.released = true), ['SEAT_RELEASED']],
+    [
+      'no succeeded payment',
+      (f: ReadinessFacts) => {
+        f.payment = null;
+      },
+      ['PAYMENT_NOT_SUCCEEDED'],
+    ],
+    [
+      'no seat',
+      (f: ReadinessFacts) => {
+        f.seat = null;
+      },
+      ['SEAT_NOT_ASSIGNED'],
+    ],
+    [
+      'released seat',
+      (f: ReadinessFacts) => {
+        f.seat!.released = true;
+      },
+      ['SEAT_RELEASED'],
+    ],
   ] as const)('blocks on %s', (_name, change, expected) => {
     const facts = ready();
     change(facts);

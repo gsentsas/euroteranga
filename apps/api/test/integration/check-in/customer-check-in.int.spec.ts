@@ -290,6 +290,17 @@ describe('customer check-in: gates, seat assignment, ownership and QR', () => {
       status: 'PENDING_REVIEW',
       blockers: ['BAGGAGE_EXCEPTION_ACTIVE'],
     });
+
+    // Every structural prerequisite exists (seat + current evaluation), so
+    // only the readiness decision prevents this check-in. This specifically
+    // proves that an active baggage blocker cannot be bypassed by the service.
+    const refusedCheckIn = await api.checkIn(ready.bookingReference, ready.passengerReference);
+    expect(refusedCheckIn.status).toBe(409);
+    expect(refusedCheckIn.body.code).toBe('CHECK_IN_NOT_READY');
+    expect(
+      refusedCheckIn.body.details.blockers.map((blocker: { code: string }) => blocker.code),
+    ).toContain('BAGGAGE_EXCEPTION_ACTIVE');
+
     // REMOVED is history: the bag no longer blocks the passenger.
     expect((await staffBags.event(removed!, { type: 'REMOVED' })).status).toBe(201);
     expect((await staffBags.event(kept!, { type: 'LOADED' })).status).toBe(201);

@@ -315,6 +315,52 @@ describe('staff check-in and authenticated boarding', () => {
     ]);
   });
 
+  it('keeps already-boarded precedence when later facts become stale', async () => {
+    const { checkIn, bookingReference, passengerReference } = await checkedIn();
+    const api = boardingApi(dispatcher);
+
+    const first = await api.scan({
+      qrPayload: checkIn.qrPayload,
+      deviceId: 'gate-priority-01',
+    });
+    expect(first.status, first.text).toBe(201);
+    expect(first.body.created).toBe(true);
+
+    // Introduce a blocker only after the passenger has already boarded.
+    const bag = await customerBaggageApi(customer).register(bookingReference, passengerReference);
+    expect(bag.status, bag.text).toBe(201);
+
+    const manager = await staffActor(t.app, ['OPS_MANAGER']);
+    const blocked = await staffBaggageApi(manager).event(bag.body.reference, {
+      type: 'HELD_BY_CUSTOMS',
+    });
+    expect(blocked.status, blocked.text).toBe(201);
+
+    // Once boarding is a historical fact, later staleness must not replace
+    // the more specific PASSENGER_ALREADY_BOARDED result.
+    const second = await api.scan({
+      qrPayload: checkIn.qrPayload,
+      deviceId: 'gate-priority-02',
+    });
+    expect(second.status).toBe(409);
+    expect(second.body.code).toBe('PASSENGER_ALREADY_BOARDED');
+
+    const stored = await db(t.app).passengerCheckIn.findUniqueOrThrow({
+      where: { reference: checkIn.reference },
+      include: { boarding: true },
+    });
+    expect(stored.boarding).not.toBeNull();
+
+    expect(
+      await db(t.app).auditEvent.count({
+        where: {
+          action: 'PASSENGER_BOARDING_REFUSED',
+          resourceId: stored.id,
+        },
+      }),
+    ).toBe(0);
+  });
+
   it('bounds the operator time and lists passengers with server-side filters, audited', async () => {
     const { checkIn, journey, bookingReference, passengerReference } = await checkedIn();
     const api = boardingApi(dispatcher);

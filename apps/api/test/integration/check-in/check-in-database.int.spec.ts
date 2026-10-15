@@ -413,6 +413,7 @@ describe('check-in and boarding PostgreSQL invariants and true concurrency', () 
         () => staffCheckInApi(agent).checkIn(ready.bookingReference, ready.passengerReference),
       ],
     );
+    if (!a || !b) throw new Error('expected two overlapping check-in responses');
     expect([a.status, b.status]).toEqual([201, 201]);
     expect([a.body.created, b.body.created].sort()).toEqual([false, true]);
     expect(a.body.checkIn.reference).toBe(b.body.checkIn.reference);
@@ -445,6 +446,7 @@ describe('check-in and boarding PostgreSQL invariants and true concurrency', () 
         () => staffCheckInApi(agent).seat(journey.bookingReference, second, { seatLabel: '1A' }),
       ],
     );
+    if (!a || !b) throw new Error('expected two overlapping seat responses');
     expect([a.status, b.status].sort()).toEqual([201, 409]);
     expect([a.body.code, b.body.code]).toContain('SEAT_ALREADY_ASSIGNED');
     expect(
@@ -463,32 +465,35 @@ describe('check-in and boarding PostgreSQL invariants and true concurrency', () 
       where: { reference: checkIn.body.checkIn.reference },
     });
     const occurredAt = new Date().toISOString();
+    const replayRequest = {
+      qrPayload: payload,
+      deviceId: 'gate-race',
+      clientEventId: 'scan-race-000001',
+      occurredAt,
+    };
+
     const responses = await forcedOverlap(
       (tx) =>
         tx.$queryRaw`SELECT 1 FROM "passenger_check_in" WHERE "id" = ${row.id}::uuid FOR UPDATE`,
-      Array.from(
-        { length: 8 },
-        (_, index) => () =>
-          boardingApi(dispatcher).scan(
-            index < 4
-              ? {
-                  qrPayload: payload,
-                  deviceId: 'gate-race',
-                  clientEventId: 'scan-race-000001',
-                  occurredAt,
-                }
-              : { qrPayload: payload, deviceId: `gate-race-${index}` },
-          ),
-      ),
+      Array.from({ length: 8 }, () => () => boardingApi(dispatcher).scan(replayRequest)),
     );
-    const created = responses.filter(
-      (response) => response.status === 201 && response.body.created,
-    );
+
+    // Same clientEventId + same payload is one logical event even when all
+    // requests overlap. The row lock must serialize the first creation and
+    // every other request must observe it as an idempotent replay.
+    expect(responses.every((response) => response.status === 201)).toBe(true);
+
+    const created = responses.filter((response) => response.body.created === true);
+    const replayed = responses.filter((response) => response.body.created === false);
+
     expect(created).toHaveLength(1);
+    expect(replayed).toHaveLength(7);
+
+    const firstCreated = created[0];
+    if (!firstCreated) throw new Error('expected one created boarding');
+
     for (const response of responses) {
-      if (response === created[0]) continue;
-      if (response.status === 201) expect(response.body.created).toBe(false);
-      else expect(response.body.code).toBe('PASSENGER_ALREADY_BOARDED');
+      expect(response.body.boarding).toEqual(firstCreated.body.boarding);
     }
     // A free burst afterwards adds nothing either.
     const burst = await Promise.all(
