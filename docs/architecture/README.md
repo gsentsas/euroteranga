@@ -365,11 +365,29 @@ person on one confirmed booking of one trip):
 - `checkin.read`/`checkin.manage` and `boarding.read`/`boarding.scan`;
   audited STAFF reads.
 
-Manifests (PR-15), trip readiness and dispatch (PR-17) and the offline Crew
-PWA (PR-18) are not part of it: a BOARDED passenger never means the trip may
+Manifests (PR-15) are a separate domain; trip readiness and dispatch (PR-17)
+and the offline Crew PWA (PR-18) are not part of it: a BOARDED passenger never means the trip may
 depart. See [`docs/domain/check-in-boarding.md`](../domain/check-in-boarding.md),
 [`docs/security/check-in-boarding.md`](../security/check-in-boarding.md) and
 [ADR-029](../adr/ADR-029-operational-boarding-credential.md).
+
+## Passenger manifests (PR-15)
+
+`apps/api/src/manifests` appends immutable versions for one `SCHEDULED` trip:
+
+- only already checked-in booking passengers are captured, with optional
+  boarding facts, in deterministic natural seat order;
+- the minimized `passenger-manifest/1` JSON snapshot excludes documents,
+  payments, compliance evidence, QR/device data, customer e-mail and baggage;
+- its canonical SHA-256 and counts are stored with an unpredictable `ETM`
+  reference; the trip row lock guarantees contiguous concurrent versions;
+- update/delete/truncate are rejected, and every STAFF read, generation and
+  CSV export is audited;
+- CSV is rendered privately from the stored snapshot, never from live tables.
+
+A manifest is neither trip readiness nor regulatory/dispatch authorization.
+See [`docs/domain/manifests.md`](../domain/manifests.md) and
+[ADR-030](../adr/ADR-030-immutable-trip-passenger-manifests.md).
 
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
@@ -387,7 +405,8 @@ historical trip pricing (ADR-025), segment inventory/customer holds
 (ADR-027), plus private object storage/scanning/quarantine (ADR-005), the
 versioned regulatory rule engine (ADR-009), baggage identity with its
 append-only event history (ADR-028) and the operational boarding credential
-with its check-in readiness snapshot (ADR-029).
+with its check-in readiness snapshot (ADR-029), plus immutable trip passenger
+manifests (ADR-030).
 
 Still open: production object-storage and malware-scanner provisioning,
 offline crew synchronisation, the choice and integration of a real payment

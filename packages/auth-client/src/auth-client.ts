@@ -1244,6 +1244,58 @@ export interface BoardingResult {
   boarding: PassengerBoarding;
 }
 
+/** PR-15 immutable, PII-minimised snapshot of checked-in passengers. */
+export interface PassengerManifestPassenger {
+  bookingReference: string;
+  passengerReference: string;
+  givenName: string;
+  familyName: string;
+  dateOfBirth: string;
+  nationality: { iso2: string; iso3: string };
+  origin: { sequence: number; code: string; name: string; countryIso2: string };
+  destination: { sequence: number; code: string; name: string; countryIso2: string };
+  seat: { label: string };
+  checkIn: { reference: string; checkedInAt: string };
+  boarding: { reference: string; boardedAt: string } | null;
+}
+
+export interface PassengerManifestSnapshot {
+  schemaVersion: 'passenger-manifest/1';
+  trip: {
+    reference: string;
+    plannedDepartureAt: string;
+    plannedArrivalAt: string;
+    vehicle: { code: string | null; registrationPlate: string | null };
+  };
+  passengers: PassengerManifestPassenger[];
+}
+
+export interface PassengerManifestSummary {
+  reference: string;
+  tripReference: string;
+  version: number;
+  schemaVersion: string;
+  contentHash: string;
+  passengerCount: number;
+  boardedCount: number;
+  generatedAt: string;
+}
+
+export interface PassengerManifest extends PassengerManifestSummary {
+  snapshot: PassengerManifestSnapshot;
+}
+
+export interface PassengerManifestListOptions {
+  tripReference: string;
+  cursor?: number;
+  limit?: number;
+}
+
+export interface PassengerManifestPage {
+  items: PassengerManifestSummary[];
+  nextCursor: number | null;
+}
+
 /**
  * PR-12 compliance. TECHNICALLY_ACCEPTED != REGULATORY_VALID and
  * NO_MATCHING_RULE != COMPLIANT: a stale evaluation is never current.
@@ -2312,6 +2364,27 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<BoardingResolution>('staff', '/v1/admin/boarding/resolve', { qrPayload }),
         scan: (qrPayload: string, input: BoardingScanInput) =>
           withCsrf<BoardingResult>('staff', '/v1/admin/boarding/scan', { qrPayload, ...input }),
+      },
+      /** PR-15: immutable history; each explicit generation creates a new version. */
+      manifests: {
+        list: (options: PassengerManifestListOptions) =>
+          call<PassengerManifestPage>(
+            'GET',
+            `/v1/admin/manifests?${query({
+              tripReference: options.tripReference,
+              cursor: options.cursor,
+              limit: options.limit,
+            })}`,
+          ),
+        detail: (reference: string) =>
+          call<PassengerManifest>('GET', `/v1/admin/manifests/${encodeURIComponent(reference)}`),
+        generate: (tripReference: string) =>
+          withCsrf<PassengerManifest>(
+            'staff',
+            `/v1/admin/manifests/trips/${encodeURIComponent(tripReference)}`,
+          ),
+        exportCsv: (reference: string) =>
+          privateDownload(`/v1/admin/manifests/${encodeURIComponent(reference)}/export.csv`),
       },
       /**
        * PR-12: compliance.read / compliance.review for passengers;

@@ -67,6 +67,11 @@ export function RefineProvider({ children }: { children: ReactNode }) {
             list: '/check-in',
             meta: { label: 'Check-in / Embarquement', permission: 'checkin.read' },
           },
+          {
+            name: 'manifests',
+            list: '/manifests',
+            meta: { label: 'Manifestes passagers', permission: 'manifest.read' },
+          },
           // Compliance group: PR-11 technical files, PR-12 rules and reviews.
           // Permits (PR-16) and trip readiness (PR-17) do not exist yet.
           {

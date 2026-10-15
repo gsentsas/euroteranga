@@ -31,6 +31,9 @@ const EXPECTED_MATRIX: Record<
       'identity.read',
       'identity.staff.provision',
       'identity.status.manage',
+      'manifest.export',
+      'manifest.generate',
+      'manifest.read',
       'mfa.enrollment.authorize',
       'network.manage',
       'network.read',
@@ -72,6 +75,9 @@ const EXPECTED_MATRIX: Record<
       'identity.read',
       'identity.staff.provision',
       'identity.status.manage',
+      'manifest.export',
+      'manifest.generate',
+      'manifest.read',
       'mfa.enrollment.authorize',
       'network.manage',
       'network.read',
@@ -106,6 +112,9 @@ const EXPECTED_MATRIX: Record<
       'fleet.manage',
       'fleet.read',
       'identity.read',
+      'manifest.export',
+      'manifest.generate',
+      'manifest.read',
       'network.manage',
       'network.read',
       'ops.access',
@@ -134,6 +143,9 @@ const EXPECTED_MATRIX: Record<
       'checkin.manage',
       'checkin.read',
       'fleet.read',
+      'manifest.export',
+      'manifest.generate',
+      'manifest.read',
       'network.read',
       'ops.access',
       'pricing.read',
@@ -332,6 +344,10 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['GET', '/v1/admin/check-in/check-ins/ETK-000000000000/qr'],
   ['POST', '/v1/admin/boarding/resolve'],
   ['POST', '/v1/admin/boarding/scan'],
+  ['GET', '/v1/admin/manifests?tripReference=ET-UNKNOWN'],
+  ['GET', '/v1/admin/manifests/ETM-000000000000'],
+  ['POST', '/v1/admin/manifests/trips/ET-UNKNOWN'],
+  ['GET', '/v1/admin/manifests/ETM-000000000000/export.csv'],
 ];
 
 describe('server-side RBAC', () => {
@@ -465,6 +481,19 @@ describe('server-side RBAC', () => {
           })
         ).status,
       ).toBe(allowed('boarding.read') && allowed('boarding.scan') ? 404 : 403);
+      // PR-15: manifest read, generation and export are independent grants.
+      expect((await api.get('/manifests?tripReference=ET-UNKNOWN')).status).toBe(
+        allowed('manifest.read') ? 404 : 403,
+      );
+      expect((await api.get('/manifests/ETM-000000000000')).status).toBe(
+        allowed('manifest.read') ? 404 : 403,
+      );
+      expect((await api.post('/manifests/trips/ET-UNKNOWN')).status).toBe(
+        allowed('manifest.generate') ? 404 : 403,
+      );
+      expect((await api.get('/manifests/ETM-000000000000/export.csv')).status).toBe(
+        allowed('manifest.export') ? 404 : 403,
+      );
     },
   );
 

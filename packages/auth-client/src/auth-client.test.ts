@@ -37,6 +37,8 @@ import {
   type CheckInReadiness,
   type CheckInResult,
   type PassengerCheckIn,
+  type PassengerManifest,
+  type PassengerManifestPage,
   type StaffPassengerCheckIn,
 } from './index.js';
 
@@ -254,6 +256,72 @@ describe('check-in and boarding client (PR-14)', () => {
       reference: string;
       boardedAt: string;
     } | null>();
+  });
+});
+
+describe('passenger manifest client (PR-15)', () => {
+  it('encodes filters/references and protects every generation with STAFF CSRF', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { items: [], nextCursor: null } },
+      { status: 200, body: { reference: 'ETM-AAAAAAAAAAAA' } },
+      { status: 200, body: { csrfToken: 'v1.manifest.csrf' } },
+      { status: 201, body: { reference: 'ETM-BBBBBBBBBBBB', version: 2 } },
+    ]);
+    const manifests = createAuthClient('http://api.test').admin.manifests;
+    await manifests.list({ tripReference: 'ET T/../X', cursor: 3, limit: 25 });
+    await manifests.detail('ETM-A/../B');
+    await manifests.generate('ET T/../X');
+    expect(calls[0]?.url).toBe(
+      'http://api.test/v1/admin/manifests?tripReference=ET+T%2F..%2FX&cursor=3&limit=25',
+    );
+    expect(calls[1]?.url).toBe('http://api.test/v1/admin/manifests/ETM-A%2F..%2FB');
+    expect(calls[3]?.url).toBe('http://api.test/v1/admin/manifests/trips/ET%20T%2F..%2FX');
+    expect(calls[3]?.init).toMatchObject({
+      method: 'POST',
+      body: '{}',
+      headers: expect.objectContaining({ 'X-CSRF-Token': 'v1.manifest.csrf' }),
+    });
+  });
+
+  it('exposes minimized manifest types and a private CSV download', async () => {
+    const bytes = new Blob(['manifest_reference\r\nETM-AAAAAAAAAAAA\r\n'], {
+      type: 'text/csv',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(bytes, {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/csv; charset=utf-8',
+              'Content-Disposition': 'attachment; filename="passenger-manifest-ET-T-v1.csv"',
+            },
+          }),
+      ),
+    );
+    const client = createAuthClient('http://api.test');
+    const result = await client.admin.manifests.exportCsv('ETM-AAAAAAAAAAAA');
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('download failed');
+    expect(result.data.filename).toBe('passenger-manifest-ET-T-v1.csv');
+    expect(await result.data.blob.text()).toContain('manifest_reference');
+    expectTypeOf(client.admin.manifests.list).returns.resolves.toEqualTypeOf<
+      ApiResult<PassengerManifestPage>
+    >();
+    expectTypeOf(client.admin.manifests.generate).returns.resolves.toEqualTypeOf<
+      ApiResult<PassengerManifest>
+    >();
+    expectTypeOf(client.admin.manifests.exportCsv).returns.resolves.toEqualTypeOf<
+      ApiResult<PrivateDownload>
+    >();
+    expectTypeOf<PassengerManifest>().not.toHaveProperty('generatedByIdentityId');
+    expectTypeOf<PassengerManifest['snapshot']['passengers'][number]>().not.toHaveProperty(
+      'credentialReference',
+    );
+    expectTypeOf<PassengerManifest['snapshot']['passengers'][number]>().not.toHaveProperty(
+      'deviceId',
+    );
   });
 });
 
