@@ -25,3 +25,20 @@ regexes = [
   # SANDBOX is refused in staging and production (packages/config).
   '''^ZGV2LW9ubHktc2FuZGJveC13ZWJob29rLW5vdC1hLXNlY3JldA==$''',
 ]
+
+# PR-14: ETQ-* values below are PII-free boarding credential references used
+# only as deterministic test fixtures. They are not API keys or provider
+# credentials. Keep the exception narrow: one Gitleaks rule, two unit-test
+# files, and the exact credential-reference format. With condition = "AND",
+# both the path and extracted secret must match.
+[[allowlists]]
+description = "PR-14 PII-free boarding credential test fixtures"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''^apps/api/test/unit/check-in/check-in-rules\.spec\.ts$''',
+  '''^apps/api/test/unit/check-in/check-in-views\.spec\.ts$''',
+]
+regexes = [
+  '''^ETQ-[0-9A-Z]{16}$''',
+]
