@@ -35,6 +35,9 @@ const PREAUTHENTICATED_SESSIONS = {
   checkInAgent: 'E2E_CHECK_IN_AGENT_SESSION',
   boardingOperator: 'E2E_BOARDING_OPERATOR_SESSION',
   checkInDenied: 'E2E_CHECK_IN_DENIED_SESSION',
+  permitManager: 'E2E_PERMIT_MANAGER_SESSION',
+  permitReader: 'E2E_PERMIT_READER_SESSION',
+  permitDenied: 'E2E_PERMIT_DENIED_SESSION',
 } as const;
 
 /**
@@ -186,6 +189,9 @@ function preauthenticatedSessionEnvironment(fixture: Fixture): string | undefine
     'checkInAgent',
     'boardingOperator',
     'checkInDenied',
+    'permitManager',
+    'permitReader',
+    'permitDenied',
   ] as const) {
     if (fixture.email === FIXTURES[name].email) return PREAUTHENTICATED_SESSIONS[name];
   }

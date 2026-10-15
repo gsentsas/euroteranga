@@ -17,7 +17,7 @@ const DATABASE_PACKAGE = fileURLToPath(
 );
 const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const PR14_MIGRATION = '20261014190000_check_in_boarding';
-const PR15_MIGRATION = '20261015090000_passenger_manifests';
+const PR16_MIGRATION = '20261015120000_regulatory_permits';
 const HISTORICAL_TABLES = [
   'trip',
   'booking',
@@ -135,8 +135,8 @@ describe('upgrade from a real PR-14 database', () => {
 
   it('applies only PR-15, preserves PR-14 rows and backfills no manifest', async () => {
     const migrations = await applied();
-    expect(migrations).toHaveLength(15);
-    expect(migrations.at(-1)).toBe(PR15_MIGRATION);
+    expect(migrations).toHaveLength(16);
+    expect(migrations.at(-1)).toBe(PR16_MIGRATION);
     expect(await snapshot()).toEqual(before);
     const [manifestCount, permissionCount, grantCount] = await Promise.all([
       raw.$queryRawUnsafe<Array<{ count: bigint }>>(
@@ -154,9 +154,9 @@ describe('upgrade from a real PR-14 database', () => {
     expect(Number(grantCount[0]!.count)).toBe(12);
   });
 
-  it('is idempotent under a second deploy and reports all 15 migrations applied', async () => {
+  it('is idempotent under a second deploy and reports all 16 migrations applied', async () => {
     deploy(null, url);
-    expect(await applied()).toHaveLength(15);
+    expect(await applied()).toHaveLength(16);
     const status = execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'status'], {
       cwd: DATABASE_PACKAGE,
       env: { ...process.env, DATABASE_URL: url },

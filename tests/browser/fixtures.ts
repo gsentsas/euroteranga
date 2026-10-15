@@ -185,6 +185,19 @@ export const FIXTURES = {
     return { realm: 'STAFF', email: runScoped('check-in-denied'), roles: ['FINANCE'] };
   },
 
+  /** PR-16: administers synthetic operational permits. */
+  get permitManager(): Fixture {
+    return { realm: 'STAFF', email: runScoped('permit-manager'), roles: ['OPS_MANAGER'] };
+  },
+  /** PR-16: reads permits for dispatch without being allowed to change them. */
+  get permitReader(): Fixture {
+    return { realm: 'STAFF', email: runScoped('permit-reader'), roles: ['DISPATCHER'] };
+  },
+  /** PR-16: has OPS access through FINANCE, but no permit permission. */
+  get permitDenied(): Fixture {
+    return { realm: 'STAFF', email: runScoped('permit-denied'), roles: ['FINANCE'] };
+  },
+
   /** Target of the SUPER_ADMIN's role and status changes. */
   get managed(): Fixture {
     return { realm: 'STAFF', email: runScoped('managed'), roles: ['DISPATCHER'] };
@@ -222,7 +235,10 @@ export type PreauthenticatedFixture =
   | 'checkInReviewer'
   | 'checkInAgent'
   | 'boardingOperator'
-  | 'checkInDenied';
+  | 'checkInDenied'
+  | 'permitManager'
+  | 'permitReader'
+  | 'permitDenied';
 
 const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string> = {
   paymentCustomer: 'E2E_PAYMENT_CUSTOMER_SESSION',
@@ -239,6 +255,9 @@ const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string
   checkInAgent: 'E2E_CHECK_IN_AGENT_SESSION',
   boardingOperator: 'E2E_BOARDING_OPERATOR_SESSION',
   checkInDenied: 'E2E_CHECK_IN_DENIED_SESSION',
+  permitManager: 'E2E_PERMIT_MANAGER_SESSION',
+  permitReader: 'E2E_PERMIT_READER_SESSION',
+  permitDenied: 'E2E_PERMIT_DENIED_SESSION',
 };
 
 /**
@@ -427,6 +446,32 @@ export function checkInSeed() {
     readyPassenger: { reference: `ETV-E2E4${run}`, givenName: 'Aminata', familyName: 'Prête' },
     blockedPassenger: { reference: `ETV-E2E5${run}`, givenName: 'Babacar', familyName: 'Bloqué' },
     counterPassenger: { reference: `ETV-E2E6${run}`, givenName: 'Coura', familyName: 'Comptoir' },
+  };
+}
+
+/**
+ * PR-16: data-driven, entirely synthetic permit data. The permit targets the
+ * existing synthetic trip and expresses no real legal requirement.
+ */
+export function permitSeed() {
+  const raw = process.env.E2E_RUN_ID;
+  if (!raw) throw new Error('E2E_RUN_ID is set by global-setup.ts');
+  const run = raw.toUpperCase();
+  const year = new Date().getUTCFullYear();
+  return {
+    run,
+    permitType: `SYNTHETIC_${run}`,
+    title: `Autorisation synthétique E2E ${run}`,
+    updatedTitle: `Autorisation synthétique E2E ${run} révisée`,
+    issuingAuthority: 'Autorité synthétique de test',
+    authorityReference: `SYN-E2E-${run}`,
+    tripReference: tripSeed().seededTripReference,
+    validFrom: `${year - 1}-01-01`,
+    validUntil: `${year + 1}-12-31`,
+    sourceUrl: `https://regulations.example.test/permits/${raw}`,
+    sourceCheckedOn: `${year - 1}-01-15`,
+    notes: 'Donnée synthétique réservée au scénario navigateur PR-16.',
+    revocationReason: 'Révocation synthétique du scénario navigateur PR-16.',
   };
 }
 

@@ -1296,6 +1296,111 @@ export interface PassengerManifestPage {
   nextCursor: number | null;
 }
 
+/** PR-16 generic operational permits. PERMIT_VALID is never TRIP_READY. */
+export type RegulatoryPermitLifecycleStatus = 'DRAFT' | 'ACTIVE' | 'REVOKED';
+export type RegulatoryPermitValidityState =
+  'DRAFT' | 'NOT_YET_VALID' | 'VALID' | 'EXPIRED' | 'REVOKED';
+export type RegulatoryPermitScopeType =
+  'OPERATOR' | 'COUNTRY' | 'VEHICLE' | 'ROUTE_VERSION' | 'TRIP';
+
+export type RegulatoryPermitScopeInput =
+  | { type: 'OPERATOR' }
+  | { type: 'COUNTRY'; countryIso2: string }
+  | { type: 'VEHICLE'; vehicleCode: string }
+  | { type: 'ROUTE_VERSION'; routeCode: string; routeVersion: number }
+  | { type: 'TRIP'; tripReference: string };
+
+export type RegulatoryPermitScope =
+  | { type: 'OPERATOR'; label: 'EURO TERANGA' }
+  | { type: 'COUNTRY'; country: { iso2: string; iso3: string; name: string } }
+  | { type: 'VEHICLE'; vehicle: { code: string; registrationPlate: string | null } }
+  | {
+      type: 'ROUTE_VERSION';
+      route: { code: string; name: string };
+      routeVersion: number;
+    }
+  | { type: 'TRIP'; trip: { reference: string } };
+
+export interface RegulatoryPermitInput {
+  permitType: string;
+  title: string;
+  issuingAuthority: string;
+  authorityReference?: string | null;
+  jurisdictionCountryIso2?: string | null;
+  scope: RegulatoryPermitScopeInput;
+  validFrom: string;
+  validUntil: string;
+  sourceUrl?: string | null;
+  sourceCheckedOn?: string | null;
+  notes?: string | null;
+}
+
+export interface RegulatoryPermitUpdateInput {
+  expectedRevision: number;
+  permitType?: string;
+  title?: string;
+  issuingAuthority?: string;
+  authorityReference?: string | null;
+  jurisdictionCountryIso2?: string | null;
+  scope?: RegulatoryPermitScopeInput;
+  validFrom?: string;
+  validUntil?: string;
+  sourceUrl?: string | null;
+  sourceCheckedOn?: string | null;
+  notes?: string | null;
+}
+
+export interface RegulatoryPermitSummary {
+  reference: string;
+  permitType: string;
+  title: string;
+  issuingAuthority: string;
+  authorityReference: string | null;
+  jurisdictionCountry: { iso2: string; iso3: string; name: string } | null;
+  scope: RegulatoryPermitScope;
+  validFrom: string;
+  validUntil: string;
+  status: RegulatoryPermitLifecycleStatus;
+  validityState: RegulatoryPermitValidityState;
+  evaluatedOn: string;
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+  activatedAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface RegulatoryPermitHistoryEntry {
+  action: string;
+  occurredAt: string;
+  status: RegulatoryPermitLifecycleStatus | null;
+  revision: number | null;
+  reason: string | null;
+}
+
+export interface RegulatoryPermitDetail extends RegulatoryPermitSummary {
+  sourceUrl: string | null;
+  sourceCheckedOn: string | null;
+  notes: string | null;
+  revocationReason: string | null;
+  history: RegulatoryPermitHistoryEntry[];
+}
+
+export interface RegulatoryPermitListOptions {
+  cursor?: string;
+  limit?: number;
+  status?: RegulatoryPermitLifecycleStatus;
+  validityState?: RegulatoryPermitValidityState;
+  scopeType?: RegulatoryPermitScopeType;
+  permitType?: string;
+  country?: string;
+  vehicleCode?: string;
+  routeCode?: string;
+  routeVersion?: number;
+  tripReference?: string;
+  reference?: string;
+}
+
 /**
  * PR-12 compliance. TECHNICALLY_ACCEPTED != REGULATORY_VALID and
  * NO_MATCHING_RULE != COMPLIANT: a stale evaluation is never current.
@@ -2385,6 +2490,52 @@ export function createAuthClient(baseUrl: string) {
           ),
         exportCsv: (reference: string) =>
           privateDownload(`/v1/admin/manifests/${encodeURIComponent(reference)}/export.csv`),
+      },
+      /** PR-16: intrinsic permit validity only; PR-17 owns trip readiness. */
+      regulatoryPermits: {
+        list: (options: RegulatoryPermitListOptions = {}) =>
+          call<Page<RegulatoryPermitSummary>>(
+            'GET',
+            `/v1/admin/regulatory-permits?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              status: options.status,
+              validityState: options.validityState,
+              scopeType: options.scopeType,
+              permitType: options.permitType,
+              country: options.country,
+              vehicleCode: options.vehicleCode,
+              routeCode: options.routeCode,
+              routeVersion: options.routeVersion,
+              tripReference: options.tripReference,
+              reference: options.reference,
+            })}`,
+          ),
+        detail: (reference: string) =>
+          call<RegulatoryPermitDetail>(
+            'GET',
+            `/v1/admin/regulatory-permits/${encodeURIComponent(reference)}`,
+          ),
+        create: (input: RegulatoryPermitInput) =>
+          withCsrf<RegulatoryPermitDetail>('staff', '/v1/admin/regulatory-permits', input),
+        update: (reference: string, input: RegulatoryPermitUpdateInput) =>
+          withCsrf<RegulatoryPermitDetail>(
+            'staff',
+            `/v1/admin/regulatory-permits/${encodeURIComponent(reference)}`,
+            input,
+          ),
+        activate: (reference: string, expectedRevision: number) =>
+          withCsrf<RegulatoryPermitDetail>(
+            'staff',
+            `/v1/admin/regulatory-permits/${encodeURIComponent(reference)}/activate`,
+            { expectedRevision },
+          ),
+        revoke: (reference: string, input: { expectedRevision: number; reason: string }) =>
+          withCsrf<RegulatoryPermitDetail>(
+            'staff',
+            `/v1/admin/regulatory-permits/${encodeURIComponent(reference)}/revoke`,
+            input,
+          ),
       },
       /**
        * PR-12: compliance.read / compliance.review for passengers;

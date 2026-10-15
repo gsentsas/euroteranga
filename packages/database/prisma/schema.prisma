@@ -263,6 +263,28 @@ enum BaggageEventType {
   @@map("baggage_event_type")
 }
 
+/// PR-16: administrative lifecycle of one operational regulatory permit.
+/// Expiration is derived from the validity dates and is never persisted.
+enum RegulatoryPermitStatus {
+  DRAFT
+  ACTIVE
+  REVOKED
+
+  @@map("regulatory_permit_status")
+}
+
+/// PR-16: exactly one referentially constrained subject per permit. OPERATOR
+/// means the single EURO TERANGA operator because no multi-operator model exists.
+enum RegulatoryPermitScopeType {
+  OPERATOR
+  COUNTRY
+  VEHICLE
+  ROUTE_VERSION
+  TRIP
+
+  @@map("regulatory_permit_scope_type")
+}
+
 /// An identity able to authenticate in exactly one realm. It is not a
 /// customer, passenger, staff profile or crew member: those business objects
 /// will reference it later and stay independent.
@@ -316,6 +338,10 @@ model AuthIdentity {
   passengerCheckIns           PassengerCheckIn[]      @relation("PassengerCheckInActor")
   passengerBoardings          PassengerBoarding[]     @relation("PassengerBoardingActor")
   passengerManifests          PassengerManifest[]     @relation("PassengerManifestGenerator")
+  permitsCreated              RegulatoryPermit[]      @relation("RegulatoryPermitCreator")
+  permitsUpdated              RegulatoryPermit[]      @relation("RegulatoryPermitUpdater")
+  permitsActivated            RegulatoryPermit[]      @relation("RegulatoryPermitActivator")
+  permitsRevoked              RegulatoryPermit[]      @relation("RegulatoryPermitRevoker")
 
   // The same address may exist in two realms as two unrelated identities.
   @@unique([realm, normalizedEmail])
@@ -597,10 +623,12 @@ model Country {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  stops       Stop[]
-  checkpoints Checkpoint[]
-  vehicles    Vehicle[]
-  passengers  Passenger[]  @relation("PassengerNationality")
+  stops               Stop[]
+  checkpoints         Checkpoint[]
+  vehicles            Vehicle[]
+  passengers          Passenger[]        @relation("PassengerNationality")
+  permitJurisdictions RegulatoryPermit[] @relation("RegulatoryPermitJurisdiction")
+  permitScopes        RegulatoryPermit[] @relation("RegulatoryPermitCountryScope")
 
   @@index([active, id])
   @@map("country")
@@ -685,6 +713,7 @@ model RouteVersion {
   waypoints         RouteWaypoint[]
   trips             Trip[]
   fareTableVersions FareTableVersion[]
+  regulatoryPermits RegulatoryPermit[]
 
   @@unique([routeId, version])
   @@index([status])
@@ -740,9 +769,10 @@ model Vehicle {
   createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  registrationCountry Country?        @relation(fields: [registrationCountryId], references: [id], onDelete: Restrict)
-  seatMapVersion      SeatMapVersion? @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
+  registrationCountry Country?           @relation(fields: [registrationCountryId], references: [id], onDelete: Restrict)
+  seatMapVersion      SeatMapVersion?    @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
   trips               Trip[]
+  regulatoryPermits   RegulatoryPermit[]
 
   @@unique([registrationCountryId, registrationPlate])
   @@index([status, id])
@@ -782,6 +812,7 @@ model Trip {
   bookings           Booking[]
   seatLocks          SeatInventoryLock[]
   passengerManifests PassengerManifest[]
+  regulatoryPermits  RegulatoryPermit[]
 
   @@index([status, id])
   @@index([routeVersionId, id])
@@ -1516,4 +1547,61 @@ model PassengerManifest {
   @@index([generatedAt, id])
   @@index([generatedByIdentityId])
   @@map("passenger_manifest")
+}
+
+/// PR-16: a data-driven operational regulatory permit. It proves only its
+/// own intrinsic validity; PR-17 owns trip readiness and dispatch.
+model RegulatoryPermit {
+  id                    String                    @id @default(uuid(7)) @db.Uuid
+  /// ETRP avoids the existing ETP payment-reference namespace.
+  reference             String                    @unique @db.VarChar(17)
+  permitType            String                    @map("permit_type") @db.VarChar(64)
+  title                 String                    @db.VarChar(160)
+  issuingAuthority      String                    @map("issuing_authority") @db.VarChar(200)
+  authorityReference    String?                   @map("authority_reference") @db.VarChar(200)
+  jurisdictionCountryId String?                   @map("jurisdiction_country_id") @db.Uuid
+  validFrom             DateTime                  @map("valid_from") @db.Date
+  validUntil            DateTime                  @map("valid_until") @db.Date
+  status                RegulatoryPermitStatus    @default(DRAFT)
+  scopeType             RegulatoryPermitScopeType @map("scope_type")
+  scopeCountryId        String?                   @map("scope_country_id") @db.Uuid
+  vehicleId             String?                   @map("vehicle_id") @db.Uuid
+  routeVersionId        String?                   @map("route_version_id") @db.Uuid
+  tripId                String?                   @map("trip_id") @db.Uuid
+  sourceUrl             String?                   @map("source_url") @db.VarChar(500)
+  sourceCheckedOn       DateTime?                 @map("source_checked_on") @db.Date
+  notes                 String?                   @db.VarChar(1000)
+  revision              Int                       @default(1)
+  createdByIdentityId   String                    @map("created_by_identity_id") @db.Uuid
+  updatedByIdentityId   String                    @map("updated_by_identity_id") @db.Uuid
+  activatedAt           DateTime?                 @map("activated_at") @db.Timestamptz(3)
+  activatedByIdentityId String?                   @map("activated_by_identity_id") @db.Uuid
+  revokedAt             DateTime?                 @map("revoked_at") @db.Timestamptz(3)
+  revokedByIdentityId   String?                   @map("revoked_by_identity_id") @db.Uuid
+  revocationReason      String?                   @map("revocation_reason") @db.VarChar(500)
+  createdAt             DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  jurisdictionCountry Country?      @relation("RegulatoryPermitJurisdiction", fields: [jurisdictionCountryId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  scopeCountry        Country?      @relation("RegulatoryPermitCountryScope", fields: [scopeCountryId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  vehicle             Vehicle?      @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  routeVersion        RouteVersion? @relation(fields: [routeVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  trip                Trip?         @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy           AuthIdentity  @relation("RegulatoryPermitCreator", fields: [createdByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedBy           AuthIdentity  @relation("RegulatoryPermitUpdater", fields: [updatedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  activatedBy         AuthIdentity? @relation("RegulatoryPermitActivator", fields: [activatedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revokedBy           AuthIdentity? @relation("RegulatoryPermitRevoker", fields: [revokedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([status, id])
+  @@index([permitType, id])
+  @@index([jurisdictionCountryId, id])
+  @@index([scopeCountryId, status, id])
+  @@index([vehicleId, status, id])
+  @@index([routeVersionId, status, id])
+  @@index([tripId, status, id])
+  @@index([createdByIdentityId])
+  @@index([updatedByIdentityId])
+  @@index([activatedByIdentityId])
+  @@index([revokedByIdentityId])
+  @@map("regulatory_permit")
 }
