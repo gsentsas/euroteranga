@@ -43,6 +43,9 @@ export const PERMISSIONS = {
   CHECKIN_MANAGE: 'checkin.manage',
   BOARDING_READ: 'boarding.read',
   BOARDING_SCAN: 'boarding.scan',
+  MANIFEST_READ: 'manifest.read',
+  MANIFEST_GENERATE: 'manifest.generate',
+  MANIFEST_EXPORT: 'manifest.export',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

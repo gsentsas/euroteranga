@@ -11,6 +11,7 @@ import { ConfigModule } from './config/config.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { FleetModule } from './fleet/fleet.module.js';
 import { HealthModule } from './health/health.module.js';
+import { ManifestModule } from './manifests/manifest.module.js';
 import { NetworkModule } from './network/network.module.js';
 import { PaymentModule } from './payments/payment.module.js';
 import { PassengerDocumentModule } from './passenger-documents/passenger-document.module.js';
@@ -49,6 +50,7 @@ export class AppModule {
         ComplianceModule,
         BaggageModule,
         CheckInModule,
+        ManifestModule,
       ],
       controllers: options.extraControllers ?? [],
     };

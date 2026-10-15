@@ -315,6 +315,7 @@ model AuthIdentity {
   seatAssignments             BookingPassengerSeat[]  @relation("BookingPassengerSeatAssigner")
   passengerCheckIns           PassengerCheckIn[]      @relation("PassengerCheckInActor")
   passengerBoardings          PassengerBoarding[]     @relation("PassengerBoardingActor")
+  passengerManifests          PassengerManifest[]     @relation("PassengerManifestGenerator")
 
   // The same address may exist in two realms as two unrelated identities.
   @@unique([realm, normalizedEmail])
@@ -773,13 +774,14 @@ model Trip {
   createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  routeVersion     RouteVersion         @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
-  vehicle          Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  seatMapVersion   SeatMapVersion?      @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
-  fareTableVersion FareTableVersion?    @relation(fields: [fareTableVersionId], references: [id], onDelete: Restrict)
-  timings          TripWaypointTiming[]
-  bookings         Booking[]
-  seatLocks        SeatInventoryLock[]
+  routeVersion       RouteVersion         @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  vehicle            Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  seatMapVersion     SeatMapVersion?      @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
+  fareTableVersion   FareTableVersion?    @relation(fields: [fareTableVersionId], references: [id], onDelete: Restrict)
+  timings            TripWaypointTiming[]
+  bookings           Booking[]
+  seatLocks          SeatInventoryLock[]
+  passengerManifests PassengerManifest[]
 
   @@index([status, id])
   @@index([routeVersionId, id])
@@ -1487,4 +1489,31 @@ model PassengerBoarding {
   @@index([boardedAt, id])
   @@index([boardedByIdentityId])
   @@map("passenger_boarding")
+}
+
+/// PR-15: one immutable, versioned passenger snapshot for a scheduled trip.
+/// It contains only checked-in passengers and intentionally carries no
+/// readiness, authorization, document, payment, compliance or QR secrets.
+model PassengerManifest {
+  id                    String   @id @default(uuid(7)) @db.Uuid
+  /// Public, immutable reference: ETM- + 12 CSPRNG Crockford base32 characters.
+  reference             String   @unique @db.VarChar(16)
+  tripId                String   @map("trip_id") @db.Uuid
+  version               Int
+  schemaVersion         String   @map("schema_version") @db.VarChar(32)
+  contentHash           String   @map("content_hash") @db.Char(64)
+  passengerCount        Int      @map("passenger_count")
+  boardedCount          Int      @map("boarded_count")
+  snapshot              Json     @db.JsonB
+  generatedByIdentityId String   @map("generated_by_identity_id") @db.Uuid
+  /// Authoritative database clock, overwritten by the insertion guard.
+  generatedAt           DateTime @default(now()) @map("generated_at") @db.Timestamptz(3)
+
+  trip        Trip         @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  generatedBy AuthIdentity @relation("PassengerManifestGenerator", fields: [generatedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tripId, version])
+  @@index([generatedAt, id])
+  @@index([generatedByIdentityId])
+  @@map("passenger_manifest")
 }

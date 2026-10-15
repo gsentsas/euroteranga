@@ -29,7 +29,7 @@ const DATABASE_PACKAGE = fileURLToPath(
 const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const PASSENGER_DOCUMENT_MIGRATION = '20261014010000_passenger_documents';
 const COMPLIANCE_MIGRATION = '20261014120000_compliance';
-const CHECK_IN_MIGRATION = '20261014190000_check_in_boarding';
+const MANIFEST_MIGRATION = '20261015090000_passenger_manifests';
 const COMPLIANCE_TABLES = [
   'compliance_rule',
   'compliance_rule_version',
@@ -213,8 +213,8 @@ describe('upgrade from a PR-11 database (isolated database)', () => {
     expect(afterCompliance.counts).toEqual(COMPLIANCE_TABLES.map(() => 0));
     // Still true once the later migrations are applied.
     const migrations = await applied();
-    expect(migrations).toHaveLength(14);
-    expect(migrations.at(-1)).toBe(CHECK_IN_MIGRATION);
+    expect(migrations).toHaveLength(15);
+    expect(migrations.at(-1)).toBe(MANIFEST_MIGRATION);
     const rows = (value: string | null) =>
       JSON.parse(value ?? '[]') as Array<Record<string, unknown>>;
     expect(rows(before.passenger!)).toHaveLength(1);
@@ -258,6 +258,6 @@ describe('upgrade from a PR-11 database (isolated database)', () => {
       encoding: 'utf8',
     });
     expect(status).toContain('Database schema is up to date');
-    expect(await applied()).toHaveLength(14);
+    expect(await applied()).toHaveLength(15);
   });
 });
