@@ -72,8 +72,13 @@ export function RefineProvider({ children }: { children: ReactNode }) {
             list: '/manifests',
             meta: { label: 'Manifestes passagers', permission: 'manifest.read' },
           },
+          {
+            name: 'regulatory-permits',
+            list: '/regulatory-permits',
+            meta: { label: 'Autorisations réglementaires', permission: 'permit.read' },
+          },
           // Compliance group: PR-11 technical files, PR-12 rules and reviews.
-          // Permits (PR-16) and trip readiness (PR-17) do not exist yet.
+          // Operational permits stay separate; trip readiness (PR-17) does not exist yet.
           {
             name: 'passenger-documents',
             list: '/passenger-documents',

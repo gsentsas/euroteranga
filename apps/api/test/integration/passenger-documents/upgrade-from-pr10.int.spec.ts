@@ -28,7 +28,7 @@ const DATABASE_PACKAGE = fileURLToPath(
 const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const PAYMENT_MIGRATION = '20261013230000_payments';
 const PASSENGER_DOCUMENT_MIGRATION = '20261014010000_passenger_documents';
-const MANIFEST_MIGRATION = '20261015090000_passenger_manifests';
+const REGULATORY_PERMIT_MIGRATION = '20261015120000_regulatory_permits';
 
 function deploy(config: string | null, url: string) {
   execFileSync(
@@ -197,8 +197,8 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
     expect(afterPassengerSnapshot).toEqual(before);
     expect(afterPassengerCounts).toEqual([0, 0, 0]);
     const migrations = await applied();
-    expect(migrations).toHaveLength(15);
-    expect(migrations.at(-1)).toBe(MANIFEST_MIGRATION);
+    expect(migrations).toHaveLength(16);
+    expect(migrations.at(-1)).toBe(REGULATORY_PERMIT_MIGRATION);
     // The comparison is only meaningful if every PR-10 state is really present.
     const rows = (value: string | null) =>
       JSON.parse(value ?? '[]') as Array<Record<string, unknown>>;
@@ -246,6 +246,6 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
       encoding: 'utf8',
     });
     expect(status).toContain('Database schema is up to date');
-    expect(await applied()).toHaveLength(15);
+    expect(await applied()).toHaveLength(16);
   });
 });

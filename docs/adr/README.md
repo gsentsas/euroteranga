@@ -33,6 +33,7 @@ written yet.
 | [ADR-028](ADR-028-baggage-identity-event-history.md)                    | Baggage identity, exact weight and append-only events  | Accepted |
 | [ADR-029](ADR-029-operational-boarding-credential.md)                   | Operational boarding credential and readiness snapshot | Accepted |
 | [ADR-030](ADR-030-immutable-trip-passenger-manifests.md)                | Immutable trip passenger manifests                     | Accepted |
+| [ADR-031](ADR-031-regulatory-permit-lifecycle.md)                       | Regulatory permit lifecycle and intrinsic validity     | Accepted |
 
 Planned: ADR-007 Offline Crew. The planned
 ADR-008 (Payment Abstraction) is covered by ADR-027. ADR-006
@@ -53,4 +54,6 @@ ADR-028 covers the PR-13 baggage identity, PII-free QR payload, exact weight
 and append-only event history. ADR-029 covers the PR-14 check-in readiness
 snapshot and fingerprint and the opaque, re-validated boarding credential.
 ADR-030 covers PR-15 immutable, minimized and versioned trip passenger
-snapshots and their on-demand CSV representation.
+snapshots and their on-demand CSV representation. ADR-031 separates generic,
+scoped operational permits and intrinsic validity from passenger compliance,
+technical documents, manifests and PR-17 departure readiness.

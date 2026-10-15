@@ -318,7 +318,8 @@ official sources, verified and published:
 
 **CODE_IS_NOT_LEGAL_AUTHORITY. NO_MATCHING_RULE != COMPLIANT.
 TECHNICALLY_ACCEPTED != REGULATORY_VALID.** No regulatory rule is shipped.
-Permits (PR-16) and trip readiness (PR-17) are separate future domains. See
+Operational permits (PR-16) and trip readiness (PR-17) are separate domains.
+See
 [`docs/domain/compliance.md`](../domain/compliance.md),
 [`docs/security/compliance.md`](../security/compliance.md) and
 [ADR-009](../adr/ADR-009-versioned-regulatory-rule-engine.md).
@@ -389,6 +390,33 @@ A manifest is neither trip readiness nor regulatory/dispatch authorization.
 See [`docs/domain/manifests.md`](../domain/manifests.md) and
 [ADR-030](../adr/ADR-030-immutable-trip-passenger-manifests.md).
 
+## Regulatory permits (PR-16)
+
+`apps/api/src/regulatory-permits` records generic operational authorizations
+without encoding corridor law or deciding that a trip may leave:
+
+- an unpredictable `ETRP` public reference, authority/provenance, mandatory
+  inclusive validity dates and one explicit scope: operator, country, vehicle,
+  historical route version or trip;
+- explicit PostgreSQL foreign keys and an exact-one-of scope CHECK rather than
+  a free polymorphic resource id;
+- lifecycle `DRAFT → ACTIVE → REVOKED`, optimistic revisions, terminal
+  revocation and database guards against ambiguous transitions, deletion or
+  truncation;
+- a pure server-side validity function returning `DRAFT`, `NOT_YET_VALID`,
+  `VALID`, `EXPIRED` or `REVOKED` for an explicit database calendar date;
+- `permit.read` / `permit.manage`, audited reads and transactional mutation
+  events; OPS exposes **Autorisations réglementaires** without a departure
+  approval control.
+
+No real permit type, authority reference, legal requirement or corridor rule
+is seeded, and PR-16 stores no document file. **PERMIT_VALID != TRIP_READY.
+PR-17 owns departure readiness / dispatch authorization.** PassengerManifest
+is not a permit, PassengerCompliance is not an operational permit, and
+technical document acceptance is not regulatory validity. See
+[`docs/domain/regulatory-permits.md`](../domain/regulatory-permits.md) and
+[ADR-031](../adr/ADR-031-regulatory-permit-lifecycle.md).
+
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
 
@@ -406,9 +434,10 @@ historical trip pricing (ADR-025), segment inventory/customer holds
 versioned regulatory rule engine (ADR-009), baggage identity with its
 append-only event history (ADR-028) and the operational boarding credential
 with its check-in readiness snapshot (ADR-029), plus immutable trip passenger
-manifests (ADR-030).
+manifests (ADR-030) and the generic regulatory-permit lifecycle with intrinsic
+validity (ADR-031).
 
 Still open: production object-storage and malware-scanner provisioning,
 offline crew synchronisation, the choice and integration of a real payment
-provider (with refunds), regulatory rule versioning, and the production
-deployment model.
+provider (with refunds), a data-driven operational permit-requirement
+catalogue, departure readiness/dispatch, and the production deployment model.

@@ -39,6 +39,8 @@ import {
   type PassengerCheckIn,
   type PassengerManifest,
   type PassengerManifestPage,
+  type RegulatoryPermitDetail,
+  type RegulatoryPermitSummary,
   type StaffPassengerCheckIn,
 } from './index.js';
 
@@ -322,6 +324,91 @@ describe('passenger manifest client (PR-15)', () => {
     expectTypeOf<PassengerManifest['snapshot']['passengers'][number]>().not.toHaveProperty(
       'deviceId',
     );
+  });
+});
+
+describe('regulatory permit client (PR-16)', () => {
+  it('encodes filters/references and protects every mutation with STAFF CSRF', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { items: [], nextCursor: null } },
+      { status: 200, body: { reference: 'ETRP-AAAAAAAAAAAA' } },
+      { status: 200, body: { csrfToken: 'create' } },
+      { status: 201, body: { reference: 'ETRP-AAAAAAAAAAAA' } },
+      { status: 200, body: { csrfToken: 'update' } },
+      { status: 200, body: { reference: 'ETRP-AAAAAAAAAAAA' } },
+      { status: 200, body: { csrfToken: 'activate' } },
+      { status: 200, body: { reference: 'ETRP-AAAAAAAAAAAA' } },
+      { status: 200, body: { csrfToken: 'revoke' } },
+      { status: 200, body: { reference: 'ETRP-AAAAAAAAAAAA' } },
+    ]);
+    const permits = createAuthClient('http://api.test').admin.regulatoryPermits;
+    await permits.list({
+      cursor: 'ETRP-AAAAAAAAAAAA',
+      limit: 25,
+      status: 'ACTIVE',
+      validityState: 'VALID',
+      scopeType: 'TRIP',
+      permitType: 'SYNTHETIC',
+      country: 'SN',
+      vehicleCode: 'BUS_A',
+      routeCode: 'PAR_DKR',
+      routeVersion: 2,
+      tripReference: 'ET-TRIP-1',
+      reference: 'ETRP-BBBBBBBBBBBB',
+    });
+    await permits.detail('ETRP-A/../B');
+    await permits.create({
+      permitType: 'SYNTHETIC',
+      title: 'Synthetic permit',
+      issuingAuthority: 'Synthetic authority',
+      scope: { type: 'TRIP', tripReference: 'ET-TRIP-1' },
+      validFrom: '2030-01-01',
+      validUntil: '2030-12-31',
+    });
+    await permits.update('ETRP-A/../B', { expectedRevision: 1, title: 'Updated' });
+    await permits.activate('ETRP-A/../B', 2);
+    await permits.revoke('ETRP-A/../B', { expectedRevision: 3, reason: 'Synthetic revocation' });
+
+    expect(calls[0]?.url).toBe(
+      'http://api.test/v1/admin/regulatory-permits?cursor=ETRP-AAAAAAAAAAAA&limit=25&status=ACTIVE&validityState=VALID&scopeType=TRIP&permitType=SYNTHETIC&country=SN&vehicleCode=BUS_A&routeCode=PAR_DKR&routeVersion=2&tripReference=ET-TRIP-1&reference=ETRP-BBBBBBBBBBBB',
+    );
+    expect(calls[1]?.url).toBe('http://api.test/v1/admin/regulatory-permits/ETRP-A%2F..%2FB');
+    expect(calls[3]?.url).toBe('http://api.test/v1/admin/regulatory-permits');
+    expect(calls[5]?.url).toBe('http://api.test/v1/admin/regulatory-permits/ETRP-A%2F..%2FB');
+    expect(calls[7]?.url).toBe(
+      'http://api.test/v1/admin/regulatory-permits/ETRP-A%2F..%2FB/activate',
+    );
+    expect(calls[9]?.url).toBe(
+      'http://api.test/v1/admin/regulatory-permits/ETRP-A%2F..%2FB/revoke',
+    );
+    for (const [index, token] of [
+      [3, 'create'],
+      [5, 'update'],
+      [7, 'activate'],
+      [9, 'revoke'],
+    ] as const) {
+      expect(calls[index]?.init.headers).toEqual(
+        expect.objectContaining({ 'X-CSRF-Token': token }),
+      );
+    }
+    expect(JSON.parse(calls[9]?.init.body as string)).toEqual({
+      expectedRevision: 3,
+      reason: 'Synthetic revocation',
+    });
+  });
+
+  it('exposes public permit views without ids or departure authorization', () => {
+    const permits = createAuthClient('http://api.test').admin.regulatoryPermits;
+    expectTypeOf(permits.list).returns.resolves.toEqualTypeOf<
+      ApiResult<Page<RegulatoryPermitSummary>>
+    >();
+    expectTypeOf(permits.detail).returns.resolves.toEqualTypeOf<
+      ApiResult<RegulatoryPermitDetail>
+    >();
+    expectTypeOf<RegulatoryPermitDetail>().not.toHaveProperty('id');
+    expectTypeOf<RegulatoryPermitDetail>().not.toHaveProperty('createdByIdentityId');
+    expectTypeOf<RegulatoryPermitDetail>().not.toHaveProperty('tripReady');
+    expectTypeOf(permits).not.toHaveProperty('approveDeparture');
   });
 });
 

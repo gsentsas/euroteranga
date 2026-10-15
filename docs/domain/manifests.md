@@ -62,5 +62,7 @@ before CSV escaping to prevent spreadsheet formula injection.
 ## Explicit non-goals
 
 Manifest is not trip readiness, regulatory clearance, a border permit,
-passenger-document validation or dispatch authorization. PR-16/17 own those
-decisions; PR-18 owns offline Crew delivery and device synchronization.
+passenger-document validation or dispatch authorization. PR-16 records
+operational permits without turning a manifest into one; PR-17 owns departure
+readiness / dispatch authorization. PR-18 owns offline Crew delivery and
+device synchronization.
