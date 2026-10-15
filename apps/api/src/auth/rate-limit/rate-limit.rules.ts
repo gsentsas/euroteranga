@@ -56,4 +56,22 @@ export const RATE_LIMITS = {
     limit: 600,
     windowMs: 15 * MINUTE,
   },
+  /** Customer seat assignments and self check-ins per identity (PR-14). */
+  checkInCustomerIdentity: {
+    action: 'check-in-customer:identity',
+    limit: 60,
+    windowMs: HOUR,
+  },
+  /** STAFF counter operations: seat assignments and check-ins. */
+  checkInOperationIdentity: {
+    action: 'check-in-operation:identity',
+    limit: 600,
+    windowMs: 15 * MINUTE,
+  },
+  /** STAFF boarding scans: a full coach several times over, finite for abuse. */
+  boardingScanIdentity: {
+    action: 'boarding-scan:identity',
+    limit: 1200,
+    windowMs: 15 * MINUTE,
+  },
 } as const satisfies Record<string, RateLimitRule>;

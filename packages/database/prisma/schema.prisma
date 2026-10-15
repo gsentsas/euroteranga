@@ -312,6 +312,9 @@ model AuthIdentity {
   complianceEvaluations       ComplianceEvaluation[]  @relation("ComplianceEvaluationActor")
   complianceReviews           ComplianceReview[]      @relation("ComplianceReviewer")
   baggageEvents               BaggageEvent[]          @relation("BaggageEventActor")
+  seatAssignments             BookingPassengerSeat[]  @relation("BookingPassengerSeatAssigner")
+  passengerCheckIns           PassengerCheckIn[]      @relation("PassengerCheckInActor")
+  passengerBoardings          PassengerBoarding[]     @relation("PassengerBoardingActor")
 
   // The same address may exist in two realms as two unrelated identities.
   @@unique([realm, normalizedEmail])
@@ -1019,6 +1022,8 @@ model BookingPassenger {
   passenger             Passenger              @relation(fields: [passengerId], references: [id], onDelete: Restrict)
   complianceEvaluations ComplianceEvaluation[]
   baggage               Baggage[]
+  seatAssignment        BookingPassengerSeat?
+  checkIn               PassengerCheckIn?
 
   @@id([bookingId, passengerId])
   @@index([passengerId, bookingId])
@@ -1128,11 +1133,15 @@ model BookingSeat {
   releasedAt    DateTime? @map("released_at") @db.Timestamptz(3)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  booking     Booking             @relation(fields: [bookingId], references: [id], onDelete: Restrict)
-  seatMapCell SeatMapCell         @relation(fields: [seatMapCellId], references: [id], onDelete: Restrict)
-  locks       SeatInventoryLock[]
+  booking        Booking                @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  seatMapCell    SeatMapCell            @relation(fields: [seatMapCellId], references: [id], onDelete: Restrict)
+  locks          SeatInventoryLock[]
+  /// PR-14: the BookingPassenger this booked seat is assigned to, if any.
+  passengerSeats BookingPassengerSeat[]
 
   @@unique([bookingId, seatMapCellId])
+  /// PR-14: target of the composite (seat, booking) foreign key.
+  @@unique([id, bookingId])
   @@index([seatMapCellId])
   @@map("booking_seat")
 }
@@ -1322,6 +1331,7 @@ model ComplianceEvaluation {
   actor            AuthIdentity                 @relation("ComplianceEvaluationActor", fields: [actorIdentityId], references: [id], onDelete: Restrict)
   results          ComplianceEvaluationResult[]
   reviews          ComplianceReview[]
+  checkIns         PassengerCheckIn[]
 
   @@index([bookingId, passengerId, evaluatedAt])
   @@index([result, id])
@@ -1382,8 +1392,99 @@ model ComplianceReview {
   supersedes   ComplianceReview?    @relation("ComplianceReviewChain", fields: [supersedesReviewId], references: [id], onDelete: Restrict)
   supersededBy ComplianceReview?    @relation("ComplianceReviewChain")
   reviewer     AuthIdentity         @relation("ComplianceReviewer", fields: [reviewerIdentityId], references: [id], onDelete: Restrict)
+  checkIns     PassengerCheckIn[]
 
   @@index([evaluationId, reviewedAt])
   @@index([reviewerIdentityId])
   @@map("compliance_review")
+}
+
+/// PR-14: the one booked seat of one BookingPassenger. It only links an
+/// existing, unreleased BookingSeat of the same booking (PR-09 stays the
+/// inventory authority): it creates, prices and releases nothing. It can be
+/// changed until the passenger is checked in, never afterwards.
+model BookingPassengerSeat {
+  bookingId            String   @map("booking_id") @db.Uuid
+  passengerId          String   @map("passenger_id") @db.Uuid
+  bookingSeatId        String   @unique @map("booking_seat_id") @db.Uuid
+  assignedByIdentityId String   @map("assigned_by_identity_id") @db.Uuid
+  /// Server clock of the latest (re)assignment, set by the trigger.
+  assignedAt           DateTime @default(now()) @map("assigned_at") @db.Timestamptz(3)
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  bookingPassenger BookingPassenger   @relation(fields: [bookingId, passengerId], references: [bookingId, passengerId], onDelete: Restrict, map: "booking_passenger_seat_booking_passenger_fkey")
+  bookingSeat      BookingSeat        @relation(fields: [bookingSeatId, bookingId], references: [id, bookingId], onDelete: Restrict, map: "booking_passenger_seat_booking_seat_fkey")
+  assignedBy       AuthIdentity       @relation("BookingPassengerSeatAssigner", fields: [assignedByIdentityId], references: [id], onDelete: Restrict)
+  checkIns         PassengerCheckIn[]
+
+  @@id([bookingId, passengerId])
+  /// Target of the check-in foreign key: a check-in pins this exact seat.
+  @@unique([bookingId, passengerId, bookingSeatId])
+  @@index([assignedByIdentityId])
+  @@map("booking_passenger_seat")
+}
+
+/// PR-14: the one successful check-in of one BookingPassenger. Append-only
+/// fact with a minimized readiness snapshot and fingerprint. It carries the
+/// opaque boarding credential identified by the passenger QR (ETPAX1:...).
+model PassengerCheckIn {
+  id                     String   @id @default(uuid(7)) @db.Uuid
+  /// Public, immutable reference: ETK- + 12 CSPRNG Crockford base32 characters.
+  reference              String   @unique @db.VarChar(16)
+  /// Boarding credential: ETQ- + 16 CSPRNG characters. Identifies, never authorizes.
+  credentialReference    String   @unique @map("credential_reference") @db.VarChar(20)
+  bookingId              String   @map("booking_id") @db.Uuid
+  passengerId            String   @map("passenger_id") @db.Uuid
+  bookingSeatId          String   @map("booking_seat_id") @db.Uuid
+  complianceEvaluationId String   @map("compliance_evaluation_id") @db.Uuid
+  complianceReviewId     String?  @map("compliance_review_id") @db.Uuid
+  engineVersion          String   @map("engine_version") @db.VarChar(32)
+  readinessFingerprint   String   @map("readiness_fingerprint") @db.Char(64)
+  /// References, statuses and codes only: no name, document number or file.
+  readinessSnapshot      Json     @map("readiness_snapshot") @db.JsonB
+  checkedInByIdentityId  String   @map("checked_in_by_identity_id") @db.Uuid
+  /// Server clock, set by the trigger.
+  checkedInAt            DateTime @default(now()) @map("checked_in_at") @db.Timestamptz(3)
+
+  bookingPassenger     BookingPassenger     @relation(fields: [bookingId, passengerId], references: [bookingId, passengerId], onDelete: Restrict, onUpdate: Restrict, map: "passenger_check_in_booking_passenger_fkey")
+  seatAssignment       BookingPassengerSeat @relation(fields: [bookingId, passengerId, bookingSeatId], references: [bookingId, passengerId, bookingSeatId], onDelete: Restrict, onUpdate: Restrict, map: "passenger_check_in_seat_assignment_fkey")
+  complianceEvaluation ComplianceEvaluation @relation(fields: [complianceEvaluationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  complianceReview     ComplianceReview?    @relation(fields: [complianceReviewId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  checkedInBy          AuthIdentity         @relation("PassengerCheckInActor", fields: [checkedInByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  boarding             PassengerBoarding?
+
+  @@unique([bookingId, passengerId])
+  @@index([checkedInAt, id])
+  @@index([complianceEvaluationId])
+  @@index([complianceReviewId])
+  @@index([checkedInByIdentityId])
+  @@map("passenger_check_in")
+}
+
+/// PR-14: the one boarding of one checked-in BookingPassenger. Append-only;
+/// the unique check-in makes double boarding physically impossible.
+model PassengerBoarding {
+  id                   String   @id @default(uuid(7)) @db.Uuid
+  /// Public, immutable reference: ETE- + 12 CSPRNG Crockford base32 characters.
+  reference            String   @unique @db.VarChar(16)
+  checkInId            String   @unique @map("check_in_id") @db.Uuid
+  /// Bounded operational metadata (PR-18 owns device enrollment): no identity proof.
+  deviceId             String   @map("device_id") @db.VarChar(64)
+  clientEventId        String?  @map("client_event_id") @db.VarChar(64)
+  payloadFingerprint   String   @map("payload_fingerprint") @db.Char(64)
+  /// Readiness recomputed at boarding (may differ from the check-in one).
+  readinessFingerprint String   @map("readiness_fingerprint") @db.Char(64)
+  /// Operator-reported time, bounded by the trigger.
+  occurredAt           DateTime @map("occurred_at") @db.Timestamptz(3)
+  /// Server clock, set by the trigger.
+  boardedAt            DateTime @default(now()) @map("boarded_at") @db.Timestamptz(3)
+  boardedByIdentityId  String   @map("boarded_by_identity_id") @db.Uuid
+
+  checkIn   PassengerCheckIn @relation(fields: [checkInId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  boardedBy AuthIdentity     @relation("PassengerBoardingActor", fields: [boardedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([deviceId, clientEventId])
+  @@index([boardedAt, id])
+  @@index([boardedByIdentityId])
+  @@map("passenger_boarding")
 }

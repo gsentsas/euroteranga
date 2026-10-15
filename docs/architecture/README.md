@@ -345,6 +345,32 @@ manifests and the offline Crew scanner are later PRs. See
 [`docs/security/baggage.md`](../security/baggage.md) and
 [ADR-028](../adr/ADR-028-baggage-identity-event-history.md).
 
+## Check-in and boarding (PR-14)
+
+`apps/api/src/check-in` checks in and boards one `BookingPassenger` (one
+person on one confirmed booking of one trip):
+
+- `booking_passenger_seat` links the passenger to one unreleased seat already
+  booked on the same booking (composite keys; frozen after check-in);
+- a pure readiness function (`checkin-readiness/1`) derives six gates —
+  booking, payment (PR-10), documents and compliance (current PR-12
+  evaluation), seat, baggage (PR-13 active exceptions) — with stable blocker
+  codes and no override;
+- `passenger_check_in` is the one append-only check-in, with a minimized
+  snapshot, a readiness fingerprint and an opaque `ETQ` credential; the QR is
+  `ETPAX1:<credential>`, PII-free, an identifier only;
+- `passenger_boarding` is the one append-only boarding per check-in: every
+  scan re-derives the gates (`CHECK_IN_STALE`), replays by
+  `(deviceId, clientEventId)` are idempotent, double boarding is impossible;
+- `checkin.read`/`checkin.manage` and `boarding.read`/`boarding.scan`;
+  audited STAFF reads.
+
+Manifests (PR-15), trip readiness and dispatch (PR-17) and the offline Crew
+PWA (PR-18) are not part of it: a BOARDED passenger never means the trip may
+depart. See [`docs/domain/check-in-boarding.md`](../domain/check-in-boarding.md),
+[`docs/security/check-in-boarding.md`](../security/check-in-boarding.md) and
+[ADR-029](../adr/ADR-029-operational-boarding-credential.md).
+
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
 
@@ -359,8 +385,9 @@ route versioning (ADR-021), vehicle lifecycle (ADR-022), trip lifecycle
 historical trip pricing (ADR-025), segment inventory/customer holds
 (ADR-026), and the payment provider abstraction with booking confirmation
 (ADR-027), plus private object storage/scanning/quarantine (ADR-005), the
-versioned regulatory rule engine (ADR-009) and baggage identity with its
-append-only event history (ADR-028).
+versioned regulatory rule engine (ADR-009), baggage identity with its
+append-only event history (ADR-028) and the operational boarding credential
+with its check-in readiness snapshot (ADR-029).
 
 Still open: production object-storage and malware-scanner provisioning,
 offline crew synchronisation, the choice and integration of a real payment

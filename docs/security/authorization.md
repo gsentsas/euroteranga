@@ -57,20 +57,24 @@ ADR-017 to ADR-020. This document contains no secret value.
 | `compliance.rule.manage`   | Drafting, verifying, publishing and retiring rule versions |
 | `baggage.read`             | Reading baggage, its QR payload and event history (PR-13)  |
 | `baggage.manage`           | Registering baggage, recording weight and baggage events   |
+| `checkin.read`             | Reading check-in readiness, seat assignments and check-ins |
+| `checkin.manage`           | Assigning booked seats and checking in ready passengers    |
+| `boarding.read`            | Resolving a boarding QR and reading the boarding state     |
+| `boarding.scan`            | Boarding a checked-in passenger by QR scan                 |
 
 ### Role matrix
 
-| Role                                | Realm | Privileged | Permissions                                                                                                                                                                                                                                                                                                                                  |
-| ----------------------------------- | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SUPER_ADMIN`                       | STAFF | yes        | all thirty-one                                                                                                                                                                                                                                                                                                                               |
-| `DIRECTOR`                          | STAFF | no         | all except `privileged.manage`                                                                                                                                                                                                                                                                                                               |
-| `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage`, `trip.read`, `trip.manage`, `seatmap.read`, `seatmap.manage`, `pricing.read`, `pricing.manage`, `booking.read`, `booking.manage`, `payment.read`, `passenger.document.read`, `compliance.read`, `baggage.read`, `baggage.manage` |
-| `DISPATCHER`                        | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `trip.manage`, `seatmap.read`, `pricing.read`, `baggage.read`, `baggage.manage` (no booking permission)                                                                                                                                                                             |
-| `AUDITOR`                           | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `pricing.read`, `payment.read`, `compliance.rule.read`                                                                                                                                                                  |
-| `COMPLIANCE_AGENT`                  | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `passenger.document.read`, `compliance.read`, `compliance.review`, `compliance.rule.read` (no pricing or payment permission)                                                                                                                                        |
-| `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`, `trip.read`, `seatmap.read`, `pricing.read`, `booking.read`, `booking.manage`, `payment.read`, `baggage.read`; `BOOKING_AGENT` also `baggage.manage` (no fleet permission by default)                                                                                                                          |
-| `FINANCE`                           | STAFF | no         | `ops.access`, `pricing.read`, `payment.read`, `payment.manage` (no network, fleet, trip, seat-map or booking permission by default)                                                                                                                                                                                                          |
-| `DRIVER`, `CREW`                    | CREW  | no         | none yet                                                                                                                                                                                                                                                                                                                                     |
+| Role                                | Realm | Privileged | Permissions                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------- | ----- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPER_ADMIN`                       | STAFF | yes        | all thirty-five                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `DIRECTOR`                          | STAFF | no         | all except `privileged.manage`                                                                                                                                                                                                                                                                                                                                                                                   |
+| `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage`, `trip.read`, `trip.manage`, `seatmap.read`, `seatmap.manage`, `pricing.read`, `pricing.manage`, `booking.read`, `booking.manage`, `payment.read`, `passenger.document.read`, `compliance.read`, `baggage.read`, `baggage.manage`, `checkin.read`, `checkin.manage`, `boarding.read`, `boarding.scan` |
+| `DISPATCHER`                        | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `trip.manage`, `seatmap.read`, `pricing.read`, `baggage.read`, `baggage.manage`, `checkin.read`, `checkin.manage`, `boarding.read`, `boarding.scan` (no booking permission)                                                                                                                                                                             |
+| `AUDITOR`                           | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `pricing.read`, `payment.read`, `compliance.rule.read`                                                                                                                                                                                                                                      |
+| `COMPLIANCE_AGENT`                  | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `passenger.document.read`, `compliance.read`, `compliance.review`, `compliance.rule.read` (no pricing or payment permission)                                                                                                                                                                                                            |
+| `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`, `trip.read`, `seatmap.read`, `pricing.read`, `booking.read`, `booking.manage`, `payment.read`, `baggage.read`, `checkin.read`; `BOOKING_AGENT` also `baggage.manage`, `checkin.manage` (no fleet or boarding permission by default)                                                                                                                                                |
+| `FINANCE`                           | STAFF | no         | `ops.access`, `pricing.read`, `payment.read`, `payment.manage` (no network, fleet, trip, seat-map or booking permission by default)                                                                                                                                                                                                                                                                              |
+| `DRIVER`, `CREW`                    | CREW  | no         | none yet                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 A STAFF identity without any role, or with roles lacking `ops.access`, can
 sign in (password + TOTP) but gets **Accès refusé** in OPS and 403 from every
@@ -183,40 +187,45 @@ There is **no public STAFF or CREW registration** and no bootstrap endpoint.
 
 All under `/v1/admin`, STAFF session, `ops.access` plus:
 
-| Method | Path                                                               | Permission(s)                             |
-| ------ | ------------------------------------------------------------------ | ----------------------------------------- |
-| GET    | `/access/me`                                                       | session only (own access)                 |
-| GET    | `/roles`                                                           | `role.read`                               |
-| GET    | `/identities?realm=staff\|crew&cursor&limit`                       | `identity.read`                           |
-| GET    | `/identities/:id/access`                                           | `identity.read`, `role.read`              |
-| POST   | `/identities/:id/roles`                                            | `role.assign` (+ CSRF)                    |
-| POST   | `/identities/:id/roles/revoke`                                     | `role.assign` (+ CSRF)                    |
-| POST   | `/identities/:id/status`                                           | `identity.status.manage` (+ CSRF)         |
-| POST   | `/identities/:id/sessions/revoke-all`                              | `session.revoke.any` (+ CSRF)             |
-| POST   | `/staff/invitations`                                               | `identity.staff.provision`, `role.assign` |
-| POST   | `/staff/:id/mfa/enrollment-authorization`                          | `mfa.enrollment.authorize`                |
-| GET    | `/audit?cursor&limit`                                              | `audit.read`                              |
-| GET    | `/bookings?cursor&limit&status&tripId&reference`                   | `booking.read`                            |
-| GET    | `/bookings/:id`                                                    | `booking.read`                            |
-| POST   | `/bookings/:id/cancel`                                             | `booking.manage` (+ CSRF, reason)         |
-| GET    | `/payments?cursor&limit&status&bookingReference&paymentReference`  | `payment.read`                            |
-| GET    | `/payments/:id`                                                    | `payment.read`                            |
-| POST   | `/payments/:id/cancel`                                             | `payment.manage` (+ CSRF, reason)         |
-| GET    | `/passenger-documents`                                             | `passenger.document.read` (+ page audit)  |
-| GET    | `/passenger-documents/:reference`                                  | `passenger.document.read` (+ read audit)  |
-| GET    | `/passenger-documents/:reference/download`                         | `passenger.document.read` (+ read audit)  |
-| GET    | `/compliance/rules`, `/compliance/rules/:reference`                | `compliance.rule.read`                    |
-| POST   | `/compliance/rules`, `/compliance/rules/:reference/versions`       | `compliance.rule.manage` (+ CSRF)         |
-| POST   | `/compliance/rules/:reference/versions/:n` (draft edit)            | `compliance.rule.manage` (+ CSRF)         |
-| POST   | `/compliance/rules/:reference/versions/:n/verify\|publish\|retire` | `compliance.rule.manage` (+ CSRF)         |
-| GET    | `/compliance/booking-passengers`                                   | `compliance.read` (+ page audit)          |
-| GET    | `/compliance/evaluations/:reference`                               | `compliance.read` (+ read audit)          |
-| POST   | `/compliance/evaluations`                                          | `compliance.review` (+ CSRF)              |
-| POST   | `/compliance/evaluations/:reference/reviews`                       | `compliance.review` (+ CSRF, reason)      |
-| GET    | `/baggage`, `/baggage/:reference`, `/baggage/:reference/qr`        | `baggage.read` (+ read audit)             |
-| POST   | `/baggage/resolve-qr`                                              | `baggage.read` (+ CSRF, read audit)       |
-| POST   | `/baggage`, `/baggage/scan`                                        | `baggage.manage` (+ CSRF)                 |
-| POST   | `/baggage/:reference/weight`, `/baggage/:reference/events`         | `baggage.manage` (+ CSRF)                 |
+| Method | Path                                                                  | Permission(s)                             |
+| ------ | --------------------------------------------------------------------- | ----------------------------------------- |
+| GET    | `/access/me`                                                          | session only (own access)                 |
+| GET    | `/roles`                                                              | `role.read`                               |
+| GET    | `/identities?realm=staff\|crew&cursor&limit`                          | `identity.read`                           |
+| GET    | `/identities/:id/access`                                              | `identity.read`, `role.read`              |
+| POST   | `/identities/:id/roles`                                               | `role.assign` (+ CSRF)                    |
+| POST   | `/identities/:id/roles/revoke`                                        | `role.assign` (+ CSRF)                    |
+| POST   | `/identities/:id/status`                                              | `identity.status.manage` (+ CSRF)         |
+| POST   | `/identities/:id/sessions/revoke-all`                                 | `session.revoke.any` (+ CSRF)             |
+| POST   | `/staff/invitations`                                                  | `identity.staff.provision`, `role.assign` |
+| POST   | `/staff/:id/mfa/enrollment-authorization`                             | `mfa.enrollment.authorize`                |
+| GET    | `/audit?cursor&limit`                                                 | `audit.read`                              |
+| GET    | `/bookings?cursor&limit&status&tripId&reference`                      | `booking.read`                            |
+| GET    | `/bookings/:id`                                                       | `booking.read`                            |
+| POST   | `/bookings/:id/cancel`                                                | `booking.manage` (+ CSRF, reason)         |
+| GET    | `/payments?cursor&limit&status&bookingReference&paymentReference`     | `payment.read`                            |
+| GET    | `/payments/:id`                                                       | `payment.read`                            |
+| POST   | `/payments/:id/cancel`                                                | `payment.manage` (+ CSRF, reason)         |
+| GET    | `/passenger-documents`                                                | `passenger.document.read` (+ page audit)  |
+| GET    | `/passenger-documents/:reference`                                     | `passenger.document.read` (+ read audit)  |
+| GET    | `/passenger-documents/:reference/download`                            | `passenger.document.read` (+ read audit)  |
+| GET    | `/compliance/rules`, `/compliance/rules/:reference`                   | `compliance.rule.read`                    |
+| POST   | `/compliance/rules`, `/compliance/rules/:reference/versions`          | `compliance.rule.manage` (+ CSRF)         |
+| POST   | `/compliance/rules/:reference/versions/:n` (draft edit)               | `compliance.rule.manage` (+ CSRF)         |
+| POST   | `/compliance/rules/:reference/versions/:n/verify\|publish\|retire`    | `compliance.rule.manage` (+ CSRF)         |
+| GET    | `/compliance/booking-passengers`                                      | `compliance.read` (+ page audit)          |
+| GET    | `/compliance/evaluations/:reference`                                  | `compliance.read` (+ read audit)          |
+| POST   | `/compliance/evaluations`                                             | `compliance.review` (+ CSRF)              |
+| POST   | `/compliance/evaluations/:reference/reviews`                          | `compliance.review` (+ CSRF, reason)      |
+| GET    | `/baggage`, `/baggage/:reference`, `/baggage/:reference/qr`           | `baggage.read` (+ read audit)             |
+| POST   | `/baggage/resolve-qr`                                                 | `baggage.read` (+ CSRF, read audit)       |
+| POST   | `/baggage`, `/baggage/scan`                                           | `baggage.manage` (+ CSRF)                 |
+| POST   | `/baggage/:reference/weight`, `/baggage/:reference/events`            | `baggage.manage` (+ CSRF)                 |
+| GET    | `/check-in/booking-passengers`, `/check-in/bookings/:b/passengers/:p` | `checkin.read` (+ read audit)             |
+| GET    | `/check-in/check-ins/:reference/qr`                                   | `checkin.read` (+ read audit)             |
+| POST   | `/check-in/bookings/:b/passengers/:p/seat\|check-in`                  | `checkin.manage` (+ CSRF)                 |
+| POST   | `/boarding/resolve`                                                   | `boarding.read` (+ CSRF, read audit)      |
+| POST   | `/boarding/scan`                                                      | `boarding.read`, `boarding.scan` (+ CSRF) |
 
 The booking detail (`GET /bookings/:id`) includes the booking's payment
 attempts only for callers holding `payment.read`: `booking.read` alone gives no
@@ -243,6 +252,9 @@ See ADR-020 and [the runbook](../runbooks/bootstrap-super-admin.md).
 - Dispatch, refund and accounting permissions arrive with their domains.
 - Regulatory document review/approval is deferred to PR-12; PR-11 exposes
   technical read access only.
+- `AUDITOR`, `FINANCE` and `COMPLIANCE_AGENT` have no check-in or boarding
+  permission (PR-14). CREW and DRIVER cannot board until the PR-18 Crew
+  application adds a CREW route and device enrollment.
 - `AUDITOR`, `FINANCE` and `COMPLIANCE_AGENT` have no baggage permission:
   baggage views name the passenger (PR-13). Auditors follow baggage changes
   through the audit trail.

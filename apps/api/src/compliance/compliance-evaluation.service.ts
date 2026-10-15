@@ -261,6 +261,47 @@ export class ComplianceEvaluationService {
     return link;
   }
 
+  /**
+   * PR-14: read-only current compliance of one booking passenger for the
+   * check-in gates. Same PR-12 status, staleness and head review as every
+   * other view; no evaluation is created and nothing is audited here.
+   */
+  async currentCompliance(db: Db, subject: Subject) {
+    const latest = await this.latest(db, subject);
+    const current = latest ? await this.isCurrent(db, subject, latest) : false;
+    const review = latest && current ? headReview(latest.reviews) : null;
+    const results = latest && current ? latest.results : [];
+    const failing = results.filter(
+      (result) => result.outcome === 'FAIL' || result.outcome === 'REVIEW_REQUIRED',
+    );
+    return {
+      status: complianceStatus(latest, current, review),
+      evaluation: latest
+        ? {
+            id: latest.id,
+            reference: latest.reference,
+            engineVersion: latest.engineVersion,
+            factsFingerprint: latest.factsFingerprint,
+            rulesFingerprint: latest.rulesFingerprint,
+          }
+        : null,
+      review: review ? { id: review.id, decision: review.decision } : null,
+      evidence: [
+        ...new Map(
+          results
+            .flatMap((result) => result.evidence)
+            .map(({ passengerDocument: document }) => [
+              document.reference,
+              { reference: document.reference, status: document.status },
+            ]),
+        ).values(),
+      ],
+      findingCodes: failing.flatMap((result) => details(result.details).map(({ code }) => code)),
+      /** Customer guidance of the requirements still to satisfy (plain text). */
+      guidance: [...new Set(failing.map((result) => result.ruleVersion.customerGuidance))],
+    };
+  }
+
   /** CUSTOMER-safe view: no rule source, internal note, reviewer or fingerprint. */
   private async customerItem(
     subject: Subject,

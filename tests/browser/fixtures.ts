@@ -160,6 +160,31 @@ export const FIXTURES = {
     return { realm: 'STAFF', email: runScoped('baggage-denied'), roles: ['COMPLIANCE_AGENT'] };
   },
 
+  /** PR-14: owner of the two dedicated check-in bookings. */
+  get checkInCustomer(): Fixture {
+    return { realm: 'CUSTOMER', email: runScoped('check-in-customer') };
+  },
+  /** PR-14: makes a synthetic traveller compliant by a reasoned human review. */
+  get checkInReviewer(): Fixture {
+    return {
+      realm: 'STAFF',
+      email: runScoped('check-in-reviewer'),
+      roles: ['COMPLIANCE_AGENT'],
+    };
+  },
+  /** PR-14: counter check-in (checkin.manage) without boarding.scan. */
+  get checkInAgent(): Fixture {
+    return { realm: 'STAFF', email: runScoped('check-in-agent'), roles: ['BOOKING_AGENT'] };
+  },
+  /** PR-14: boards by QR scan (boarding.scan). */
+  get boardingOperator(): Fixture {
+    return { realm: 'STAFF', email: runScoped('boarding-operator'), roles: ['DISPATCHER'] };
+  },
+  /** PR-14: OPS access through FINANCE, but no check-in or boarding permission. */
+  get checkInDenied(): Fixture {
+    return { realm: 'STAFF', email: runScoped('check-in-denied'), roles: ['FINANCE'] };
+  },
+
   /** Target of the SUPER_ADMIN's role and status changes. */
   get managed(): Fixture {
     return { realm: 'STAFF', email: runScoped('managed'), roles: ['DISPATCHER'] };
@@ -192,7 +217,12 @@ export type PreauthenticatedFixture =
   | 'complianceCustomer'
   | 'baggageCustomer'
   | 'baggageManager'
-  | 'baggageDenied';
+  | 'baggageDenied'
+  | 'checkInCustomer'
+  | 'checkInReviewer'
+  | 'checkInAgent'
+  | 'boardingOperator'
+  | 'checkInDenied';
 
 const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string> = {
   paymentCustomer: 'E2E_PAYMENT_CUSTOMER_SESSION',
@@ -204,6 +234,11 @@ const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string
   baggageCustomer: 'E2E_BAGGAGE_CUSTOMER_SESSION',
   baggageManager: 'E2E_BAGGAGE_MANAGER_SESSION',
   baggageDenied: 'E2E_BAGGAGE_DENIED_SESSION',
+  checkInCustomer: 'E2E_CHECK_IN_CUSTOMER_SESSION',
+  checkInReviewer: 'E2E_CHECK_IN_REVIEWER_SESSION',
+  checkInAgent: 'E2E_CHECK_IN_AGENT_SESSION',
+  boardingOperator: 'E2E_BOARDING_OPERATOR_SESSION',
+  checkInDenied: 'E2E_CHECK_IN_DENIED_SESSION',
 };
 
 /**
@@ -369,6 +404,29 @@ export function baggageSeed() {
     passengerReference: `ETV-E2E3${run}`,
     passengerGivenName: 'Coumba',
     passengerFamilyName: 'Bagages',
+  };
+}
+
+/**
+ * PR-14: two dedicated trips and confirmed bookings of the check-in customer.
+ * Booking A (two seats): a traveller made ready, one left blocked. Booking B:
+ * the traveller checked in at the counter and boarded.
+ */
+export function checkInSeed() {
+  const raw = process.env.E2E_RUN_ID;
+  if (!raw) throw new Error('E2E_RUN_ID is set by global-setup.ts');
+  const run = raw.toUpperCase();
+  return {
+    run,
+    customerTripReference: `ET-CHKA-${run}`,
+    customerBookingReference: `ETB-E2E4${run}`,
+    customerPaymentReference: `ETP-E2E4${run}`,
+    counterTripReference: `ET-CHKB-${run}`,
+    counterBookingReference: `ETB-E2E5${run}`,
+    counterPaymentReference: `ETP-E2E5${run}`,
+    readyPassenger: { reference: `ETV-E2E4${run}`, givenName: 'Aminata', familyName: 'Prête' },
+    blockedPassenger: { reference: `ETV-E2E5${run}`, givenName: 'Babacar', familyName: 'Bloqué' },
+    counterPassenger: { reference: `ETV-E2E6${run}`, givenName: 'Coura', familyName: 'Comptoir' },
   };
 }
 

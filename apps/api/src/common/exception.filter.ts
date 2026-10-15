@@ -7,6 +7,8 @@ import { currentRequestId } from './request-context.js';
 export interface ErrorResponse {
   code: string;
   message: string;
+  /** Server-built stable codes only (PublicApiError.publicDetails). */
+  details?: Readonly<Record<string, unknown>>;
   requestId: string | null;
 }
 
@@ -88,7 +90,12 @@ export class FoundationExceptionFilter implements ExceptionFilter {
         response.setHeader(name, value);
     }
 
-    const body: ErrorResponse = { ...publicError, requestId: currentRequestId() ?? null };
+    const details = exception instanceof PublicApiError ? exception.publicDetails : undefined;
+    const body: ErrorResponse = {
+      ...publicError,
+      ...(details ? { details } : {}),
+      requestId: currentRequestId() ?? null,
+    };
     response.status(status).json(body);
   }
 }

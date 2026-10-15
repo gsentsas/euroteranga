@@ -4,6 +4,12 @@ export interface ApiError {
   status: number;
   code: string;
   message: string;
+  /** Server-built stable codes, e.g. check-in blockers (PR-14). */
+  details?: ApiErrorDetails;
+}
+
+export interface ApiErrorDetails {
+  blockers?: CheckInBlocker[];
 }
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError };
@@ -1086,6 +1092,158 @@ export interface BaggageListOptions {
   createdTo?: string;
 }
 
+/** PR-14: the six server-derived check-in gates of one BookingPassenger. */
+export type CheckInGate = 'BOOKING' | 'PAYMENT' | 'DOCUMENTS' | 'COMPLIANCE' | 'SEAT' | 'BAGGAGE';
+export type CheckInGateStatus = 'PASS' | 'BLOCKED' | 'PENDING_REVIEW';
+export type CheckInBlockerCode =
+  | 'BOOKING_NOT_CONFIRMED'
+  | 'BOOKING_CANCELLED'
+  | 'TRIP_NOT_SCHEDULED'
+  | 'PAYMENT_NOT_SUCCEEDED'
+  | 'DOCUMENTS_NOT_VERIFIED'
+  | 'DOCUMENTS_NOT_ACCEPTED'
+  | 'DOCUMENTS_INCOMPLETE'
+  | 'DOCUMENTS_REVIEW_REQUIRED'
+  | 'COMPLIANCE_MISSING'
+  | 'COMPLIANCE_STALE'
+  | 'COMPLIANCE_REVIEW_REQUIRED'
+  | 'COMPLIANCE_NEEDS_INFORMATION'
+  | 'COMPLIANCE_NON_COMPLIANT'
+  | 'SEAT_NOT_ASSIGNED'
+  | 'SEAT_RELEASED'
+  | 'BAGGAGE_EXCEPTION_ACTIVE';
+
+export interface CheckInBlocker {
+  check: CheckInGate;
+  code: CheckInBlockerCode;
+  /** Business reference the blocker is about (a bag). */
+  reference?: string;
+}
+
+export interface CheckInReadiness {
+  engineVersion: string;
+  eligible: boolean;
+  checks: Array<{ check: CheckInGate; status: CheckInGateStatus; blockers: CheckInBlockerCode[] }>;
+  blockers: CheckInBlocker[];
+  /** PR-12 customer guidance of the requirements still to satisfy. */
+  complianceGuidance: string[];
+}
+
+export interface CheckInTrip {
+  reference: string;
+  route: { code: string; name: string };
+  plannedDepartureAt: string | null;
+  plannedArrivalAt: string | null;
+}
+
+/** CUSTOMER view: the QR payload is PII-free and grants nothing by itself. */
+export interface PassengerCheckIn {
+  reference: string;
+  checkedInAt: string;
+  qrPayload: string;
+  seat: { label: string };
+  passenger: { reference: string; givenName: string; familyName: string };
+  booking: { reference: string };
+  trip: CheckInTrip;
+  boarding: { reference: string; boardedAt: string } | null;
+}
+
+export interface PassengerBoarding {
+  reference: string;
+  boardedAt: string;
+  occurredAt: string;
+  /** Operational metadata only (no identity proof). */
+  deviceId: string;
+}
+
+export interface StaffPassengerCheckIn extends Omit<PassengerCheckIn, 'boarding'> {
+  channel: 'CUSTOMER' | 'STAFF';
+  engineVersion: string;
+  checksAtCheckIn: Array<{ check: CheckInGate; status: CheckInGateStatus }>;
+  /** Present when the gates were re-derived for this response. */
+  current?: boolean;
+  factsChangedSinceCheckIn?: boolean;
+  boarding: PassengerBoarding | null;
+}
+
+export interface CheckInResult<T> {
+  /** false: the existing check-in of this BookingPassenger was returned. */
+  created: boolean;
+  checkIn: T;
+}
+
+export interface SeatAssignmentResult {
+  changed: boolean;
+  seat: { label: string };
+}
+
+export interface CheckInQr {
+  reference: string;
+  /** Locally generated SVG; render it as an image, never as markup. */
+  svg: string;
+}
+
+export interface BookingCheckInOverview {
+  booking: { reference: string };
+  trip: CheckInTrip;
+  seats: Array<{ label: string; assignedTo: string | null }>;
+  items: Array<{
+    passenger: { reference: string; givenName: string; familyName: string };
+    seat: { label: string } | null;
+    readiness: CheckInReadiness;
+    checkIn: PassengerCheckIn | null;
+  }>;
+}
+
+export interface StaffCheckInListItem {
+  passenger: { reference: string; givenName: string; familyName: string };
+  booking: { reference: string };
+  trip: CheckInTrip;
+  seat: { label: string } | null;
+  readiness: { eligible: boolean; blockers: CheckInBlocker[] };
+  checkIn: { reference: string; checkedInAt: string } | null;
+  boarding: { reference: string; boardedAt: string } | null;
+}
+
+export interface StaffCheckInDetail {
+  passenger: { reference: string; givenName: string; familyName: string } | null;
+  booking: { reference: string };
+  trip: CheckInTrip;
+  seat: { label: string } | null;
+  seats: Array<{ label: string; assigned: boolean }>;
+  readiness: CheckInReadiness;
+  checkIn: StaffPassengerCheckIn | null;
+}
+
+export interface CheckInListOptions {
+  cursor?: string;
+  limit?: number;
+  tripReference?: string;
+  bookingReference?: string;
+  passengerReference?: string;
+  checkInStatus?: 'CHECKED_IN' | 'NOT_CHECKED_IN';
+  boardingStatus?: 'BOARDED' | 'NOT_BOARDED';
+}
+
+export interface BoardingResolution {
+  checkIn: StaffPassengerCheckIn;
+  readiness: CheckInReadiness;
+}
+
+export interface BoardingScanInput {
+  /** Bounded operational device label; PR-18 owns device enrollment. */
+  deviceId: string;
+  /** Makes a retried scan idempotent (requires occurredAt). */
+  clientEventId?: string;
+  occurredAt?: string;
+}
+
+export interface BoardingResult {
+  /** false: an identical clientEventId replay returned the original boarding. */
+  created: boolean;
+  boarding: PassengerBoarding;
+}
+
 /**
  * PR-12 compliance. TECHNICALLY_ACCEPTED != REGULATORY_VALID and
  * NO_MATCHING_RULE != COMPLIANT: a stale evaluation is never current.
@@ -1303,6 +1461,13 @@ function query(values: Record<string, string | number | undefined>): string {
   return params.toString();
 }
 
+/** Keeps only the known, server-built detail shape of an error body. */
+function errorDetails(value: unknown): { details?: ApiErrorDetails } {
+  if (typeof value !== 'object' || value === null) return {};
+  const blockers = (value as { blockers?: unknown }).blockers;
+  return Array.isArray(blockers) ? { details: { blockers: blockers as CheckInBlocker[] } } : {};
+}
+
 const NETWORK_ERROR: ApiError = {
   status: 0,
   code: 'NETWORK_ERROR',
@@ -1362,6 +1527,7 @@ export function createAuthClient(baseUrl: string) {
         status: response.status,
         code: typeof body.code === 'string' ? body.code : 'UNKNOWN_ERROR',
         message: typeof body.message === 'string' ? body.message : UNEXPECTED_ERROR,
+        ...errorDetails(body.details),
       },
     };
   }
@@ -1374,6 +1540,7 @@ export function createAuthClient(baseUrl: string) {
         status: response.status,
         code: typeof body.code === 'string' ? body.code : 'UNKNOWN_ERROR',
         message: typeof body.message === 'string' ? body.message : UNEXPECTED_ERROR,
+        ...errorDetails(body.details),
       },
     };
   }
@@ -1637,6 +1804,35 @@ export function createAuthClient(baseUrl: string) {
           call<BaggageDetail>('GET', `/v1/booking/baggage/${encodeURIComponent(reference)}`),
         baggageQr: (reference: string) =>
           call<BaggageQr>('GET', `/v1/booking/baggage/${encodeURIComponent(reference)}/qr`),
+        /** PR-14: seats, six gates and check-ins of an owned booking (no side effect). */
+        checkInOverview: (bookingReference: string) =>
+          call<BookingCheckInOverview>(
+            'GET',
+            `/v1/booking/bookings/${encodeURIComponent(bookingReference)}/check-in`,
+          ),
+        checkInReadiness: (bookingReference: string, passengerReference: string) =>
+          call<CheckInReadiness>(
+            'GET',
+            `/v1/booking/bookings/${encodeURIComponent(bookingReference)}/passengers/${encodeURIComponent(passengerReference)}/check-in-readiness`,
+          ),
+        /** Links the traveller to a seat already booked; never a new seat. */
+        assignSeat: (bookingReference: string, passengerReference: string, seatLabel: string) =>
+          withCsrf<SeatAssignmentResult>(
+            'customer',
+            `/v1/booking/bookings/${encodeURIComponent(bookingReference)}/passengers/${encodeURIComponent(passengerReference)}/seat`,
+            { seatLabel },
+          ),
+        /** No input: the server derives every gate; a 409 lists the blockers. */
+        checkIn: (bookingReference: string, passengerReference: string) =>
+          withCsrf<CheckInResult<PassengerCheckIn>>(
+            'customer',
+            `/v1/booking/bookings/${encodeURIComponent(bookingReference)}/passengers/${encodeURIComponent(passengerReference)}/check-in`,
+          ),
+        checkInQr: (checkInReference: string) =>
+          call<CheckInQr>(
+            'GET',
+            `/v1/booking/check-ins/${encodeURIComponent(checkInReference)}/qr`,
+          ),
         /** PR-12: compliance of the caller's own booking passengers (no side effect). */
         compliance: (bookingReference: string) =>
           call<CustomerBookingCompliance>(
@@ -2072,6 +2268,50 @@ export function createAuthClient(baseUrl: string) {
           }),
         resolveQr: (qrPayload: string) =>
           withCsrf<BaggageDetail>('staff', '/v1/admin/baggage/resolve-qr', { qrPayload }),
+      },
+      /** PR-14: checkin.read for reads; seat and check-in need checkin.manage. */
+      checkIn: {
+        list: (options: CheckInListOptions = {}) =>
+          call<Page<StaffCheckInListItem>>(
+            'GET',
+            `/v1/admin/check-in/booking-passengers?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              tripReference: options.tripReference,
+              bookingReference: options.bookingReference,
+              passengerReference: options.passengerReference,
+              checkInStatus: options.checkInStatus,
+              boardingStatus: options.boardingStatus,
+            })}`,
+          ),
+        detail: (bookingReference: string, passengerReference: string) =>
+          call<StaffCheckInDetail>(
+            'GET',
+            `/v1/admin/check-in/bookings/${encodeURIComponent(bookingReference)}/passengers/${encodeURIComponent(passengerReference)}`,
+          ),
+        assignSeat: (bookingReference: string, passengerReference: string, seatLabel: string) =>
+          withCsrf<SeatAssignmentResult>(
+            'staff',
+            `/v1/admin/check-in/bookings/${encodeURIComponent(bookingReference)}/passengers/${encodeURIComponent(passengerReference)}/seat`,
+            { seatLabel },
+          ),
+        checkIn: (bookingReference: string, passengerReference: string) =>
+          withCsrf<CheckInResult<StaffPassengerCheckIn>>(
+            'staff',
+            `/v1/admin/check-in/bookings/${encodeURIComponent(bookingReference)}/passengers/${encodeURIComponent(passengerReference)}/check-in`,
+          ),
+        qr: (checkInReference: string) =>
+          call<CheckInQr>(
+            'GET',
+            `/v1/admin/check-in/check-ins/${encodeURIComponent(checkInReference)}/qr`,
+          ),
+      },
+      /** PR-14: boarding.read resolves a QR; boarding needs boarding.scan. */
+      boarding: {
+        resolve: (qrPayload: string) =>
+          withCsrf<BoardingResolution>('staff', '/v1/admin/boarding/resolve', { qrPayload }),
+        scan: (qrPayload: string, input: BoardingScanInput) =>
+          withCsrf<BoardingResult>('staff', '/v1/admin/boarding/scan', { qrPayload, ...input }),
       },
       /**
        * PR-12: compliance.read / compliance.review for passengers;

@@ -32,6 +32,12 @@ import {
   type BaggageDetail,
   type BaggageEventResult,
   type BaggageQr,
+  type BoardingResult,
+  type BookingCheckInOverview,
+  type CheckInReadiness,
+  type CheckInResult,
+  type PassengerCheckIn,
+  type StaffPassengerCheckIn,
 } from './index.js';
 
 type Call = { url: string; init: RequestInit };
@@ -149,6 +155,105 @@ describe('baggage client (PR-13)', () => {
     expectTypeOf<Baggage>().not.toHaveProperty('id');
     expectTypeOf<BaggageDetail['events'][number]>().not.toHaveProperty('actorIdentityId');
     expectTypeOf<BaggageDetail['events'][number]>().not.toHaveProperty('clientEventId');
+  });
+});
+
+describe('check-in and boarding client (PR-14)', () => {
+  it('encodes references, sends CSRF on every mutation and keeps blocker details', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { items: [] } },
+      { status: 200, body: { csrfToken: 'v1.checkin.csrf' } },
+      { status: 201, body: { changed: true, seat: { label: '1A' } } },
+      { status: 200, body: { csrfToken: 'v1.checkin.csrf' } },
+      {
+        status: 409,
+        body: {
+          code: 'CHECK_IN_NOT_READY',
+          message: 'Le check-in n’est pas possible.',
+          details: { blockers: [{ check: 'SEAT', code: 'SEAT_NOT_ASSIGNED' }] },
+          requestId: 'r',
+        },
+      },
+      { status: 200, body: { reference: 'ETK-AAAAAAAAAAAA', svg: '<svg/>' } },
+    ]);
+    const customer = createAuthClient('http://api.test').booking.customer;
+    await customer.checkInOverview('ETB-A/../B');
+    await customer.assignSeat('ETB-A/../B', 'ETV-C/../D', '1A');
+    const refused = await customer.checkIn('ETB-A/../B', 'ETV-C/../D');
+    await customer.checkInQr('ETK-A/../B');
+    expect(calls[0]?.url).toBe('http://api.test/v1/booking/bookings/ETB-A%2F..%2FB/check-in');
+    expect(calls[2]?.url).toBe(
+      'http://api.test/v1/booking/bookings/ETB-A%2F..%2FB/passengers/ETV-C%2F..%2FD/seat',
+    );
+    expect(calls[2]?.init).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({ seatLabel: '1A' }),
+      headers: expect.objectContaining({ 'X-CSRF-Token': 'v1.checkin.csrf' }),
+    });
+    expect(calls[4]?.init.body).toBe('{}');
+    expect(refused).toEqual({
+      ok: false,
+      error: {
+        status: 409,
+        code: 'CHECK_IN_NOT_READY',
+        message: 'Le check-in n’est pas possible.',
+        details: { blockers: [{ check: 'SEAT', code: 'SEAT_NOT_ASSIGNED' }] },
+      },
+    });
+    expect(calls[5]?.url).toBe('http://api.test/v1/booking/check-ins/ETK-A%2F..%2FB/qr');
+  });
+
+  it('sends the staff list filters and the scan body as typed', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { items: [], nextCursor: null } },
+      { status: 200, body: { csrfToken: 'v1.boarding.csrf' } },
+      { status: 201, body: { created: true, boarding: {} } },
+    ]);
+    const admin = createAuthClient('http://api.test').admin;
+    await admin.checkIn.list({ tripReference: 'ET-T', checkInStatus: 'CHECKED_IN', limit: 25 });
+    await admin.boarding.scan('ETPAX1:ETQ-AAAAAAAAAAAAAAAA', {
+      deviceId: 'gate-01',
+      clientEventId: 'scan-board-00001',
+      occurredAt: '2030-01-01T00:00:00.000Z',
+    });
+    expect(calls[0]?.url).toBe(
+      'http://api.test/v1/admin/check-in/booking-passengers?limit=25&tripReference=ET-T&checkInStatus=CHECKED_IN',
+    );
+    expect(calls[2]?.url).toBe('http://api.test/v1/admin/boarding/scan');
+    expect(JSON.parse(String(calls[2]?.init.body))).toEqual({
+      qrPayload: 'ETPAX1:ETQ-AAAAAAAAAAAAAAAA',
+      deviceId: 'gate-01',
+      clientEventId: 'scan-board-00001',
+      occurredAt: '2030-01-01T00:00:00.000Z',
+    });
+  });
+
+  it('exposes safe types: no customer boarding, no override input', () => {
+    const client = createAuthClient('http://api.test');
+    expectTypeOf(client.booking.customer.checkInOverview).returns.resolves.toEqualTypeOf<
+      ApiResult<BookingCheckInOverview>
+    >();
+    expectTypeOf(client.booking.customer.checkInReadiness).returns.resolves.toEqualTypeOf<
+      ApiResult<CheckInReadiness>
+    >();
+    expectTypeOf(client.booking.customer.checkIn).returns.resolves.toEqualTypeOf<
+      ApiResult<CheckInResult<PassengerCheckIn>>
+    >();
+    expectTypeOf(client.booking.customer.checkIn).parameters.toEqualTypeOf<[string, string]>();
+    expectTypeOf(client.booking.customer).not.toHaveProperty('board');
+    expectTypeOf(client.booking.customer).not.toHaveProperty('scanBoarding');
+    expectTypeOf(client.admin.checkIn.checkIn).returns.resolves.toEqualTypeOf<
+      ApiResult<CheckInResult<StaffPassengerCheckIn>>
+    >();
+    expectTypeOf(client.admin.boarding.scan).returns.resolves.toEqualTypeOf<
+      ApiResult<BoardingResult>
+    >();
+    expectTypeOf<PassengerCheckIn>().not.toHaveProperty('id');
+    expectTypeOf<PassengerCheckIn>().not.toHaveProperty('readinessFingerprint');
+    expectTypeOf<PassengerCheckIn['boarding']>().toEqualTypeOf<{
+      reference: string;
+      boardedAt: string;
+    } | null>();
   });
 });
 
