@@ -7,6 +7,7 @@ import {
   type Browser,
   type BrowserContext,
   type Page,
+  type Route,
 } from '@playwright/test';
 import { appByName, appUrl } from '../apps.js';
 import {
@@ -188,6 +189,44 @@ async function offlineDatabaseDump(page: Page) {
   });
 }
 
+interface SyncCapture {
+  requests: number;
+  clientEventIds: string[];
+}
+
+async function mockAcknowledgedCrewSync(
+  page: Page,
+  tripReference: string,
+  capture: SyncCapture,
+  beforeResponse?: () => Promise<void>,
+) {
+  await page.route('**/v1/crew/trips/*/events/sync', async (route: Route) => {
+    capture.requests += 1;
+    const body = route.request().postDataJSON() as {
+      events: Array<{ clientEventId: string }>;
+    };
+    capture.clientEventIds.push(...body.events.map(({ clientEventId }) => clientEventId));
+    await beforeResponse?.();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: {
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Origin': `http://localhost:${crewApp.port}`,
+      },
+      body: JSON.stringify({
+        tripReference,
+        results: body.events.map(({ clientEventId }) => ({
+          clientEventId,
+          status: 'ACKNOWLEDGED',
+          created: false,
+          boardingReference: 'ETE-HOTFIX23TEST',
+        })),
+      }),
+    });
+  });
+}
+
 test.describe('PR-18 Crew PWA offline operations', () => {
   test.describe.configure({ mode: 'serial' });
 
@@ -314,6 +353,274 @@ test.describe('PR-18 Crew PWA offline operations', () => {
     await context.setOffline(false);
   });
 
+  test('retries transient reconnect validation before synchronizing the pending queue', async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(30_000);
+    const seed = checkInSeed();
+    await addSessionCookie(context, 'crew', preauthenticatedSession('crew'));
+    await page.goto(appUrl(crewApp, '/session'));
+    await expect(page.getByRole('combobox', { name: 'Voyage', exact: true })).toHaveValue(
+      seed.crewTripReference,
+    );
+
+    await context.setOffline(true);
+    await expect(page.getByText('Hors ligne', { exact: true })).toBeVisible();
+    await page.getByLabel('Code QR passager').fill('ETPAX1:ETQ-XXXXXXXXXXXXXXX1');
+    await page.getByRole('button', { name: 'Enregistrer l’embarquement' }).click();
+    await expect(page.getByText('1 en attente')).toBeVisible();
+    const beforeReconnect = await offlineDatabaseDump(page);
+    expect(beforeReconnect.events).toHaveLength(1);
+    const queuedClientEventId = beforeReconnect.events[0]?.clientEventId;
+    expect(queuedClientEventId).toEqual(expect.any(String));
+
+    let validationRequests = 0;
+    const sync = { requests: 0, clientEventIds: [] } satisfies SyncCapture;
+    let releaseSyncResponse: (() => void) | undefined;
+    const syncResponseGate = new Promise<void>((resolve) => {
+      releaseSyncResponse = resolve;
+    });
+    await page.route('**/v1/auth/crew/me', async (route) => {
+      validationRequests += 1;
+      if (validationRequests === 1) {
+        await route.abort('failed');
+        return;
+      }
+      await route.continue();
+    });
+    await mockAcknowledgedCrewSync(
+      page,
+      seed.crewTripReference,
+      sync,
+      async () => syncResponseGate,
+    );
+    await page.clock.install();
+    await page.clock.pauseAt(new Date());
+
+    await context.setOffline(false);
+    await page.clock.runFor(0);
+    await expect(page.getByText('Core API indisponible', { exact: false })).toBeVisible();
+    expect(validationRequests).toBe(1);
+    expect(sync.requests).toBe(0);
+    await expect(page.getByRole('button', { name: 'Synchroniser' })).toBeDisabled();
+    const afterFailure = await offlineDatabaseDump(page);
+    expect(afterFailure.events).toHaveLength(1);
+    expect(afterFailure.events[0]).toMatchObject({ status: 'PENDING' });
+
+    await page.clock.fastForward(999);
+    expect(validationRequests).toBe(1);
+    expect(sync.requests).toBe(0);
+    expect((await offlineDatabaseDump(page)).events[0]).toMatchObject({ status: 'PENDING' });
+
+    await page.clock.fastForward(1);
+    await expect.poll(() => validationRequests).toBe(2);
+    await expect(page.getByText('En ligne', { exact: true })).toBeVisible();
+    await page.clock.runFor(0);
+    await expect.poll(() => sync.requests).toBe(1);
+    expect((await offlineDatabaseDump(page)).events[0]).toMatchObject({
+      clientEventId: queuedClientEventId,
+      status: 'SYNCING',
+    });
+    releaseSyncResponse?.();
+    await expect(page.getByText('Toutes les actions sont synchronisées.')).toBeVisible();
+    expect(validationRequests).toBe(2);
+    expect(sync.clientEventIds).toEqual([queuedClientEventId]);
+    expect((await offlineDatabaseDump(page)).events).toEqual([]);
+  });
+
+  test('retries a server 500 and synchronizes only after the full refresh succeeds', async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(30_000);
+    const seed = checkInSeed();
+    await addSessionCookie(context, 'crew', preauthenticatedSession('crew'));
+    await page.goto(appUrl(crewApp, '/session'));
+    await expect(page.getByRole('combobox', { name: 'Voyage', exact: true })).toHaveValue(
+      seed.crewTripReference,
+    );
+
+    await context.setOffline(true);
+    await page.getByLabel('Code QR passager').fill('ETPAX1:ETQ-XXXXXXXXXXXXXXX2');
+    await page.getByRole('button', { name: 'Enregistrer l’embarquement' }).click();
+    const queued = await offlineDatabaseDump(page);
+    const queuedClientEventId = queued.events[0]?.clientEventId;
+    expect(queued.events).toHaveLength(1);
+    expect(queuedClientEventId).toEqual(expect.any(String));
+
+    let tripRefreshes = 0;
+    await page.route('**/v1/crew/trips', async (route) => {
+      tripRefreshes += 1;
+      if (tripRefreshes === 1) {
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          headers: {
+            'Access-Control-Allow-Credentials': 'true',
+            'Access-Control-Allow-Origin': `http://localhost:${crewApp.port}`,
+          },
+          body: JSON.stringify({ code: 'TEMPORARY_FAILURE', message: 'Synthetic server failure.' }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+    const sync = { requests: 0, clientEventIds: [] } satisfies SyncCapture;
+    await mockAcknowledgedCrewSync(page, seed.crewTripReference, sync);
+    await page.clock.install();
+    await page.clock.pauseAt(new Date());
+
+    await context.setOffline(false);
+    await page.clock.runFor(0);
+    await expect(page.getByText('voyages conservés', { exact: false })).toBeVisible();
+    expect(tripRefreshes).toBe(1);
+    expect(sync.requests).toBe(0);
+    expect((await offlineDatabaseDump(page)).events[0]).toMatchObject({ status: 'PENDING' });
+
+    await page.clock.fastForward(999);
+    expect(tripRefreshes).toBe(1);
+    expect(sync.requests).toBe(0);
+    expect((await offlineDatabaseDump(page)).events[0]).toMatchObject({ status: 'PENDING' });
+    await page.clock.fastForward(1);
+    await expect.poll(() => tripRefreshes).toBe(2);
+    await expect(page.getByText('En ligne', { exact: true })).toBeVisible();
+    await page.clock.runFor(0);
+    await expect.poll(() => sync.requests).toBe(1);
+    expect(sync.clientEventIds).toEqual([queuedClientEventId]);
+    expect((await offlineDatabaseDump(page)).events).toEqual([]);
+  });
+
+  test('cancels transient reconnect retry when the browser goes offline again', async ({
+    context,
+    page,
+  }) => {
+    const seed = checkInSeed();
+    await addSessionCookie(context, 'crew', preauthenticatedSession('crew'));
+    await page.goto(appUrl(crewApp, '/session'));
+    await expect(page.getByRole('combobox', { name: 'Voyage', exact: true })).toHaveValue(
+      seed.crewTripReference,
+    );
+    await context.setOffline(true);
+    await page.getByLabel('Code QR passager').fill('ETPAX1:ETQ-XXXXXXXXXXXXXXX3');
+    await page.getByRole('button', { name: 'Enregistrer l’embarquement' }).click();
+
+    let validationRequests = 0;
+    await page.route('**/v1/auth/crew/me', async (route) => {
+      validationRequests += 1;
+      if (validationRequests === 1) {
+        await route.abort('failed');
+        return;
+      }
+      await route.continue();
+    });
+    const sync = { requests: 0, clientEventIds: [] } satisfies SyncCapture;
+    await mockAcknowledgedCrewSync(page, seed.crewTripReference, sync);
+    await page.clock.install();
+    await page.clock.pauseAt(new Date());
+
+    await context.setOffline(false);
+    await page.clock.runFor(0);
+    await expect(page.getByText('Core API indisponible', { exact: false })).toBeVisible();
+    expect(validationRequests).toBe(1);
+    await context.setOffline(true);
+    await expect(page.getByText('Hors ligne', { exact: true })).toBeVisible();
+    await page.clock.fastForward(60_000);
+
+    expect(validationRequests).toBe(1);
+    expect(sync.requests).toBe(0);
+    expect((await offlineDatabaseDump(page)).events[0]).toMatchObject({ status: 'PENDING' });
+  });
+
+  test('cancels transient reconnect retry when the Crew workspace unmounts', async ({
+    context,
+    page,
+  }) => {
+    const seed = checkInSeed();
+    await addSessionCookie(context, 'crew', preauthenticatedSession('crew'));
+    await page.goto(appUrl(crewApp, '/session'));
+    await expect(page.getByRole('combobox', { name: 'Voyage', exact: true })).toHaveValue(
+      seed.crewTripReference,
+    );
+    await context.setOffline(true);
+
+    let validationRequests = 0;
+    await page.route('**/v1/auth/crew/me', async (route) => {
+      validationRequests += 1;
+      if (validationRequests === 1) {
+        await route.abort('failed');
+        return;
+      }
+      await route.continue();
+    });
+    await page.clock.install();
+    await page.clock.pauseAt(new Date());
+
+    await context.setOffline(false);
+    await page.clock.runFor(0);
+    await expect(page.getByText('Core API indisponible', { exact: false })).toBeVisible();
+    expect(validationRequests).toBe(1);
+    await page.goto(appUrl(crewApp, '/connexion'));
+    await page.clock.fastForward(60_000);
+    expect(validationRequests).toBe(1);
+  });
+
+  test('coalesces concurrent online events into one refresh and one queue sync', async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(30_000);
+    const seed = checkInSeed();
+    await addSessionCookie(context, 'crew', preauthenticatedSession('crew'));
+    await page.goto(appUrl(crewApp, '/session'));
+    await expect(page.getByRole('combobox', { name: 'Voyage', exact: true })).toHaveValue(
+      seed.crewTripReference,
+    );
+    await context.setOffline(true);
+    await page.getByLabel('Code QR passager').fill('ETPAX1:ETQ-XXXXXXXXXXXXXXX4');
+    await page.getByRole('button', { name: 'Enregistrer l’embarquement' }).click();
+    const queuedClientEventId = (await offlineDatabaseDump(page)).events[0]?.clientEventId;
+
+    let validationRequests = 0;
+    let releaseFirstRequest: (() => void) | undefined;
+    const firstRequestGate = new Promise<void>((resolve) => {
+      releaseFirstRequest = resolve;
+    });
+    await page.route('**/v1/auth/crew/me', async (route) => {
+      validationRequests += 1;
+      if (validationRequests === 1) await firstRequestGate;
+      await route.continue();
+    });
+    const sync = { requests: 0, clientEventIds: [] } satisfies SyncCapture;
+    await mockAcknowledgedCrewSync(page, seed.crewTripReference, sync);
+    await page.clock.install();
+    await page.clock.pauseAt(new Date());
+
+    await context.setOffline(false);
+    await page.clock.runFor(0);
+    await expect.poll(() => validationRequests).toBe(1);
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event('online'));
+      window.dispatchEvent(new Event('online'));
+      window.dispatchEvent(new Event('online'));
+    });
+    await page.clock.runFor(0);
+    expect(validationRequests).toBe(1);
+    expect(sync.requests).toBe(0);
+    expect((await offlineDatabaseDump(page)).events[0]).toMatchObject({
+      clientEventId: queuedClientEventId,
+      status: 'PENDING',
+    });
+
+    releaseFirstRequest?.();
+    await expect(page.getByText('En ligne', { exact: true })).toBeVisible();
+    await page.clock.runFor(0);
+    await expect.poll(() => sync.requests).toBe(1);
+    expect(validationRequests).toBe(1);
+    expect(sync.clientEventIds).toEqual([queuedClientEventId]);
+    expect((await offlineDatabaseDump(page)).events).toEqual([]);
+  });
+
   test('preserves pending scans when the Crew session expires before reconnect', async ({
     context,
     page,
@@ -336,15 +643,46 @@ test.describe('PR-18 Crew PWA offline operations', () => {
     await page.getByLabel('Code QR passager').fill('ETPAX1:ETQ-YYYYYYYYYYYYYYYY');
     await page.getByRole('button', { name: 'Enregistrer l’embarquement' }).click();
     await expect(page.getByText('1 en attente')).toBeVisible();
+    const beforeExpiry = await offlineDatabaseDump(page);
+    const queuedClientEventId = beforeExpiry.events[0]?.clientEventId;
+    expect(queuedClientEventId).toEqual(expect.any(String));
     await expireCrewSession(session.sessionId);
 
+    let validationRequests = 0;
+    let csrfRequests = 0;
+    let syncRequests = 0;
+    await page.route('**/v1/auth/crew/me', async (route) => {
+      validationRequests += 1;
+      await route.continue();
+    });
+    await page.route('**/v1/auth/crew/csrf', async (route) => {
+      csrfRequests += 1;
+      await route.continue();
+    });
+    await page.route('**/v1/crew/trips/*/events/sync', async (route) => {
+      syncRequests += 1;
+      await route.continue();
+    });
+    await page.clock.install();
+    await page.clock.pauseAt(new Date());
+
     await context.setOffline(false);
+    await page.clock.runFor(0);
     await expect(page).toHaveURL(appUrl(crewApp, '/connexion'));
     const dump = await offlineDatabaseDump(page);
     expect(dump.events).toHaveLength(1);
     expect(dump.events[0]).toMatchObject({
+      clientEventId: queuedClientEventId,
       tripReference: seed.crewTripReference,
       status: 'PENDING',
     });
+    expect(validationRequests).toBe(1);
+    expect(csrfRequests).toBe(0);
+    expect(syncRequests).toBe(0);
+
+    await page.clock.fastForward(60_000);
+    expect(validationRequests).toBe(1);
+    expect(csrfRequests).toBe(0);
+    expect(syncRequests).toBe(0);
   });
 });
