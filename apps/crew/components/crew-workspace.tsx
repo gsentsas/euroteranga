@@ -51,7 +51,7 @@ function eventLabel(status: LocalCrewEvent['status']) {
 
 export function CrewWorkspace() {
   const router = useRouter();
-  const [online, setOnline] = useState(true);
+  const [online, setOnline] = useState(false);
   const [trips, setTrips] = useState<CrewTripSnapshot[]>([]);
   const [events, setEvents] = useState<LocalCrewEvent[]>([]);
   const [selectedTrip, setSelectedTrip] = useState('');
@@ -169,7 +169,7 @@ export function CrewWorkspace() {
     [refreshLocal, router],
   );
 
-  const refreshFromServer = useCallback(async () => {
+  const refreshFromServer = useCallback(async (): Promise<boolean> => {
     const me = await auth.me('crew');
     if (!me.ok) {
       if (me.error.status === 401) {
@@ -178,7 +178,7 @@ export function CrewWorkspace() {
       } else if (me.error.code === 'NETWORK_ERROR') {
         setNotice('Core API indisponible : utilisation du cache local non expiré.');
       } else setError(me.error.message);
-      return;
+      return false;
     }
 
     setEmail(me.data.email);
@@ -199,7 +199,7 @@ export function CrewWorkspace() {
       } else {
         setError(`${enrolled.error.message} Les actions locales sont conservées.`);
       }
-      return;
+      return false;
     }
 
     const remote = await auth.crew.trips();
@@ -210,7 +210,7 @@ export function CrewWorkspace() {
       } else if (remote.error.code === 'NETWORK_ERROR') {
         setNotice('Core API indisponible : voyages non expirés conservés localement.');
       } else setError(remote.error.message);
-      return;
+      return false;
     }
     const unassigned = await replaceTripSnapshots(remote.data.items);
     if (unassigned > 0) {
@@ -219,15 +219,16 @@ export function CrewWorkspace() {
       );
     }
     await refreshLocal();
-    await syncQueued(id);
-  }, [refreshLocal, router, syncQueued]);
+    return true;
+  }, [refreshLocal, router]);
 
   useEffect(() => {
     let active = true;
     const onOnline = () => {
-      setOnline(true);
       void (async () => {
-        if (active) await refreshFromServer();
+        if (!active) return;
+        const ready = await refreshFromServer();
+        if (active) setOnline(ready);
       })();
     };
     const onOffline = () => {
@@ -240,13 +241,15 @@ export function CrewWorkspace() {
         await recoverInterruptedSync();
         const purged = await purgeExpiredData();
         if (!active) return;
-        setOnline(navigator.onLine);
+        setOnline(false);
         await refreshLocal();
         if (purged.events > 0 || purged.trips > 0) {
           setNotice('Données locales expirées purgées.');
         }
-        if (navigator.onLine) await refreshFromServer();
-        else {
+        if (navigator.onLine) {
+          const ready = await refreshFromServer();
+          if (active) setOnline(ready);
+        } else {
           const id = await deviceId();
           if (active) setDevice(id);
         }
@@ -302,7 +305,7 @@ export function CrewWorkspace() {
       setQrPayload('');
       setNotice('Embarquement enregistré sur cet appareil — synchronisation en attente.');
       await refreshLocal();
-      if (navigator.onLine) await syncQueued(device ?? undefined, true);
+      if (online) await syncQueued(device ?? undefined, true);
     } finally {
       setRecording(false);
     }
@@ -311,7 +314,7 @@ export function CrewWorkspace() {
   async function retry(item: LocalCrewEvent) {
     await retryEvent(item.clientEventId);
     await refreshLocal();
-    if (navigator.onLine) await syncQueued(device ?? undefined, true);
+    if (online) await syncQueued(device ?? undefined, true);
   }
 
   async function discard(item: LocalCrewEvent) {
