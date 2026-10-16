@@ -9,7 +9,7 @@ import type {
   RegulatoryPermitSummary,
 } from '@euroteranga/auth-client';
 import { FormAlert, FormStatus } from '@euroteranga/ui';
-import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useCan } from '../staff-access';
 
@@ -421,7 +421,11 @@ function Detail({
   const [pending, setPending] = useState(false);
   const [reason, setReason] = useState('');
   const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const syncedRevision = useRef<string | null>(null);
   useEffect(() => {
+    const revisionKey = `${permit.reference}:${permit.revision}`;
+    if (syncedRevision.current === revisionKey) return;
+    syncedRevision.current = revisionKey;
     setEdit((current) => ({
       ...current,
       ...scopeFormValues(permit.scope),
