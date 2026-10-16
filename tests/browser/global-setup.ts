@@ -21,6 +21,7 @@ import {
 const DAY_MS = 24 * 3_600_000;
 
 const PREAUTHENTICATED_SESSIONS = {
+  crew: 'E2E_CREW_SESSION',
   paymentCustomer: 'E2E_PAYMENT_CUSTOMER_SESSION',
   foreignCustomer: 'E2E_FOREIGN_CUSTOMER_SESSION',
   passengerDocumentReader: 'E2E_PASSENGER_DOCUMENT_READER_SESSION',
@@ -156,6 +157,9 @@ export default async function globalSetup(): Promise<void> {
  * suite-wide login-IP rate-limit budget used by the authentication tests.
  */
 function preauthenticatedSessionEnvironment(fixture: Fixture): string | undefined {
+  if (fixture.email === FIXTURES.crew.email) {
+    return PREAUTHENTICATED_SESSIONS.crew;
+  }
   if (fixture.email === FIXTURES.paymentCustomer.email) {
     return PREAUTHENTICATED_SESSIONS.paymentCustomer;
   }
@@ -806,6 +810,38 @@ async function seedCheckInData(db: ReturnType<typeof createDatabaseClient>): Pro
     paymentReference: seed.counterPaymentReference,
   });
   await seedPassenger(db, b, seed.counterPassenger);
+
+  const c = await seedConfirmedBooking(db, {
+    run: seed.run,
+    tag: 'chkc',
+    customerEmail,
+    tripReference: seed.crewTripReference,
+    departureDate: '2030-07-05',
+    bookingReference: seed.crewBookingReference,
+    paymentReference: seed.crewPaymentReference,
+  });
+  await seedPassenger(db, c, seed.crewPassenger);
+
+  const [crew, grantor, trip] = await Promise.all([
+    db.authIdentity.findUniqueOrThrow({
+      where: {
+        realm_normalizedEmail: { realm: 'CREW', normalizedEmail: FIXTURES.crew.email },
+      },
+    }),
+    db.authIdentity.findUniqueOrThrow({
+      where: {
+        realm_normalizedEmail: { realm: 'STAFF', normalizedEmail: FIXTURES.permitManager.email },
+      },
+    }),
+    db.trip.findUniqueOrThrow({ where: { reference: seed.crewTripReference } }),
+  ]);
+  await db.crewTripAssignment.create({
+    data: {
+      tripId: trip.id,
+      crewIdentityId: crew.id,
+      assignedByIdentityId: grantor.id,
+    },
+  });
 }
 
 async function seedBaggageData(db: ReturnType<typeof createDatabaseClient>): Promise<void> {

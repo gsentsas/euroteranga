@@ -6,6 +6,7 @@ written yet.
 
 | ADR                                                                     | Title                                                  | Status   |
 | ----------------------------------------------------------------------- | ------------------------------------------------------ | -------- |
+| [ADR-007](ADR-007-offline-crew.md)                                      | Offline Crew operations                                | Accepted |
 | [ADR-001](ADR-001-modular-monolith.md)                                  | Modular monolith                                       | Accepted |
 | [ADR-002](ADR-002-postgresql.md)                                        | PostgreSQL, Prisma and baseline                        | Accepted |
 | [ADR-003](ADR-003-nestjs-api.md)                                        | NestJS Core API                                        | Accepted |
@@ -36,8 +37,7 @@ written yet.
 | [ADR-031](ADR-031-regulatory-permit-lifecycle.md)                       | Regulatory permit lifecycle and intrinsic validity     | Accepted |
 | [ADR-032](ADR-032-departure-readiness-dispatch.md)                      | Departure readiness and dispatch authorization         | Accepted |
 
-Planned: ADR-007 Offline Crew. The planned
-ADR-008 (Payment Abstraction) is covered by ADR-027. ADR-006
+The planned ADR-008 (Payment Abstraction) is covered by ADR-027. ADR-006
 (Authentication) is covered in detail by ADR-012 to ADR-016; authorization
 by ADR-017 to ADR-020.
 

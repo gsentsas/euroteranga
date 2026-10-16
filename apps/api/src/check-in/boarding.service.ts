@@ -1,3 +1,4 @@
+import { Prisma } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { RATE_LIMITS } from '../auth/rate-limit/rate-limit.rules.js';
@@ -17,6 +18,21 @@ import { checkInSelect, readinessView, staffCheckInView } from './check-in-views
 
 const THIRTY_DAYS = 30 * 24 * 3_600_000;
 const FIVE_MINUTES = 5 * 60_000;
+
+export interface CrewBoardingContext {
+  crewDeviceId: string;
+  crewAssignmentId: string;
+}
+
+function clientEventCollision(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002')
+    return false;
+  const meta = JSON.stringify(error.meta ?? {});
+  return (
+    (meta.includes('device_id') || meta.includes('deviceId')) &&
+    (meta.includes('client_event_id') || meta.includes('clientEventId'))
+  );
+}
 
 const boardingSelect = {
   reference: true,
@@ -112,7 +128,7 @@ export class BoardingService {
    * every gate → board → audit, in one transaction. A same clientEventId with
    * the same payload returns the original boarding (created: false).
    */
-  async scan(actor: AuthPrincipal, input: BoardingScanInput) {
+  async scan(actor: AuthPrincipal, input: BoardingScanInput, crewContext?: CrewBoardingContext) {
     const credentialReference = this.credential(input.qrPayload);
     const occurredAt = input.occurredAt ?? new Date();
     const now = Date.now();
@@ -192,6 +208,12 @@ export class BoardingService {
                   readinessFingerprint: current.fingerprint,
                   occurredAt,
                   boardedByIdentityId: actor.identityId,
+                  ...(crewContext
+                    ? {
+                        crewDeviceId: crewContext.crewDeviceId,
+                        crewAssignmentId: crewContext.crewAssignmentId,
+                      }
+                    : {}),
                 },
                 select: boardingSelect,
               });
@@ -209,6 +231,7 @@ export class BoardingService {
                     tripReference: current.facts.trip.reference,
                     seatLabel: current.facts.seat?.label ?? null,
                     deviceId: input.deviceId,
+                    crewAssignmentId: crewContext?.crewAssignmentId ?? null,
                     factsChangedSinceCheckIn: current.fingerprint !== row.readinessFingerprint,
                   },
                 },
@@ -224,6 +247,32 @@ export class BoardingService {
       if (error instanceof CheckInBlockedError && refusal.value) {
         await this.auditRefusal(actor, refusal.value, input.deviceId, error);
       }
+      if (input.clientEventId && clientEventCollision(error)) {
+        const [replay, replayCheckIn] = await Promise.all([
+          this.database.client.passengerBoarding.findUnique({
+            where: {
+              deviceId_clientEventId: {
+                deviceId: input.deviceId,
+                clientEventId: input.clientEventId,
+              },
+            },
+            select: boardingSelect,
+          }),
+          this.database.client.passengerCheckIn.findUnique({
+            where: { credentialReference },
+            select: { id: true },
+          }),
+        ]);
+        if (
+          replay &&
+          replayCheckIn &&
+          replay.checkInId === replayCheckIn.id &&
+          replay.payloadFingerprint === payloadFingerprint
+        ) {
+          return { created: false, boarding: boardingView(replay) };
+        }
+        throw CheckInErrors.idempotencyConflict();
+      }
       if (String(error).includes('passenger_boarding_check_in_id_key')) {
         throw CheckInErrors.alreadyBoarded();
       }
@@ -232,6 +281,13 @@ export class BoardingService {
       }
       if (String(error).includes('boarding requires a confirmed')) {
         throw CheckInErrors.stale([]);
+      }
+      if (
+        String(error).includes('CREW boarding requires') ||
+        String(error).includes('active owned device') ||
+        String(error).includes('active trip assignment')
+      ) {
+        throw CheckInErrors.crewContextStale();
       }
       return checkInDomainError(error);
     }

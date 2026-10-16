@@ -32,7 +32,9 @@ export const FIXTURES = {
   get customer(): Fixture {
     return { realm: 'CUSTOMER', email: runScoped('customer') };
   },
-  crew: { realm: 'CREW', email: 'crew.e2e@fixtures.example.test' },
+  get crew(): Fixture {
+    return { realm: 'CREW', email: runScoped('crew'), roles: ['CREW'] };
+  },
   get staff(): Fixture {
     return { realm: 'STAFF', email: runScoped('staff'), roles: ['DISPATCHER'] };
   },
@@ -222,6 +224,7 @@ export function invitationToken(): string {
 }
 
 export type PreauthenticatedFixture =
+  | 'crew'
   | 'paymentCustomer'
   | 'foreignCustomer'
   | 'passengerDocumentReader'
@@ -241,6 +244,7 @@ export type PreauthenticatedFixture =
   | 'permitDenied';
 
 const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string> = {
+  crew: 'E2E_CREW_SESSION',
   paymentCustomer: 'E2E_PAYMENT_CUSTOMER_SESSION',
   foreignCustomer: 'E2E_FOREIGN_CUSTOMER_SESSION',
   passengerDocumentReader: 'E2E_PASSENGER_DOCUMENT_READER_SESSION',
@@ -444,9 +448,13 @@ export function checkInSeed() {
     counterTripReference: `ET-CHKB-${run}`,
     counterBookingReference: `ETB-E2E5${run}`,
     counterPaymentReference: `ETP-E2E5${run}`,
+    crewTripReference: `ET-CHKC-${run}`,
+    crewBookingReference: `ETB-E2E6${run}`,
+    crewPaymentReference: `ETP-E2E6${run}`,
     readyPassenger: { reference: `ETV-E2E4${run}`, givenName: 'Aminata', familyName: 'Prête' },
     blockedPassenger: { reference: `ETV-E2E5${run}`, givenName: 'Babacar', familyName: 'Bloqué' },
     counterPassenger: { reference: `ETV-E2E6${run}`, givenName: 'Coura', familyName: 'Comptoir' },
+    crewPassenger: { reference: `ETV-E2E7${run}`, givenName: 'Daba', familyName: 'Equipage' },
   };
 }
 
