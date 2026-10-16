@@ -1,5 +1,7 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import type { ApiEnv } from '@euroteranga/config';
+import { keyedDigest, toBytes } from '../../../src/auth/crypto/tokens.js';
+import { RATE_LIMITS } from '../../../src/auth/rate-limit/rate-limit.rules.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { staffActor, type StaffActor } from '../../support/admin-helpers.js';
 import { client, createIdentity, csrfToken, db, loginCookie } from '../../support/auth-helpers.js';
@@ -72,6 +74,40 @@ describe('PR-18 Crew offline sync', () => {
       },
     });
     const cookie = await loginCookie(t.app, 'crew', identity.email);
+    return {
+      id: identity.id,
+      cookie,
+      csrf: await csrfToken(t.app, 'crew', cookie),
+      http: client(t.app, 'crew'),
+    };
+  }
+
+  async function crewActorWithoutPassword(): Promise<CrewActor> {
+    const email = `crew.direct.${randomBytes(6).toString('hex')}@example.test`;
+    const identity = await db(t.app).authIdentity.create({
+      data: {
+        realm: 'CREW',
+        email,
+        normalizedEmail: email,
+        status: 'ACTIVE',
+        emailVerifiedAt: new Date(),
+        roleAssignments: {
+          create: { roleKey: 'CREW', grantReason: `pr18-direct-${run}` },
+        },
+      },
+    });
+    const token = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + 60 * 60_000);
+    await db(t.app).authSession.create({
+      data: {
+        identityId: identity.id,
+        tokenHash: new Uint8Array(createHash('sha256').update(token).digest()),
+        authVersion: identity.authVersion,
+        idleExpiresAt: expiresAt,
+        absoluteExpiresAt: expiresAt,
+      },
+    });
+    const cookie = `et_crew_session=${token}`;
     return {
       id: identity.id,
       cookie,
@@ -623,6 +659,51 @@ describe('PR-18 Crew offline sync', () => {
     expect(await db(t.app).passengerBoarding.count({ where: { deviceId, clientEventId } })).toBe(1);
   });
 
+  it('keeps rate-limited boarding events retryable instead of rejecting them', async () => {
+    const crew = await crewActorWithoutPassword();
+    const ready = await readyBoarding();
+    await assign(crew, ready.trip.id);
+    const deviceId = `crew-${run}-rate-limit`;
+    await crewApi(crew).enroll(deviceId);
+
+    const rule = RATE_LIMITS.boardingScanIdentity;
+    const now = Date.now();
+    const windowStart = new Date(Math.floor(now / rule.windowMs) * rule.windowMs);
+    const key = toBytes(
+      keyedDigest(Buffer.from(env.AUTH_HMAC_KEY, 'base64'), ['rate-limit', rule.action, crew.id]),
+    );
+    await db(t.app).authRateLimitBucket.upsert({
+      where: { key_windowStart: { key, windowStart } },
+      create: {
+        key,
+        windowStart,
+        action: rule.action,
+        count: rule.limit,
+        expiresAt: new Date(windowStart.getTime() + rule.windowMs),
+      },
+      update: { count: rule.limit },
+    });
+
+    const response = await crewApi(crew).sync(ready.trip.reference, {
+      deviceId,
+      events: [
+        {
+          clientEventId: `event-${run}-rate-limit`,
+          type: 'PASSENGER_BOARDING',
+          occurredAt: new Date().toISOString(),
+          payload: { qrPayload: ready.qrPayload },
+        },
+      ],
+    });
+    expect(response.status, response.text).toBe(201);
+    expect(response.body.results[0]).toMatchObject({
+      status: 'RETRY',
+      errorCode: 'TOO_MANY_REQUESTS',
+    });
+    expect(response.body.results[0].retryAfterSeconds).toBeGreaterThan(0);
+    expect(await db(t.app).passengerBoarding.count({ where: { deviceId } })).toBe(0);
+  });
+
   it('enforces Crew ownership and STAFF grantor rules inside PostgreSQL', async () => {
     const crew = await crewActor();
     const ready = await readyBoarding();
@@ -724,6 +805,59 @@ describe('PR-18 Crew offline sync', () => {
     expect(events.filter((event) => event.action === 'CREW_DEVICE_ENROLLED')).toHaveLength(1);
     expect(events.filter((event) => event.action === 'PASSENGER_BOARDED')).toHaveLength(1);
     expect(JSON.stringify(events)).not.toContain(ready.qrPayload);
+  });
+
+  it('allows active STAFF to revoke after the Crew owner and original grantor are disabled', async () => {
+    const crew = await crewActorWithoutPassword();
+    const ready = await readyBoarding();
+    const grantorEmail = `grantor.direct.${randomBytes(6).toString('hex')}@example.test`;
+    const grantor = await db(t.app).authIdentity.create({
+      data: {
+        realm: 'STAFF',
+        email: grantorEmail,
+        normalizedEmail: grantorEmail,
+        status: 'ACTIVE',
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const assigned = await db(t.app).crewTripAssignment.create({
+      data: {
+        tripId: ready.trip.id,
+        crewIdentityId: crew.id,
+        assignedByIdentityId: grantor.id,
+      },
+    });
+    const assignmentId = assigned.id;
+    const deviceId = `crew-${run}-revocation-after-disable`;
+    expect((await crewApi(crew).enroll(deviceId)).status).toBe(201);
+
+    await db(t.app).authIdentity.update({
+      where: { id: crew.id },
+      data: { status: 'SUSPENDED' },
+    });
+    await db(t.app).authIdentity.update({
+      where: { id: grantor.id },
+      data: { status: 'DISABLED' },
+    });
+
+    const revoked = await ops.http.post(
+      `/v1/admin/trips/${ready.trip.id}/crew-assignments/${assignmentId}/revoke`,
+      { reason: 'Retrait après suspension du Crew' },
+      ops.cookie,
+      await ops.csrf(),
+    );
+    expect(revoked.status, revoked.text).toBe(201);
+    expect(revoked.body.revokedAt).toBeTruthy();
+
+    const device = await db(t.app).crewDevice.update({
+      where: { deviceId },
+      data: {
+        revokedAt: new Date(),
+        revokedByIdentityId: ops.id,
+        revocationReason: 'Appareil retiré après suspension',
+      },
+    });
+    expect(device.revokedAt).toBeTruthy();
   });
 
   it('makes assignment creation idempotent and revocation terminal', async () => {

@@ -60,12 +60,14 @@ manifest, permit, readiness or departure access.
   short retention and recovers interrupted `syncing` work.
 - Logout attempts server device revocation when online, then purges local Crew
   data even if the network call fails.
-- A fresh assignment response purges trips that are completed, cancelled,
-  expired or no longer assigned. An unauthorized sync pauses and removes data
-  according to the explicit logout/re-authentication path; it never silently
-  claims success.
-- Retry is bounded and uses backoff. Business rejections and conflicts require
-  operator action and do not loop forever.
+- A fresh assignment response removes stale trip snapshots but preserves
+  unsynchronized events. Events for a removed assignment are marked rejected
+  for operator review rather than deleted.
+- Authentication, authorization, quota and transient server failures preserve
+  pending events. Full local deletion is reserved for explicit logout, identity
+  change, event TTL or explicit operator removal.
+- Retry uses capped exponential backoff. Business rejections and conflicts
+  require operator action and do not loop forever.
 
 ## Honest browser-security boundary
 

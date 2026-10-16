@@ -59,6 +59,11 @@ function p2002(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
+function retryAfterSeconds(error: PublicApiError): number {
+  const parsed = Number.parseInt(error.headers['Retry-After'] ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
 @Injectable()
 export class CrewService {
   constructor(
@@ -256,6 +261,15 @@ export class CrewService {
         });
       } catch (error) {
         if (error instanceof PublicApiError) {
+          if (error.getStatus() === 429) {
+            results.push({
+              clientEventId: event.clientEventId,
+              status: 'RETRY' as const,
+              errorCode: error.code,
+              retryAfterSeconds: retryAfterSeconds(error),
+            });
+            continue;
+          }
           results.push({
             clientEventId: event.clientEventId,
             status:

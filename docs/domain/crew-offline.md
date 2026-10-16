@@ -15,7 +15,8 @@ create another check-in, boarding or departure engine.
 6. On reconnect, the PWA sends a bounded, ordered batch to the trip endpoint.
 7. The API validates current authority and processes each event independently.
 8. `ACKNOWLEDGED` removes the payload; `REJECTED` and `CONFLICT` remain visible
-   for operator action. Network and authentication failures pause retry safely.
+   for operator action. Network, quota and authentication failures retain the
+   event as `PENDING` and pause retry safely.
 
 ## Server model
 

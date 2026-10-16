@@ -1,5 +1,5 @@
 /* global self, caches, fetch, URL */
-const CACHE = 'euroteranga-crew-shell-v3';
+const CACHE = 'euroteranga-crew-shell-v4';
 const SHELL = ['/', '/connexion', '/session'];
 
 self.addEventListener('install', (event) => {
@@ -44,7 +44,15 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(async () => (await caches.match(request)) || (await caches.match('/'))),
+      fetch(request)
+        .then(async (response) => {
+          if (response.ok && response.type === 'basic') {
+            const cache = await caches.open(CACHE);
+            await cache.put(request, response.clone());
+          }
+          return response;
+        })
+        .catch(async () => (await caches.match(request)) || (await caches.match('/'))),
     );
   }
 });

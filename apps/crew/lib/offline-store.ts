@@ -3,6 +3,7 @@
 import type { CrewSyncResult, CrewTripSnapshot } from '@euroteranga/auth-client';
 import {
   afterNetworkFailure,
+  afterTemporaryFailure,
   applyServerResult,
   createBoardingEvent,
   findPendingDuplicate,
@@ -91,7 +92,7 @@ export async function bindIdentity(identityId: string): Promise<boolean> {
   return changed;
 }
 
-/** Replaces authoritative assignments and purges work for lost assignments. */
+/** Replaces authoritative assignments without deleting unsynchronized evidence. */
 export async function replaceTripSnapshots(items: CrewTripSnapshot[]): Promise<number> {
   const db = await database();
   const tx = db.transaction([TRIPS, EVENTS], 'readwrite');
@@ -100,14 +101,22 @@ export async function replaceTripSnapshots(items: CrewTripSnapshot[]): Promise<n
   const allowed = new Set(items.map((item) => item.trip.reference));
   const queued = (await request(events.getAll())) as LocalCrewEvent[];
   const partition = partitionForAssignments(queued, allowed);
-  for (const event of partition.purged) {
-    events.delete(event.clientEventId);
+  let rejected = 0;
+  for (const event of partition.unassigned) {
+    if (event.status === 'PENDING' || event.status === 'SYNCING') {
+      events.put({
+        ...event,
+        status: 'REJECTED',
+        errorCode: 'CREW_TRIP_NOT_ASSIGNED',
+      });
+      rejected += 1;
+    }
   }
   trips.clear();
   for (const item of items) trips.put(item);
   await finished(tx);
   db.close();
-  return partition.purged.length;
+  return rejected;
 }
 
 export async function cachedTripSnapshots(): Promise<CrewTripSnapshot[]> {
@@ -246,6 +255,24 @@ export async function markNetworkFailure(ids: string[], now = new Date()): Promi
   for (const id of ids) {
     const row = (await request(store.get(id))) as LocalCrewEvent | undefined;
     if (row) store.put(afterNetworkFailure(row, now));
+  }
+  await finished(tx);
+  db.close();
+}
+
+export async function markTemporaryFailure(
+  ids: string[],
+  errorCode: string,
+  minimumDelayMs = 0,
+  now = new Date(),
+): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await database();
+  const tx = db.transaction(EVENTS, 'readwrite');
+  const store = tx.objectStore(EVENTS);
+  for (const id of ids) {
+    const row = (await request(store.get(id))) as LocalCrewEvent | undefined;
+    if (row) store.put(afterTemporaryFailure(row, errorCode, now, minimumDelayMs));
   }
   await finished(tx);
   db.close();

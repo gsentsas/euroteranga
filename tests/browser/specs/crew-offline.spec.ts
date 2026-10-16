@@ -1,3 +1,5 @@
+import { createHash, randomBytes } from 'node:crypto';
+import { createDatabaseClient } from '@euroteranga/database';
 import {
   expect,
   test,
@@ -7,7 +9,12 @@ import {
   type Page,
 } from '@playwright/test';
 import { appByName, appUrl } from '../apps.js';
-import { checkInSeed, preauthenticatedSession, type PreauthenticatedFixture } from '../fixtures.js';
+import {
+  checkInSeed,
+  FIXTURES,
+  preauthenticatedSession,
+  type PreauthenticatedFixture,
+} from '../fixtures.js';
 import { BROWSER_API_URL, directAdminApi } from '../staff.js';
 
 const crewApp = appByName('crew');
@@ -113,6 +120,50 @@ async function prepareCrewCheckIn(browser: Browser) {
   expect(checked.status()).toBe(201);
   const body = (await checked.json()) as { checkIn: { qrPayload: string; reference: string } };
   return { seed, context, api, qrPayload: body.checkIn.qrPayload };
+}
+
+async function createEphemeralCrewSession() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) throw new Error('DATABASE_URL is required for the Crew browser test');
+  const db = createDatabaseClient({ databaseUrl });
+  try {
+    const identity = await db.authIdentity.findUniqueOrThrow({
+      where: {
+        realm_normalizedEmail: {
+          realm: 'CREW',
+          normalizedEmail: FIXTURES.crew.email,
+        },
+      },
+    });
+    const token = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + 60 * 60_000);
+    const session = await db.authSession.create({
+      data: {
+        identityId: identity.id,
+        tokenHash: new Uint8Array(createHash('sha256').update(token).digest()),
+        authVersion: identity.authVersion,
+        idleExpiresAt: expiresAt,
+        absoluteExpiresAt: expiresAt,
+      },
+    });
+    return { token, sessionId: session.id };
+  } finally {
+    await db.$disconnect();
+  }
+}
+
+async function expireCrewSession(sessionId: string) {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) throw new Error('DATABASE_URL is required for the Crew browser test');
+  const db = createDatabaseClient({ databaseUrl });
+  try {
+    await db.authSession.update({
+      where: { id: sessionId },
+      data: { idleExpiresAt: new Date(Date.now() - 1_000) },
+    });
+  } finally {
+    await db.$disconnect();
+  }
 }
 
 async function offlineDatabaseDump(page: Page) {
@@ -261,5 +312,39 @@ test.describe('PR-18 Crew PWA offline operations', () => {
     expect(dump.events).toHaveLength(1);
 
     await context.setOffline(false);
+  });
+
+  test('preserves pending scans when the Crew session expires before reconnect', async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const seed = checkInSeed();
+    const session = await createEphemeralCrewSession();
+    await addSessionCookie(context, 'crew', session.token);
+    await page.goto(appUrl(crewApp, '/session'));
+    await expect(page.getByRole('combobox', { name: 'Voyage', exact: true })).toHaveValue(
+      seed.crewTripReference,
+    );
+    await page.evaluate(async () => {
+      if (!('serviceWorker' in navigator)) throw new Error('service worker unavailable');
+      await navigator.serviceWorker.ready;
+    });
+    await page.reload();
+
+    await context.setOffline(true);
+    await page.getByLabel('Code QR passager').fill('ETPAX1:ETQ-YYYYYYYYYYYYYYYY');
+    await page.getByRole('button', { name: 'Enregistrer l’embarquement' }).click();
+    await expect(page.getByText('1 en attente')).toBeVisible();
+    await expireCrewSession(session.sessionId);
+
+    await context.setOffline(false);
+    await expect(page).toHaveURL(appUrl(crewApp, '/connexion'));
+    const dump = await offlineDatabaseDump(page);
+    expect(dump.events).toHaveLength(1);
+    expect(dump.events[0]).toMatchObject({
+      tripReference: seed.crewTripReference,
+      status: 'PENDING',
+    });
   });
 });

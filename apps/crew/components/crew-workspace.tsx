@@ -16,11 +16,13 @@ import {
   markFailed,
   markNetworkFailure,
   markSyncing,
+  markTemporaryFailure,
   purgeExpiredData,
   queueBoarding,
   recoverInterruptedSync,
   replaceTripSnapshots,
   retryEvent,
+  returnPending,
   type LocalCrewEvent,
 } from '../lib/offline-store';
 
@@ -74,13 +76,6 @@ export function CrewWorkspace() {
     );
   }, []);
 
-  const purgeAuthorization = useCallback(async () => {
-    await clearOfflineData();
-    setTrips([]);
-    setEvents([]);
-    setDevice(null);
-  }, []);
-
   const syncQueued = useCallback(
     async (knownDevice?: string, force = false) => {
       if (!navigator.onLine || syncLock.current) return;
@@ -130,17 +125,28 @@ export function CrewWorkspace() {
                 return;
               }
               if (result.error.status === 401) {
-                await purgeAuthorization();
+                await returnPending(ids);
+                setNotice(
+                  'Session expirée : les actions locales sont conservées pour la reconnexion.',
+                );
                 router.replace('/connexion');
                 return;
               }
+              if (result.error.code === 'CREW_TRIP_NOT_ASSIGNED') {
+                await markFailed(ids, result.error.code);
+                setError(
+                  'Affectation retirée : seuls les événements de ce voyage sont à vérifier.',
+                );
+                continue;
+              }
               if (
                 result.error.status === 403 ||
-                result.error.code === 'CREW_DEVICE_UNAVAILABLE' ||
-                result.error.code === 'CREW_TRIP_NOT_ASSIGNED'
+                result.error.status === 429 ||
+                result.error.status >= 500 ||
+                result.error.code === 'CREW_DEVICE_UNAVAILABLE'
               ) {
-                await purgeAuthorization();
-                setError('Autorisation Crew retirée : les données locales ont été purgées.');
+                await markTemporaryFailure(ids, result.error.code, 30_000);
+                setError(`${result.error.message} Les actions locales sont conservées.`);
                 return;
               }
               await markFailed(ids, result.error.code);
@@ -160,14 +166,14 @@ export function CrewWorkspace() {
         await refreshLocal();
       }
     },
-    [purgeAuthorization, refreshLocal, router],
+    [refreshLocal, router],
   );
 
   const refreshFromServer = useCallback(async () => {
     const me = await auth.me('crew');
     if (!me.ok) {
       if (me.error.status === 401) {
-        await purgeAuthorization();
+        setNotice('Session expirée : les actions locales sont conservées pour la reconnexion.');
         router.replace('/connexion');
       } else if (me.error.code === 'NETWORK_ERROR') {
         setNotice('Core API indisponible : utilisation du cache local non expiré.');
@@ -186,13 +192,12 @@ export function CrewWorkspace() {
     const enrolled = await auth.crew.enrollDevice(id, 'PWA Crew');
     if (!enrolled.ok) {
       if (enrolled.error.status === 401) {
-        await purgeAuthorization();
+        setNotice('Session expirée : les actions locales sont conservées pour la reconnexion.');
         router.replace('/connexion');
       } else if (enrolled.error.code === 'NETWORK_ERROR') {
-        setNotice('Core API indisponible : appareil conservé localement.');
+        setNotice('Core API indisponible : appareil et actions conservés localement.');
       } else {
-        await purgeAuthorization();
-        setError(enrolled.error.message);
+        setError(`${enrolled.error.message} Les actions locales sont conservées.`);
       }
       return;
     }
@@ -200,20 +205,22 @@ export function CrewWorkspace() {
     const remote = await auth.crew.trips();
     if (!remote.ok) {
       if (remote.error.status === 401) {
-        await purgeAuthorization();
+        setNotice('Session expirée : les actions locales sont conservées pour la reconnexion.');
         router.replace('/connexion');
       } else if (remote.error.code === 'NETWORK_ERROR') {
         setNotice('Core API indisponible : voyages non expirés conservés localement.');
       } else setError(remote.error.message);
       return;
     }
-    const purged = await replaceTripSnapshots(remote.data.items);
-    if (purged > 0) {
-      setNotice(`${purged} action(s) locale(s) purgée(s) : voyage terminé ou affectation retirée.`);
+    const unassigned = await replaceTripSnapshots(remote.data.items);
+    if (unassigned > 0) {
+      setNotice(
+        `${unassigned} action(s) locale(s) conservée(s) mais marquée(s) à vérifier : affectation retirée.`,
+      );
     }
     await refreshLocal();
     await syncQueued(id);
-  }, [purgeAuthorization, refreshLocal, router, syncQueued]);
+  }, [refreshLocal, router, syncQueued]);
 
   useEffect(() => {
     let active = true;

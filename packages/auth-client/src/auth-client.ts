@@ -1292,6 +1292,12 @@ export interface CrewSyncResult {
       }
     | {
         clientEventId: string;
+        status: 'RETRY';
+        errorCode: string;
+        retryAfterSeconds: number;
+      }
+    | {
+        clientEventId: string;
         status: 'REJECTED' | 'CONFLICT';
         errorCode: string;
       }

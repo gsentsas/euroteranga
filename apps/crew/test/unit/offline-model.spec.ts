@@ -7,7 +7,6 @@ import {
   findPendingDuplicate,
   isExpired,
   MAX_RETRY_DELAY_MS,
-  MAX_SYNC_ATTEMPTS,
   newClientEventId,
   orderEvents,
   partitionForAssignments,
@@ -94,7 +93,7 @@ describe('Crew offline queue model', () => {
     expect(recovered.payload).toEqual(interrupted.payload);
   });
 
-  it('backs off deterministically, caps delay and stops after a bounded retry count', () => {
+  it('backs off deterministically, caps delay and keeps network failures pending', () => {
     expect([1, 2, 3, 4, 20].map(retryDelayMs)).toEqual([
       1_000,
       2_000,
@@ -103,17 +102,15 @@ describe('Crew offline queue model', () => {
       MAX_RETRY_DELAY_MS,
     ]);
     let current = event();
-    for (let attempt = 1; attempt < MAX_SYNC_ATTEMPTS; attempt += 1) {
+    for (let attempt = 1; attempt <= 8; attempt += 1) {
       current = afterNetworkFailure(current, NOW);
-      expect(current.attempts).toBe(attempt);
-      expect(current.status).toBe('PENDING');
+      expect(current).toMatchObject({
+        attempts: attempt,
+        status: 'PENDING',
+        errorCode: 'NETWORK_ERROR',
+      });
     }
-    current = afterNetworkFailure(current, NOW);
-    expect(current).toMatchObject({
-      attempts: MAX_SYNC_ATTEMPTS,
-      status: 'REJECTED',
-      errorCode: 'SYNC_RETRY_EXHAUSTED',
-    });
+    expect(Date.parse(current.nextAttemptAt) - NOW.getTime()).toBe(MAX_RETRY_DELAY_MS);
   });
 
   it('deletes an acknowledged event and retains explicit server conflicts', () => {
@@ -135,6 +132,23 @@ describe('Crew offline queue model', () => {
       status: 'CONFLICT',
       errorCode: 'BOARDING_CLIENT_EVENT_ID_REUSED',
     });
+    expect(
+      applyServerResult(
+        event({ status: 'SYNCING', attempts: 2 }),
+        {
+          clientEventId: 'evt-00000001',
+          status: 'RETRY',
+          errorCode: 'TOO_MANY_REQUESTS',
+          retryAfterSeconds: 900,
+        },
+        NOW,
+      ),
+    ).toMatchObject({
+      status: 'PENDING',
+      attempts: 3,
+      errorCode: 'TOO_MANY_REQUESTS',
+      nextAttemptAt: new Date(NOW.getTime() + 900_000).toISOString(),
+    });
   });
 
   it('expires records at their TTL and purges events for assignments no longer returned', () => {
@@ -144,7 +158,7 @@ describe('Crew offline queue model', () => {
     const removed = event({ clientEventId: 'evt-2', tripReference: 'ET-REMOVED' });
     const partition = partitionForAssignments([removed, kept], new Set(['ET-TEST-1']));
     expect(partition.retained).toEqual([kept]);
-    expect(partition.purged).toEqual([removed]);
+    expect(partition.unassigned).toEqual([removed]);
   });
 
   it('does not merge different trips or QR payloads', () => {

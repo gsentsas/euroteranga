@@ -45,9 +45,9 @@ portable foreground path is authoritative.
 
 The local snapshot is deliberately minimal. It contains assigned trip display
 data and opaque boarding events, not a passenger manifest, names, dates of
-birth, documents, passwords, session cookies or CSRF values. Records expire
-and are purged on logout and when the server reports that an assignment ended
-or became unauthorized.
+birth, documents, passwords, session cookies or CSRF values. Records expire and are purged on explicit logout or identity change. A
+server-side authorization loss never silently deletes an unacknowledged event:
+it remains visible as rejected for operator review until explicit removal or TTL.
 
 ## Consequences
 

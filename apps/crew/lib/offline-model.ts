@@ -13,7 +13,6 @@ export interface LocalCrewEvent extends CrewOfflineEvent {
 }
 
 export const EVENT_TTL_MS = 7 * 24 * 60 * 60_000;
-export const MAX_SYNC_ATTEMPTS = 5;
 export const MAX_RETRY_DELAY_MS = 30_000;
 
 export function newClientEventId(randomUUID: () => string = () => crypto.randomUUID()): string {
@@ -53,31 +52,41 @@ export function retryDelayMs(attempt: number): number {
   return Math.min(1_000 * 2 ** Math.max(0, attempt - 1), MAX_RETRY_DELAY_MS);
 }
 
-export function afterNetworkFailure(event: LocalCrewEvent, now = new Date()): LocalCrewEvent {
+export function afterTemporaryFailure(
+  event: LocalCrewEvent,
+  errorCode: string,
+  now = new Date(),
+  minimumDelayMs = 0,
+): LocalCrewEvent {
   const attempts = event.attempts + 1;
-  if (attempts >= MAX_SYNC_ATTEMPTS) {
-    return {
-      ...event,
-      attempts,
-      status: 'REJECTED',
-      errorCode: 'SYNC_RETRY_EXHAUSTED',
-      nextAttemptAt: now.toISOString(),
-    };
-  }
+  const delay = Math.max(retryDelayMs(attempts), Math.max(0, minimumDelayMs));
   return {
     ...event,
     attempts,
     status: 'PENDING',
-    errorCode: 'NETWORK_ERROR',
-    nextAttemptAt: new Date(now.getTime() + retryDelayMs(attempts)).toISOString(),
+    errorCode,
+    nextAttemptAt: new Date(now.getTime() + delay).toISOString(),
   };
+}
+
+export function afterNetworkFailure(event: LocalCrewEvent, now = new Date()): LocalCrewEvent {
+  return afterTemporaryFailure(event, 'NETWORK_ERROR', now);
 }
 
 export function applyServerResult(
   event: LocalCrewEvent,
   result: CrewSyncResult['results'][number],
+  now = new Date(),
 ): LocalCrewEvent | null {
   if (result.status === 'ACKNOWLEDGED') return null;
+  if (result.status === 'RETRY') {
+    return afterTemporaryFailure(
+      event,
+      result.errorCode,
+      now,
+      Math.max(1, result.retryAfterSeconds) * 1_000,
+    );
+  }
   return {
     ...event,
     status: result.status,
@@ -98,13 +107,13 @@ export function recoverInterruptedEvent(event: LocalCrewEvent): LocalCrewEvent {
 export function partitionForAssignments(
   events: readonly LocalCrewEvent[],
   allowedTripReferences: ReadonlySet<string>,
-): { retained: LocalCrewEvent[]; purged: LocalCrewEvent[] } {
+): { retained: LocalCrewEvent[]; unassigned: LocalCrewEvent[] } {
   const retained: LocalCrewEvent[] = [];
-  const purged: LocalCrewEvent[] = [];
+  const unassigned: LocalCrewEvent[] = [];
   for (const event of events) {
-    (allowedTripReferences.has(event.tripReference) ? retained : purged).push(event);
+    (allowedTripReferences.has(event.tripReference) ? retained : unassigned).push(event);
   }
-  return { retained, purged };
+  return { retained, unassigned };
 }
 
 export function findPendingDuplicate(

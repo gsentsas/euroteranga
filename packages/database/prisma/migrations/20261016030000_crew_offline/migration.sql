@@ -129,11 +129,13 @@ BEGIN
       USING ERRCODE = 'object_not_in_prerequisite_state';
   END IF;
 
-  SELECT "realm", "status" INTO owner_realm, owner_status
-  FROM "auth_identity" WHERE "id" = NEW."identity_id" FOR SHARE;
-  IF FOUND AND (owner_realm <> 'CREW' OR owner_status <> 'ACTIVE') THEN
-    RAISE EXCEPTION 'crew device owner must be active CREW'
-      USING ERRCODE = 'check_violation';
+  IF TG_OP = 'INSERT' THEN
+    SELECT "realm", "status" INTO owner_realm, owner_status
+    FROM "auth_identity" WHERE "id" = NEW."identity_id" FOR SHARE;
+    IF FOUND AND (owner_realm <> 'CREW' OR owner_status <> 'ACTIVE') THEN
+      RAISE EXCEPTION 'crew device owner must be active CREW'
+        USING ERRCODE = 'check_violation';
+    END IF;
   END IF;
 
   IF TG_OP = 'UPDATE' THEN
@@ -192,17 +194,19 @@ BEGIN
       USING ERRCODE = 'object_not_in_prerequisite_state';
   END IF;
 
-  SELECT "realm", "status" INTO crew_realm, crew_status
-  FROM "auth_identity" WHERE "id" = NEW."crew_identity_id" FOR SHARE;
-  IF FOUND AND (crew_realm <> 'CREW' OR crew_status <> 'ACTIVE') THEN
-    RAISE EXCEPTION 'trip assignment requires active CREW identity'
-      USING ERRCODE = 'check_violation';
-  END IF;
-  SELECT "realm", "status" INTO grantor_realm, grantor_status
-  FROM "auth_identity" WHERE "id" = NEW."assigned_by_identity_id" FOR SHARE;
-  IF FOUND AND (grantor_realm <> 'STAFF' OR grantor_status <> 'ACTIVE') THEN
-    RAISE EXCEPTION 'trip assignment grantor must be active STAFF'
-      USING ERRCODE = 'check_violation';
+  IF TG_OP = 'INSERT' THEN
+    SELECT "realm", "status" INTO crew_realm, crew_status
+    FROM "auth_identity" WHERE "id" = NEW."crew_identity_id" FOR SHARE;
+    IF FOUND AND (crew_realm <> 'CREW' OR crew_status <> 'ACTIVE') THEN
+      RAISE EXCEPTION 'trip assignment requires active CREW identity'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    SELECT "realm", "status" INTO grantor_realm, grantor_status
+    FROM "auth_identity" WHERE "id" = NEW."assigned_by_identity_id" FOR SHARE;
+    IF FOUND AND (grantor_realm <> 'STAFF' OR grantor_status <> 'ACTIVE') THEN
+      RAISE EXCEPTION 'trip assignment grantor must be active STAFF'
+        USING ERRCODE = 'check_violation';
+    END IF;
   END IF;
 
   IF TG_OP = 'UPDATE' THEN
