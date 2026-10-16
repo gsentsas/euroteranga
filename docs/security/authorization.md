@@ -66,24 +66,34 @@ ADR-017 to ADR-020. This document contains no secret value.
 | `manifest.export`          | Exporting a stored manifest snapshot as private CSV        |
 | `permit.read`              | Reading operational permits and intrinsic validity         |
 | `permit.manage`            | Creating, editing, activating and revoking permits         |
+| `departure.read`           | Reading whole-trip readiness and dispatch history          |
+| `departure.authorize`      | Authorizing the current READY departure fingerprint        |
+| `departure.manage`         | Publishing permit policy and recording trip dispatch       |
+| `crew.trip.read`           | Reading only trips assigned to the Crew identity (PR-18)   |
+| `crew.device.manage`       | Managing only devices owned by the Crew identity (PR-18)   |
+| `crew.boarding.scan`       | Synchronizing boarding events for an assigned trip (PR-18) |
 
 ### Role matrix
 
-| Role                                | Realm | Privileged | Permissions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ----------------------------------- | ----- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SUPER_ADMIN`                       | STAFF | yes        | all forty                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `DIRECTOR`                          | STAFF | no         | all except `privileged.manage`                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage`, `trip.read`, `trip.manage`, `seatmap.read`, `seatmap.manage`, `pricing.read`, `pricing.manage`, `booking.read`, `booking.manage`, `payment.read`, `passenger.document.read`, `compliance.read`, `baggage.read`, `baggage.manage`, `checkin.read`, `checkin.manage`, `boarding.read`, `boarding.scan`, `manifest.read`, `manifest.generate`, `manifest.export`, `permit.read`, `permit.manage` |
-| `DISPATCHER`                        | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `trip.manage`, `seatmap.read`, `pricing.read`, `baggage.read`, `baggage.manage`, `checkin.read`, `checkin.manage`, `boarding.read`, `boarding.scan`, `manifest.read`, `manifest.generate`, `manifest.export`, `permit.read` (no booking or permit-management permission)                                                                                                                                                                         |
-| `AUDITOR`                           | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `pricing.read`, `payment.read`, `compliance.rule.read`, `permit.read`                                                                                                                                                                                                                                                                                                                |
-| `COMPLIANCE_AGENT`                  | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `passenger.document.read`, `compliance.read`, `compliance.review`, `compliance.rule.read`, `permit.read` (no pricing, payment or permit-management permission)                                                                                                                                                                                                                                                                   |
-| `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`, `trip.read`, `seatmap.read`, `pricing.read`, `booking.read`, `booking.manage`, `payment.read`, `baggage.read`, `checkin.read`; `BOOKING_AGENT` also `baggage.manage`, `checkin.manage` (no fleet or boarding permission by default)                                                                                                                                                                                                                                         |
-| `FINANCE`                           | STAFF | no         | `ops.access`, `pricing.read`, `payment.read`, `payment.manage` (no network, fleet, trip, seat-map or booking permission by default)                                                                                                                                                                                                                                                                                                                                                                       |
-| `DRIVER`, `CREW`                    | CREW  | no         | none yet                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Role                                | Realm | Privileged | Permissions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------- | ----- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPER_ADMIN`                       | STAFF | yes        | all 47 permission keys; the three `crew.*` grants exist for role anti-escalation, not to cross the realm guard                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `DIRECTOR`                          | STAFF | no         | all STAFF-facing permissions except `privileged.manage`; no `crew.*` permission                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage`, `trip.read`, `trip.manage`, `seatmap.read`, `seatmap.manage`, `pricing.read`, `pricing.manage`, `booking.read`, `booking.manage`, `payment.read`, `passenger.document.read`, `compliance.read`, `baggage.read`, `baggage.manage`, `checkin.read`, `checkin.manage`, `boarding.read`, `boarding.scan`, `manifest.read`, `manifest.generate`, `manifest.export`, `permit.read`, `permit.manage`, `departure.read`, `departure.authorize`, `departure.manage` |
+| `DISPATCHER`                        | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `trip.manage`, `seatmap.read`, `pricing.read`, `baggage.read`, `baggage.manage`, `checkin.read`, `checkin.manage`, `boarding.read`, `boarding.scan`, `manifest.read`, `manifest.generate`, `manifest.export`, `permit.read`, `departure.read`, `departure.authorize`, `departure.manage` (no booking or permit-management permission)                                                                                                                                                                         |
+| `AUDITOR`                           | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `audit.read`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `pricing.read`, `payment.read`, `compliance.rule.read`, `permit.read`, `departure.read`                                                                                                                                                                                                                                                                                                                                                           |
+| `COMPLIANCE_AGENT`                  | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `passenger.document.read`, `compliance.read`, `compliance.review`, `compliance.rule.read`, `permit.read` (no pricing, payment or permit-management permission)                                                                                                                                                                                                                                                                                                                                |
+| `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`, `trip.read`, `seatmap.read`, `pricing.read`, `booking.read`, `booking.manage`, `payment.read`, `baggage.read`, `checkin.read`; `BOOKING_AGENT` also `baggage.manage`, `checkin.manage` (no fleet or boarding permission by default)                                                                                                                                                                                                                                                                                                      |
+| `FINANCE`                           | STAFF | no         | `ops.access`, `pricing.read`, `payment.read`, `payment.manage` (no network, fleet, trip, seat-map or booking permission by default)                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `DRIVER`, `CREW`                    | CREW  | no         | `crew.trip.read`, `crew.device.manage`, `crew.boarding.scan`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 A STAFF identity without any role, or with roles lacking `ops.access`, can
 sign in (password + TOTP) but gets **Accès refusé** in OPS and 403 from every
 admin route.
+
+The `crew.*` namespace is intentionally separate from STAFF `trip.*` and
+`boarding.*`. A permission grant never changes an identity's realm: Crew
+sessions cannot enter `/v1/admin`, and STAFF sessions cannot enter `/v1/crew`.
 
 ## Enforcement
 
@@ -191,6 +201,11 @@ There is **no public STAFF or CREW registration** and no bootstrap endpoint.
   scope, lifecycle/validity, dates and revision; never notes, source URLs,
   authority references, actor ids or internal resource ids. Revocation stores
   its mandatory reason as bounded event metadata.
+- Crew offline operations (PR-18) add `CREW_DEVICE_ENROLLED`,
+  `CREW_DEVICE_REFRESHED`, `CREW_DEVICE_REVOKED`, `CREW_TRIP_ASSIGNED` and
+  `CREW_TRIP_ASSIGNMENT_REVOKED`. Boarding success/refusal continues to use
+  PR-14 `PASSENGER_BOARDED` / `PASSENGER_BOARDING_REFUSED`, with device and
+  assignment provenance but never the QR payload.
 - `before`, `after` and `metadata` go through the same redaction as logs:
   tokens, passwords, TOTP secrets and recovery codes are never written.
 - Read through `GET /v1/admin/audit` (`audit.read`), newest first, keyset
@@ -246,6 +261,21 @@ All under `/v1/admin`, STAFF session, `ops.access` plus:
 | POST   | `/regulatory-permits`, `/regulatory-permits/:reference`               | `permit.manage` (+ CSRF, audit)           |
 | POST   | `/regulatory-permits/:reference/activate`                             | `permit.manage` (+ CSRF, audit)           |
 | POST   | `/regulatory-permits/:reference/revoke`                               | `permit.manage` (+ CSRF, reason, audit)   |
+| GET    | `/trips/:tripId/crew-assignments`                                     | `trip.manage`                             |
+| POST   | `/trips/:tripId/crew-assignments`                                     | `trip.manage` (+ CSRF, audit)             |
+| POST   | `/trips/:tripId/crew-assignments/:assignmentId/revoke`                | `trip.manage` (+ CSRF, reason, audit)     |
+
+## Crew API (PR-18)
+
+All routes below are under `/v1/crew`, require a live CREW-realm session, and
+are scoped again to the authenticated identity:
+
+| Method | Path                                           | Permission(s)                        |
+| ------ | ---------------------------------------------- | ------------------------------------ |
+| GET    | `/trips`, `/trips/:tripReference`              | `crew.trip.read`                     |
+| GET    | `/devices/:deviceId`                           | `crew.device.manage`                 |
+| POST   | `/devices/enroll`, `/devices/:deviceId/revoke` | `crew.device.manage` (+ CSRF, audit) |
+| POST   | `/trips/:tripReference/events/sync`            | `crew.boarding.scan` (+ CSRF, audit) |
 
 The booking detail (`GET /bookings/:id`) includes the booking's payment
 attempts only for callers holding `payment.read`: `booking.read` alone gives no
@@ -283,8 +313,9 @@ See ADR-020 and [the runbook](../runbooks/bootstrap-super-admin.md).
   which permits a trip needs. PR-17 owns departure readiness / dispatch
   authorization.
 - `AUDITOR`, `FINANCE` and `COMPLIANCE_AGENT` have no check-in or boarding
-  permission (PR-14). CREW and DRIVER cannot board until the PR-18 Crew
-  application adds a CREW route and device enrollment.
+  permission (PR-14). `CREW` and `DRIVER` board only through the assigned-trip,
+  enrolled-device PR-18 path; they have no STAFF `boarding.read` or
+  `boarding.scan` grant.
 - `AUDITOR`, `FINANCE` and `COMPLIANCE_AGENT` have no baggage permission:
   baggage views name the passenger (PR-13). Auditors follow baggage changes
   through the audit trail.
@@ -292,4 +323,11 @@ See ADR-020 and [the runbook](../runbooks/bootstrap-super-admin.md).
 
 ## PR-17 departure permissions
 
-PR-17 adds `departure.read`, `departure.authorize` and `departure.manage`. SUPER_ADMIN, DIRECTOR, OPS_MANAGER and DISPATCHER hold all three; AUDITOR holds read only; other default roles, including DRIVER and CREW, hold none. All departure mutations require CSRF. The STAFF API routes are under `/v1/admin/departure/trips/:tripReference`; read exposes minimized readiness facts, while policy publication, authorization, departure and completion are separately permission-checked and audited. PR-18 is required before Crew/device access exists.
+PR-17 adds `departure.read`, `departure.authorize` and `departure.manage`.
+SUPER_ADMIN, DIRECTOR, OPS_MANAGER and DISPATCHER hold all three; AUDITOR holds
+read only; other default roles, including DRIVER and CREW, hold none. All
+departure mutations require CSRF. The STAFF API routes are under
+`/v1/admin/departure/trips/:tripReference`; read exposes minimized readiness
+facts, while policy publication, authorization, departure and completion are
+separately permission-checked and audited. PR-18 Crew/device permissions do
+not imply any departure permission.

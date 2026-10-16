@@ -510,7 +510,7 @@ describe('check-in and boarding PostgreSQL invariants and true concurrency', () 
     ).toBe(1);
   });
 
-  it('keeps boarding append-only, staff-only, time-bounded and tied to a check-in', async () => {
+  it('keeps boarding append-only, actor-checked, time-bounded and tied to a check-in', async () => {
     const ready = await compliantPassenger(t.app, env, customer, ruleManager);
     const checkIn = await staffCheckInApi(agent).checkIn(
       ready.bookingReference,
@@ -540,7 +540,7 @@ describe('check-in and boarding PostgreSQL invariants and true concurrency', () 
       db(t.app).passengerBoarding.create({
         data: { ...base, reference: 'ETE-000000000002', boardedByIdentityId: customer.id },
       }),
-    ).rejects.toThrow(/only active STAFF may board a passenger/);
+    ).rejects.toThrow(/only active STAFF or CREW may board a passenger/);
     await expect(
       db(t.app).passengerBoarding.create({
         data: {

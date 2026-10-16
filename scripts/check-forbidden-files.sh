@@ -33,12 +33,18 @@ if matches="$(git grep -nE "$bypass_pattern" -- ':!scripts/check-forbidden-files
   status=1
 fi
 
-# Authentication hygiene (PR-02):
+# Authentication and Crew-offline hygiene (PR-02 / PR-18):
 # - browser code never persists secrets in web storage (sessions are HttpOnly cookies);
+# - the sole IndexedDB adapter is the reviewed, minimized Crew offline store;
 # - the API never uses Math.random (not a CSPRNG) nor console.log (unredacted output).
 storage_pattern='\b(localStorage|sessionStorage|indexedDB)[[:space:]]*[.[]'
-if matches="$(git grep -nE "$storage_pattern" -- 'apps/*/app/**' 'apps/*/components/**' 'apps/*/lib/**' 'packages/auth-client/src/**' 'packages/ui/src/**' ':!**/*.test.ts')"; then
+if matches="$(git grep -nE "$storage_pattern" -- 'apps/*/app/**' 'apps/*/components/**' 'apps/*/lib/**' 'packages/auth-client/src/**' 'packages/ui/src/**' ':!apps/crew/lib/offline-store.ts' ':!**/*.test.ts')"; then
   echo "$matches" | while IFS= read -r line; do echo "::error::Browser storage used in application code: $line"; done
+  status=1
+fi
+crew_secret_field_pattern='\b(password|cookie|csrf|accessToken|refreshToken|sessionToken|documentNumber|dateOfBirth)[[:space:]]*:'
+if matches="$(git grep -nE "$crew_secret_field_pattern" -- 'apps/crew/lib/offline-*.ts')"; then
+  echo "$matches" | while IFS= read -r line; do echo "::error::Forbidden secret or passenger field in Crew offline records: $line"; done
   status=1
 fi
 if matches="$(git grep -nE '\bMath\.random\(|\bconsole\.(log|info|debug)\(' -- 'apps/api/src/**')"; then

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EURO TERANGA Crew">
+  <rect width="512" height="512" rx="96" fill="#0b1f3a"/>
+  <path d="M96 152h320v176H96z" fill="#fff"/>
+  <path d="M128 184h256v80H128z" fill="#0b1f3a"/>
+  <circle cx="160" cy="344" r="40" fill="#fff"/>
+  <circle cx="352" cy="344" r="40" fill="#fff"/>
+  <path d="M112 296h288v48H112z" fill="#fff"/>
+  <text x="256" y="244" text-anchor="middle" font-family="system-ui,sans-serif" font-size="52" font-weight="700" fill="#fff">ET</text>
+</svg>

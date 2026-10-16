@@ -1,18 +1,23 @@
 import '@euroteranga/ui/tokens.css';
+import './crew.css';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { PwaRegistration } from '../components/pwa-registration';
 
 export const metadata: Metadata = {
   title: 'EURO TERANGA Crew',
-  description: 'Application équipage EURO TERANGA — environnement de fondation.',
-  // Foundation skeletons must not be indexed as if they were live services.
+  description: 'Application terrain équipage EURO TERANGA.',
+  manifest: '/manifest.webmanifest',
   robots: { index: false, follow: false },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="fr">
-      <body>{children}</body>
+      <body>
+        <PwaRegistration />
+        {children}
+      </body>
     </html>
   );
 }

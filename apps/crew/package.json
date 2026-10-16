@@ -8,7 +8,8 @@
     "dev": "next dev --port 3005",
     "build": "next build",
     "start": "next start --port 3005",
-    "typecheck": "next typegen && tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit",
+    "test:unit": "vitest run test/unit"
   },
   "dependencies": {
     "@euroteranga/auth-client": "workspace:*",
@@ -23,6 +24,7 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

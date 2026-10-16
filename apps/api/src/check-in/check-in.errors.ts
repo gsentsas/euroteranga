@@ -68,4 +68,10 @@ export const CheckInErrors = {
       'BOARDING_TIME_INVALID',
       'L’heure d’embarquement est hors de la fenêtre autorisée.',
     ),
+  crewContextStale: () =>
+    new PublicApiError(
+      409,
+      'CREW_CONTEXT_STALE',
+      'L’appareil ou l’affectation équipage n’est plus autorisé pour ce voyage.',
+    ),
 };

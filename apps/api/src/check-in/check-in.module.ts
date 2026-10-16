@@ -16,6 +16,6 @@ import { CustomerCheckInController } from './customer-check-in.controller.js';
   imports: [DatabaseModule, ComplianceModule],
   controllers: [CustomerCheckInController, AdminCheckInController, AdminBoardingController],
   providers: [CheckInService, BoardingService],
-  exports: [CheckInService],
+  exports: [CheckInService, BoardingService],
 })
 export class CheckInModule {}

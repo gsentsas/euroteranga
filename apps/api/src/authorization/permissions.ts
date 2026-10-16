@@ -51,6 +51,10 @@ export const PERMISSIONS = {
   DEPARTURE_READ: 'departure.read',
   DEPARTURE_AUTHORIZE: 'departure.authorize',
   DEPARTURE_MANAGE: 'departure.manage',
+  // PR-18: Crew-realm capabilities are deliberately separate from STAFF.
+  CREW_TRIP_READ: 'crew.trip.read',
+  CREW_DEVICE_MANAGE: 'crew.device.manage',
+  CREW_BOARDING_SCAN: 'crew.boarding.scan',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

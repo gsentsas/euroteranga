@@ -1247,6 +1247,72 @@ export interface BoardingResult {
   boarding: PassengerBoarding;
 }
 
+export interface CrewTripSnapshot {
+  assignmentId: string;
+  snapshotExpiresAt: string;
+  trip: {
+    reference: string;
+    status: 'SCHEDULED';
+    plannedDepartureAt: string | null;
+    plannedArrivalAt: string | null;
+    vehicleCode: string | null;
+    route: { code: string; name: string };
+  };
+}
+
+export interface CrewTripList {
+  serverTime: string;
+  items: CrewTripSnapshot[];
+}
+
+export interface CrewDevice {
+  deviceId: string;
+  label: string | null;
+  enrolledAt: string;
+  expiresAt: string;
+  lastSeenAt: string;
+  revokedAt: string | null;
+}
+
+export interface CrewOfflineEvent {
+  clientEventId: string;
+  type: 'PASSENGER_BOARDING';
+  occurredAt: string;
+  payload: { qrPayload: string };
+}
+
+export interface CrewSyncResult {
+  tripReference: string;
+  results: Array<
+    | {
+        clientEventId: string;
+        status: 'ACKNOWLEDGED';
+        created: boolean;
+        boardingReference: string;
+      }
+    | {
+        clientEventId: string;
+        status: 'RETRY';
+        errorCode: string;
+        retryAfterSeconds: number;
+      }
+    | {
+        clientEventId: string;
+        status: 'REJECTED' | 'CONFLICT';
+        errorCode: string;
+      }
+  >;
+}
+
+export interface CrewTripAssignment {
+  id: string;
+  assignedAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  revocationReason: string | null;
+  crew: { id: string; email: string; status: string };
+}
+
 /** PR-15 immutable, PII-minimised snapshot of checked-in passengers. */
 export interface PassengerManifestPassenger {
   bookingReference: string;
@@ -2122,6 +2188,31 @@ export function createAuthClient(baseUrl: string) {
           ),
       },
     },
+    crew: {
+      trips: () => call<CrewTripList>('GET', '/v1/crew/trips'),
+      trip: (tripReference: string) =>
+        call<CrewTripSnapshot & { serverTime: string }>(
+          'GET',
+          `/v1/crew/trips/${encodeURIComponent(tripReference)}`,
+        ),
+      device: (deviceId: string) =>
+        call<CrewDevice>('GET', `/v1/crew/devices/${encodeURIComponent(deviceId)}`),
+      enrollDevice: (deviceId: string, label?: string) =>
+        withCsrf<CrewDevice>('crew', '/v1/crew/devices/enroll', {
+          deviceId,
+          ...(label ? { label } : {}),
+        }),
+      revokeDevice: (deviceId: string, reason: string) =>
+        withCsrf<CrewDevice>('crew', `/v1/crew/devices/${encodeURIComponent(deviceId)}/revoke`, {
+          reason,
+        }),
+      sync: (tripReference: string, deviceId: string, events: CrewOfflineEvent[]) =>
+        withCsrf<CrewSyncResult>(
+          'crew',
+          `/v1/crew/trips/${encodeURIComponent(tripReference)}/events/sync`,
+          { deviceId, events },
+        ),
+    },
     admin: {
       access: () => call<AccessInfo>('GET', '/v1/admin/access/me'),
       roles: () => call<AdminRole[]>('GET', '/v1/admin/roles'),
@@ -2346,6 +2437,23 @@ export function createAuthClient(baseUrl: string) {
               originRouteWaypointId,
               destinationRouteWaypointId,
             })}`,
+          ),
+        crewAssignments: (tripId: string) =>
+          call<{ items: CrewTripAssignment[] }>(
+            'GET',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/crew-assignments`,
+          ),
+        assignCrew: (tripId: string, crewIdentityId: string, expiresAt?: string) =>
+          withCsrf<{ created: boolean; assignment: CrewTripAssignment }>(
+            'staff',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/crew-assignments`,
+            { crewIdentityId, ...(expiresAt ? { expiresAt } : {}) },
+          ),
+        revokeCrewAssignment: (tripId: string, assignmentId: string, reason: string) =>
+          withCsrf<CrewTripAssignment>(
+            'staff',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/crew-assignments/${encodeURIComponent(assignmentId)}/revoke`,
+            { reason },
           ),
       },
       seatMaps: {

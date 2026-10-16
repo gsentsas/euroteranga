@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { ApiEnv } from '@euroteranga/config';
+import { Prisma } from '@euroteranga/database';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import {
   generateDocumentObjectKey,
@@ -25,8 +26,13 @@ export async function country(app: NestExpressApplication, name = 'Pays conformi
       select: { id: true },
     });
     if (taken) continue;
-    const created = await db(app).country.create({ data: { iso2, iso3: letters, name } });
-    return { id: created.id, iso2 };
+    try {
+      const created = await db(app).country.create({ data: { iso2, iso3: letters, name } });
+      return { id: created.id, iso2 };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') continue;
+      throw error;
+    }
   }
 }
 

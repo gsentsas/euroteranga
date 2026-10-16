@@ -26,6 +26,9 @@ const EXPECTED_MATRIX: Record<
       'compliance.review',
       'compliance.rule.manage',
       'compliance.rule.read',
+      'crew.boarding.scan',
+      'crew.device.manage',
+      'crew.trip.read',
       'departure.authorize',
       'departure.manage',
       'departure.read',
@@ -262,8 +265,16 @@ const EXPECTED_MATRIX: Record<
       'trip.read',
     ],
   },
-  DRIVER: { realm: 'CREW', privileged: false, permissions: [] },
-  CREW: { realm: 'CREW', privileged: false, permissions: [] },
+  DRIVER: {
+    realm: 'CREW',
+    privileged: false,
+    permissions: ['crew.boarding.scan', 'crew.device.manage', 'crew.trip.read'],
+  },
+  CREW: {
+    realm: 'CREW',
+    privileged: false,
+    permissions: ['crew.boarding.scan', 'crew.device.manage', 'crew.trip.read'],
+  },
 };
 
 const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
@@ -313,6 +324,12 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
     '/v1/admin/seat-maps/01900000-0000-7000-8000-000000000000/versions/01900000-0000-7000-8000-000000000001/publish',
   ],
   ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/fare-table'],
+  ['GET', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/crew-assignments'],
+  ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/crew-assignments'],
+  [
+    'POST',
+    '/v1/admin/trips/01900000-0000-7000-8000-000000000000/crew-assignments/01900000-0000-7000-8000-000000000001/revoke',
+  ],
   [
     'GET',
     '/v1/admin/trips/01900000-0000-7000-8000-000000000000/fare?originRouteWaypointId=01900000-0000-7000-8000-000000000001&destinationRouteWaypointId=01900000-0000-7000-8000-000000000002',

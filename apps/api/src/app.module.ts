@@ -9,6 +9,7 @@ import { ComplianceModule } from './compliance/compliance.module.js';
 import type { AuthMailProvider } from './auth/mail/auth-mail.provider.js';
 import { ConfigModule } from './config/config.module.js';
 import { DatabaseModule } from './database/database.module.js';
+import { CrewModule } from './crew/crew.module.js';
 import { DepartureReadinessModule } from './departure-readiness/departure-readiness.module.js';
 import { FleetModule } from './fleet/fleet.module.js';
 import { HealthModule } from './health/health.module.js';
@@ -52,6 +53,7 @@ export class AppModule {
         ComplianceModule,
         BaggageModule,
         CheckInModule,
+        CrewModule,
         ManifestModule,
         RegulatoryPermitModule,
         DepartureReadinessModule,
