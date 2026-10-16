@@ -1,6 +1,6 @@
 'use client';
 
-import type { CrewTripSnapshot } from '@euroteranga/auth-client';
+import type { ApiError, CrewTripSnapshot } from '@euroteranga/auth-client';
 import { FormAlert, FormStatus } from '@euroteranga/ui';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -25,6 +25,18 @@ import {
   returnPending,
   type LocalCrewEvent,
 } from '../lib/offline-store';
+import { retryDelayMs } from '../lib/offline-model';
+
+type RefreshResult = 'READY' | 'TRANSIENT_FAILURE' | 'STOPPED';
+
+function isTransientApiError(error: ApiError): boolean {
+  return (
+    error.code === 'NETWORK_ERROR' ||
+    error.status === 408 ||
+    error.status === 429 ||
+    error.status >= 500
+  );
+}
 
 function formatDate(value: string | null) {
   if (!value) return '—';
@@ -169,16 +181,20 @@ export function CrewWorkspace() {
     [refreshLocal, router],
   );
 
-  const refreshFromServer = useCallback(async (): Promise<boolean> => {
+  const refreshFromServer = useCallback(async (): Promise<RefreshResult> => {
     const me = await auth.me('crew');
     if (!me.ok) {
       if (me.error.status === 401) {
         setNotice('Session expirée : les actions locales sont conservées pour la reconnexion.');
         router.replace('/connexion');
-      } else if (me.error.code === 'NETWORK_ERROR') {
-        setNotice('Core API indisponible : utilisation du cache local non expiré.');
-      } else setError(me.error.message);
-      return false;
+        return 'STOPPED';
+      }
+      if (isTransientApiError(me.error)) {
+        setNotice('Core API indisponible : nouvelle tentative automatique en cours.');
+        return 'TRANSIENT_FAILURE';
+      }
+      setError(me.error.message);
+      return 'STOPPED';
     }
 
     setEmail(me.data.email);
@@ -194,12 +210,14 @@ export function CrewWorkspace() {
       if (enrolled.error.status === 401) {
         setNotice('Session expirée : les actions locales sont conservées pour la reconnexion.');
         router.replace('/connexion');
-      } else if (enrolled.error.code === 'NETWORK_ERROR') {
-        setNotice('Core API indisponible : appareil et actions conservés localement.');
-      } else {
-        setError(`${enrolled.error.message} Les actions locales sont conservées.`);
+        return 'STOPPED';
       }
-      return false;
+      if (isTransientApiError(enrolled.error)) {
+        setNotice('Core API indisponible : appareil conservé, nouvelle tentative automatique.');
+        return 'TRANSIENT_FAILURE';
+      }
+      setError(`${enrolled.error.message} Les actions locales sont conservées.`);
+      return 'STOPPED';
     }
 
     const remote = await auth.crew.trips();
@@ -207,10 +225,14 @@ export function CrewWorkspace() {
       if (remote.error.status === 401) {
         setNotice('Session expirée : les actions locales sont conservées pour la reconnexion.');
         router.replace('/connexion');
-      } else if (remote.error.code === 'NETWORK_ERROR') {
-        setNotice('Core API indisponible : voyages non expirés conservés localement.');
-      } else setError(remote.error.message);
-      return false;
+        return 'STOPPED';
+      }
+      if (isTransientApiError(remote.error)) {
+        setNotice('Core API indisponible : voyages conservés, nouvelle tentative automatique.');
+        return 'TRANSIENT_FAILURE';
+      }
+      setError(remote.error.message);
+      return 'STOPPED';
     }
     const unassigned = await replaceTripSnapshots(remote.data.items);
     if (unassigned > 0) {
@@ -219,19 +241,65 @@ export function CrewWorkspace() {
       );
     }
     await refreshLocal();
-    return true;
+    return 'READY';
   }, [refreshLocal, router]);
 
   useEffect(() => {
     let active = true;
+    let refreshing = false;
+    let retryAttempt = 0;
+    let retryTimer: number | undefined;
+
+    function scheduleRefresh(delay = 0) {
+      if (!active || !navigator.onLine) return;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      retryTimer = window.setTimeout(() => {
+        retryTimer = undefined;
+        void validateOnline();
+      }, delay);
+    }
+
+    async function validateOnline() {
+      if (!active || !navigator.onLine || refreshing) return;
+      refreshing = true;
+      let result: RefreshResult;
+      try {
+        result = await refreshFromServer();
+      } catch {
+        result = 'STOPPED';
+        if (active) setError('Le stockage local Crew est indisponible sur cet appareil.');
+      } finally {
+        refreshing = false;
+      }
+
+      if (!active || !navigator.onLine) {
+        if (active) setOnline(false);
+        return;
+      }
+      if (result === 'READY') {
+        retryAttempt = 0;
+        setError(null);
+        setOnline(true);
+        return;
+      }
+
+      setOnline(false);
+      if (result === 'TRANSIENT_FAILURE') {
+        retryAttempt += 1;
+        scheduleRefresh(retryDelayMs(retryAttempt));
+      } else {
+        retryAttempt = 0;
+      }
+    }
+
     const onOnline = () => {
-      void (async () => {
-        if (!active) return;
-        const ready = await refreshFromServer();
-        if (active) setOnline(ready);
-      })();
+      setOnline(false);
+      scheduleRefresh();
     };
     const onOffline = () => {
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      retryTimer = undefined;
+      retryAttempt = 0;
       setOnline(false);
       setNotice('Mode hors ligne : les actions seront conservées sur cet appareil.');
     };
@@ -247,8 +315,7 @@ export function CrewWorkspace() {
           setNotice('Données locales expirées purgées.');
         }
         if (navigator.onLine) {
-          const ready = await refreshFromServer();
-          if (active) setOnline(ready);
+          await validateOnline();
         } else {
           const id = await deviceId();
           if (active) setDevice(id);
@@ -264,6 +331,7 @@ export function CrewWorkspace() {
     window.addEventListener('offline', onOffline);
     return () => {
       active = false;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
     };
