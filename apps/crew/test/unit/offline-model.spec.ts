@@ -17,7 +17,9 @@ import {
 
 const NOW = new Date('2026-10-16T01:00:00.000Z');
 
-function event(overrides: Partial<LocalCrewEvent> = {}): LocalCrewEvent {
+type BoardingLocalEvent = Extract<LocalCrewEvent, { type: 'PASSENGER_BOARDING' }>;
+
+function event(overrides: Partial<BoardingLocalEvent> = {}): BoardingLocalEvent {
   return {
     clientEventId: 'evt-00000001',
     type: 'PASSENGER_BOARDING',
@@ -101,7 +103,7 @@ describe('Crew offline queue model', () => {
       8_000,
       MAX_RETRY_DELAY_MS,
     ]);
-    let current = event();
+    let current: LocalCrewEvent = event();
     for (let attempt = 1; attempt <= 8; attempt += 1) {
       current = afterNetworkFailure(current, NOW);
       expect(current).toMatchObject({

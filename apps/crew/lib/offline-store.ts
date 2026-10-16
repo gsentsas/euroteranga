@@ -6,6 +6,7 @@ import {
   afterTemporaryFailure,
   applyServerResult,
   createBoardingEvent,
+  createTrackingCheckpointEvent,
   findPendingDuplicate,
   isExpired,
   orderEvents,
@@ -179,6 +180,27 @@ export async function queueBoarding(
   qrPayload: string,
 ): Promise<LocalCrewEvent> {
   const event = createBoardingEvent(tripReference, qrPayload);
+  const db = await database();
+  const tx = db.transaction(EVENTS, 'readwrite');
+  const store = tx.objectStore(EVENTS);
+  const current = (await request(store.getAll())) as LocalCrewEvent[];
+  const duplicate = findPendingDuplicate(current, event);
+  if (duplicate) {
+    await finished(tx);
+    db.close();
+    return duplicate;
+  }
+  store.add(event);
+  await finished(tx);
+  db.close();
+  return event;
+}
+
+export async function queueTrackingCheckpoint(
+  tripReference: string,
+  routeWaypointId: string,
+): Promise<LocalCrewEvent> {
+  const event = createTrackingCheckpointEvent(tripReference, routeWaypointId);
   const db = await database();
   const tx = db.transaction(EVENTS, 'readwrite');
   const store = tx.objectStore(EVENTS);

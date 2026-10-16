@@ -55,6 +55,9 @@ export const PERMISSIONS = {
   CREW_TRIP_READ: 'crew.trip.read',
   CREW_DEVICE_MANAGE: 'crew.device.manage',
   CREW_BOARDING_SCAN: 'crew.boarding.scan',
+  TRACKING_READ: 'tracking.read',
+  TRACKING_MANAGE: 'tracking.manage',
+  CREW_TRACKING_REPORT: 'crew.tracking.report',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

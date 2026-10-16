@@ -6,6 +6,7 @@ import { PublicApiError } from '../auth/http/public-api-error.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { BoardingService, type CrewBoardingContext } from '../check-in/boarding.service.js';
 import { DatabaseService } from '../database/database.service.js';
+import { TrackingService } from '../tracking/tracking.service.js';
 import type {
   crewAssignmentCreateSchema,
   crewAssignmentRevokeSchema,
@@ -70,6 +71,7 @@ export class CrewService {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly boarding: BoardingService,
+    private readonly tracking: TrackingService,
   ) {}
 
   async trips(actor: AuthPrincipal) {
@@ -79,7 +81,7 @@ export class CrewService {
         crewIdentityId: actor.identityId,
         revokedAt: null,
         OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-        trip: { status: 'SCHEDULED' },
+        trip: { status: { in: ['SCHEDULED', 'IN_PROGRESS'] } },
       },
       orderBy: [{ trip: { plannedDepartureAt: 'asc' } }, { assignedAt: 'asc' }],
       select: {
@@ -92,7 +94,20 @@ export class CrewService {
             plannedDepartureAt: true,
             plannedArrivalAt: true,
             vehicle: { select: { code: true } },
-            routeVersion: { select: { route: { select: { code: true, name: true } } } },
+            routeVersion: {
+              select: {
+                route: { select: { code: true, name: true } },
+                waypoints: {
+                  orderBy: { sequence: 'asc' },
+                  select: {
+                    id: true,
+                    sequence: true,
+                    stop: { select: { code: true, name: true } },
+                    checkpoint: { select: { code: true, name: true } },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -112,6 +127,17 @@ export class CrewService {
           plannedArrivalAt: row.trip.plannedArrivalAt,
           vehicleCode: row.trip.vehicle?.code ?? null,
           route: row.trip.routeVersion.route,
+          waypoints: row.trip.routeVersion.waypoints.map((waypoint) => {
+            const place = waypoint.checkpoint ?? waypoint.stop;
+            if (!place) throw new Error('route waypoint has no place');
+            return {
+              id: waypoint.id,
+              sequence: waypoint.sequence,
+              kind: waypoint.checkpoint ? ('CHECKPOINT' as const) : ('STOP' as const),
+              code: place.code,
+              name: place.name,
+            };
+          }),
         },
       })),
     };
@@ -239,10 +265,31 @@ export class CrewService {
 
   async sync(actor: AuthPrincipal, rawTripReference: string, input: SyncInput) {
     const tripReference = rawTripReference.trim().toUpperCase();
-    const context = await this.context(actor, tripReference, input.deviceId);
+    const hasBoarding = input.events.some((event) => event.type === 'PASSENGER_BOARDING');
+    const boardingContext = hasBoarding
+      ? await this.context(actor, tripReference, input.deviceId)
+      : null;
     const results = [];
+
     for (const event of input.events) {
       try {
+        if (event.type === 'TRACKING_CHECKPOINT') {
+          const result = await this.tracking.recordCrewCheckpoint(actor, tripReference, {
+            deviceId: input.deviceId,
+            clientEventId: event.clientEventId,
+            routeWaypointId: event.payload.routeWaypointId,
+            occurredAt: event.occurredAt,
+          });
+          results.push({
+            clientEventId: event.clientEventId,
+            status: 'ACKNOWLEDGED' as const,
+            created: result.created,
+            trackingObservationId: result.observation.id,
+          });
+          continue;
+        }
+
+        if (!boardingContext) throw new Error('boarding context missing after batch validation');
         const result = await this.boarding.scan(
           actor,
           {
@@ -251,7 +298,7 @@ export class CrewService {
             clientEventId: event.clientEventId,
             occurredAt: event.occurredAt,
           },
-          context,
+          boardingContext,
         );
         results.push({
           clientEventId: event.clientEventId,
@@ -273,7 +320,8 @@ export class CrewService {
           results.push({
             clientEventId: event.clientEventId,
             status:
-              error.code === 'BOARDING_CLIENT_EVENT_ID_REUSED'
+              error.code === 'BOARDING_CLIENT_EVENT_ID_REUSED' ||
+              error.code === 'TRACKING_CLIENT_EVENT_ID_REUSED'
                 ? ('CONFLICT' as const)
                 : ('REJECTED' as const),
             errorCode: error.code,

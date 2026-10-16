@@ -2,7 +2,7 @@ import type { CrewOfflineEvent, CrewSyncResult } from '@euroteranga/auth-client'
 
 export type LocalEventStatus = 'PENDING' | 'SYNCING' | 'ACKNOWLEDGED' | 'REJECTED' | 'CONFLICT';
 
-export interface LocalCrewEvent extends CrewOfflineEvent {
+export type LocalCrewEvent = CrewOfflineEvent & {
   tripReference: string;
   status: LocalEventStatus;
   errorCode: string | null;
@@ -10,7 +10,7 @@ export interface LocalCrewEvent extends CrewOfflineEvent {
   expiresAt: string;
   attempts: number;
   nextAttemptAt: string;
-}
+};
 
 export const EVENT_TTL_MS = 7 * 24 * 60 * 60_000;
 export const MAX_RETRY_DELAY_MS = 30_000;
@@ -31,6 +31,28 @@ export function createBoardingEvent(
     type: 'PASSENGER_BOARDING',
     occurredAt: timestamp,
     payload: { qrPayload: qrPayload.trim().toUpperCase() },
+    tripReference: tripReference.trim().toUpperCase(),
+    status: 'PENDING',
+    errorCode: null,
+    queuedAt: timestamp,
+    expiresAt: new Date(now.getTime() + EVENT_TTL_MS).toISOString(),
+    attempts: 0,
+    nextAttemptAt: timestamp,
+  };
+}
+
+export function createTrackingCheckpointEvent(
+  tripReference: string,
+  routeWaypointId: string,
+  options: { now?: Date; randomUUID?: () => string } = {},
+): LocalCrewEvent {
+  const now = options.now ?? new Date();
+  const timestamp = now.toISOString();
+  return {
+    clientEventId: newClientEventId(options.randomUUID),
+    type: 'TRACKING_CHECKPOINT',
+    occurredAt: timestamp,
+    payload: { routeWaypointId },
     tripReference: tripReference.trim().toUpperCase(),
     status: 'PENDING',
     errorCode: null,
@@ -116,15 +138,25 @@ export function partitionForAssignments(
   return { retained, unassigned };
 }
 
+function samePayload(a: LocalCrewEvent, b: LocalCrewEvent): boolean {
+  if (a.type !== b.type) return false;
+  if (a.type === 'PASSENGER_BOARDING' && b.type === 'PASSENGER_BOARDING') {
+    return a.payload.qrPayload === b.payload.qrPayload;
+  }
+  if (a.type === 'TRACKING_CHECKPOINT' && b.type === 'TRACKING_CHECKPOINT') {
+    return a.payload.routeWaypointId === b.payload.routeWaypointId;
+  }
+  return false;
+}
+
 export function findPendingDuplicate(
   current: readonly LocalCrewEvent[],
-  candidate: Pick<LocalCrewEvent, 'tripReference' | 'type' | 'payload'>,
+  candidate: LocalCrewEvent,
 ): LocalCrewEvent | undefined {
   return current.find(
     (item) =>
       item.tripReference === candidate.tripReference &&
-      item.type === candidate.type &&
-      item.payload.qrPayload === candidate.payload.qrPayload &&
+      samePayload(item, candidate) &&
       (item.status === 'PENDING' || item.status === 'SYNCING'),
   );
 }

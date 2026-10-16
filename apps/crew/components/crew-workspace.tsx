@@ -1,6 +1,6 @@
 'use client';
 
-import type { ApiError, CrewTripSnapshot } from '@euroteranga/auth-client';
+import type { ApiError, CrewOfflineEvent, CrewTripSnapshot } from '@euroteranga/auth-client';
 import { FormAlert, FormStatus } from '@euroteranga/ui';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,6 +19,7 @@ import {
   markTemporaryFailure,
   purgeExpiredData,
   queueBoarding,
+  queueTrackingCheckpoint,
   recoverInterruptedSync,
   replaceTripSnapshots,
   retryEvent,
@@ -46,6 +47,23 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
+function syncEvent(item: LocalCrewEvent): CrewOfflineEvent {
+  if (item.type === 'PASSENGER_BOARDING') {
+    return {
+      clientEventId: item.clientEventId,
+      type: item.type,
+      occurredAt: item.occurredAt,
+      payload: { qrPayload: item.payload.qrPayload },
+    };
+  }
+  return {
+    clientEventId: item.clientEventId,
+    type: item.type,
+    occurredAt: item.occurredAt,
+    payload: { routeWaypointId: item.payload.routeWaypointId },
+  };
+}
+
 function eventLabel(status: LocalCrewEvent['status']) {
   switch (status) {
     case 'PENDING':
@@ -68,6 +86,7 @@ export function CrewWorkspace() {
   const [events, setEvents] = useState<LocalCrewEvent[]>([]);
   const [selectedTrip, setSelectedTrip] = useState('');
   const [qrPayload, setQrPayload] = useState('');
+  const [checkpointWaypointId, setCheckpointWaypointId] = useState('');
   const [device, setDevice] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -118,16 +137,7 @@ export function CrewWorkspace() {
             const batch = group.slice(start, start + 25);
             const ids = batch.map((item) => item.clientEventId);
             await markSyncing(ids);
-            const result = await auth.crew.sync(
-              tripReference,
-              id,
-              batch.map(({ clientEventId, type, occurredAt, payload }) => ({
-                clientEventId,
-                type,
-                occurredAt,
-                payload,
-              })),
-            );
+            const result = await auth.crew.sync(tripReference, id, batch.map(syncEvent));
             if (!result.ok) {
               if (result.error.code === 'NETWORK_ERROR') {
                 await markNetworkFailure(ids);
@@ -171,7 +181,7 @@ export function CrewWorkspace() {
             ).length;
           }
         }
-        if (acknowledged > 0) setNotice('Embarquement synchronisé avec EURO TERANGA.');
+        if (acknowledged > 0) setNotice('Action(s) synchronisée(s) avec EURO TERANGA.');
       } finally {
         syncLock.current = false;
         setSyncing(false);
@@ -354,12 +364,30 @@ export function CrewWorkspace() {
     [events],
   );
 
+  const selectedSnapshot = useMemo(
+    () => trips.find((item) => item.trip.reference === selectedTrip) ?? null,
+    [selectedTrip, trips],
+  );
+
+  useEffect(() => {
+    setCheckpointWaypointId((current) => {
+      if (selectedSnapshot?.trip.waypoints.some((waypoint) => waypoint.id === current)) {
+        return current;
+      }
+      return selectedSnapshot?.trip.waypoints[0]?.id ?? '';
+    });
+  }, [selectedSnapshot]);
+
   async function submitBoarding(event: FormEvent) {
     event.preventDefault();
     setError(null);
     setNotice(null);
     if (!selectedTrip) {
       setError('Aucun voyage affecté n’est disponible.');
+      return;
+    }
+    if (selectedSnapshot?.trip.status !== 'SCHEDULED') {
+      setError('L’embarquement n’est disponible qu’avant le départ du voyage.');
       return;
     }
     const payload = qrPayload.trim();
@@ -372,6 +400,25 @@ export function CrewWorkspace() {
       await queueBoarding(selectedTrip, payload);
       setQrPayload('');
       setNotice('Embarquement enregistré sur cet appareil — synchronisation en attente.');
+      await refreshLocal();
+      if (online) await syncQueued(device ?? undefined, true);
+    } finally {
+      setRecording(false);
+    }
+  }
+
+  async function submitCheckpoint(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setNotice(null);
+    if (!selectedTrip || !checkpointWaypointId) {
+      setError('Sélectionnez un voyage et un checkpoint.');
+      return;
+    }
+    setRecording(true);
+    try {
+      await queueTrackingCheckpoint(selectedTrip, checkpointWaypointId);
+      setNotice('Checkpoint enregistré sur cet appareil — synchronisation en attente.');
       await refreshLocal();
       if (online) await syncQueued(device ?? undefined, true);
     } finally {
@@ -470,6 +517,10 @@ export function CrewWorkspace() {
           .map((item) => (
             <dl className="crew-trip-facts" key={item.assignmentId}>
               <div>
+                <dt>État</dt>
+                <dd>{item.trip.status === 'IN_PROGRESS' ? 'En cours' : 'Planifié'}</dd>
+              </div>
+              <div>
                 <dt>Départ prévu</dt>
                 <dd>{formatDate(item.trip.plannedDepartureAt)}</dd>
               </div>
@@ -512,11 +563,46 @@ export function CrewWorkspace() {
           <button
             className="et-button crew-primary-action"
             type="submit"
-            disabled={!selectedTrip || recording}
+            disabled={!selectedTrip || recording || selectedSnapshot?.trip.status !== 'SCHEDULED'}
           >
             Enregistrer l’embarquement
           </button>
         </form>
+      </section>
+
+      <section className="crew-panel" aria-labelledby="crew-tracking-title">
+        <h2 id="crew-tracking-title">Checkpoint du voyage</h2>
+        <p className="et-hint">
+          Le passage est enregistré localement avec un identifiant idempotent et sera validé par le
+          serveur lors de la synchronisation.
+        </p>
+        {selectedSnapshot?.trip.waypoints.length ? (
+          <form className="et-form crew-scan-form" onSubmit={submitCheckpoint}>
+            <label className="et-field">
+              Étape / checkpoint
+              <select
+                className="et-select"
+                value={checkpointWaypointId}
+                onChange={(event) => setCheckpointWaypointId(event.target.value)}
+              >
+                {selectedSnapshot.trip.waypoints.map((waypoint) => (
+                  <option key={waypoint.id} value={waypoint.id}>
+                    {waypoint.sequence}. {waypoint.code} — {waypoint.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="et-button crew-primary-action"
+              type="submit"
+              disabled={!selectedTrip || !checkpointWaypointId || recording}
+            >
+              Enregistrer le passage
+            </button>
+          </form>
+        ) : (
+          <p>Aucun waypoint disponible dans le cache de ce voyage.</p>
+        )}
       </section>
 
       <section className="crew-panel" aria-labelledby="crew-queue-title">
@@ -534,6 +620,7 @@ export function CrewWorkspace() {
                   <strong>{eventLabel(item.status)}</strong>
                   <div className="et-code">{item.clientEventId.slice(0, 18)}…</div>
                   <small>
+                    {item.type === 'PASSENGER_BOARDING' ? 'Embarquement' : 'Checkpoint'} ·{' '}
                     {item.tripReference} · {formatDate(item.occurredAt)}
                     {item.errorCode ? ` · ${item.errorCode}` : ''}
                   </small>
