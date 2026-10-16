@@ -6,12 +6,16 @@ export default function HomePage() {
     <FoundationShell
       product="Tracking"
       title="EURO TERANGA Tracking"
-      subtitle="Foundation environment"
+      subtitle="Suivi sécurisé des voyages"
       environment={publicEnv.NEXT_PUBLIC_APP_ENV}
     >
-      <p>
-        Aucun suivi de voyage n’est disponible. Aucune position, réelle ou simulée, n’est affichée.
-      </p>
+      <section className="tracking-card">
+        <h2>Accès au suivi</h2>
+        <p>
+          Ouvrez le lien de suivi sécurisé qui vous a été transmis pour consulter les informations
+          publiées pour votre voyage.
+        </p>
+      </section>
     </FoundationShell>
   );
 }

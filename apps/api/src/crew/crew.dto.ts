@@ -21,14 +21,24 @@ export const crewSyncSchema = z
     deviceId: crewDeviceIdSchema,
     events: z
       .array(
-        z
-          .object({
-            clientEventId,
-            type: z.literal('PASSENGER_BOARDING'),
-            occurredAt: z.iso.datetime({ offset: true }).transform((value) => new Date(value)),
-            payload: z.object({ qrPayload: z.string().trim().min(1).max(64) }).strict(),
-          })
-          .strict(),
+        z.discriminatedUnion('type', [
+          z
+            .object({
+              clientEventId,
+              type: z.literal('PASSENGER_BOARDING'),
+              occurredAt: z.iso.datetime({ offset: true }).transform((value) => new Date(value)),
+              payload: z.object({ qrPayload: z.string().trim().min(1).max(64) }).strict(),
+            })
+            .strict(),
+          z
+            .object({
+              clientEventId,
+              type: z.literal('TRACKING_CHECKPOINT'),
+              occurredAt: z.iso.datetime({ offset: true }).transform((value) => new Date(value)),
+              payload: z.object({ routeWaypointId: z.uuid() }).strict(),
+            })
+            .strict(),
+        ]),
       )
       .min(1)
       .max(25),

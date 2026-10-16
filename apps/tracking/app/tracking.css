@@ -1,0 +1,80 @@
+.tracking-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.tracking-card {
+  border: 1px solid var(--et-border);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  background: var(--et-surface);
+}
+
+.tracking-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.tracking-heading h2 {
+  margin: 0.2rem 0 0;
+}
+
+.tracking-kicker {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.tracking-badge {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.tracking-grid {
+  display: grid;
+  grid-template-columns: minmax(8rem, 12rem) 1fr;
+  gap: 0.5rem 1rem;
+  margin: 1rem 0 0;
+}
+
+.tracking-grid dt {
+  font-weight: 700;
+}
+
+.tracking-grid dd {
+  margin: 0;
+}
+
+.tracking-event,
+.tracking-position {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem 0;
+}
+
+.tracking-position {
+  border-top: 1px solid var(--et-border);
+}
+
+.tracking-privacy {
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+
+@media (max-width: 640px) {
+  .tracking-heading {
+    display: grid;
+  }
+
+  .tracking-grid {
+    grid-template-columns: 1fr;
+  }
+}

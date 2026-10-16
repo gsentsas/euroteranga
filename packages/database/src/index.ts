@@ -20,6 +20,9 @@ export {
   SeatMapVersionStatus,
   TripStatus,
   VehicleStatus,
+  TrackingObservationSource,
+  TrackingProviderStatus,
+  TrackingVisibility,
 } from './generated/prisma/client.js';
 export type {
   AuthIdentity,
@@ -46,6 +49,10 @@ export type {
   Trip,
   TripWaypointTiming,
   Vehicle,
+  TrackingDevice,
+  TripTrackingConfig,
+  TrackingObservation,
+  TrackingPublicToken,
 } from './generated/prisma/client.js';
 
 /** Interactive transaction client, as passed to `$transaction(async (tx) => ...)`. */

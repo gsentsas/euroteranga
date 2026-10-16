@@ -38,6 +38,11 @@ export function RefineProvider({ children }: { children: ReactNode }) {
             meta: { label: 'Voyages', permission: 'trip.read' },
           },
           {
+            name: 'tracking',
+            list: '/tracking',
+            meta: { label: 'Tracking', permission: 'tracking.read' },
+          },
+          {
             name: 'seat-maps',
             list: '/seat-maps',
             meta: { label: 'Plans de sièges', permission: 'seatmap.read' },

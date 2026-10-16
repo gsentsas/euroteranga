@@ -1252,11 +1252,18 @@ export interface CrewTripSnapshot {
   snapshotExpiresAt: string;
   trip: {
     reference: string;
-    status: 'SCHEDULED';
+    status: 'SCHEDULED' | 'IN_PROGRESS';
     plannedDepartureAt: string | null;
     plannedArrivalAt: string | null;
     vehicleCode: string | null;
     route: { code: string; name: string };
+    waypoints: Array<{
+      id: string;
+      sequence: number;
+      kind: 'STOP' | 'CHECKPOINT';
+      code: string;
+      name: string;
+    }>;
   };
 }
 
@@ -1274,12 +1281,19 @@ export interface CrewDevice {
   revokedAt: string | null;
 }
 
-export interface CrewOfflineEvent {
-  clientEventId: string;
-  type: 'PASSENGER_BOARDING';
-  occurredAt: string;
-  payload: { qrPayload: string };
-}
+export type CrewOfflineEvent =
+  | {
+      clientEventId: string;
+      type: 'PASSENGER_BOARDING';
+      occurredAt: string;
+      payload: { qrPayload: string };
+    }
+  | {
+      clientEventId: string;
+      type: 'TRACKING_CHECKPOINT';
+      occurredAt: string;
+      payload: { routeWaypointId: string };
+    };
 
 export interface CrewSyncResult {
   tripReference: string;
@@ -1288,7 +1302,8 @@ export interface CrewSyncResult {
         clientEventId: string;
         status: 'ACKNOWLEDGED';
         created: boolean;
-        boardingReference: string;
+        boardingReference?: string;
+        trackingObservationId?: string;
       }
     | {
         clientEventId: string;
@@ -1311,6 +1326,140 @@ export interface CrewTripAssignment {
   revokedAt: string | null;
   revocationReason: string | null;
   crew: { id: string; email: string; status: string };
+}
+
+export type TrackingVisibility = 'HIDDEN' | 'CHECKPOINT_ONLY' | 'APPROXIMATE' | 'PRECISE';
+export type TrackingProviderStatus = 'UP' | 'DEGRADED' | 'STALE' | 'UNAVAILABLE';
+export type TrackingObservationSource = 'GPS' | 'CHECKPOINT' | 'CREW' | 'OPS' | 'SYSTEM';
+
+export interface TrackingDevice {
+  id: string;
+  providerKey: string;
+  externalId: string;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  vehicle: { id: string; code: string; status?: string };
+}
+
+export interface TrackingConfig {
+  enabled: boolean;
+  visibility: TrackingVisibility;
+  trackingDevice: Pick<TrackingDevice, 'id' | 'providerKey' | 'externalId' | 'active'> | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TrackingCheckpointProjection {
+  sequence: number;
+  kind: 'STOP' | 'CHECKPOINT';
+  code: string;
+  name: string;
+  type?: string;
+  observedAt: string;
+}
+
+export interface TrackingObservation {
+  id: string;
+  source: TrackingObservationSource;
+  observedAt: string;
+  receivedAt: string;
+  latitude: number | null;
+  longitude: number | null;
+  accuracyMeters: number | null;
+  speedKph: number | null;
+  headingDegrees: number | null;
+  routeWaypointId: string | null;
+  label: string | null;
+  providerKey: string | null;
+  providerObservationId: string | null;
+  clientEventId: string | null;
+  checkpoint: TrackingCheckpointProjection | null;
+}
+
+export interface TrackingPublicTokenSummary {
+  id: string;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  revocationReason: string | null;
+}
+
+export interface TrackingTripSummary {
+  id: string;
+  reference: string;
+  status: TripStatus;
+  plannedDepartureAt: string | null;
+  plannedArrivalAt: string | null;
+  vehicle: { id: string; code: string } | null;
+  route: { code: string; name: string };
+  config: TrackingConfig | null;
+  lastObservation: { observedAt: string; source: TrackingObservationSource } | null;
+  providerStatus: TrackingProviderStatus;
+}
+
+export interface TrackingTripDetail extends Omit<TrackingTripSummary, 'lastObservation'> {
+  observations: TrackingObservation[];
+  publicTokens: TrackingPublicTokenSummary[];
+}
+
+export interface TrackingConfigInput {
+  enabled: boolean;
+  visibility: TrackingVisibility;
+  trackingDeviceId: string | null;
+}
+
+export interface TrackingConfigMutationResult {
+  tripId: string;
+  enabled: boolean;
+  visibility: TrackingVisibility;
+  trackingDeviceId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrackingObservationInput {
+  source: 'CHECKPOINT' | 'OPS';
+  clientEventId?: string;
+  observedAt: string;
+  routeWaypointId?: string;
+  latitude?: number;
+  longitude?: number;
+  accuracyMeters?: number;
+  speedKph?: number;
+  headingDegrees?: number;
+  label?: string;
+}
+
+export interface TrackingObservationResult {
+  created: boolean;
+  observation: TrackingObservation;
+}
+
+export interface TrackingIssuedToken {
+  id: string;
+  createdAt: string;
+  expiresAt: string | null;
+  token: string;
+}
+
+export interface PublicTrackingProjection {
+  tripReference: string;
+  tripStatus: TripStatus;
+  route: { code: string; name: string };
+  plannedDepartureAt: string | null;
+  plannedArrivalAt: string | null;
+  visibility: Exclude<TrackingVisibility, 'HIDDEN'>;
+  providerStatus: TrackingProviderStatus;
+  lastUpdatedAt: string | null;
+  checkpoint: TrackingCheckpointProjection | null;
+  position: {
+    observedAt: string;
+    latitude: number;
+    longitude: number;
+    precision: 'APPROXIMATE' | 'PRECISE';
+    accuracyMeters?: number | null;
+  } | null;
 }
 
 /** PR-15 immutable, PII-minimised snapshot of checked-in passengers. */
@@ -2188,6 +2337,10 @@ export function createAuthClient(baseUrl: string) {
           ),
       },
     },
+    tracking: {
+      public: (token: string) =>
+        call<PublicTrackingProjection>('GET', '/v1/tracking/' + encodeURIComponent(token)),
+    },
     crew: {
       trips: () => call<CrewTripList>('GET', '/v1/crew/trips'),
       trip: (tripReference: string) =>
@@ -2211,6 +2364,20 @@ export function createAuthClient(baseUrl: string) {
           'crew',
           `/v1/crew/trips/${encodeURIComponent(tripReference)}/events/sync`,
           { deviceId, events },
+        ),
+      reportTrackingCheckpoint: (
+        tripReference: string,
+        input: {
+          deviceId: string;
+          clientEventId: string;
+          routeWaypointId: string;
+          occurredAt: string;
+        },
+      ) =>
+        withCsrf<TrackingObservationResult>(
+          'crew',
+          '/v1/crew/trips/' + encodeURIComponent(tripReference) + '/tracking/checkpoints',
+          input,
         ),
     },
     admin: {
@@ -2793,6 +2960,42 @@ export function createAuthClient(baseUrl: string) {
             'staff',
             `/v1/admin/regulatory-permits/${encodeURIComponent(reference)}/revoke`,
             input,
+          ),
+      },
+      tracking: {
+        trips: () => call<{ items: TrackingTripSummary[] }>('GET', '/v1/admin/tracking/trips'),
+        trip: (tripId: string) =>
+          call<TrackingTripDetail>('GET', '/v1/admin/tracking/trips/' + encodeURIComponent(tripId)),
+        devices: () => call<{ items: TrackingDevice[] }>('GET', '/v1/admin/tracking/devices'),
+        createDevice: (input: { vehicleId: string; providerKey: string; externalId: string }) =>
+          withCsrf<TrackingDevice>('staff', '/v1/admin/tracking/devices', input),
+        configure: (tripId: string, input: TrackingConfigInput) =>
+          withCsrf<TrackingConfigMutationResult>(
+            'staff',
+            '/v1/admin/tracking/trips/' + encodeURIComponent(tripId) + '/config',
+            input,
+          ),
+        observe: (tripId: string, input: TrackingObservationInput) =>
+          withCsrf<TrackingObservationResult>(
+            'staff',
+            '/v1/admin/tracking/trips/' + encodeURIComponent(tripId) + '/observations',
+            input,
+          ),
+        issueToken: (tripId: string, expiresAt?: string) =>
+          withCsrf<TrackingIssuedToken>(
+            'staff',
+            '/v1/admin/tracking/trips/' + encodeURIComponent(tripId) + '/public-tokens',
+            expiresAt ? { expiresAt } : {},
+          ),
+        revokeToken: (tripId: string, tokenId: string, reason: string) =>
+          withCsrf<TrackingPublicTokenSummary>(
+            'staff',
+            '/v1/admin/tracking/trips/' +
+              encodeURIComponent(tripId) +
+              '/public-tokens/' +
+              encodeURIComponent(tokenId) +
+              '/revoke',
+            { reason },
           ),
       },
       /**

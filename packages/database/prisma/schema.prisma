@@ -107,6 +107,36 @@ enum VehicleStatus {
   @@map("vehicle_status")
 }
 
+/// PR-19: the maximum tracking precision that may leave the authenticated
+/// operational boundary. GPS_RECEIVED never implies GPS_PUBLIC.
+enum TrackingVisibility {
+  HIDDEN
+  CHECKPOINT_ONLY
+  APPROXIMATE
+  PRECISE
+
+  @@map("tracking_visibility")
+}
+
+enum TrackingObservationSource {
+  GPS
+  CHECKPOINT
+  CREW
+  OPS
+  SYSTEM
+
+  @@map("tracking_observation_source")
+}
+
+enum TrackingProviderStatus {
+  UP
+  DEGRADED
+  STALE
+  UNAVAILABLE
+
+  @@map("tracking_provider_status")
+}
+
 /// PR-10: payment service providers. SANDBOX is local and test-only: it calls
 /// no external service and is refused in staging and production.
 enum PaymentProvider {
@@ -361,6 +391,12 @@ model AuthIdentity {
   permitsRevoked                   RegulatoryPermit[]       @relation("RegulatoryPermitRevoker")
   departurePermitPoliciesPublished DeparturePermitPolicy[]  @relation("DeparturePermitPolicyPublisher")
   departureAuthorizations          DepartureAuthorization[] @relation("DepartureAuthorizationActor")
+  trackingConfigsCreated           TripTrackingConfig[]     @relation("TrackingConfigCreator")
+  trackingConfigsUpdated           TripTrackingConfig[]     @relation("TrackingConfigUpdater")
+  trackingObservationsCreated      TrackingObservation[]    @relation("TrackingObservationActor")
+  trackingTokensCreated            TrackingPublicToken[]    @relation("TrackingPublicTokenCreator")
+  trackingTokensRevoked            TrackingPublicToken[]    @relation("TrackingPublicTokenRevoker")
+  trackingDevicesCreated           TrackingDevice[]         @relation("TrackingDeviceCreator")
 
   // The same address may exist in two realms as two unrelated identities.
   @@unique([realm, normalizedEmail])
@@ -751,15 +787,16 @@ model RouteWaypoint {
   boardingAllowed  Boolean @default(false) @map("boarding_allowed")
   alightingAllowed Boolean @default(false) @map("alighting_allowed")
 
-  routeVersion  RouteVersion         @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
-  stop          Stop?                @relation(fields: [stopId], references: [id], onDelete: Restrict)
-  checkpoint    Checkpoint?          @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
-  timings       TripWaypointTiming[]
-  faresFrom     FareEntry[]          @relation("FareOrigin")
-  faresTo       FareEntry[]          @relation("FareDestination")
-  bookingsFrom  Booking[]            @relation("BookingOrigin")
-  bookingsTo    Booking[]            @relation("BookingDestination")
-  baggageEvents BaggageEvent[]
+  routeVersion         RouteVersion          @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  stop                 Stop?                 @relation(fields: [stopId], references: [id], onDelete: Restrict)
+  checkpoint           Checkpoint?           @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
+  timings              TripWaypointTiming[]
+  faresFrom            FareEntry[]           @relation("FareOrigin")
+  faresTo              FareEntry[]           @relation("FareDestination")
+  bookingsFrom         Booking[]             @relation("BookingOrigin")
+  bookingsTo           Booking[]             @relation("BookingDestination")
+  baggageEvents        BaggageEvent[]
+  trackingObservations TrackingObservation[]
 
   @@unique([routeVersionId, sequence])
   @@index([stopId])
@@ -793,6 +830,7 @@ model Vehicle {
   seatMapVersion      SeatMapVersion?    @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
   trips               Trip[]
   regulatoryPermits   RegulatoryPermit[]
+  trackingDevices     TrackingDevice[]
 
   @@unique([registrationCountryId, registrationPlate])
   @@index([status, id])
@@ -843,6 +881,9 @@ model Trip {
   departureAuthorizations DepartureAuthorization[] @relation("TripDepartureAuthorizations")
   departureAuthorization  DepartureAuthorization?  @relation("TripUsedDepartureAuthorization", fields: [departureAuthorizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   crewAssignments         CrewTripAssignment[]
+  trackingConfig          TripTrackingConfig?
+  trackingObservations    TrackingObservation[]
+  trackingPublicTokens    TrackingPublicToken[]
 
   @@index([status, id])
   @@index([routeVersionId, id])
@@ -1528,6 +1569,110 @@ model PassengerCheckIn {
 
 /// PR-14: the one boarding of one checked-in BookingPassenger. Append-only;
 /// the unique check-in makes double boarding physically impossible.
+/// PR-19: provider/device catalogue. Provider identifiers are operational
+/// metadata only; they are never authentication credentials.
+model TrackingDevice {
+  id                  String   @id @default(uuid(7)) @db.Uuid
+  vehicleId           String   @map("vehicle_id") @db.Uuid
+  providerKey         String   @map("provider_key") @db.VarChar(64)
+  externalId          String   @map("external_id") @db.VarChar(128)
+  active              Boolean  @default(true)
+  createdByIdentityId String   @map("created_by_identity_id") @db.Uuid
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  vehicle   Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy AuthIdentity         @relation("TrackingDeviceCreator", fields: [createdByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  configs   TripTrackingConfig[]
+
+  @@unique([providerKey, externalId])
+  @@index([vehicleId, active])
+  @@map("tracking_device")
+}
+
+/// One mutable policy row per trip. Every policy mutation is audited in the
+/// same transaction; deleting the row is forbidden by the PR-19 migration.
+model TripTrackingConfig {
+  tripId              String             @id @map("trip_id") @db.Uuid
+  enabled             Boolean            @default(false)
+  visibility          TrackingVisibility @default(HIDDEN)
+  trackingDeviceId    String?            @map("tracking_device_id") @db.Uuid
+  createdByIdentityId String             @map("created_by_identity_id") @db.Uuid
+  updatedByIdentityId String             @map("updated_by_identity_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip           Trip            @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  trackingDevice TrackingDevice? @relation(fields: [trackingDeviceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy      AuthIdentity    @relation("TrackingConfigCreator", fields: [createdByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedBy      AuthIdentity    @relation("TrackingConfigUpdater", fields: [updatedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([enabled, visibility])
+  @@index([trackingDeviceId])
+  @@map("trip_tracking_config")
+}
+
+/// Append-only operational observation. Public endpoints never return this
+/// record directly: they build a visibility-safe projection.
+model TrackingObservation {
+  id                    String                    @id @default(uuid(7)) @db.Uuid
+  tripId                String                    @map("trip_id") @db.Uuid
+  source                TrackingObservationSource
+  providerKey           String?                   @map("provider_key") @db.VarChar(64)
+  providerDeviceId      String?                   @map("provider_device_id") @db.VarChar(128)
+  providerObservationId String?                   @map("provider_observation_id") @db.VarChar(128)
+  clientEventId         String?                   @map("client_event_id") @db.VarChar(64)
+  payloadFingerprint    String                    @map("payload_fingerprint") @db.Char(64)
+  observedAt            DateTime                  @map("observed_at") @db.Timestamptz(3)
+  receivedAt            DateTime                  @default(now()) @map("received_at") @db.Timestamptz(3)
+  latitude              Decimal?                  @db.Decimal(9, 6)
+  longitude             Decimal?                  @db.Decimal(9, 6)
+  accuracyMeters        Decimal?                  @map("accuracy_meters") @db.Decimal(8, 2)
+  speedKph              Decimal?                  @map("speed_kph") @db.Decimal(8, 2)
+  headingDegrees        Decimal?                  @map("heading_degrees") @db.Decimal(6, 2)
+  routeWaypointId       String?                   @map("route_waypoint_id") @db.Uuid
+  label                 String?                   @db.VarChar(160)
+  createdByIdentityId   String?                   @map("created_by_identity_id") @db.Uuid
+  crewAssignmentId      String?                   @map("crew_assignment_id") @db.Uuid
+  crewDeviceId          String?                   @map("crew_device_id") @db.Uuid
+
+  trip           Trip                @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  routeWaypoint  RouteWaypoint?      @relation(fields: [routeWaypointId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy      AuthIdentity?       @relation("TrackingObservationActor", fields: [createdByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  crewAssignment CrewTripAssignment? @relation(fields: [crewAssignmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  crewDevice     CrewDevice?         @relation(fields: [crewDeviceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tripId, clientEventId])
+  @@unique([providerKey, providerObservationId])
+  @@index([tripId, observedAt, id])
+  @@index([source, observedAt])
+  @@index([routeWaypointId])
+  @@index([crewAssignmentId])
+  @@index([crewDeviceId])
+  @@map("tracking_observation")
+}
+
+/// Revocable hash-only public capability. The raw token is returned once at
+/// issuance and never persisted.
+model TrackingPublicToken {
+  id                  String    @id @default(uuid(7)) @db.Uuid
+  tripId              String    @map("trip_id") @db.Uuid
+  tokenHash           Bytes     @unique @map("token_hash")
+  createdByIdentityId String    @map("created_by_identity_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt           DateTime? @map("expires_at") @db.Timestamptz(3)
+  revokedAt           DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revokedByIdentityId String?   @map("revoked_by_identity_id") @db.Uuid
+  revocationReason    String?   @map("revocation_reason") @db.VarChar(255)
+
+  trip      Trip          @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy AuthIdentity  @relation("TrackingPublicTokenCreator", fields: [createdByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revokedBy AuthIdentity? @relation("TrackingPublicTokenRevoker", fields: [revokedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tripId, revokedAt, expiresAt])
+  @@map("tracking_public_token")
+}
+
 model CrewDevice {
   id                  String    @id @default(uuid(7)) @db.Uuid
   /// Public random identifier generated by the PWA. Context only, never authentication.
@@ -1541,9 +1686,10 @@ model CrewDevice {
   revokedByIdentityId String?   @map("revoked_by_identity_id") @db.Uuid
   revocationReason    String?   @map("revocation_reason") @db.VarChar(255)
 
-  identity  AuthIdentity        @relation("CrewDeviceOwner", fields: [identityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  revokedBy AuthIdentity?       @relation("CrewDeviceRevoker", fields: [revokedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  boardings PassengerBoarding[]
+  identity             AuthIdentity          @relation("CrewDeviceOwner", fields: [identityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revokedBy            AuthIdentity?         @relation("CrewDeviceRevoker", fields: [revokedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  boardings            PassengerBoarding[]
+  trackingObservations TrackingObservation[]
 
   @@index([identityId, revokedAt, expiresAt])
   @@index([expiresAt])
@@ -1561,11 +1707,12 @@ model CrewTripAssignment {
   revokedByIdentityId  String?   @map("revoked_by_identity_id") @db.Uuid
   revocationReason     String?   @map("revocation_reason") @db.VarChar(255)
 
-  trip       Trip                @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  crew       AuthIdentity        @relation("CrewTripAssignmentCrew", fields: [crewIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  assignedBy AuthIdentity        @relation("CrewTripAssignmentGrantor", fields: [assignedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  revokedBy  AuthIdentity?       @relation("CrewTripAssignmentRevoker", fields: [revokedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  boardings  PassengerBoarding[]
+  trip                 Trip                  @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  crew                 AuthIdentity          @relation("CrewTripAssignmentCrew", fields: [crewIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  assignedBy           AuthIdentity          @relation("CrewTripAssignmentGrantor", fields: [assignedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revokedBy            AuthIdentity?         @relation("CrewTripAssignmentRevoker", fields: [revokedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  boardings            PassengerBoarding[]
+  trackingObservations TrackingObservation[]
 
   @@index([tripId, revokedAt])
   @@index([crewIdentityId, revokedAt, expiresAt])

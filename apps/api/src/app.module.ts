@@ -21,6 +21,7 @@ import { PricingModule } from './pricing/pricing.module.js';
 import { RegulatoryPermitModule } from './regulatory-permits/regulatory-permit.module.js';
 import { SeatMapModule } from './seat-maps/seat-map.module.js';
 import { TripModule } from './trips/trip.module.js';
+import { TrackingModule } from './tracking/tracking.module.js';
 
 export interface AppModuleOptions {
   env: ApiEnv;
@@ -57,6 +58,7 @@ export class AppModule {
         ManifestModule,
         RegulatoryPermitModule,
         DepartureReadinessModule,
+        TrackingModule,
       ],
       controllers: options.extraControllers ?? [],
     };
