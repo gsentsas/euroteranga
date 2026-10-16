@@ -1,5 +1,5 @@
 /* global self, caches, fetch, URL */
-const CACHE = 'euroteranga-crew-shell-v2';
+const CACHE = 'euroteranga-crew-shell-v3';
 const SHELL = ['/', '/connexion', '/session'];
 
 self.addEventListener('install', (event) => {
@@ -16,32 +16,6 @@ self.addEventListener('activate', (event) => {
       ),
   );
   self.clients.claim();
-});
-
-self.addEventListener('message', (event) => {
-  if (event.data?.type !== 'CACHE_STATIC_ASSETS' || !Array.isArray(event.data.urls)) return;
-  const allowed = event.data.urls.filter((value) => {
-    try {
-      const url = new URL(value);
-      return url.origin === self.location.origin && url.pathname.startsWith('/_next/static/');
-    } catch {
-      return false;
-    }
-  });
-  event.waitUntil(
-    caches.open(CACHE).then(async (cache) => {
-      await Promise.all(
-        allowed.map(async (value) => {
-          try {
-            const response = await fetch(value, { credentials: 'same-origin' });
-            if (response.ok) await cache.put(value, response);
-          } catch {
-            // Best-effort static cache warming only.
-          }
-        }),
-      );
-    }),
-  );
 });
 
 self.addEventListener('fetch', (event) => {
