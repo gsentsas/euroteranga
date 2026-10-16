@@ -5,15 +5,14 @@ import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import type { ManifestListQuery } from './manifest.dto.js';
 import { ManifestErrors } from './manifest.errors.js';
+import { currentManifestSnapshot } from './manifest-source.js';
 import {
-  buildManifestSnapshot,
   canonicalManifestJson,
   manifestContentHash,
   MANIFEST_SCHEMA_VERSION,
   normalizeManifestReference,
   renderManifestCsv,
   withFreshManifestReference,
-  type ManifestPassengerSnapshot,
   type PassengerManifestSnapshot,
 } from './manifest-rules.js';
 import {
@@ -37,10 +36,6 @@ function manifestDomainError(error: unknown): never {
   const message = String(error);
   if (message.includes('requires a scheduled trip')) throw ManifestErrors.tripNotScheduled();
   throw error;
-}
-
-function isoDate(value: Date): string {
-  return value.toISOString().slice(0, 10);
 }
 
 function storedSnapshot(row: ManifestRow): PassengerManifestSnapshot {
@@ -163,137 +158,17 @@ export class ManifestService {
             if (!locked) throw ManifestErrors.tripNotFound();
             if (locked.status !== 'SCHEDULED') throw ManifestErrors.tripNotScheduled();
 
-            const trip = await tx.trip.findUniqueOrThrow({
-              where: { id: locked.id },
-              select: {
-                id: true,
-                reference: true,
-                plannedDepartureAt: true,
-                plannedArrivalAt: true,
-                vehicle: { select: { code: true, registrationPlate: true } },
-              },
-            });
-            if (!trip.plannedDepartureAt || !trip.plannedArrivalAt) {
-              throw ManifestErrors.sourceInvalid();
-            }
-
-            const checkIns = await tx.passengerCheckIn.findMany({
-              where: { bookingPassenger: { booking: { tripId: trip.id } } },
-              select: {
-                reference: true,
-                checkedInAt: true,
-                bookingPassenger: {
-                  select: {
-                    passenger: {
-                      select: {
-                        reference: true,
-                        givenName: true,
-                        familyName: true,
-                        dateOfBirth: true,
-                        nationalityCountry: { select: { iso2: true, iso3: true } },
-                      },
-                    },
-                    booking: {
-                      select: {
-                        reference: true,
-                        originSequence: true,
-                        destinationSequence: true,
-                        originRouteWaypoint: {
-                          select: {
-                            sequence: true,
-                            stop: {
-                              select: {
-                                code: true,
-                                name: true,
-                                country: { select: { iso2: true } },
-                              },
-                            },
-                          },
-                        },
-                        destinationRouteWaypoint: {
-                          select: {
-                            sequence: true,
-                            stop: {
-                              select: {
-                                code: true,
-                                name: true,
-                                country: { select: { iso2: true } },
-                              },
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-                seatAssignment: {
-                  select: {
-                    bookingSeat: { select: { seatMapCell: { select: { seatLabel: true } } } },
-                  },
-                },
-                boarding: { select: { reference: true, boardedAt: true } },
-              },
-            });
-
-            const passengers = checkIns.map((checkIn): ManifestPassengerSnapshot => {
-              const { booking, passenger } = checkIn.bookingPassenger;
-              const origin = booking.originRouteWaypoint.stop;
-              const destination = booking.destinationRouteWaypoint.stop;
-              const seatLabel = checkIn.seatAssignment.bookingSeat.seatMapCell.seatLabel;
-              if (!origin || !destination || !seatLabel) throw ManifestErrors.sourceInvalid();
-              return {
-                bookingReference: booking.reference,
-                passengerReference: passenger.reference,
-                givenName: passenger.givenName,
-                familyName: passenger.familyName,
-                dateOfBirth: isoDate(passenger.dateOfBirth),
-                nationality: passenger.nationalityCountry,
-                origin: {
-                  sequence: booking.originSequence,
-                  code: origin.code,
-                  name: origin.name,
-                  countryIso2: origin.country.iso2,
-                },
-                destination: {
-                  sequence: booking.destinationSequence,
-                  code: destination.code,
-                  name: destination.name,
-                  countryIso2: destination.country.iso2,
-                },
-                seat: { label: seatLabel },
-                checkIn: {
-                  reference: checkIn.reference,
-                  checkedInAt: checkIn.checkedInAt.toISOString(),
-                },
-                boarding: checkIn.boarding
-                  ? {
-                      reference: checkIn.boarding.reference,
-                      boardedAt: checkIn.boarding.boardedAt.toISOString(),
-                    }
-                  : null,
-              };
-            });
-            const snapshot = buildManifestSnapshot({
-              trip: {
-                reference: trip.reference,
-                plannedDepartureAt: trip.plannedDepartureAt.toISOString(),
-                plannedArrivalAt: trip.plannedArrivalAt.toISOString(),
-                vehicle: {
-                  code: trip.vehicle?.code ?? null,
-                  registrationPlate: trip.vehicle?.registrationPlate ?? null,
-                },
-              },
-              passengers,
-            });
+            const snapshot = await currentManifestSnapshot(tx, locked.id);
+            if (!snapshot) throw ManifestErrors.sourceInvalid();
             const latest = await tx.passengerManifest.aggregate({
-              where: { tripId: trip.id },
+              where: { tripId: locked.id },
               _max: { version: true },
             });
             const version = (latest._max.version ?? 0) + 1;
             const row = await tx.passengerManifest.create({
               data: {
                 reference,
-                tripId: trip.id,
+                tripId: locked.id,
                 version,
                 schemaVersion: MANIFEST_SCHEMA_VERSION,
                 contentHash: manifestContentHash(snapshot),

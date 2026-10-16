@@ -75,13 +75,15 @@ const tripSummaryInclude = {
 /** Public view: seat map summaries carry their computed capacity. */
 function tripView<
   T extends {
+    departureAuthorizationId: string | null;
     seatMapVersion: { _count: { cells: number } } | null;
     fareTableVersion: { _count: { entries: number } } | null;
     vehicle: { seatMapVersion: { _count: { cells: number } } | null } | null;
   },
 >(trip: T) {
+  const { departureAuthorizationId: _internalAuthorizationId, ...publicTrip } = trip;
   return {
-    ...trip,
+    ...publicTrip,
     seatMapVersion: seatMapVersionView(trip.seatMapVersion),
     fareTableVersion: fareTableVersionView(trip.fareTableVersion),
     vehicle: trip.vehicle
@@ -496,6 +498,9 @@ export class TripService {
           throw TripErrors.statusConflict();
         }
         if (trip.status === 'CANCELLED') throw TripErrors.cancelled();
+        if (trip.status === 'IN_PROGRESS' || trip.status === 'COMPLETED') {
+          throw TripErrors.dispatchStarted();
+        }
         // PR-09: release every active hold first (trip already FOR UPDATE).
         // PR-10: refused when a booking is CONFIRMED (no refund workflow yet);
         // PENDING payment attempts are cancelled with their holds.
@@ -539,6 +544,9 @@ export class TripService {
       this.database.client.$transaction(async (tx) => {
         const trip = await lockTrip(tx, id);
         if (trip.status === 'CANCELLED') throw TripErrors.cancelled();
+        if (trip.status === 'IN_PROGRESS' || trip.status === 'COMPLETED') {
+          throw TripErrors.dispatchStarted();
+        }
         if (input.expectedVehicleId !== undefined && input.expectedVehicleId !== trip.vehicleId) {
           throw TripErrors.vehicleConflict();
         }

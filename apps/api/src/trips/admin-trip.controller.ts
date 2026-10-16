@@ -94,7 +94,11 @@ export class AdminTripController {
   @ApiOkResponse({ description: 'Trips, newest first, using UUIDv7 keyset pagination.' })
   @ApiQuery({ name: 'limit', required: false, type: Number, minimum: 1, maximum: 100 })
   @ApiQuery({ name: 'cursor', required: false, type: String, format: 'uuid' })
-  @ApiQuery({ name: 'status', required: false, enum: ['DRAFT', 'SCHEDULED', 'CANCELLED'] })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['DRAFT', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'],
+  })
   @ApiQuery({ name: 'routeId', required: false, type: String, format: 'uuid' })
   @ApiQuery({ name: 'routeVersionId', required: false, type: String, format: 'uuid' })
   @ApiQuery({ name: 'departureFrom', required: false, type: String, format: 'date-time' })

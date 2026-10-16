@@ -76,7 +76,7 @@ const SNAPSHOTS = {
   // Grants added by later migrations (booking.*, payment.*, PR-11
   // passenger-document reads, PR-12 compliance.*, PR-13 baggage.* and PR-14
   // checkin.*/boarding.* and PR-15 manifest.*) aside.
-  grants: `SELECT json_agg(g ORDER BY g.role_key, g.permission_key)::text AS value FROM authorization_role_permission g WHERE g.permission_key NOT LIKE 'booking.%' AND g.permission_key NOT LIKE 'payment.%' AND g.permission_key <> 'passenger.document.read' AND g.permission_key NOT LIKE 'compliance.%' AND g.permission_key NOT LIKE 'baggage.%' AND g.permission_key NOT LIKE 'checkin.%' AND g.permission_key NOT LIKE 'boarding.%' AND g.permission_key NOT LIKE 'manifest.%' AND g.permission_key NOT LIKE 'permit.%'`,
+  grants: `SELECT json_agg(g ORDER BY g.role_key, g.permission_key)::text AS value FROM authorization_role_permission g WHERE g.permission_key NOT LIKE 'booking.%' AND g.permission_key NOT LIKE 'payment.%' AND g.permission_key <> 'passenger.document.read' AND g.permission_key NOT LIKE 'compliance.%' AND g.permission_key NOT LIKE 'baggage.%' AND g.permission_key NOT LIKE 'checkin.%' AND g.permission_key NOT LIKE 'boarding.%' AND g.permission_key NOT LIKE 'manifest.%' AND g.permission_key NOT LIKE 'permit.%' AND g.permission_key NOT LIKE 'departure.%'`,
 };
 
 function deploy(config: string | null, url: string) {

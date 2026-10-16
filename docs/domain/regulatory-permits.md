@@ -254,3 +254,7 @@ legacy rows.
   in snapshots.
 - No production legal data is shipped, and nothing has been validated against
   production.
+
+## Use by PR-17
+
+PR-17 adds a separate, explicit, versioned trip permit policy. Missing policy blocks departure readiness; a published empty policy explicitly records zero requirements. Requirements remain generic and synthetic. Matching PR-16 permits must be ACTIVE and intrinsically VALID on the evaluation date, but **PERMIT_VALID != TRIP_READY** and PR-17 seeds no real legal requirement.

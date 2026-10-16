@@ -26,6 +26,9 @@ const EXPECTED_MATRIX: Record<
       'compliance.review',
       'compliance.rule.manage',
       'compliance.rule.read',
+      'departure.authorize',
+      'departure.manage',
+      'departure.read',
       'fleet.manage',
       'fleet.read',
       'identity.read',
@@ -72,6 +75,9 @@ const EXPECTED_MATRIX: Record<
       'compliance.review',
       'compliance.rule.manage',
       'compliance.rule.read',
+      'departure.authorize',
+      'departure.manage',
+      'departure.read',
       'fleet.manage',
       'fleet.read',
       'identity.read',
@@ -113,6 +119,9 @@ const EXPECTED_MATRIX: Record<
       'checkin.manage',
       'checkin.read',
       'compliance.read',
+      'departure.authorize',
+      'departure.manage',
+      'departure.read',
       'fleet.manage',
       'fleet.read',
       'identity.read',
@@ -148,6 +157,9 @@ const EXPECTED_MATRIX: Record<
       'boarding.scan',
       'checkin.manage',
       'checkin.read',
+      'departure.authorize',
+      'departure.manage',
+      'departure.read',
       'fleet.read',
       'manifest.export',
       'manifest.generate',
@@ -237,6 +249,7 @@ const EXPECTED_MATRIX: Record<
     permissions: [
       'audit.read',
       'compliance.rule.read',
+      'departure.read',
       'fleet.read',
       'identity.read',
       'network.read',
@@ -363,6 +376,11 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['POST', '/v1/admin/regulatory-permits/ETRP-000000000000'],
   ['POST', '/v1/admin/regulatory-permits/ETRP-000000000000/activate'],
   ['POST', '/v1/admin/regulatory-permits/ETRP-000000000000/revoke'],
+  ['GET', '/v1/admin/departure/trips/ET-UNKNOWN/readiness'],
+  ['POST', '/v1/admin/departure/trips/ET-UNKNOWN/permit-policy'],
+  ['POST', '/v1/admin/departure/trips/ET-UNKNOWN/authorize'],
+  ['POST', '/v1/admin/departure/trips/ET-UNKNOWN/depart'],
+  ['POST', '/v1/admin/departure/trips/ET-UNKNOWN/complete'],
 ];
 
 describe('server-side RBAC', () => {
@@ -508,6 +526,23 @@ describe('server-side RBAC', () => {
       );
       expect((await api.get('/manifests/ETM-000000000000/export.csv')).status).toBe(
         allowed('manifest.export') ? 404 : 403,
+      );
+      // PR-17: whole-trip readiness, explicit authorization and dispatch are
+      // independent from trip.manage and from intrinsic permit validity.
+      expect((await api.get('/departure/trips/ET-UNKNOWN/readiness')).status).toBe(
+        allowed('departure.read') ? 404 : 403,
+      );
+      expect(
+        (await api.post('/departure/trips/ET-UNKNOWN/permit-policy', { requirements: [] })).status,
+      ).toBe(allowed('departure.manage') ? 404 : 403);
+      expect((await api.post('/departure/trips/ET-UNKNOWN/authorize', {})).status).toBe(
+        allowed('departure.authorize') ? 404 : 403,
+      );
+      expect((await api.post('/departure/trips/ET-UNKNOWN/depart', {})).status).toBe(
+        allowed('departure.manage') ? 404 : 403,
+      );
+      expect((await api.post('/departure/trips/ET-UNKNOWN/complete', {})).status).toBe(
+        allowed('departure.manage') ? 404 : 403,
       );
     },
   );

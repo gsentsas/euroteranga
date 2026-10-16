@@ -48,6 +48,9 @@ export const PERMISSIONS = {
   MANIFEST_EXPORT: 'manifest.export',
   PERMIT_READ: 'permit.read',
   PERMIT_MANAGE: 'permit.manage',
+  DEPARTURE_READ: 'departure.read',
+  DEPARTURE_AUTHORIZE: 'departure.authorize',
+  DEPARTURE_MANAGE: 'departure.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

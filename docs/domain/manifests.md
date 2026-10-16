@@ -66,3 +66,7 @@ passenger-document validation or dispatch authorization. PR-16 records
 operational permits without turning a manifest into one; PR-17 owns departure
 readiness / dispatch authorization. PR-18 owns offline Crew delivery and
 device synchronization.
+
+## Use by PR-17
+
+PR-17 never treats a manifest as authorization. It rebuilds the same canonical PR-15 snapshot from current check-in/boarding facts and requires its SHA-256 hash to match the latest immutable manifest before departure readiness can pass.

@@ -41,6 +41,11 @@ import {
   type PassengerManifestPage,
   type RegulatoryPermitDetail,
   type RegulatoryPermitSummary,
+  type DepartureAuthorizationResult,
+  type DepartureDispatchResult,
+  type DeparturePermitPolicy,
+  type DepartureReadinessResponse,
+  type DepartureReadinessSnapshot,
   type StaffPassengerCheckIn,
 } from './index.js';
 
@@ -409,6 +414,81 @@ describe('regulatory permit client (PR-16)', () => {
     expectTypeOf<RegulatoryPermitDetail>().not.toHaveProperty('createdByIdentityId');
     expectTypeOf<RegulatoryPermitDetail>().not.toHaveProperty('tripReady');
     expectTypeOf(permits).not.toHaveProperty('approveDeparture');
+  });
+});
+
+describe('departure readiness client (PR-17)', () => {
+  it('encodes trip references and protects every mutation with STAFF CSRF', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { trip: { reference: 'ET-T' }, readiness: { status: 'BLOCKED' } } },
+      { status: 200, body: { csrfToken: 'policy' } },
+      { status: 201, body: { tripReference: 'ET-T', version: 1 } },
+      { status: 200, body: { csrfToken: 'authorize' } },
+      { status: 200, body: { created: true, authorization: { reference: 'ETDA-AAAAAAAAAAAA' } } },
+      { status: 200, body: { csrfToken: 'depart' } },
+      { status: 200, body: { trip: { reference: 'ET-T', status: 'IN_PROGRESS' } } },
+      { status: 200, body: { csrfToken: 'complete' } },
+      { status: 200, body: { trip: { reference: 'ET-T', status: 'COMPLETED' } } },
+    ]);
+    const departure = createAuthClient('http://api.test').admin.departure;
+    const trip = 'ET T/../X';
+    await departure.readiness(trip);
+    await departure.publishPermitPolicy(trip, {
+      requirements: [
+        { permitType: 'SYNTHETIC', scopeType: 'TRIP' },
+        { permitType: 'COUNTRY_SYNTHETIC', scopeType: 'COUNTRY', countryIso2: 'SN' },
+      ],
+    });
+    await departure.authorize(trip);
+    await departure.depart(trip);
+    await departure.complete(trip);
+
+    const encoded = 'ET%20T%2F..%2FX';
+    expect(calls[0]?.url).toBe(`http://api.test/v1/admin/departure/trips/${encoded}/readiness`);
+    expect(calls[2]?.url).toBe(`http://api.test/v1/admin/departure/trips/${encoded}/permit-policy`);
+    expect(JSON.parse(calls[2]?.init.body as string)).toEqual({
+      requirements: [
+        { permitType: 'SYNTHETIC', scopeType: 'TRIP' },
+        { permitType: 'COUNTRY_SYNTHETIC', scopeType: 'COUNTRY', countryIso2: 'SN' },
+      ],
+    });
+    expect(calls[4]?.url).toBe(`http://api.test/v1/admin/departure/trips/${encoded}/authorize`);
+    expect(calls[6]?.url).toBe(`http://api.test/v1/admin/departure/trips/${encoded}/depart`);
+    expect(calls[8]?.url).toBe(`http://api.test/v1/admin/departure/trips/${encoded}/complete`);
+    for (const [index, token] of [
+      [2, 'policy'],
+      [4, 'authorize'],
+      [6, 'depart'],
+      [8, 'complete'],
+    ] as const) {
+      expect(calls[index]?.init.headers).toEqual(
+        expect.objectContaining({ 'X-CSRF-Token': token }),
+      );
+    }
+    expect(calls[4]?.init.body).toBe('{}');
+    expect(calls[6]?.init.body).toBe('{}');
+    expect(calls[8]?.init.body).toBe('{}');
+  });
+
+  it('exposes minimized departure types without internal ids or passenger PII', () => {
+    const departure = createAuthClient('http://api.test').admin.departure;
+    expectTypeOf(departure.readiness).returns.resolves.toEqualTypeOf<
+      ApiResult<DepartureReadinessResponse>
+    >();
+    expectTypeOf(departure.publishPermitPolicy).returns.resolves.toEqualTypeOf<
+      ApiResult<DeparturePermitPolicy>
+    >();
+    expectTypeOf(departure.authorize).returns.resolves.toEqualTypeOf<
+      ApiResult<DepartureAuthorizationResult>
+    >();
+    expectTypeOf(departure.depart).returns.resolves.toEqualTypeOf<
+      ApiResult<DepartureDispatchResult>
+    >();
+    expectTypeOf<DepartureReadinessResponse>().not.toHaveProperty('tripId');
+    expectTypeOf<DepartureReadinessSnapshot['passengers']>().not.toHaveProperty('items');
+    expectTypeOf<DepartureReadinessSnapshot>().not.toHaveProperty('documents');
+    expectTypeOf<DepartureReadinessSnapshot>().not.toHaveProperty('payments');
+    expectTypeOf<DepartureReadinessSnapshot>().not.toHaveProperty('qrPayload');
   });
 });
 

@@ -777,7 +777,9 @@ describe('trip administration API (isolated database)', () => {
         expect(item.id < first.body.nextCursor).toBe(true);
       }
       expect((await api.get('/trips?limit=101')).status).toBe(400);
-      expect((await api.get('/trips?status=IN_PROGRESS')).status).toBe(400);
+      expect((await api.get('/trips?status=IN_PROGRESS')).status).toBe(200);
+      expect((await api.get('/trips?status=COMPLETED')).status).toBe(200);
+      expect((await api.get('/trips?status=DEPARTED')).status).toBe(400);
       expect((await api.get('/trips?departureFrom=2030-01-01')).status).toBe(400);
       expect((await api.get(`/trips/${UNKNOWN_ID}`)).status).toBe(404);
     });

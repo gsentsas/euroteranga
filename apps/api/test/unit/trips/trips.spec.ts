@@ -157,7 +157,9 @@ describe('trip input validation', () => {
 
   it('bounds list filters', () => {
     expect(tripListQuerySchema.safeParse({ limit: '101' }).success).toBe(false);
-    expect(tripListQuerySchema.safeParse({ status: 'IN_PROGRESS' }).success).toBe(false);
+    expect(tripListQuerySchema.safeParse({ status: 'IN_PROGRESS' }).success).toBe(true);
+    expect(tripListQuerySchema.safeParse({ status: 'COMPLETED' }).success).toBe(true);
+    expect(tripListQuerySchema.safeParse({ status: 'DEPARTED' }).success).toBe(false);
     expect(
       tripListQuerySchema.parse({ departureFrom: '2030-01-01T00:00:00Z' }).departureFrom,
     ).toEqual(new Date('2030-01-01T00:00:00Z'));
