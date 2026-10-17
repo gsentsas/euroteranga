@@ -4,6 +4,7 @@ export const OBJECT_STORAGE_PROVIDER = Symbol('OBJECT_STORAGE_PROVIDER');
 
 export const PASSENGER_DOCUMENT_OBJECT_KEY = /^passenger-documents\/[0-9a-f]{2}\/[0-9a-f]{64}$/;
 export const INCIDENT_ATTACHMENT_OBJECT_KEY = /^incident-attachments\/[0-9a-f]{2}\/[0-9a-f]{64}$/;
+export const FINANCE_RECEIPT_OBJECT_KEY = /^finance-receipts\/[0-9a-f]{2}\/[0-9a-f]{64}$/;
 
 export type ObjectStorageErrorCode = 'UNAVAILABLE' | 'NOT_FOUND' | 'CONFLICT' | 'INVALID_KEY';
 
@@ -34,7 +35,11 @@ export function assertPassengerDocumentObjectKey(key: string): void {
 }
 
 export function assertPrivateObjectKey(key: string): void {
-  if (!PASSENGER_DOCUMENT_OBJECT_KEY.test(key) && !INCIDENT_ATTACHMENT_OBJECT_KEY.test(key)) {
+  if (
+    !PASSENGER_DOCUMENT_OBJECT_KEY.test(key) &&
+    !INCIDENT_ATTACHMENT_OBJECT_KEY.test(key) &&
+    !FINANCE_RECEIPT_OBJECT_KEY.test(key)
+  ) {
     throw new ObjectStorageError('INVALID_KEY');
   }
 }

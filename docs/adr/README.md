@@ -36,6 +36,7 @@ written yet.
 | [ADR-030](ADR-030-immutable-trip-passenger-manifests.md)                | Immutable trip passenger manifests                     | Accepted |
 | [ADR-031](ADR-031-regulatory-permit-lifecycle.md)                       | Regulatory permit lifecycle and intrinsic validity     | Accepted |
 | [ADR-032](ADR-032-departure-readiness-dispatch.md)                      | Departure readiness and dispatch authorization         | Accepted |
+| [ADR-033](ADR-033-operational-trip-finance.md)                          | Operational trip finance without a general ledger      | Accepted |
 
 The planned ADR-008 (Payment Abstraction) is covered by ADR-027. ADR-006
 (Authentication) is covered in detail by ADR-012 to ADR-016; authorization
@@ -58,3 +59,5 @@ ADR-030 covers PR-15 immutable, minimized and versioned trip passenger
 snapshots and their on-demand CSV representation. ADR-031 separates generic,
 scoped operational permits and intrinsic validity from passenger compliance,
 technical documents, manifests and PR-17 departure readiness. ADR-032 defines the deterministic whole-trip gates, explicit permit policy and dispatch lifecycle.
+
+ADR-033 defines PR-22 operational finance, exact per-currency contribution, refund/cancellation semantics and the explicit boundary from statutory accounting.

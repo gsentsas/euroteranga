@@ -4,7 +4,11 @@ import { PublicApiError } from '../auth/http/public-api-error.js';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
-import { cancelPendingPayments, lockPendingPayments } from '../payments/payment-transitions.js';
+import {
+  cancelPendingPayments,
+  isPaymentFullyRefunded,
+  lockFinancialPayments,
+} from '../payments/payment-transitions.js';
 import { findTripFare } from '../pricing/fare-resolution.service.js';
 import { BOOKING_CONFIG, type BookingConfig } from './booking.config.js';
 import type { AdminBookingListQuery, BookingCreate } from './booking.dto.js';
@@ -296,9 +300,9 @@ export class BookingService {
   /**
    * Lock order: the booking's PENDING payments FOR UPDATE (by id) -> booking
    * FOR UPDATE -> seats -> locks, the same payment -> booking order as the
-   * webhook pipeline. A second concurrent cancellation waits, then sees the
-   * booking cancelled. A CONFIRMED booking is refused (no refund workflow
-   * yet); a PENDING attempt is cancelled with its hold (PR-10).
+   * webhook/refund pipeline. A second concurrent cancellation waits, then
+   * sees the booking cancelled. A CONFIRMED booking is cancellable only after
+   * its SUCCEEDED payment is fully refunded; PENDING attempts are cancelled.
    */
   private async cancel(
     bookingId: string,
@@ -309,15 +313,26 @@ export class BookingService {
   ) {
     try {
       await this.database.client.$transaction(async (tx) => {
-        const pendingPayments = await lockPendingPayments(tx, { bookingId });
+        const lockedPayments = await lockFinancialPayments(tx, { bookingId });
+        const pendingPayments = lockedPayments
+          .filter((payment) => payment.status === 'PENDING')
+          .map((payment) => ({
+            id: payment.id,
+            reference: payment.reference,
+            bookingReference: payment.bookingReference,
+          }));
         const [booking] = await lock(tx);
         if (!booking) throw BookingErrors.notFound();
         if (booking.cancelled_at) throw BookingErrors.cancelled();
-        if (booking.confirmed_at) throw BookingErrors.confirmed();
         const now = await databaseNow(tx);
-        if (booking.hold_expires_at.getTime() <= now.getTime()) throw BookingErrors.expired();
-        // An attempt started between the two locks cannot be locked now
-        // without inverting the order: report a conflict instead.
+        if (booking.confirmed_at) {
+          const succeeded = lockedPayments.find((payment) => payment.status === 'SUCCEEDED');
+          if (!succeeded || !(await isPaymentFullyRefunded(tx, succeeded))) {
+            throw BookingErrors.confirmed();
+          }
+        } else if (booking.hold_expires_at.getTime() <= now.getTime()) {
+          throw BookingErrors.expired();
+        }
         const pendingNow = await tx.payment.count({
           where: { bookingId: booking.id, status: 'PENDING' },
         });
@@ -335,7 +350,7 @@ export class BookingService {
             action: 'BOOKING_CANCELLED',
             resourceType: 'booking',
             resourceId: booking.id,
-            before: { status: 'HELD' },
+            before: { status: booking.confirmed_at ? 'CONFIRMED' : 'HELD' },
             after: { status: 'CANCELLED', cancelledAt: now },
             metadata: {
               reference: booking.reference,

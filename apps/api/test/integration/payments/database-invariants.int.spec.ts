@@ -492,7 +492,7 @@ describe('payment database invariants (isolated database)', () => {
   });
 
   describe('booking confirmation', () => {
-    it('is set once, by a succeeded payment, on an active hold', async () => {
+    it('is set once by a succeeded payment and cannot cancel before full refund', async () => {
       const f = await fixture();
       const held = await heldBooking(f, 1, 2, ['1B']);
       await expect(
@@ -538,7 +538,7 @@ describe('payment database invariants (isolated database)', () => {
           where: { id: booking.id },
           data: { cancelledAt: new Date(), cancellationReason: 'Essai direct' },
         }),
-      ).rejects.toThrow(/confirmed booking cannot be cancelled/);
+      ).rejects.toThrow(/must be fully refunded before cancellation/);
     });
 
     it('keeps the confirmation within the hold (CHECK) and never with a cancellation', async () => {
@@ -576,7 +576,7 @@ describe('payment database invariants (isolated database)', () => {
   });
 
   describe('confirmed inventory', () => {
-    it('never releases, extends or deletes the inventory of a confirmed booking', async () => {
+    it('never releases, extends or deletes confirmed inventory before refund and cancellation', async () => {
       const f = await fixture();
       const short = await shortHold(t.app, f, alice.id, 1, 3, ['2A'], 3_000);
       const row = await prisma().booking.findUniqueOrThrow({ where: { id: short.id } });
@@ -590,14 +590,14 @@ describe('payment database invariants (isolated database)', () => {
       expect(seat.locks).toHaveLength(2);
       await expect(
         prisma().seatInventoryLock.delete({ where: { id: seat.locks[0]!.id } }),
-      ).rejects.toThrow(/seat lock of a confirmed booking cannot be deleted/);
+      ).rejects.toThrow(/seat lock of a confirmed booking requires cancellation and full refund/);
       await expect(
         prisma()
           .$executeRaw`DELETE FROM "seat_inventory_lock" WHERE "booking_seat_id" = ${seat.id}::uuid`,
-      ).rejects.toThrow(/seat lock of a confirmed booking cannot be deleted/);
+      ).rejects.toThrow(/seat lock of a confirmed booking requires cancellation and full refund/);
       await expect(
         prisma().bookingSeat.update({ where: { id: seat.id }, data: { releasedAt: new Date() } }),
-      ).rejects.toThrow(/seat of a confirmed booking cannot be released/);
+      ).rejects.toThrow(/seat of a confirmed booking requires cancellation and full refund/);
       await expect(
         prisma().bookingSeat.create({
           data: { bookingId: short.id, seatMapCellId: f.cells['2B']! },
@@ -608,7 +608,7 @@ describe('payment database invariants (isolated database)', () => {
         prisma().$executeRaw`
           UPDATE "booking_seat" bs SET "released_at" = b."hold_expires_at"
           FROM "booking" b WHERE bs."booking_id" = b."id" AND b."id" = ${short.id}::uuid`,
-      ).rejects.toThrow(/seat of a confirmed booking cannot be released/);
+      ).rejects.toThrow(/seat of a confirmed booking requires cancellation and full refund/);
       expect(await prisma().seatInventoryLock.count({ where: { bookingSeatId: seat.id } })).toBe(2);
     });
 

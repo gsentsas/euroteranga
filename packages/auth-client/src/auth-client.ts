@@ -916,6 +916,157 @@ export interface AdminPaymentListOptions {
   paymentReference?: string;
 }
 
+export type FinanceRevenueType = 'BAGGAGE' | 'OPTION' | 'OTHER';
+export type FinanceExpenseType =
+  'FUEL' | 'FERRY' | 'TOLL' | 'CREW' | 'HOTEL' | 'MAINTENANCE' | 'BORDER' | 'INSURANCE' | 'OTHER';
+export type FinanceEntryStatus = 'ACTIVE' | 'VOIDED';
+
+export interface FinanceCurrencySummary {
+  currencyCode: string;
+  currencyMinorUnit: number;
+  ticketRevenueMinor: string;
+  additionalRevenueMinor: string;
+  grossRevenueMinor: string;
+  refundMinor: string;
+  netRevenueMinor: string;
+  expenseMinor: string;
+  contributionMinor: string;
+  payoutMinor: string;
+  outstandingExpenseMinor: string;
+}
+
+export interface FinanceRefund {
+  id: string;
+  reference: string;
+  amountMinor: string;
+  reason: string;
+  recordedAt: string;
+  creditNote: { reference: string; issuedAt: string } | null;
+}
+
+export interface FinancePayment {
+  id: string;
+  reference: string;
+  amountMinor: string;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  booking: { reference: string; cancelledAt: string | null };
+  refunds: FinanceRefund[];
+}
+
+export interface FinanceRevenue {
+  id: string;
+  reference: string;
+  type: FinanceRevenueType;
+  status: FinanceEntryStatus;
+  amountMinor: string;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  description: string;
+  occurredAt: string;
+  createdAt: string;
+  voidedAt: string | null;
+  voidReason: string | null;
+  baggage: { reference: string } | null;
+}
+
+export interface FinancePayout {
+  id: string;
+  reference: string;
+  amountMinor: string;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  note: string | null;
+  paidAt: string;
+  recordedAt: string;
+}
+
+export interface FinanceReceipt {
+  id: string;
+  reference: string;
+  sha256: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+export interface FinanceExpense {
+  id: string;
+  reference: string;
+  type: FinanceExpenseType;
+  status: FinanceEntryStatus;
+  amountMinor: string;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  description: string;
+  vendorLabel: string | null;
+  occurredAt: string;
+  createdAt: string;
+  voidedAt: string | null;
+  voidReason: string | null;
+  payouts: FinancePayout[];
+  receipts: FinanceReceipt[];
+}
+
+export interface FinanceTripSummary {
+  trip: { id: string; reference: string; status: TripStatus };
+  currencies: FinanceCurrencySummary[];
+  payments: FinancePayment[];
+  revenues: FinanceRevenue[];
+  expenses: FinanceExpense[];
+  /** PR-22 deliberately performs no cross-currency conversion. */
+  fxConversionApplied: false;
+}
+
+export interface FinanceRevenueInput {
+  type: FinanceRevenueType;
+  amountMinor: string;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  description: string;
+  occurredAt: string;
+  baggageReference?: string;
+}
+
+export interface FinanceExpenseInput {
+  type: FinanceExpenseType;
+  amountMinor: string;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  description: string;
+  vendorLabel?: string;
+  occurredAt: string;
+}
+
+export interface FinanceRefundInput {
+  clientRefundId: string;
+  amountMinor: string;
+  reason: string;
+}
+
+export interface FinanceRefundResult {
+  created: boolean;
+  refund: {
+    id?: string;
+    reference: string;
+    amountMinor: string;
+    reason: string;
+    creditNote: { reference: string; issuedAt?: string } | null;
+  };
+}
+
+export interface FinancePayoutInput {
+  clientPayoutId: string;
+  amountMinor: string;
+  paidAt: string;
+  note?: string;
+}
+
+export interface FinancePayoutResult {
+  created: boolean;
+  payout: FinancePayout;
+}
+
 export type AdminBookingPage = Page<AdminBooking>;
 
 export interface AdminBookingListOptions {
@@ -2944,6 +3095,75 @@ export function createAuthClient(baseUrl: string) {
             'staff',
             `/v1/admin/payments/${encodeURIComponent(paymentId)}/cancel`,
             { reason },
+          ),
+      },
+      /** PR-22 operational finance. No FX conversion and no general ledger. */
+      finance: {
+        trip: (tripReference: string) =>
+          call<FinanceTripSummary>(
+            'GET',
+            '/v1/admin/finance/trips/' + encodeURIComponent(tripReference),
+          ),
+        createRevenue: (tripReference: string, input: FinanceRevenueInput) =>
+          withCsrf<FinanceRevenue>(
+            'staff',
+            '/v1/admin/finance/trips/' + encodeURIComponent(tripReference) + '/revenues',
+            input,
+          ),
+        createExpense: (tripReference: string, input: FinanceExpenseInput) =>
+          withCsrf<FinanceExpense>(
+            'staff',
+            '/v1/admin/finance/trips/' + encodeURIComponent(tripReference) + '/expenses',
+            input,
+          ),
+        voidRevenue: (reference: string, reason: string) =>
+          withCsrf<FinanceRevenue>(
+            'staff',
+            '/v1/admin/finance/revenues/' + encodeURIComponent(reference) + '/void',
+            { reason },
+          ),
+        voidExpense: (reference: string, reason: string) =>
+          withCsrf<FinanceExpense>(
+            'staff',
+            '/v1/admin/finance/expenses/' + encodeURIComponent(reference) + '/void',
+            { reason },
+          ),
+        refundPayment: (paymentReference: string, input: FinanceRefundInput) =>
+          withCsrf<FinanceRefundResult>(
+            'staff',
+            '/v1/admin/finance/payments/' + encodeURIComponent(paymentReference) + '/refunds',
+            input,
+          ),
+        recordPayout: (expenseReference: string, input: FinancePayoutInput) =>
+          withCsrf<FinancePayoutResult>(
+            'staff',
+            '/v1/admin/finance/expenses/' + encodeURIComponent(expenseReference) + '/payouts',
+            input,
+          ),
+        uploadReceipt: (expenseReference: string, file: File) => {
+          const form = new FormData();
+          form.append('file', file, file.name);
+          return withCsrfMultipart<FinanceReceipt>(
+            'staff',
+            '/v1/admin/finance/expenses/' + encodeURIComponent(expenseReference) + '/receipts',
+            form,
+          );
+        },
+        downloadReceipt: (expenseReference: string, receiptId: string) =>
+          privateDownload(
+            '/v1/admin/finance/expenses/' +
+              encodeURIComponent(expenseReference) +
+              '/receipts/' +
+              encodeURIComponent(receiptId) +
+              '/download',
+          ),
+        exportCsv: (tripReference: string) =>
+          privateDownload(
+            '/v1/admin/finance/trips/' + encodeURIComponent(tripReference) + '/export.csv',
+          ),
+        exportXlsx: (tripReference: string) =>
+          privateDownload(
+            '/v1/admin/finance/trips/' + encodeURIComponent(tripReference) + '/export.xlsx',
           ),
       },
       /** passenger.document.read; technical status only, no compliance action. */

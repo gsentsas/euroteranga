@@ -12,7 +12,7 @@ const DATABASE_PACKAGE = fileURLToPath(
 );
 const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const PR20_MIGRATION = '20261017013000_borders';
-const PR21_MIGRATION = '20261017083000_incidents';
+const PR22_MIGRATION = '20261017143000_finance';
 
 function deploy(config: string | null, url: string) {
   execFileSync(
@@ -101,9 +101,9 @@ describe('upgrade from a real PR-20 database', () => {
     if (workDir) rmSync(workDir, { recursive: true, force: true });
   });
 
-  it('applies only PR-21 on top of PR-20 without synthesizing incident history', async () => {
-    expect(await applied()).toHaveLength(21);
-    expect((await applied()).at(-1)).toBe(PR21_MIGRATION);
+  it('applies PR-21 and PR-22 on top of PR-20 without synthesizing incident history', async () => {
+    expect(await applied()).toHaveLength(22);
+    expect((await applied()).at(-1)).toBe(PR22_MIGRATION);
 
     expect(
       await raw.country.count({
@@ -160,9 +160,9 @@ describe('upgrade from a real PR-20 database', () => {
     ]);
   });
 
-  it('is idempotent and reports all 21 migrations applied', async () => {
+  it('is idempotent and reports all 22 migrations applied', async () => {
     deploy(null, url);
-    expect(await applied()).toHaveLength(21);
+    expect(await applied()).toHaveLength(22);
     const status = execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'status'], {
       cwd: DATABASE_PACKAGE,
       env: { ...process.env, DATABASE_URL: url },

@@ -1,7 +1,7 @@
 # Payment domain
 
-> Implemented in PR-10: payment attempts, provider events and booking
-> confirmation. **NOT PRODUCTION DEPLOYED.** There is **no real payment service
+> Implemented in PR-10 and extended by PR-22 operational refunds: payment
+> attempts, provider events, booking confirmation and bounded refund facts. **NOT PRODUCTION DEPLOYED.** There is **no real payment service
 > provider (PSP)**: the only provider, **SANDBOX**, is a local simulation for
 > development, tests and CI. No real money is ever moved, and no card, security
 > code or IBAN is ever collected. Browser and integration tests use synthetic
@@ -23,8 +23,7 @@ Included:
 - `PaymentEvent`: each provider event, authenticated (HMAC), recorded once and
   idempotent;
 - booking confirmation (`Booking.confirmedAt`, status CONFIRMED), confirmed
-  inventory permanence, and refusal of cancelling a confirmed booking or its
-  trip;
+  inventory permanence, and PR-22 cancellation only after full refund;
 - CUSTOMER initiation (idempotent), reading and cancellation of an attempt;
 - STAFF reading with `payment.read`, and cancellation of a PENDING attempt with
   `payment.manage`;
@@ -34,8 +33,9 @@ Deferred:
 
 - **any real PSP** (Stripe, PayDunya, Wave, Orange Money, card acquiring…) and
   PCI-scoped data collection;
-- **refunds**: a confirmed booking cannot be cancelled, and a trip with a
-  confirmed booking cannot be cancelled, until a refund workflow exists;
+- **real provider-side refund execution**: PR-22 records the operational
+  refund fact and matching credit memo, but SANDBOX moves no money and no
+  production PSP refund API is selected;
 - **ticketing**, ticket PDF, QR codes;
 - **passengers**, check-in, boarding, baggage;
 - promotions, coupons, detailed taxes, commissions and general accounting.
@@ -100,11 +100,23 @@ changes afterwards. A confirmed booking:
 - **keeps its seats occupied after `holdExpiresAt`**: availability, search and
   the overbooking checks count its locks; the expired-hold cleanup never
   selects it; PostgreSQL refuses to release its seats or delete its locks;
-- cannot be cancelled by the PR-09 CUSTOMER or STAFF endpoints:
-  `409 BOOKING_CONFIRMED` (no refund workflow yet);
-- prevents the cancellation of its trip: `409 TRIP_HAS_CONFIRMED_BOOKINGS`.
-  HELD bookings are still cancelled atomically with their trip, as in PR-09. A
-  future Refund PR will lift this restriction.
+- cannot be cancelled while its succeeded payment is only partially refunded:
+  `409 BOOKING_CONFIRMED`;
+- may be cancelled after the succeeded payment is fully refunded (PR-22), at
+  which point its seats and inventory locks are released;
+- prevents trip cancellation only while it is not fully refunded:
+  `409 TRIP_HAS_CONFIRMED_BOOKINGS`. Fully refunded confirmed bookings join
+  the normal trip-cancellation cascade.
+
+## PR-22 operational refunds
+
+A `Refund` is append-only and targets one SUCCEEDED payment. Cumulative
+refunds cannot exceed the payment amount; concurrent refunds serialize on the
+payment row. `clientRefundId` makes retries idempotent. One matching
+operational `CreditNote` is created in the same transaction.
+
+This is a business record, not a PSP network operation. The current SANDBOX
+provider moves no real money. See [finance.md](finance.md) and ADR-033.
 
 ## Exact amount
 

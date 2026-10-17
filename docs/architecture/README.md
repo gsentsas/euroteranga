@@ -435,13 +435,24 @@ versioned regulatory rule engine (ADR-009), baggage identity with its
 append-only event history (ADR-028) and the operational boarding credential
 with its check-in readiness snapshot (ADR-029), plus immutable trip passenger
 manifests (ADR-030) and the generic regulatory-permit lifecycle with intrinsic
-validity (ADR-031).
+validity (ADR-031), plus operational trip finance without a general ledger
+(ADR-033).
 
 Still open: production object-storage and malware-scanner provisioning,
 offline crew synchronisation, the choice and integration of a real payment
-provider (with refunds), a data-driven operational permit-requirement
+provider (including provider-side refund execution), a data-driven operational permit-requirement
 catalogue, departure readiness/dispatch, and the production deployment model.
 
 ### PR-17 — departure readiness and dispatch
 
 PR-17 composes current trip, vehicle, passenger, manifest and explicit permit-policy facts with the deterministic `departure-readiness/1` engine. Missing permit policy blocks readiness; a published empty policy is the only explicit zero-requirement state. A READY result is fingerprinted, explicit STAFF authorization binds that fingerprint, and actual departure revalidates it before `SCHEDULED -> IN_PROGRESS -> COMPLETED`. PostgreSQL owns actual clocks and append-only authorization/policy history. No real legal requirement is seeded; PR-18 still owns Crew offline/device behavior. See [departure-readiness.md](../domain/departure-readiness.md) and ADR-032.
+
+### PR-22 — operational finance
+
+PR-22 derives ticket revenue from existing SUCCEEDED payments, adds immutable
+additional trip revenue and expenses, bounded refunds with matching credit
+memos, expense payouts, private scanned receipts and CSV/XLSX operational
+exports. Contribution is calculated per currency with no implicit FX. A
+confirmed booking becomes cancellable only after full refund. This is not a
+general ledger, statutory invoicing or FEC implementation. See
+[finance.md](../domain/finance.md) and ADR-033.

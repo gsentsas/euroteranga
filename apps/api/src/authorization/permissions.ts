@@ -64,6 +64,9 @@ export const PERMISSIONS = {
   INCIDENT_READ: 'incident.read',
   INCIDENT_MANAGE: 'incident.manage',
   CREW_INCIDENT_REPORT: 'crew.incident.report',
+  FINANCE_READ: 'finance.read',
+  FINANCE_MANAGE: 'finance.manage',
+  PAYMENT_REFUND: 'payment.refund',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
