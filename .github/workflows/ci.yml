@@ -243,6 +243,12 @@ jobs:
           fetch-depth: 0 # scan the full history, not only the last commit
       - name: Forbidden files and quality-gate bypass markers
         run: bash scripts/check-forbidden-files.sh
+      - name: Validate Plesk nginx fragments
+        run: |
+          if grep -RFn '\\n' infrastructure/plesk/nginx --include='*.conf'; then
+            echo "::error::Literal \\n sequence found in Plesk nginx fragment"
+            exit 1
+          fi
       - name: Secret detection (gitleaks, checksum-verified binary)
         run: |
           archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
