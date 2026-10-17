@@ -7,7 +7,8 @@
   "type": "module",
   "scripts": {
     "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:pilot": "playwright test specs/pilot-acceptance.spec.ts"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",

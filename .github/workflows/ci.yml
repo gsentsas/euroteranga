@@ -200,6 +200,35 @@ jobs:
           path: tests/browser/playwright-report/
           retention-days: 7
 
+  pilot-acceptance:
+    name: pilot-acceptance
+    if: always()
+    needs: [quality, database, test, build, browser, security]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require all mandatory CI gates
+        env:
+          QUALITY: ${{ needs.quality.result }}
+          DATABASE: ${{ needs.database.result }}
+          TEST: ${{ needs.test.result }}
+          BUILD: ${{ needs.build.result }}
+          BROWSER: ${{ needs.browser.result }}
+          SECURITY: ${{ needs.security.result }}
+        run: |
+          failed=0
+          for gate in QUALITY DATABASE TEST BUILD BROWSER SECURITY; do
+            result="${!gate}"
+            if [ "$result" != "success" ]; then
+              echo "::error::${gate,,} gate is $result"
+              failed=1
+            else
+              echo "${gate,,}: success"
+            fi
+          done
+          test "$failed" -eq 0
+          echo "pilot acceptance CI gates: PASS"
+
   security:
     name: security
     runs-on: ubuntu-24.04
