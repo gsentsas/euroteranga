@@ -42,7 +42,6 @@ test('web: the skip link is reachable by keyboard and moves focus to main', asyn
   await expect(page.getByRole('main')).toBeFocused();
 });
 
-
 test('web: public homepage exposes booking, account and tracking journeys', async ({ page }) => {
   await page.goto(appUrl(appByName('web')));
 

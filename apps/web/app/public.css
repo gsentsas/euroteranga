@@ -172,8 +172,7 @@ body {
 .public-hero {
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(115deg, var(--public-green-950) 0%, #0d634f 63%, #167c62 100%);
+  background: linear-gradient(115deg, var(--public-green-950) 0%, #0d634f 63%, #167c62 100%);
   color: #fff;
 }
 
@@ -695,8 +694,7 @@ body {
   overflow: hidden;
   border-radius: 1.6rem;
   background:
-    linear-gradient(110deg, rgba(7, 59, 49, 0.98), rgba(19, 112, 91, 0.94)),
-    var(--public-green-950);
+    linear-gradient(110deg, rgba(7, 59, 49, 0.98), rgba(19, 112, 91, 0.94)), var(--public-green-950);
   color: #fff;
 }
 
