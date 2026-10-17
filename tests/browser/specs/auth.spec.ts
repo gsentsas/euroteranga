@@ -144,7 +144,7 @@ test('ops: staff logs in with password, enrolls TOTP, reaches the console, logs 
   await expect(
     page
       .getByRole('navigation', { name: 'Navigation principale' })
-      .getByRole('link', { name: 'Foundation' }),
+      .getByRole('link', { name: 'Vue d’ensemble' }),
   ).toBeVisible();
 
   await page.getByRole('button', { name: 'Se déconnecter' }).click();
