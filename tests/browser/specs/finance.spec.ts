@@ -189,8 +189,13 @@ test.describe('PR-22 operational finance', () => {
 
     const workspace = page.getByTestId('finance-workspace');
     await expect(workspace).toContainText('Aucune conversion de change');
-    await expect(workspace.getByRole('row').filter({ hasText: 'EUR' })).toContainText('210,00 EUR');
-    await expect(workspace.getByRole('row').filter({ hasText: 'XOF' })).toContainText(
+    const profitability = workspace.getByRole('table', {
+      name: 'Rentabilité opérationnelle par devise',
+    });
+    await expect(profitability.getByRole('row').filter({ hasText: 'EUR' })).toContainText(
+      '210,00 EUR',
+    );
+    await expect(profitability.getByRole('row').filter({ hasText: 'XOF' })).toContainText(
       '-50 000 XOF',
     );
 
