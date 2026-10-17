@@ -8,8 +8,8 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: '/session',
     scope: '/',
     display: 'standalone',
-    background_color: '#ffffff',
-    theme_color: '#0b1f3a',
+    background_color: '#f3f7f5',
+    theme_color: '#071f1a',
     lang: 'fr',
     icons: [
       { src: '/crew-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
