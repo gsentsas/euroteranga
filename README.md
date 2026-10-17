@@ -62,21 +62,21 @@ database. The backend is a modular monolith. Details:
 
 ## Monorepo
 
-| Path                   | Package                      | What it is today                                                                  | Local port |
-| ---------------------- | ---------------------------- | --------------------------------------------------------------------------------- | ---------- |
-| `apps/web`             | `@euroteranga/web`           | Next.js public site skeleton                                                      | 3000       |
-| `apps/booking`         | `@euroteranga/booking`       | Public search, historical seat selection, CUSTOMER holds and SANDBOX payment      | 3001       |
-| `apps/client`          | `@euroteranga/client`        | Customer auth, account, owned bookings and their payments                         | 3002       |
-| `apps/tracking`        | `@euroteranga/tracking`      | Public tracking projection                                                        | 3003       |
-| `apps/ops`             | `@euroteranga/ops`           | Refine back-office including operations, finance and reporting                    | 3004       |
-| `apps/crew`            | `@euroteranga/crew`          | Crew operations with offline event queue                                          | 3005       |
-| `apps/api`             | `@euroteranga/api`           | NestJS Core API — auth, RBAC and operational domains through PR-23                | 4000       |
-| `packages/config`      | `@euroteranga/config`        | Validated environment configuration                                               | —          |
-| `packages/logger`      | `@euroteranga/logger`        | Structured JSON logs with redaction                                               | —          |
-| `packages/database`    | `@euroteranga/database`      | Prisma schema, migrations, client                                                 | —          |
-| `packages/ui`          | `@euroteranga/ui`            | Brand mark, page shell, forms, tokens                                             | —          |
-| `packages/auth-client` | `@euroteranga/auth-client`   | Typed browser client for Core API                                                 | —          |
-| `tests/browser`        | `@euroteranga/browser-tests` | Playwright foundation, auth and business flows                                    | —          |
+| Path                   | Package                      | What it is today                                                             | Local port |
+| ---------------------- | ---------------------------- | ---------------------------------------------------------------------------- | ---------- |
+| `apps/web`             | `@euroteranga/web`           | Next.js public site skeleton                                                 | 3000       |
+| `apps/booking`         | `@euroteranga/booking`       | Public search, historical seat selection, CUSTOMER holds and SANDBOX payment | 3001       |
+| `apps/client`          | `@euroteranga/client`        | Customer auth, account, owned bookings and their payments                    | 3002       |
+| `apps/tracking`        | `@euroteranga/tracking`      | Public tracking projection                                                   | 3003       |
+| `apps/ops`             | `@euroteranga/ops`           | Refine back-office including operations, finance and reporting               | 3004       |
+| `apps/crew`            | `@euroteranga/crew`          | Crew operations with offline event queue                                     | 3005       |
+| `apps/api`             | `@euroteranga/api`           | NestJS Core API — auth, RBAC and operational domains through PR-23           | 4000       |
+| `packages/config`      | `@euroteranga/config`        | Validated environment configuration                                          | —          |
+| `packages/logger`      | `@euroteranga/logger`        | Structured JSON logs with redaction                                          | —          |
+| `packages/database`    | `@euroteranga/database`      | Prisma schema, migrations, client                                            | —          |
+| `packages/ui`          | `@euroteranga/ui`            | Brand mark, page shell, forms, tokens                                        | —          |
+| `packages/auth-client` | `@euroteranga/auth-client`   | Typed browser client for Core API                                            | —          |
+| `tests/browser`        | `@euroteranga/browser-tests` | Playwright foundation, auth and business flows                               | —          |
 
 Ports are a local development convention only; production does not depend on
 them.

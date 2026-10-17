@@ -22,21 +22,21 @@ never rewrites historical trip geometry.
 
 ## KPI definitions
 
-| KPI | Numerator / value | Denominator / population | Zero/null rule |
-| --- | --- | --- | --- |
-| Trips | filtered trips | `[from,to)` planned departures | 0 |
-| Confirmed bookings | `confirmedAt != null && cancelledAt == null` | filtered-trip bookings | 0 |
-| Cancelled bookings | `cancelledAt != null` | filtered-trip bookings | 0 |
-| Passengers | booking-passenger rows of active confirmed bookings | active confirmed bookings | 0 |
-| Sold seats | unreleased booking-seat rows of active confirmed bookings | active confirmed bookings | 0 |
-| Offered seats | historical trip seat-map cells with `kind=SEAT` | filtered trips | 0 |
-| Load factor | sold seats | offered seats | `null` when capacity is 0 |
-| Booking cancellation rate | cancelled bookings | all bookings in filtered trips | `null` when no booking |
-| On-time departure | actual departure <= planned departure | trips with both timestamps | no sample => counts 0 |
-| Delay | max(0, actual-planned), minutes | trips with both timestamps | no sample => average/max `null` |
-| Resolution time | resolvedAt-openedAt, minutes | incidents with resolvedAt | no sample => `null` |
-| Baggage anomaly rate | current non-null exception status | baggage belonging to filtered trips | `null` when no baggage |
-| Fleet utilization | current ACTIVE vehicles used by filtered trips | current ACTIVE vehicles | `null` when none active |
+| KPI                       | Numerator / value                                         | Denominator / population            | Zero/null rule                  |
+| ------------------------- | --------------------------------------------------------- | ----------------------------------- | ------------------------------- |
+| Trips                     | filtered trips                                            | `[from,to)` planned departures      | 0                               |
+| Confirmed bookings        | `confirmedAt != null && cancelledAt == null`              | filtered-trip bookings              | 0                               |
+| Cancelled bookings        | `cancelledAt != null`                                     | filtered-trip bookings              | 0                               |
+| Passengers                | booking-passenger rows of active confirmed bookings       | active confirmed bookings           | 0                               |
+| Sold seats                | unreleased booking-seat rows of active confirmed bookings | active confirmed bookings           | 0                               |
+| Offered seats             | historical trip seat-map cells with `kind=SEAT`           | filtered trips                      | 0                               |
+| Load factor               | sold seats                                                | offered seats                       | `null` when capacity is 0       |
+| Booking cancellation rate | cancelled bookings                                        | all bookings in filtered trips      | `null` when no booking          |
+| On-time departure         | actual departure <= planned departure                     | trips with both timestamps          | no sample => counts 0           |
+| Delay                     | max(0, actual-planned), minutes                           | trips with both timestamps          | no sample => average/max `null` |
+| Resolution time           | resolvedAt-openedAt, minutes                              | incidents with resolvedAt           | no sample => `null`             |
+| Baggage anomaly rate      | current non-null exception status                         | baggage belonging to filtered trips | `null` when no baggage          |
+| Fleet utilization         | current ACTIVE vehicles used by filtered trips            | current ACTIVE vehicles             | `null` when none active         |
 
 The fleet utilization definition is intentionally operational and conservative:
 it is **the share of the currently ACTIVE fleet that was assigned to at least

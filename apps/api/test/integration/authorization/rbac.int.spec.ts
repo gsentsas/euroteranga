@@ -440,9 +440,18 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ],
   ['GET', '/v1/admin/finance/trips/ET-FINANCE-RBAC/export.csv'],
   ['GET', '/v1/admin/finance/trips/ET-FINANCE-RBAC/export.xlsx'],
-  ['GET', '/v1/admin/reporting/overview?from=2026-10-01T00%3A00%3A00.000Z&to=2026-10-02T00%3A00%3A00.000Z'],
-  ['GET', '/v1/admin/reporting/export.csv?from=2026-10-01T00%3A00%3A00.000Z&to=2026-10-02T00%3A00%3A00.000Z'],
-  ['GET', '/v1/admin/reporting/export.xlsx?from=2026-10-01T00%3A00%3A00.000Z&to=2026-10-02T00%3A00%3A00.000Z'],
+  [
+    'GET',
+    '/v1/admin/reporting/overview?from=2026-10-01T00%3A00%3A00.000Z&to=2026-10-02T00%3A00%3A00.000Z',
+  ],
+  [
+    'GET',
+    '/v1/admin/reporting/export.csv?from=2026-10-01T00%3A00%3A00.000Z&to=2026-10-02T00%3A00%3A00.000Z',
+  ],
+  [
+    'GET',
+    '/v1/admin/reporting/export.xlsx?from=2026-10-01T00%3A00%3A00.000Z&to=2026-10-02T00%3A00%3A00.000Z',
+  ],
   ['GET', '/v1/admin/passenger-documents'],
   ['GET', '/v1/admin/passenger-documents/ETD-000000000000'],
   ['GET', '/v1/admin/passenger-documents/ETD-000000000000/download'],

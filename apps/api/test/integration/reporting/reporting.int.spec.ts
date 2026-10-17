@@ -1,5 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { adminApi, isolatedDatabase, staffActor, type StaffActor } from '../../support/admin-helpers.js';
+import {
+  adminApi,
+  isolatedDatabase,
+  staffActor,
+  type StaffActor,
+} from '../../support/admin-helpers.js';
 import { db } from '../../support/auth-helpers.js';
 import {
   bookableFixture,
@@ -52,8 +57,14 @@ describe('PR-23 operational reporting', () => {
     await confirm(xof, '1B');
 
     const [eurTrip, xofTrip] = await Promise.all([
-      db(t.app).trip.findUniqueOrThrow({ where: { id: eur.tripId }, select: { plannedDepartureAt: true } }),
-      db(t.app).trip.findUniqueOrThrow({ where: { id: xof.tripId }, select: { plannedDepartureAt: true } }),
+      db(t.app).trip.findUniqueOrThrow({
+        where: { id: eur.tripId },
+        select: { plannedDepartureAt: true },
+      }),
+      db(t.app).trip.findUniqueOrThrow({
+        where: { id: xof.tripId },
+        select: { plannedDepartureAt: true },
+      }),
     ]);
     const departures = [eurTrip.plannedDepartureAt!, xofTrip.plannedDepartureAt!];
     const from = new Date(Math.min(...departures.map((value) => value.getTime())) - 60_000);
@@ -68,10 +79,9 @@ describe('PR-23 operational reporting', () => {
     expect(response.body.commercial.soldSeatCount).toBe(2);
     expect(response.body.privacy).toEqual({ containsPassengerPii: false });
     expect(response.body.finance.fxConversionApplied).toBe(false);
-    expect(response.body.finance.currencies.map((item: { currencyCode: string }) => item.currencyCode)).toEqual([
-      'EUR',
-      'XOF',
-    ]);
+    expect(
+      response.body.finance.currencies.map((item: { currencyCode: string }) => item.currencyCode),
+    ).toEqual(['EUR', 'XOF']);
     const serialized = JSON.stringify(response.body);
     expect(serialized).not.toMatch(/@fixtures|givenName|familyName|dateOfBirth|documentNumber/i);
   });

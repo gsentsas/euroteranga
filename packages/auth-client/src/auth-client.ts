@@ -2363,35 +2363,64 @@ export interface ReportingTripSummary {
 
 export interface ReportingOverview {
   period: { from: string; to: string; semantics: '[from,to) on trip.plannedDepartureAt' };
-  filters: { routeId: string | null; tripId: string | null; vehicleId: string | null; status: TripStatus | null };
+  filters: {
+    routeId: string | null;
+    tripId: string | null;
+    vehicleId: string | null;
+    status: TripStatus | null;
+  };
   activity: {
-    tripCount: number; draftTripCount: number; scheduledTripCount: number;
-    inProgressTripCount: number; completedTripCount: number; cancelledTripCount: number;
+    tripCount: number;
+    draftTripCount: number;
+    scheduledTripCount: number;
+    inProgressTripCount: number;
+    completedTripCount: number;
+    cancelledTripCount: number;
   };
   commercial: {
-    bookingCount: number; confirmedBookingCount: number; cancelledBookingCount: number;
-    passengerCount: number; soldSeatCount: number; offeredSeatCapacity: number;
-    loadFactor: number | null; cancellationRate: number | null;
+    bookingCount: number;
+    confirmedBookingCount: number;
+    cancelledBookingCount: number;
+    passengerCount: number;
+    soldSeatCount: number;
+    offeredSeatCapacity: number;
+    loadFactor: number | null;
+    cancellationRate: number | null;
   };
   finance: { currencies: ReportingMoneySummary[]; fxConversionApplied: false };
   operations: {
-    departureSampleCount: number; onTimeDepartureCount: number; delayedDepartureCount: number;
-    averageDelayMinutes: number | null; maximumDelayMinutes: number | null;
-    actualDurationSampleCount: number; averageActualDurationMinutes: number | null;
+    departureSampleCount: number;
+    onTimeDepartureCount: number;
+    delayedDepartureCount: number;
+    averageDelayMinutes: number | null;
+    maximumDelayMinutes: number | null;
+    actualDurationSampleCount: number;
+    averageActualDurationMinutes: number | null;
   };
   incidents: {
-    incidentCount: number; openIncidentCount: number; resolvedIncidentCount: number;
+    incidentCount: number;
+    openIncidentCount: number;
+    resolvedIncidentCount: number;
     severity: { LOW: number; MEDIUM: number; HIGH: number; CRITICAL: number };
     averageResolutionMinutes: number | null;
   };
   baggage: {
-    baggageCount: number; loadedBaggageCount: number; deliveredBaggageCount: number;
-    anomalyBaggageCount: number; baggageIncidentCount: number; anomalyRate: number | null;
+    baggageCount: number;
+    loadedBaggageCount: number;
+    deliveredBaggageCount: number;
+    anomalyBaggageCount: number;
+    baggageIncidentCount: number;
+    anomalyRate: number | null;
   };
   fleet: {
-    vehicleCount: number; activeVehicleCount: number; outOfServiceVehicleCount: number;
-    retiredVehicleCount: number; usedVehicleCount: number; activeUsedVehicleCount: number;
-    utilizationRate: number | null; tripsPerUsedVehicle: number | null;
+    vehicleCount: number;
+    activeVehicleCount: number;
+    outOfServiceVehicleCount: number;
+    retiredVehicleCount: number;
+    usedVehicleCount: number;
+    activeUsedVehicleCount: number;
+    utilizationRate: number | null;
+    tripsPerUsedVehicle: number | null;
   };
   routes: ReportingRouteSummary[];
   recentTrips: ReportingTripSummary[];
@@ -3217,15 +3246,23 @@ export function createAuthClient(baseUrl: string) {
         exportCsv: (options: ReportingOverviewOptions) =>
           privateDownload(
             `/v1/admin/reporting/export.csv?${query({
-              from: options.from, to: options.to, routeId: options.routeId,
-              tripId: options.tripId, vehicleId: options.vehicleId, status: options.status,
+              from: options.from,
+              to: options.to,
+              routeId: options.routeId,
+              tripId: options.tripId,
+              vehicleId: options.vehicleId,
+              status: options.status,
             })}`,
           ),
         exportXlsx: (options: ReportingOverviewOptions) =>
           privateDownload(
             `/v1/admin/reporting/export.xlsx?${query({
-              from: options.from, to: options.to, routeId: options.routeId,
-              tripId: options.tripId, vehicleId: options.vehicleId, status: options.status,
+              from: options.from,
+              to: options.to,
+              routeId: options.routeId,
+              tripId: options.tripId,
+              vehicleId: options.vehicleId,
+              status: options.status,
             })}`,
           ),
       },

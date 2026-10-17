@@ -184,7 +184,12 @@ function overview(empty = false) {
             status: 'COMPLETED',
             plannedDepartureAt: '2026-10-17T08:00:00.000Z',
             plannedArrivalAt: '2026-10-18T08:00:00.000Z',
-            route: { id: '01900000-0000-7000-8000-000000000302', code: 'PAR-DKR', name: 'Paris Dakar', version: 2 },
+            route: {
+              id: '01900000-0000-7000-8000-000000000302',
+              code: 'PAR-DKR',
+              name: 'Paris Dakar',
+              version: 2,
+            },
             vehicle: { id: '01900000-0000-7000-8000-000000000304', code: 'BUS-01' },
             bookingCount: 5,
             cancelledBookingCount: 0,
@@ -205,7 +210,11 @@ test.describe('PR-23 operational reporting', () => {
     const errors = trackPageErrors(page);
     await staffSession(context, preauthenticatedSession('permitManager'));
     await page.route(/\/v1\/admin\/reporting\/overview(?:\?.*)?$/u, (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(overview()) }),
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(overview()),
+      }),
     );
 
     await page.goto(appUrl(ops, '/reporting'));
@@ -226,7 +235,11 @@ test.describe('PR-23 operational reporting', () => {
   test('empty period stays explicit and never renders NaN', async ({ context, page }) => {
     await staffSession(context, preauthenticatedSession('permitManager'));
     await page.route(/\/v1\/admin\/reporting\/overview(?:\?.*)?$/u, (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(overview(true)) }),
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(overview(true)),
+      }),
     );
     await page.goto(appUrl(ops, '/reporting'));
     const workspace = page.getByTestId('reporting-workspace');

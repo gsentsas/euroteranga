@@ -41,10 +41,13 @@ function integerMinor(amountMinor: string, minorUnit: number): string {
   return `${negative ? '-' : ''}${grouped}${minorUnit > 0 ? `,${fraction}` : ''}`;
 }
 
-function money(value: ReportingMoneySummary, field: keyof Pick<
-  ReportingMoneySummary,
-  'netRevenueMinor' | 'refundMinor' | 'expenseMinor' | 'contributionMinor'
->): string {
+function money(
+  value: ReportingMoneySummary,
+  field: keyof Pick<
+    ReportingMoneySummary,
+    'netRevenueMinor' | 'refundMinor' | 'expenseMinor' | 'contributionMinor'
+  >,
+): string {
   return `${integerMinor(value[field], value.currencyMinorUnit)} ${value.currencyCode}`;
 }
 
@@ -218,17 +221,27 @@ export function ReportingDashboard() {
           </button>
           {canExport ? (
             <>
-              <button type="button" className="et-button" disabled={busy} onClick={() => exportFile('csv')}>
+              <button
+                type="button"
+                className="et-button"
+                disabled={busy}
+                onClick={() => exportFile('csv')}
+              >
                 Export CSV
               </button>
-              <button type="button" className="et-button" disabled={busy} onClick={() => exportFile('xlsx')}>
+              <button
+                type="button"
+                className="et-button"
+                disabled={busy}
+                onClick={() => exportFile('xlsx')}
+              >
                 Export XLSX
               </button>
             </>
           ) : null}
         </div>
         <FormAlert message={error} />
-        <FormStatus busy={busy} message="Calcul du reporting…" />
+        {busy ? <FormStatus>Calcul du reporting…</FormStatus> : null}
       </form>
 
       {data ? (
@@ -256,7 +269,10 @@ export function ReportingDashboard() {
             <div className="et-network-adders">
               <Kpi label="Départs à l’heure" value={data.operations.onTimeDepartureCount} />
               <Kpi label="Départs en retard" value={data.operations.delayedDepartureCount} />
-              <Kpi label="Retard moyen" value={decimal(data.operations.averageDelayMinutes, ' min')} />
+              <Kpi
+                label="Retard moyen"
+                value={decimal(data.operations.averageDelayMinutes, ' min')}
+              />
               <Kpi label="Incidents ouverts" value={data.incidents.openIncidentCount} />
               <Kpi label="Anomalies bagages" value={data.baggage.anomalyBaggageCount} />
               <Kpi label="Utilisation flotte active" value={percent(data.fleet.utilizationRate)} />
@@ -280,21 +296,29 @@ export function ReportingDashboard() {
                 </thead>
                 <tbody>
                   {data.routes.length === 0 ? (
-                    <tr><td colSpan={6}>Aucun trajet sur la période.</td></tr>
-                  ) : data.routes.map((route) => (
-                    <tr key={route.routeVersionId}>
-                      <td>{route.routeCode} · v{route.routeVersion}</td>
-                      <td>{route.tripCount}</td>
-                      <td>{route.passengerCount}</td>
-                      <td>{percent(route.loadFactor)}</td>
-                      <td>{route.incidentCount}</td>
-                      <td>
-                        {route.currencies.length === 0
-                          ? '—'
-                          : route.currencies.map((currency) => money(currency, 'contributionMinor')).join(' · ')}
-                      </td>
+                    <tr>
+                      <td colSpan={6}>Aucun trajet sur la période.</td>
                     </tr>
-                  ))}
+                  ) : (
+                    data.routes.map((route) => (
+                      <tr key={route.routeVersionId}>
+                        <td>
+                          {route.routeCode} · v{route.routeVersion}
+                        </td>
+                        <td>{route.tripCount}</td>
+                        <td>{route.passengerCount}</td>
+                        <td>{percent(route.loadFactor)}</td>
+                        <td>{route.incidentCount}</td>
+                        <td>
+                          {route.currencies.length === 0
+                            ? '—'
+                            : route.currencies
+                                .map((currency) => money(currency, 'contributionMinor'))
+                                .join(' · ')}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -307,22 +331,33 @@ export function ReportingDashboard() {
                 <caption>25 voyages maximum, triés par départ planifié décroissant</caption>
                 <thead>
                   <tr>
-                    <th>Voyage</th><th>Trajet</th><th>Statut</th><th>Passagers</th><th>Remplissage</th><th>Incidents</th>
+                    <th>Voyage</th>
+                    <th>Trajet</th>
+                    <th>Statut</th>
+                    <th>Passagers</th>
+                    <th>Remplissage</th>
+                    <th>Incidents</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.recentTrips.length === 0 ? (
-                    <tr><td colSpan={6}>Aucun voyage sur la période.</td></tr>
-                  ) : data.recentTrips.map((trip) => (
-                    <tr key={trip.id}>
-                      <td>{trip.reference}</td>
-                      <td>{trip.route.code} · v{trip.route.version}</td>
-                      <td>{trip.status}</td>
-                      <td>{trip.passengerCount}</td>
-                      <td>{percent(trip.loadFactor)}</td>
-                      <td>{trip.incidentCount}</td>
+                    <tr>
+                      <td colSpan={6}>Aucun voyage sur la période.</td>
                     </tr>
-                  ))}
+                  ) : (
+                    data.recentTrips.map((trip) => (
+                      <tr key={trip.id}>
+                        <td>{trip.reference}</td>
+                        <td>
+                          {trip.route.code} · v{trip.route.version}
+                        </td>
+                        <td>{trip.status}</td>
+                        <td>{trip.passengerCount}</td>
+                        <td>{percent(trip.loadFactor)}</td>
+                        <td>{trip.incidentCount}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

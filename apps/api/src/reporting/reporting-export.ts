@@ -48,7 +48,9 @@ function scalar(value: unknown): string {
 }
 
 function rows(overview: ReportingExportOverview): string[][] {
-  const result: string[][] = [['section', 'dimension', 'metric', 'value', 'currency', 'minor_unit']];
+  const result: string[][] = [
+    ['section', 'dimension', 'metric', 'value', 'currency', 'minor_unit'],
+  ];
   result.push(['PERIOD', '', 'from', scalar(overview.period.from), '', '']);
   result.push(['PERIOD', '', 'to', scalar(overview.period.to), '', '']);
   for (const [metric, value] of Object.entries(overview.activity)) {

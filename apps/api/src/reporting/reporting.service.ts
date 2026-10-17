@@ -118,10 +118,7 @@ function moneyView(
       source.ticketRevenueMinor,
       commercial?.confirmedBookings ?? 0,
     ),
-    averageNetRevenuePerPassengerMinor: integerAverageMinor(
-      net,
-      commercial?.passengers ?? 0,
-    ),
+    averageNetRevenuePerPassengerMinor: integerAverageMinor(net, commercial?.passengers ?? 0),
     averageNetRevenuePerSoldSeatMinor: integerAverageMinor(net, commercial?.soldSeats ?? 0),
     profitableTripCount: profitability?.profitable ?? 0,
     lossTripCount: profitability?.loss ?? 0,
@@ -228,4 +225,398 @@ export class ReportingService {
           select: {
             bookingId: true,
             booking: { select: { tripId: true } },
-         ²È="25½Õ¹ÑÌ¤ì(€€€€€ô(€€€ô((€€€±•ÐÉ•Í½±Ù•‘%¹¥‘•¹Ñ½Õ¹Ð€ô€Àì(€€€±•ÐÉ•Í½±ÕÑ¥½¹5¥¹ÕÑ•Ì€ô€Àì(€€€±•ÐÉ•Í½±ÕÑ¥½¹M…µÁ±•½Õ¹Ð€ô€Àì(€€€½¹ÍÐÍ•Ù•É¥Ñä€ôì1=\è€À°5%U4è€À°!% è€À°I%Q%0è€Àôì(€€€™½È€¡½¹ÍÐ¥¹¥‘•¹Ð½˜¥¹¥‘•¹ÑÌ¤ì(€€€€€Í•Ù•É¥Ñåm¥¹¥‘•¹Ð¹Í•Ù•É¥Ñåt€¬ô€Äì(€€€€€½¹ÍÐÁ•ÉQÉ¥À€ôÑÉ¥Á5•ÑÉ¥Ì¹•Ð¡¥¹¥‘•¹Ð¹ÑÉ¥Á%¤ì(€€€€€¥˜€¡Á•ÉQÉ¥À¤Á•ÉQÉ¥À¹¥¹¥‘•¹Ñ½Õ¹Ð€¬ô€Äì(€€€€€½¹ÍÐÑÉ¥À€ôÑÉ¥Á	å%¹•Ð¡¥¹¥‘•¹Ð¹ÑÉ¥Á%¤ì(€€€€€¥˜€¡ÑÉ¥À¤É½ÕÑ•5•ÑÉ¥Ì¹•Ð¡ÑÉ¥À¹É½ÕÑ•Y•ÉÍ¥½¸¹¥¤„¹¥¹¥‘•¹Ñ½Õ¹Ð€¬ô€Äì(€€€€€¥˜€¡¥¹¥‘•¹Ð¹É•Í½±Ù•‘Ð¤ì(€€€€€€€É•Í½±Ù•‘%¹¥‘•¹Ñ½Õ¹Ð€¬ô€Äì(€€€€€€€½¹ÍÐµ¥¹ÕÑ•Ì€ô5…Ñ ¹µ…à (€€€€€€€€€€À°(€€€€€€€€€€¡¥¹¥‘•¹Ð¹É•Í½±Ù•‘Ð¹•ÑQ¥µ” ¤€´¥¹¥‘•¹Ð¹½Á•¹•‘Ð¹•ÑQ¥µ” ¤¤€¼€ØÁ|ÀÀÀ°(€€€€€€€€¤ì(€€€€€€€É•Í½±ÕÑ¥½¹5¥¹ÕÑ•Ì€¬ôµ¥¹ÕÑ•Ìì(€€€€€€€É•Í½±ÕÑ¥½¹M…µÁ±•½Õ¹Ð€¬ô€Äì(€€€€€ô(€€€ô((€€€±•Ð±½…‘•‘	……•½Õ¹Ð€ô€Àì(€€€±•Ð‘•±¥Ù•É•‘	……•½Õ¹Ð€ô€Àì(€€€±•Ð‰……•¹½µ…±å½Õ¹Ð€ô€Àì(€€€™½È€¡½¹ÍÐ¥Ñ•´½˜‰……”¤ì(€€€€€¥˜€¡¥Ñ•´¹}½Õ¹Ð¹•Ù•¹ÑÌ€ø€À¤±½…‘•‘	……•½Õ¹Ð€¬ô€Äì(€€€€€¥˜€¡¥Ñ•´¹±¥™•å±•MÑ…ÑÕÌ€ôôô€1%YIœ¤‘•±¥Ù•É•‘	……•½Õ¹Ð€¬ô€Äì(€€€€€¥˜€¡¥Ñ•´¹•á•ÁÑ¥½¹MÑ…ÑÕÌ€„ôô¹Õ±°¤‰……•¹½µ…±å½Õ¹Ð€¬ô€Äì(€€€ô((€€€½¹ÍÐ‘•Á…ÉÑÕÉ••±…åÌ€ôÑÉ¥ÁÌ(€€€€€€¹µ…À ¡ÑÉ¥À¤€ôø‘•±…å5¥¹ÕÑ•Ì¡ÑÉ¥À¹Á±…¹¹•‘•Á…ÉÑÕÉ•Ð°ÑÉ¥À¹…ÑÕ…±•Á…ÉÑÕÉ•Ð¤¤(€€€€€€¹™¥±Ñ•È ¡Ù…±Õ”¤èÙ…±Õ”¥Ì¹Õµ‰•È€ôøÙ…±Õ”€„ôô¹Õ±°¤ì(€€€½¹ÍÐ‘•±…å•‘•Á…ÉÑÕÉ•½Õ¹Ð€ô‘•Á…ÉÑÕÉ••±…åÌ¹™¥±Ñ•È ¡µ¥¹ÕÑ•Ì¤€ôøµ¥¹ÕÑ•Ì€ø€À¤¹±•¹Ñ ì(€€€½¹ÍÐ½¹Q¥µ••Á…ÉÑÕÉ•½Õ¹Ð€ô‘•Á…ÉÑÕÉ••±…åÌ¹±•¹Ñ €´‘•±…å•‘•Á…ÉÑÕÉ•½Õ¹Ðì(€€€½¹ÍÐ…ÑÕ…±ÕÉ…Ñ¥½¹Ì€ôÑÉ¥ÁÌ(€€€€€€¹™¥±Ñ•È ¡ÑÉ¥À¤€ôøÑÉ¥À¹…ÑÕ…±•Á…ÉÑÕÉ•Ð€˜˜ÑÉ¥À¹…ÑÕ…±ÉÉ¥Ù…±Ð¤(€€€€€€¹µ…À (€€€€€€€€¡ÑÉ¥À¤€ôø(€€€€€€€€€€¡ÑÉ¥À¹…ÑÕ…±ÉÉ¥Ù…±Ð„¹•ÑQ¥µ” ¤€´ÑÉ¥À¹…ÑÕ…±•Á…ÉÑÕÉ•Ð„¹•ÑQ¥µ” ¤¤€¼€ØÁ|ÀÀÀ°(€€€€€€¤(€€€€€€¹™¥±Ñ•È ¡µ¥¹ÕÑ•Ì¤€ôøµ¥¹ÕÑ•Ì€øô€À¤ì((€€€½¹ÍÐ…Ñ¥Ù•Y•¡¥±•%‘Ì€ô¹•ÜM•Ð (€€€€€Ù•¡¥±•Ì¹™¥±Ñ•È ¡Ù•¡¥±”¤€ôøÙ•¡¥±”¹ÍÑ…ÑÕÌ€ôôô€Q%Yœ¤¹µ…À ¡Ù•¡¥±”¤€ôøÙ•¡¥±”¹¥¤°(€€€€¤ì(€€€½¹ÍÐÕÍ•‘Y•¡¥±•%‘Ì€ô¹•ÜM•Ð (€€€€€ÑÉ¥ÁÌ¹µ…À ¡ÑÉ¥À¤€ôøÑÉ¥À¹Ù•¡¥±•%¤¹™¥±Ñ•È ¡¥¤è¥¥ÌÍÑÉ¥¹œ€ôø¥€„ôô¹Õ±°¤°(€€€€¤ì(€€€½¹ÍÐ…Ñ¥Ù•UÍ•‘Y•¡¥±•½Õ¹Ð€ôl¸¸¹ÕÍ•‘Y•¡¥±•%‘Ít¹™¥±Ñ•È ¡¥¤€ôø…Ñ¥Ù•Y•¡¥±•%‘Ì¹¡…Ì¡¥¤¤¹±•¹Ñ ì(€€€½¹ÍÐ…ÍÍ¥¹•‘QÉ¥Á½Õ¹Ð€ôÑÉ¥ÁÌ¹™¥±Ñ•È ¡ÑÉ¥À¤€ôøÑÉ¥À¹Ù•¡¥±•%€„ôô¹Õ±°¤¹±•¹Ñ ì((€€€½¹ÍÐÉ••¹ÑQÉ¥ÁÌ€ôÑÉ¥ÁÌ¹Í±¥” À°€ÈÔ¤¹µ…À ¡ÑÉ¥À¤€ôøì(€€€€€½¹ÍÐµ•ÑÉ¥Ì€ôÑÉ¥Á5•ÑÉ¥Ì¹•Ð¡ÑÉ¥À¹¥¤„ì(€€€€€É•ÑÕÉ¸ì(€€€€€€€¥èÑÉ¥À¹¥°(€€€€€€€É•™•É•¹”èÑÉ¥À¹É•™•É•¹”°(€€€€€€€ÍÑ…ÑÕÌèÑÉ¥À¹ÍÑ…ÑÕÌ°(€€€€€€€Á±…¹¹•‘•Á…ÉÑÕÉ•ÐèÑÉ¥À¹Á±…¹¹•‘•Á…ÉÑÕÉ•Ð°(€€€€€€€Á±…¹¹•‘ÉÉ¥Ù…±ÐèÑÉ¥À¹Á±…¹¹•‘ÉÉ¥Ù…±Ð°(€€€€€€€É½ÕÑ”èì(€€€€€€€€€¥èÑÉ¥À¹É½ÕÑ•Y•ÉÍ¥½¸¹É½ÕÑ”¹¥°(€€€€€€€€€½‘”èÑÉ¥À¹É½ÕÑ•Y•ÉÍ¥½¸¹É½ÕÑ”¹½‘”°(€€€€€€€€€¹…µ”èÑÉ¥À¹É½ÕÑ•Y•ÉÍ¥½¸¹É½ÕÑ”¹¹…µ”°(€€€€€€€€€Ù•ÉÍ¥½¸èÑÉ¥À¹É½ÕÑ•Y•ÉÍ¥½¸¹Ù•ÉÍ¥½¸°(€€€€€€€ô°(€€€€€€€Ù•¡¥±”èÑÉ¥À¹Ù•¡¥±”€üì¥èÑÉ¥À¹Ù•¡¥±•%„°½‘”èÑÉ¥À¹Ù•¡¥±”¹½‘”ô€è¹Õ±°°(€€€€€€€‰½½­¥¹½Õ¹Ðèµ•ÑÉ¥Ì¹‰½½­¥¹½Õ¹Ð°(€€€€€€€…¹•±±•‘	½½­¥¹½Õ¹Ðèµ•ÑÉ¥Ì¹…¹•±±•‘	½½­¥¹½Õ¹Ð°(€€€€€€€Á…ÍÍ•¹•É½Õ¹Ðèµ•ÑÉ¥Ì¹Á…ÍÍ•¹•É½Õ¹Ð°(€€€€€€€Í½±‘M•…Ñ½Õ¹Ðèµ•ÑÉ¥Ì¹Í½±‘M•…Ñ½Õ¹Ð°(€€€€€€€½™™•É•‘M•…Ñ…Á…¥ÑäèÑÉ¥À¹Í•…Ñ5…ÁY•ÉÍ¥½¸ü¹}½Õ¹Ð¹•±±Ì€üü€À°(€€€€€€€±½…‘…Ñ½ÈèÍ…™•I…Ñ”¡µ•ÑÉ¥Ì¹Í½±‘M•…Ñ½Õ¹Ð°ÑÉ¥À¹Í•…Ñ5…ÁY•ÉÍ¥½¸ü¹}½Õ¹Ð¹•±±Ì€üü€À¤°(€€€€€€€¥¹¥‘•¹Ñ½Õ¹Ðèµ•ÑÉ¥Ì¹¥¹¥‘•¹Ñ½Õ¹Ð°(€€€€€€€ÕÉÉ•¹¥•ÌèÍ½ÉÑ•‘5½¹•ä¡µ•ÑÉ¥Ì¹µ½¹•ä¤°(€€€€€ôì(€€€ô¤ì((€€€½¹ÍÐÉ½ÕÑ•Ì€ôl¸¸¹É½ÕÑ•5•ÑÉ¥Ì¹Ù…±Õ•Ì ¥t(€€€€€€¹Í½ÉÐ ¡„°ˆ¤€ôøˆ¹ÑÉ¥Á½Õ¹Ð€´„¹ÑÉ¥Á½Õ¹Ðñðˆ¹Í½±‘M•…Ñ½Õ¹Ð€´„¹Í½±‘M•…Ñ½Õ¹Ð¤(€€€€€€¹Í±¥” À°€ÈÀ¤(€€€€€€¹µ…À ¡É½ÕÑ”¤€ôø€¡ì(€€€€€€€É½ÕÑ•Y•ÉÍ¥½¹%èÉ½ÕÑ”¹É½ÕÑ•Y•ÉÍ¥½¹%°(€€€€€€€É½ÕÑ•%èÉ½ÕÑ”¹É½ÕÑ•%°(€€€€€€€É½ÕÑ•½‘”èÉ½ÕÑ”¹É½ÕÑ•½‘”°(€€€€€€€É½ÕÑ•9…µ”èÉ½ÕÑ”¹É½ÕÑ•9…µ”°(€€€€€€€É½ÕÑ•Y•ÉÍ¥½¸èÉ½ÕÑ”¹É½ÕÑ•Y•ÉÍ¥½¸°(€€€€€€€ÑÉ¥Á½Õ¹ÐèÉ½ÕÑ”¹ÑÉ¥Á½Õ¹Ð°(€€€€€€€Á…ÍÍ•¹•É½Õ¹ÐèÉ½ÕÑ”¹Á…ÍÍ•¹•É½Õ¹Ð°(€€€€€€€Í½±‘M•…Ñ½Õ¹ÐèÉ½ÕÑ”¹Í½±‘M•…Ñ½Õ¹Ð°(€€€€€€€½™™•É•‘M•…Ñ…Á…¥ÑäèÉ½ÕÑ”¹½™™•É•‘M•…Ñ…Á…¥Ñä°(€€€€€€€±½…‘…Ñ½ÈèÍ…™•I…Ñ”¡É½ÕÑ”¹Í½±‘M•…Ñ½Õ¹Ð°É½ÕÑ”¹½™™•É•‘M•…Ñ…Á…¥Ñä¤°(€€€€€€€…¹•±±…Ñ¥½¹½Õ¹ÐèÉ½ÕÑ”¹…¹•±±…Ñ¥½¹½Õ¹Ð°(€€€€€€€¥¹¥‘•¹Ñ½Õ¹ÐèÉ½ÕÑ”¹¥¹¥‘•¹Ñ½Õ¹Ð°(€€€€€€€ÕÉÉ•¹¥•ÌèÍ½ÉÑ•‘5½¹•ä¡É½ÕÑ”¹µ½¹•ä¤°(€€€€€ô¤¤ì(((€€€É•ÑÕÉ¸ì(€€€€€Á•É¥½èì(€€€€€€€™É½´èÅÕ•Éä¹™É½´°(€€€€€€€Ñ¼èÅÕ•Éä¹Ñ¼°(€€€€€€€Í•µ…¹Ñ¥Ìè€m™É½´±Ñ¼¤½¸ÑÉ¥À¹Á±…¹¹•‘•Á…ÉÑÕÉ•Ðœ…Ì½¹ÍÐ°(€€€€€ô°(€€€€€™¥±Ñ•ÉÌèì(€€€€€€€É½ÕÑ•%èÅÕ•Éä¹É½ÕÑ•%€üü¹Õ±°°(€€€€€€€ÑÉ¥Á%èÅÕ•Éä¹ÑÉ¥Á%€üü¹Õ±°°(€€€€€€€Ù•¡¥±•%èÅÕ•Éä¹Ù•¡¥±•%€üü¹Õ±°°(€€€€€€€ÍÑ…ÑÕÌèÅÕ•Éä¹ÍÑ…ÑÕÌ€üü¹Õ±°°(€€€€€ô°(€€€€€…Ñ¥Ù¥Ñäèì(€€€€€€€ÑÉ¥Á½Õ¹Ð°(€€€€€€€‘É…™ÑQÉ¥Á½Õ¹ÐèÑÉ¥ÁÌ¹™¥±Ñ•È ¡ÑÉ¥À¤€ôøÑÉ¥À¹ÍÑ…ÑÕÌ€ôôô€IPœ¤¹±•¹Ñ °(€€€€€€€Í¡•‘Õ±•‘QÉ¥Á½Õ¹ÐèÑÉ¥ÁÌ¹™¥±Ñ•È ¡ÑÉ¥À¤€ôøÑÉ¥À¹ÍÑ…ÑÕÌ€ôôô€M!U1œ¤¹±•¹Ñ °(€€€€€€€¥¹AÉ½É•ÍÍQÉ¥Á½Õ¹ÐèÑÉ¥ÁÌ¹™¥±Ñ•È ¡ÑÉ¥À¤€ôøÑÉ¥À¹ÍÑ…ÑÕÌ€ôôô€%9}AI=IMLœ¤¹±•¹Ñ °(€€€€€€€½µÁ±•Ñ•‘QÉ¥Á½Õ¹ÐèÑÉ¥ÁÌ¹™¥±Ñ•È ¡ÑÉ¥À¤€ôøÑÉ¥À¹ÍÑ…ÑÕÌ€ôôô€=5A1Qœ¤¹±•¹Ñ °(€€€€€€€…¹•±±•‘QÉ¥Á½Õ¹ÐèÑÉ¥ÁÌ¹™¥±Ñ•È ¡ÑÉ¥À¤€ôøÑÉ¥À¹ÍÑ…ÑÕÌ€ôôô€911œ¤¹±•¹Ñ °(€€€€€ô°(€€€€€½µµ•É¥…°èì(€€€€€€€‰½½­¥¹½Õ¹Ðè‰½½­¥¹Ì¹±•¹Ñ °(€€€€€€€½¹™¥Éµ•‘	½½­¥¹½Õ¹Ð°(€€€€€€€…¹•±±•‘	½½­¥¹½Õ¹Ð°(€€€€€€€Á…ÍÍ•¹•É½Õ¹Ð°(€€€€€€€Í½±‘M•…Ñ½Õ¹Ð°(€€€€€€€½™™•É•‘M•…Ñ…Á…¥Ñä°(€€€€€€€±½…‘…Ñ½ÈèÍ…™•I…Ñ”¡Í½±‘M•…Ñ½Õ¹Ð°½™™•É•‘M•…Ñ…Á…¥Ñä¤°(€€€€€€€…¹•±±…Ñ¥½¹I…Ñ”èÍ…™•I…Ñ”¡…¹•±±•‘	½½­¥¹½Õ¹Ð°‰½½­¥¹Ì¹±•¹Ñ ¤°(€€€€€ô°(€€€€€™¥¹…¹”èì(€€€€€€€ÕÉÉ•¹¥•ÌèÍ½ÉÑ•‘5½¹•ä¡…±±5½¹•ä°½µµ•É¥…±	åÕÉÉ•¹ä°ÁÉ½™¥Ñ…‰¥±¥Ñå	åÕÉÉ•¹ä¤°(€€€€€€€™á½¹Ù•ÉÍ¥½¹ÁÁ±¥•è™…±Í”…Ì½¹ÍÐ°(€€€€€ô°(€€€€€½Á•É…Ñ¥½¹Ìèì(€€€€€€€‘•Á…ÉÑÕÉ•M…µÁ±•½Õ¹Ðè‘•Á…ÉÑÕÉ••±…åÌ¹±•¹Ñ °(€€€€€€€½¹Q¥µ••Á…ÉÑÕÉ•½Õ¹Ð°(€€€€€€€‘•±…å•‘•Á…ÉÑÕÉ•½Õ¹Ð°(€€€€€€€…Ù•É…••±…å5¥¹ÕÑ•Ìè(€€€€€€€€€‘•Á…ÉÑÕÉ••±…åÌ¹±•¹Ñ €ø€À(€€€€€€€€€€€€ü‘•Á…ÉÑÕÉ••±…åÌ¹É•‘Õ” ¡ÍÕ´°Ù…±Õ”¤€ôøÍÕ´€¬Ù…±Õ”°€À¤€¼‘•Á…ÉÑÕÉ••±…åÌ¹±•¹Ñ (€€€€€€€€€€€€è¹Õ±°°(€€€€€€€µ…á¥µÕµ•±…å5¥¹ÕÑ•Ìè(€€€€€€€€€‘•Á…ÉÑÕÉ••±…åÌ¹±•¹Ñ €ø€À€ü5…Ñ ¹µ…à ¸¸¹‘•Á…ÉÑÕÉ••±…åÌ¤€è¹Õ±°°(€€€€€€€…ÑÕ…±ÕÉ…Ñ¥½¹M…µÁ±•½Õ¹Ðè…ÑÕ…±ÕÉ…Ñ¥½¹Ì¹±•¹Ñ °(€€€€€€€…Ù•É…•ÑÕ…±ÕÉ…Ñ¥½¹5¥¹ÕÑ•Ìè(€€€€€€€€€…ÑÕ…±ÕÉ…Ñ¥½¹Ì¹±•¹Ñ €ø€À(€€€€€€€€€€€€ü…ÑÕ…±ÕÉ…Ñ¥½¹Ì¹É•‘Õ” ¡ÍÕ´°Ù…±Õ”¤€ôøÍÕ´€¬Ù…±Õ”°€À¤€¼…ÑÕ…±ÕÉ…Ñ¥½¹Ì¹±•¹Ñ (€€€€€€€€€€€€è¹Õ±°°(€€€€€ô°(€€€€€¥¹¥‘•¹ÑÌèì(€€€€€€€¥¹¥‘•¹Ñ½Õ¹Ðè¥¹¥‘•¹ÑÌ¹±•¹Ñ °(€€€€€€€½Á•¹%¹¥‘•¹Ñ½Õ¹Ðè¥¹¥‘•¹ÑÌ¹™¥±Ñ•È (€€€€€€€€€€¡¥¹¥‘•¹Ð¤€ôø¥¹¥‘•¹Ð¹ÍÑ…ÑÕÌ€„ôô€IM=1Yœ€˜˜¥¹¥‘•¹Ð¹ÍÑ…ÑÕÌ€„ôô€1=Mœ°(€€€€€€€€¤¹±•¹Ñ °(€€€€€€€É•Í½±Ù•‘%¹¥‘•¹Ñ½Õ¹Ð°(€€€€€€€Í•Ù•É¥Ñä°(€€€€€€€…Ù•É…•I•Í½±ÕÑ¥½¹5¥¹ÕÑ•Ìè(€€€€€€€€€É•Í½±ÕÑ¥½¹M…µÁ±•½Õ¹Ð€ø€À€üÉ•Í½±ÕÑ¥½¹5¥¹ÕÑ•Ì€¼É•Í½±ÕÑ¥½¹M…µÁ±•½Õ¹Ð€è¹Õ±°°(€€€€€ô°(€€€€€‰……”èì(€€€€€€€‰……•½Õ¹Ðè‰……”¹±•¹Ñ °(€€€€€€€±½…‘•‘	……•½Õ¹Ð°(€€€€€€€‘•±¥Ù•É•‘	……•½Õ¹Ð°(€€€€€€€…¹½µ…±å	……•½Õ¹Ðè‰……•¹½µ…±å½Õ¹Ð°(€€€€€€€‰……•%¹¥‘•¹Ñ½Õ¹Ðè¥¹¥‘•¹ÑÌ¹™¥±Ñ•È ¡¥¹¥‘•¹Ð¤€ôø¥¹¥‘•¹Ð¹ÑåÁ”€ôôô€	œ¤¹±•¹Ñ °(€€€€€€€…¹½µ…±åI…Ñ”èÍ…™•I…Ñ”¡‰……•¹½µ…±å½Õ¹Ð°‰……”¹±•¹Ñ ¤°(€€€€€ô°(€€€€€™±••Ðèì(€€€€€€€Ù•¡¥±•½Õ¹ÐèÙ•¡¥±•Ì¹±•¹Ñ °(€€€€€€€…Ñ¥Ù•Y•¡¥±•½Õ¹Ðè…Ñ¥Ù•Y•¡¥±•%‘Ì¹Í¥é”°(€€€€€€€½ÕÑ=™M•ÉÙ¥•Y•¡¥±•½Õ¹ÐèÙ•¡¥±•Ì¹™¥±Ñ•È ¡Ù•¡¥±”¤€ôøÙ•¡¥±”¹ÍÑ…ÑÕÌ€ôôô€=UQ}=}MIY%œ¤(€€€€€€€€€€¹±•¹Ñ °(€€€€€€€É•Ñ¥É•‘Y•¡¥±•½Õ¹ÐèÙ•¡¥±•Ì¹™¥±Ñ•È ¡Ù•¡¥±”¤€ôøÙ•¡¥±”¹ÍÑ…ÑÕÌ€ôôô€IQ%Iœ¤¹±•¹Ñ °(€€€€€€€ÕÍ•‘Y•¡¥±•½Õ¹ÐèÕÍ•‘Y•¡¥±•%‘Ì¹Í¥é”°(€€€€€€€…Ñ¥Ù•UÍ•‘Y•¡¥±•½Õ¹Ð°(€€€€€€€ÕÑ¥±¥é…Ñ¥½¹I…Ñ”èÍ…™•I…Ñ”¡…Ñ¥Ù•UÍ•‘Y•¡¥±•½Õ¹Ð°…Ñ¥Ù•Y•¡¥±•%‘Ì¹Í¥é”¤°(€€€€€€€ÑÉ¥ÁÍA•ÉUÍ•‘Y•¡¥±”èÍ…™•I…Ñ”¡…ÍÍ¥¹•‘QÉ¥Á½Õ¹Ð°ÕÍ•‘Y•¡¥±•%‘Ì¹Í¥é”¤°(€€€€€ô°(€€€€€É½ÕÑ•Ì°(€€€€€É••¹ÑQÉ¥ÁÌ°(€€€€€ÁÉ¥Ù…äèì½¹Ñ…¥¹ÍA…ÍÍ•¹•ÉA¥¤è™…±Í”…Ì½¹ÍÐô°(€€€ôì(€ô)ô(
+            amountMinor: true,
+            currencyCode: true,
+            currencyMinorUnit: true,
+            refunds: { select: { amountMinor: true } },
+          },
+        }),
+        this.database.client.tripRevenue.findMany({
+          where: { status: 'ACTIVE', trip: where },
+          select: {
+            tripId: true,
+            amountMinor: true,
+            currencyCode: true,
+            currencyMinorUnit: true,
+          },
+        }),
+        this.database.client.tripExpense.findMany({
+          where: { status: 'ACTIVE', trip: where },
+          select: {
+            tripId: true,
+            amountMinor: true,
+            currencyCode: true,
+            currencyMinorUnit: true,
+            payouts: { select: { amountMinor: true } },
+          },
+        }),
+        this.database.client.incident.findMany({
+          where: { trip: where },
+          select: {
+            tripId: true,
+            type: true,
+            severity: true,
+            status: true,
+            openedAt: true,
+            resolvedAt: true,
+          },
+        }),
+        this.database.client.baggage.findMany({
+          where: { bookingPassenger: { booking: { trip: where } } },
+          select: {
+            bookingId: true,
+            lifecycleStatus: true,
+            exceptionStatus: true,
+            _count: { select: { events: { where: { type: 'LOADED' } } } },
+          },
+        }),
+        this.database.client.vehicle.findMany({ select: { id: true, status: true } }),
+      ]);
+
+    const tripById = new Map(trips.map((trip) => [trip.id, trip]));
+    const routeMetrics = new Map<string, MutableRoute>();
+    const tripMetrics = new Map<string, MutableTripMetrics>();
+    const allMoney = new Map<string, MutableMoneyBucket>();
+    const commercialByCurrency = new Map<string, CommercialCount>();
+    const tripMoney = new Map<string, Map<string, MutableMoneyBucket>>();
+
+    let offeredSeatCapacity = 0;
+    for (const trip of trips) {
+      const capacity = trip.seatMapVersion?._count.cells ?? 0;
+      offeredSeatCapacity += capacity;
+      tripMetrics.set(trip.id, {
+        passengerCount: 0,
+        soldSeatCount: 0,
+        incidentCount: 0,
+        bookingCount: 0,
+        cancelledBookingCount: 0,
+        money: new Map(),
+      });
+      const routeVersionId = trip.routeVersion.id;
+      const route = routeMetrics.get(routeVersionId) ?? {
+        routeVersionId,
+        routeId: trip.routeVersion.route.id,
+        routeCode: trip.routeVersion.route.code,
+        routeName: trip.routeVersion.route.name,
+        routeVersion: trip.routeVersion.version,
+        tripCount: 0,
+        passengerCount: 0,
+        soldSeatCount: 0,
+        offeredSeatCapacity: 0,
+        cancellationCount: 0,
+        incidentCount: 0,
+        money: new Map(),
+      };
+      route.tripCount += 1;
+      route.offeredSeatCapacity += capacity;
+      routeMetrics.set(routeVersionId, route);
+      tripMoney.set(trip.id, new Map());
+    }
+
+    let confirmedBookingCount = 0;
+    let cancelledBookingCount = 0;
+    let passengerCount = 0;
+    let soldSeatCount = 0;
+    for (const booking of bookings) {
+      const trip = tripById.get(booking.tripId);
+      const perTrip = tripMetrics.get(booking.tripId);
+      if (!trip || !perTrip) continue;
+      const perRoute = routeMetrics.get(trip.routeVersion.id)!;
+      perTrip.bookingCount += 1;
+      if (booking.cancelledAt) {
+        cancelledBookingCount += 1;
+        perTrip.cancelledBookingCount += 1;
+        perRoute.cancellationCount += 1;
+      }
+      const activeConfirmed = booking.confirmedAt !== null && booking.cancelledAt === null;
+      if (!activeConfirmed) continue;
+      confirmedBookingCount += 1;
+      passengerCount += booking._count.passengers;
+      soldSeatCount += booking._count.seats;
+      perTrip.passengerCount += booking._count.passengers;
+      perTrip.soldSeatCount += booking._count.seats;
+      perRoute.passengerCount += booking._count.passengers;
+      perRoute.soldSeatCount += booking._count.seats;
+      const currency = key(booking.currencyCode, booking.currencyMinorUnit);
+      const counts = commercialByCurrency.get(currency) ?? {
+        confirmedBookings: 0,
+        passengers: 0,
+        soldSeats: 0,
+      };
+      counts.confirmedBookings += 1;
+      counts.passengers += booking._count.passengers;
+      counts.soldSeats += booking._count.seats;
+      commercialByCurrency.set(currency, counts);
+    }
+
+    const recordMoney = (
+      tripId: string,
+      kind: MoneyKind,
+      amountMinor: bigint,
+      currencyCode: string,
+      currencyMinorUnit: number,
+    ) => {
+      const trip = tripById.get(tripId);
+      if (!trip) return;
+      addMoney(allMoney, kind, amountMinor, currencyCode, currencyMinorUnit);
+      addMoney(tripMoney.get(tripId)!, kind, amountMinor, currencyCode, currencyMinorUnit);
+      addMoney(
+        routeMetrics.get(trip.routeVersion.id)!.money,
+        kind,
+        amountMinor,
+        currencyCode,
+        currencyMinorUnit,
+      );
+    };
+
+    for (const payment of payments) {
+      const tripId = payment.booking.tripId;
+      recordMoney(
+        tripId,
+        'ticket',
+        payment.amountMinor,
+        payment.currencyCode,
+        payment.currencyMinorUnit,
+      );
+      for (const refund of payment.refunds) {
+        recordMoney(
+          tripId,
+          'refund',
+          refund.amountMinor,
+          payment.currencyCode,
+          payment.currencyMinorUnit,
+        );
+      }
+    }
+    for (const revenue of revenues) {
+      recordMoney(
+        revenue.tripId,
+        'additional',
+        revenue.amountMinor,
+        revenue.currencyCode,
+        revenue.currencyMinorUnit,
+      );
+    }
+    for (const expense of expenses) {
+      recordMoney(
+        expense.tripId,
+        'expense',
+        expense.amountMinor,
+        expense.currencyCode,
+        expense.currencyMinorUnit,
+      );
+      for (const payout of expense.payouts) {
+        recordMoney(
+          expense.tripId,
+          'payout',
+          payout.amountMinor,
+          expense.currencyCode,
+          expense.currencyMinorUnit,
+        );
+      }
+    }
+
+    const profitabilityByCurrency = new Map<
+      string,
+      { profitable: number; loss: number; breakEven: number }
+    >();
+    for (const buckets of tripMoney.values()) {
+      for (const value of buckets.values()) {
+        const contribution =
+          value.ticketRevenueMinor +
+          value.additionalRevenueMinor -
+          value.refundMinor -
+          value.expenseMinor;
+        const currency = key(value.currencyCode, value.currencyMinorUnit);
+        const counts = profitabilityByCurrency.get(currency) ?? {
+          profitable: 0,
+          loss: 0,
+          breakEven: 0,
+        };
+        if (contribution > 0n) counts.profitable += 1;
+        else if (contribution < 0n) counts.loss += 1;
+        else counts.breakEven += 1;
+        profitabilityByCurrency.set(currency, counts);
+      }
+    }
+
+    let resolvedIncidentCount = 0;
+    let resolutionMinutes = 0;
+    let resolutionSampleCount = 0;
+    const severity = { LOW: 0, MEDIUM: 0, HIGH: 0, CRITICAL: 0 };
+    for (const incident of incidents) {
+      severity[incident.severity] += 1;
+      const perTrip = tripMetrics.get(incident.tripId);
+      if (perTrip) perTrip.incidentCount += 1;
+      const trip = tripById.get(incident.tripId);
+      if (trip) routeMetrics.get(trip.routeVersion.id)!.incidentCount += 1;
+      if (incident.resolvedAt) {
+        resolvedIncidentCount += 1;
+        const minutes = Math.max(
+          0,
+          (incident.resolvedAt.getTime() - incident.openedAt.getTime()) / 60_000,
+        );
+        resolutionMinutes += minutes;
+        resolutionSampleCount += 1;
+      }
+    }
+
+    let loadedBaggageCount = 0;
+    let deliveredBaggageCount = 0;
+    let baggageAnomalyCount = 0;
+    for (const item of baggage) {
+      if (item._count.events > 0) loadedBaggageCount += 1;
+      if (item.lifecycleStatus === 'DELIVERED') deliveredBaggageCount += 1;
+      if (item.exceptionStatus !== null) baggageAnomalyCount += 1;
+    }
+
+    const departureDelays = trips
+      .map((trip) => delayMinutes(trip.plannedDepartureAt, trip.actualDepartureAt))
+      .filter((value): value is number => value !== null);
+    const delayedDepartureCount = departureDelays.filter((minutes) => minutes > 0).length;
+    const onTimeDepartureCount = departureDelays.length - delayedDepartureCount;
+    const actualDurations = trips
+      .filter((trip) => trip.actualDepartureAt && trip.actualArrivalAt)
+      .map((trip) => (trip.actualArrivalAt!.getTime() - trip.actualDepartureAt!.getTime()) / 60_000)
+      .filter((minutes) => minutes >= 0);
+
+    const activeVehicleIds = new Set(
+      vehicles.filter((vehicle) => vehicle.status === 'ACTIVE').map((vehicle) => vehicle.id),
+    );
+    const usedVehicleIds = new Set(
+      trips.map((trip) => trip.vehicleId).filter((id): id is string => id !== null),
+    );
+    const activeUsedVehicleCount = [...usedVehicleIds].filter((id) =>
+      activeVehicleIds.has(id),
+    ).length;
+    const assignedTripCount = trips.filter((trip) => trip.vehicleId !== null).length;
+
+    const recentTrips = trips.slice(0, 25).map((trip) => {
+      const metrics = tripMetrics.get(trip.id)!;
+      return {
+        id: trip.id,
+        reference: trip.reference,
+        status: trip.status,
+        plannedDepartureAt: trip.plannedDepartureAt,
+        plannedArrivalAt: trip.plannedArrivalAt,
+        route: {
+          id: trip.routeVersion.route.id,
+          code: trip.routeVersion.route.code,
+          name: trip.routeVersion.route.name,
+          version: trip.routeVersion.version,
+        },
+        vehicle: trip.vehicle ? { id: trip.vehicleId!, code: trip.vehicle.code } : null,
+        bookingCount: metrics.bookingCount,
+        cancelledBookingCount: metrics.cancelledBookingCount,
+        passengerCount: metrics.passengerCount,
+        soldSeatCount: metrics.soldSeatCount,
+        offeredSeatCapacity: trip.seatMapVersion?._count.cells ?? 0,
+        loadFactor: safeRate(metrics.soldSeatCount, trip.seatMapVersion?._count.cells ?? 0),
+        incidentCount: metrics.incidentCount,
+        currencies: sortedMoney(metrics.money),
+      };
+    });
+
+    const routes = [...routeMetrics.values()]
+      .sort((a, b) => b.tripCount - a.tripCount || b.soldSeatCount - a.soldSeatCount)
+      .slice(0, 20)
+      .map((route) => ({
+        routeVersionId: route.routeVersionId,
+        routeId: route.routeId,
+        routeCode: route.routeCode,
+        routeName: route.routeName,
+        routeVersion: route.routeVersion,
+        tripCount: route.tripCount,
+        passengerCount: route.passengerCount,
+        soldSeatCount: route.soldSeatCount,
+        offeredSeatCapacity: route.offeredSeatCapacity,
+        loadFactor: safeRate(route.soldSeatCount, route.offeredSeatCapacity),
+        cancellationCount: route.cancellationCount,
+        incidentCount: route.incidentCount,
+        currencies: sortedMoney(route.money),
+      }));
+
+    return {
+      period: {
+        from: query.from,
+        to: query.to,
+        semantics: '[from,to) on trip.plannedDepartureAt' as const,
+      },
+      filters: {
+        routeId: query.routeId ?? null,
+        tripId: query.tripId ?? null,
+        vehicleId: query.vehicleId ?? null,
+        status: query.status ?? null,
+      },
+      activity: {
+        tripCount,
+        draftTripCount: trips.filter((trip) => trip.status === 'DRAFT').length,
+        scheduledTripCount: trips.filter((trip) => trip.status === 'SCHEDULED').length,
+        inProgressTripCount: trips.filter((trip) => trip.status === 'IN_PROGRESS').length,
+        completedTripCount: trips.filter((trip) => trip.status === 'COMPLETED').length,
+        cancelledTripCount: trips.filter((trip) => trip.status === 'CANCELLED').length,
+      },
+      commercial: {
+        bookingCount: bookings.length,
+        confirmedBookingCount,
+        cancelledBookingCount,
+        passengerCount,
+        soldSeatCount,
+        offeredSeatCapacity,
+        loadFactor: safeRate(soldSeatCount, offeredSeatCapacity),
+        cancellationRate: safeRate(cancelledBookingCount, bookings.length),
+      },
+      finance: {
+        currencies: sortedMoney(allMoney, commercialByCurrency, profitabilityByCurrency),
+        fxConversionApplied: false as const,
+      },
+      operations: {
+        departureSampleCount: departureDelays.length,
+        onTimeDepartureCount,
+        delayedDepartureCount,
+        averageDelayMinutes:
+          departureDelays.length > 0
+            ? departureDelays.reduce((sum, value) => sum + value, 0) / departureDelays.length
+            : null,
+        maximumDelayMinutes: departureDelays.length > 0 ? Math.max(...departureDelays) : null,
+        actualDurationSampleCount: actualDurations.length,
+        averageActualDurationMinutes:
+          actualDurations.length > 0
+            ? actualDurations.reduce((sum, value) => sum + value, 0) / actualDurations.length
+            : null,
+      },
+      incidents: {
+        incidentCount: incidents.length,
+        openIncidentCount: incidents.filter(
+          (incident) => incident.status !== 'RESOLVED' && incident.status !== 'CLOSED',
+        ).length,
+        resolvedIncidentCount,
+        severity,
+        averageResolutionMinutes:
+          resolutionSampleCount > 0 ? resolutionMinutes / resolutionSampleCount : null,
+      },
+      baggage: {
+        baggageCount: baggage.length,
+        loadedBaggageCount,
+        deliveredBaggageCount,
+        anomalyBaggageCount: baggageAnomalyCount,
+        baggageIncidentCount: incidents.filter((incident) => incident.type === 'BAGGAGE').length,
+        anomalyRate: safeRate(baggageAnomalyCount, baggage.length),
+      },
+      fleet: {
+        vehicleCount: vehicles.length,
+        activeVehicleCount: activeVehicleIds.size,
+        outOfServiceVehicleCount: vehicles.filter((vehicle) => vehicle.status === 'OUT_OF_SERVICE')
+          .length,
+        retiredVehicleCount: vehicles.filter((vehicle) => vehicle.status === 'RETIRED').length,
+        usedVehicleCount: usedVehicleIds.size,
+        activeUsedVehicleCount,
+        utilizationRate: safeRate(activeUsedVehicleCount, activeVehicleIds.size),
+        tripsPerUsedVehicle: safeRate(assignedTripCount, usedVehicleIds.size),
+      },
+      routes,
+      recentTrips,
+      privacy: { containsPassengerPii: false as const },
+    };
+  }
+}

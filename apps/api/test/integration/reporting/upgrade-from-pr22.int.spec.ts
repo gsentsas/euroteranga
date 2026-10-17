@@ -104,7 +104,7 @@ describe('upgrade from a real PR-22 database', () => {
   }, 120_000);
 
   afterAll(async () => {
-    await raw/.$disconnect();
+    await raw?.$disconnect();
     if (root) {
       await root.$executeRawUnsafe('DROP DATABASE IF EXISTS "' + name + '" WITH (FORCE)');
       await root.$disconnect();
