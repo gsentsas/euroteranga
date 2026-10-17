@@ -249,6 +249,13 @@ jobs:
             echo "::error::Literal \\n sequence found in Plesk nginx fragment"
             exit 1
           fi
+      - name: Validate private document scanner infrastructure
+        run: |
+          docker compose -f infrastructure/plesk/documents/docker-compose.yml config >/dev/null
+          bash -n infrastructure/plesk/documents/install-clamav.sh
+          python3 -m py_compile infrastructure/plesk/documents/verify-clamav-instream.py
+          grep -Fq "127.0.0.1:3310:3310" infrastructure/plesk/documents/docker-compose.yml
+          grep -Eq 'clamav/clamav@sha256:[0-9a-f]{64}' infrastructure/plesk/documents/docker-compose.yml
       - name: Secret detection (gitleaks, checksum-verified binary)
         run: |
           archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
