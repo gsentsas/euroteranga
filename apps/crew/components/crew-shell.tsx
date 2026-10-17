@@ -19,7 +19,12 @@ export function CrewShell({
       </a>
 
       <header className="crew-topbar">
-        <Link className="crew-brand" href="/" prefetch={false} aria-label="EURO TERANGA Crew — accueil">
+        <Link
+          className="crew-brand"
+          href="/"
+          prefetch={false}
+          aria-label="EURO TERANGA Crew — accueil"
+        >
           <span className="crew-brand__mark" aria-hidden="true">
             ET
           </span>
@@ -29,8 +34,12 @@ export function CrewShell({
           <span className="crew-brand__product">CREW</span>
         </Link>
         <nav className="crew-topbar__nav" aria-label="Navigation équipage">
-          <Link href="/session" prefetch={false}>Session terrain</Link>
-          <Link href="/connexion" prefetch={false}>Connexion</Link>
+          <Link href="/session" prefetch={false}>
+            Session terrain
+          </Link>
+          <Link href="/connexion" prefetch={false}>
+            Connexion
+          </Link>
         </nav>
       </header>
 
