@@ -22,6 +22,7 @@ function deployed(appEnv: 'staging' | 'production', overrides: Record<string, st
   return env({
     APP_ENV: appEnv,
     NODE_ENV: 'production',
+    API_TRUST_PROXY: 'loopback',
     AUTH_MAIL_PROVIDER: 'smtp',
     SMTP_HOST: 'smtp.example.test',
     AUTH_EMAIL_FROM: 'no-reply@example.test',

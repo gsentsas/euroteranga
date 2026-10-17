@@ -6,12 +6,33 @@ import { appEnvSchema, httpUrlSchema } from './schemas.js';
  * Variables exposed to the browser. Everything prefixed NEXT_PUBLIC_ is inlined
  * into client bundles, so nothing secret may ever live here.
  */
-export const publicEnvSchema = z.object({
-  NEXT_PUBLIC_APP_ENV: appEnvSchema,
-  NEXT_PUBLIC_API_BASE_URL: httpUrlSchema,
-  /** Customer account app (links from the booking app); optional elsewhere. */
-  NEXT_PUBLIC_CLIENT_URL: httpUrlSchema.optional(),
-});
+export const publicEnvSchema = z
+  .object({
+    NEXT_PUBLIC_APP_ENV: appEnvSchema,
+    NEXT_PUBLIC_API_BASE_URL: httpUrlSchema,
+    /** Customer account app (links from the booking app); optional elsewhere. */
+    NEXT_PUBLIC_CLIENT_URL: httpUrlSchema.optional(),
+  })
+  .superRefine((env, ctx) => {
+    const deployed =
+      env.NEXT_PUBLIC_APP_ENV === 'staging' || env.NEXT_PUBLIC_APP_ENV === 'production';
+    if (!deployed) return;
+
+    const requireHttps = (
+      name: 'NEXT_PUBLIC_API_BASE_URL' | 'NEXT_PUBLIC_CLIENT_URL',
+      value?: string,
+    ) => {
+      if (value && !value.startsWith('https://')) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [name],
+          message: 'must use https in staging and production',
+        });
+      }
+    };
+    requireHttps('NEXT_PUBLIC_API_BASE_URL', env.NEXT_PUBLIC_API_BASE_URL);
+    requireHttps('NEXT_PUBLIC_CLIENT_URL', env.NEXT_PUBLIC_CLIENT_URL);
+  });
 
 export type PublicEnv = z.infer<typeof publicEnvSchema>;
 

@@ -248,6 +248,8 @@ describe('authentication security controls', () => {
         // An unquoted value: V8 quotes the surrounding payload in its error message.
         .send(`{"email":"a@example.test","password": ${secret}}`);
       expect(response.status).toBe(400);
+      expect(response.headers['x-request-id']).toMatch(/^[A-Za-z0-9._-]{8,128}$/);
+      expect(response.body.requestId).toBe(response.headers['x-request-id']);
       expect(response.text).not.toContain(canary);
       expect(t.logs.raw.join('\n')).not.toContain(canary);
     });

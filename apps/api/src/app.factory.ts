@@ -39,10 +39,13 @@ function configureApp(app: NestExpressApplication, { env, logger }: CreateAppOpt
   app.disable('x-powered-by');
   // X-Forwarded-For is ignored unless a proxy is explicitly trusted.
   app.set('trust proxy', env.API_TRUST_PROXY === 'loopback' ? 'loopback' : false);
-  app.useBodyParser('json', { limit: '32kb' });
 
-  // First middleware: every later log line and error response carries the id.
+  // First middleware: parser failures included. Keep this before useBodyParser
+  // so malformed/oversized JSON still receives and logs a stable request id.
   app.use(requestIdMiddleware(logger));
+  // Nest's useBodyParser respects the application's rawBody option, so signed
+  // payment webhooks keep their exact bytes.
+  app.useBodyParser('json', { limit: '32kb' });
   app.use(helmet());
 
   // Authentication responses (sessions, CSRF tokens, MFA secrets) are never cached.

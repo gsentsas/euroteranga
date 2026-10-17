@@ -40,6 +40,15 @@ export const apiEnvSchema = z
     refineAuthEnv(env, ctx);
     refinePaymentEnv(env, ctx);
     refinePassengerDocumentEnv(env, ctx);
+
+    const deployed = env.APP_ENV === 'staging' || env.APP_ENV === 'production';
+    if (deployed && env.API_TRUST_PROXY !== 'loopback') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['API_TRUST_PROXY'],
+        message: 'must be loopback in staging and production',
+      });
+    }
   });
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;
