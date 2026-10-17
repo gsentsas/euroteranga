@@ -21,7 +21,9 @@ for (const app of frontendApps.filter((candidate) => candidate.name !== 'ops')) 
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(app.heading);
     await expect(page.getByRole('banner')).toBeVisible();
     await expect(page.getByRole('main')).toBeVisible();
-    await expect(page.getByRole('contentinfo')).toContainText(\n      app.name === 'web' ? 'Plateforme pilote' : 'Platform under development',\n    );
+    await expect(page.getByRole('contentinfo')).toContainText(
+      app.name === 'web' ? 'Plateforme pilote' : 'Platform under development',
+    );
 
     // Let hydration and any client effects finish before asserting no errors.
     await page.waitForLoadState('networkidle');
