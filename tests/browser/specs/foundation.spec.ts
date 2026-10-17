@@ -21,7 +21,7 @@ for (const app of frontendApps.filter((candidate) => candidate.name !== 'ops')) 
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(app.heading);
     await expect(page.getByRole('banner')).toBeVisible();
     await expect(page.getByRole('main')).toBeVisible();
-    await expect(page.getByRole('contentinfo')).toContainText('Platform under development');
+    await expect(page.getByRole('contentinfo')).toContainText(\n      app.name === 'web' ? 'Plateforme pilote' : 'Platform under development',\n    );
 
     // Let hydration and any client effects finish before asserting no errors.
     await page.waitForLoadState('networkidle');
@@ -38,4 +38,24 @@ test('web: the skip link is reachable by keyboard and moves focus to main', asyn
 
   await page.keyboard.press('Enter');
   await expect(page.getByRole('main')).toBeFocused();
+});
+
+
+test('web: public homepage exposes booking, account and tracking journeys', async ({ page }) => {
+  await page.goto(appUrl(appByName('web')));
+
+  await expect(page.getByRole('link', { name: /Rechercher un voyage/i }).first()).toHaveAttribute(
+    'href',
+    'https://booking.euroteranga.com/',
+  );
+  await expect(page.getByRole('link', { name: 'Mon compte' })).toHaveAttribute(
+    'href',
+    'https://client.euroteranga.com/',
+  );
+  await expect(page.getByRole('link', { name: /Suivre un trajet/i }).first()).toHaveAttribute(
+    'href',
+    'https://tracking.euroteranga.com/',
+  );
+  await expect(page.getByRole('heading', { name: 'Choisissez, réservez, voyagez.' })).toBeVisible();
+  await expect(page.getByText('Tarif standard pilote').first()).toBeVisible();
 });
