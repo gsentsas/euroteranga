@@ -1,13 +1,92 @@
+.tracking-access-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 0.8fr;
+  gap: 2rem;
+  align-items: center;
+  min-height: 19rem;
+  margin-top: -4.1rem;
+  padding: 2rem;
+  border: 1px solid rgba(7, 59, 49, 0.1);
+  border-radius: 1.4rem;
+  background: #fff;
+  box-shadow: 0 20px 55px rgba(7, 59, 49, 0.15);
+  z-index: 4;
+}
+
+.tracking-access-card h2 {
+  max-width: 16ch;
+  margin: 0.3rem 0 0.8rem;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  letter-spacing: -0.035em;
+}
+
+.tracking-access-card p {
+  color: #5a6762;
+}
+
+.tracking-access-visual {
+  position: relative;
+  min-height: 12rem;
+  overflow: hidden;
+  border: 1px solid #dce5e0;
+  border-radius: 1.1rem;
+  background:
+    linear-gradient(rgba(7, 59, 49, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(7, 59, 49, 0.05) 1px, transparent 1px),
+    #f7fbf9;
+  background-size: 1.8rem 1.8rem;
+}
+
+.tracking-access-line {
+  position: absolute;
+  left: 14%;
+  top: 55%;
+  width: 72%;
+  border-top: 3px dashed #e7aa2f;
+  transform: rotate(-12deg);
+}
+
+.tracking-access-pin {
+  position: absolute;
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 0.2rem solid #fff;
+  border-radius: 50%;
+  background: #0b5d4b;
+  box-shadow: 0 0 0 0.35rem rgba(11, 93, 75, 0.12);
+}
+
+.tracking-access-pin--a {
+  left: 12%;
+  top: 62%;
+}
+
+.tracking-access-pin--b {
+  right: 12%;
+  top: 34%;
+  background: #e7aa2f;
+  box-shadow: 0 0 0 0.35rem rgba(231, 170, 47, 0.14);
+}
+
 .tracking-stack {
   display: grid;
-  gap: 1rem;
+  gap: 1.15rem;
+  margin-top: -4.1rem;
+  position: relative;
+  z-index: 4;
 }
 
 .tracking-card {
-  border: 1px solid var(--et-border);
-  border-radius: 1rem;
-  padding: 1.25rem;
-  background: var(--et-surface);
+  border: 1px solid #dce5e0;
+  border-radius: 1.25rem;
+  padding: 1.4rem;
+  background: #fff;
+  box-shadow: 0 16px 38px rgba(7, 59, 49, 0.08);
+}
+
+.tracking-card:first-child {
+  border-top: 0.3rem solid #0b5d4b;
 }
 
 .tracking-heading {
@@ -15,61 +94,104 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid #edf1ef;
 }
 
 .tracking-heading h2 {
-  margin: 0.2rem 0 0;
+  margin: 0.15rem 0 0;
+  font-size: clamp(1.4rem, 3vw, 2rem);
 }
 
 .tracking-kicker {
   display: block;
-  font-size: 0.8rem;
-  font-weight: 700;
+  color: #13705b;
+  font-size: 0.76rem;
+  font-weight: 850;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  opacity: 0.7;
 }
 
 .tracking-badge {
-  border: 1px solid currentColor;
+  border: 1px solid #bfd2c9;
   border-radius: 999px;
-  padding: 0.35rem 0.65rem;
-  font-size: 0.85rem;
+  padding: 0.4rem 0.7rem;
+  background: #e8f5ef;
+  color: #0a493a;
+  font-size: 0.82rem;
+  font-weight: 750;
   white-space: nowrap;
 }
 
 .tracking-grid {
   display: grid;
-  grid-template-columns: minmax(8rem, 12rem) 1fr;
-  gap: 0.5rem 1rem;
+  grid-template-columns: minmax(9rem, 13rem) 1fr;
+  gap: 0.65rem 1rem;
   margin: 1rem 0 0;
 }
 
 .tracking-grid dt {
+  color: #5a6762;
+  font-size: 0.86rem;
   font-weight: 700;
 }
 
 .tracking-grid dd {
   margin: 0;
+  font-weight: 650;
 }
 
 .tracking-event,
 .tracking-position {
   display: grid;
-  gap: 0.35rem;
-  padding: 1rem 0;
+  gap: 0.4rem;
+  padding: 1rem;
+  margin-top: 1rem;
+  border-radius: 0.9rem;
+  background: #f7fcf9;
 }
 
 .tracking-position {
-  border-top: 1px solid var(--et-border);
+  border: 1px solid #dce5e0;
+}
+
+.tracking-event strong,
+.tracking-position strong {
+  color: #073b31;
 }
 
 .tracking-privacy {
-  font-size: 0.9rem;
-  opacity: 0.75;
+  margin: 0;
+  padding-inline: 0.4rem;
+  color: #5a6762;
+  font-size: 0.88rem;
 }
 
-@media (max-width: 640px) {
+[data-testid='tracking-unavailable'] {
+  max-width: 42rem;
+  margin-top: -4.1rem;
+  position: relative;
+  z-index: 4;
+}
+
+@media (max-width: 48rem) {
+  .tracking-access-card,
+  .tracking-stack,
+  [data-testid='tracking-unavailable'] {
+    margin-top: -2.4rem;
+  }
+
+  .tracking-access-card {
+    grid-template-columns: 1fr;
+    padding: 1.2rem;
+  }
+
+  .tracking-access-visual {
+    min-height: 9rem;
+  }
+}
+
+@media (max-width: 40rem) {
   .tracking-heading {
     display: grid;
   }
