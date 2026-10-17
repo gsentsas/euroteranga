@@ -1,0 +1,34 @@
+[Unit]
+Description=EURO TERANGA crew
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=euroteranga.com_5p804yhows7
+Group=psacln
+WorkingDirectory=/var/www/vhosts/euroteranga.com/current
+EnvironmentFile=/var/www/vhosts/euroteranga.com/.secrets/public.env
+Environment=PATH=/opt/plesk/node/24/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/plesk/node/24/bin/pnpm --filter @euroteranga/crew exec next start --hostname 127.0.0.1 --port 3205
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+TasksMax=256
+MemoryMax=768M
+
+[Install]
+WantedBy=multi-user.target
