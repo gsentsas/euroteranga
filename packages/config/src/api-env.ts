@@ -25,7 +25,7 @@ export const apiEnvSchema = z
     API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),
     API_CORS_ORIGINS: originListSchema.default([]),
     // Which proxies may set X-Forwarded-For. "none" (default) uses the TCP peer
-    // address; the production proxy chain has not been audited yet.
+    // address; deployed environments require the audited loopback proxy topology.
     API_TRUST_PROXY: z
       .enum(['none', 'loopback'], { error: 'must be none or loopback' })
       .default('none'),
@@ -40,6 +40,15 @@ export const apiEnvSchema = z
     refineAuthEnv(env, ctx);
     refinePaymentEnv(env, ctx);
     refinePassengerDocumentEnv(env, ctx);
+
+    const deployed = env.APP_ENV === 'staging' || env.APP_ENV === 'production';
+    if (deployed && env.API_TRUST_PROXY !== 'loopback') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['API_TRUST_PROXY'],
+        message: 'must be loopback in staging and production',
+      });
+    }
   });
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;

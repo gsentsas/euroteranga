@@ -12,7 +12,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:unit": "vitest run test/unit",
     "test:integration": "vitest run test/integration --exclude 'test/integration/**/upgrade-from-*.int.spec.ts' && vitest run upgrade-from- --maxWorkers=1 --no-file-parallelism",
-    "auth:bootstrap-super-admin": "node --enable-source-maps --env-file-if-exists=../../.env dist/cli/bootstrap-super-admin.js"
+    "auth:bootstrap-super-admin": "node --enable-source-maps --env-file-if-exists=../../.env dist/cli/bootstrap-super-admin.js",
+    "auth:purge-expired": "node --enable-source-maps --env-file-if-exists=../../.env dist/cli/purge-auth-artifacts.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "catalog:",

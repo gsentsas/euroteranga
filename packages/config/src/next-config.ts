@@ -1,5 +1,5 @@
 import { assertNoSensitivePublicEnv, loadPublicEnv } from './public-env.js';
-import { foundationSecurityHeaders } from './security-headers.js';
+import { buildFoundationSecurityHeaders } from './security-headers.js';
 
 interface HeaderRule {
   source: string;
@@ -22,11 +22,13 @@ export function createFoundationNextConfig(
   env: Record<string, string | undefined> = process.env,
 ): FoundationNextConfig {
   assertNoSensitivePublicEnv(env);
-  loadPublicEnv(env);
+  const publicEnv = loadPublicEnv(env);
 
   return {
     reactStrictMode: true,
     poweredByHeader: false,
-    headers: async () => [{ source: '/:path*', headers: [...foundationSecurityHeaders] }],
+    headers: async () => [
+      { source: '/:path*', headers: [...buildFoundationSecurityHeaders(publicEnv)] },
+    ],
   };
 }

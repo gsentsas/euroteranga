@@ -163,7 +163,9 @@ test.describe('PR-21 operational incidents', () => {
     await expect(detail).toContainText('Traitement en cours');
     expect(actionBody).toMatchObject({ type: 'ACTION_PLAN' });
     expect(String(actionBody.clientActionId)).toMatch(/^act-[0-9a-f-]{36}$/u);
-    expect(transitionBody).toEqual({ status: 'MITIGATING', expectedStatus: 'ACTION_REQUIRED' });
+    await expect
+      .poll(() => transitionBody)
+      .toEqual({ status: 'MITIGATING', expectedStatus: 'ACTION_REQUIRED' });
     expect(errors.pageErrors).toEqual([]);
     expect(errors.consoleErrors).toEqual([]);
   });
@@ -185,7 +187,7 @@ test.describe('PR-21 operational incidents', () => {
           items: [
             {
               assignmentId: '01900000-0000-7000-8000-000000000210',
-              snapshotExpiresAt: '2026-10-17T15:00:00.000Z',
+              snapshotExpiresAt: '2030-10-17T15:00:00.000Z',
               trip: {
                 reference: tripReference,
                 status: 'IN_PROGRESS',

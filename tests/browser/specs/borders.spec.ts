@@ -200,7 +200,7 @@ test.describe('PR-20 operational border crossings', () => {
           items: [
             {
               assignmentId: '01900000-0000-7000-8000-000000000030',
-              snapshotExpiresAt: '2026-10-17T15:00:00.000Z',
+              snapshotExpiresAt: '2030-10-17T15:00:00.000Z',
               trip: {
                 reference: tripReference,
                 status: 'IN_PROGRESS',

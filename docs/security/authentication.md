@@ -169,8 +169,10 @@ PostgreSQL fixed windows (`auth_rate_limit_bucket`), keyed by
 
 Responses: 429 `TOO_MANY_REQUESTS` with `Retry-After`, identical whether the
 account exists. No permanent lockout. The client address is the TCP peer
-unless `API_TRUST_PROXY=loopback`; the production proxy chain is not audited
-yet.
+unless `API_TRUST_PROXY=loopback`. PR-24 requires that exact loopback-proxy
+topology in staging and production; deployed instances fail startup when proxy
+trust is left disabled. Client-supplied forwarding headers are ignored unless
+the TCP peer is the trusted loopback reverse proxy.
 
 ## Security logging
 
@@ -215,16 +217,30 @@ deployed environment.
 Generate with `openssl rand -base64 32`. Rotation impact: see
 [`docs/runbooks/authentication-incident.md`](../runbooks/authentication-incident.md).
 
-## Retention of temporary data (purge not implemented yet)
+## Retention of temporary authentication data
 
-| Data                        | Proposed retention          | Index for purge       |
-| --------------------------- | --------------------------- | --------------------- |
-| Verification / reset tokens | delete 7 days after expiry  | `expires_at`          |
-| Challenges                  | delete 1 day after expiry   | `expires_at`          |
-| Rate-limit buckets          | delete after `expires_at`   | `expires_at`          |
-| Revoked / expired sessions  | delete 90 days after expiry | `absolute_expires_at` |
+PR-24 implements an idempotent operator purge:
 
-A scheduled purge job will be added with the worker infrastructure.
+```bash
+pnpm build
+pnpm auth:purge-expired
+```
+
+It uses one retention snapshot and deletes only temporary authentication
+artifacts. Security/audit events and durable identity/MFA credentials are not
+deleted by this command.
+
+| Data                        | Retention after expiry/revocation | Indexed time field               |
+| --------------------------- | --------------------------------- | -------------------------------- |
+| Verification / reset tokens | 7 days                            | `expires_at`                     |
+| MFA challenges              | 1 day                             | `expires_at`                     |
+| Rate-limit buckets          | immediately after expiry          | `expires_at`                     |
+| Revoked / expired sessions  | 90 days                           | session expiry/revocation fields |
+| Staff invitations           | 7 days                            | `expires_at`                     |
+| Staff MFA enrollment grants | 7 days                            | `expires_at`                     |
+
+Production should schedule the CLI daily in the platform scheduler. Running it
+again with the same database state is a no-op.
 
 ## Known limitations
 
@@ -236,13 +252,12 @@ A scheduled purge job will be added with the worker infrastructure.
   `AUTH_MFA_ENROLLMENT_BLOCKED`.
 - Suspension and session revocation are available in OPS (PR-03); an
   administrative reset of an **enabled** TOTP is not.
-- Requests rejected by the JSON body parser (malformed JSON) carry no request
-  id: the parser runs before the request-id middleware.
+- Malformed and oversized JSON requests receive the same generated/validated
+  request id as routed requests; raw request bodies are never logged.
 - The "forgot password" path for an existing account performs a few database
   writes that an unknown address does not; mail is asynchronous and rate
   limits apply, but timing is not strictly constant.
 - TOTP key rotation tooling not implemented.
-- Production proxy chain and real client IP not verified.
-- No purge job yet; no customer MFA; no passkeys.
+- The purge CLI exists, but the production scheduler still has to invoke it; no customer MFA or passkeys yet.
 - Not deployed; production TLS and cookie behaviour behind the real proxy not
   validated.

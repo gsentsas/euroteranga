@@ -31,6 +31,7 @@ describe('loadApiEnv', () => {
       API_HOST: '127.0.0.1',
       API_PORT: 4000,
       API_CORS_ORIGINS: [],
+      API_TRUST_PROXY: 'none',
       OPENAPI_ENABLED: false,
       LOG_LEVEL: 'info',
       BOOKING_HOLD_TTL_SECONDS: 900,
@@ -120,6 +121,30 @@ describe('loadApiEnv', () => {
     expect(loadApiEnv({ ...validApiEnv, OPENAPI_ENABLED: 'true' }).OPENAPI_ENABLED).toBe(true);
     expect(() => loadApiEnv({ ...validApiEnv, OPENAPI_ENABLED: 'yes' })).toThrow(/OPENAPI_ENABLED/);
   });
+
+  it('requires the audited loopback proxy topology in staging and production', () => {
+    const deployed = {
+      ...validApiEnv,
+      NODE_ENV: 'production',
+      APP_ENV: 'production',
+      API_TRUST_PROXY: 'none',
+      AUTH_MAIL_PROVIDER: 'smtp',
+      SMTP_HOST: 'smtp.example.test',
+      AUTH_EMAIL_FROM: 'no-reply@example.test',
+      CLIENT_PUBLIC_URL: 'https://client.example.test',
+      OPS_PUBLIC_URL: 'https://ops.example.test',
+      AUTH_CUSTOMER_ORIGINS: 'https://client.example.test',
+      AUTH_STAFF_ORIGINS: 'https://ops.example.test',
+      AUTH_CREW_ORIGINS: 'https://crew.example.test',
+      PAYMENT_PROVIDER: 'DISABLED',
+      OBJECT_STORAGE_PROVIDER: 'DISABLED',
+      MALWARE_SCANNER: 'DISABLED',
+    };
+    expect(() => loadApiEnv(deployed)).toThrow(/API_TRUST_PROXY/);
+    expect(loadApiEnv({ ...deployed, API_TRUST_PROXY: 'loopback' }).API_TRUST_PROXY).toBe(
+      'loopback',
+    );
+  });
 });
 
 describe('loadPublicEnv', () => {
@@ -152,6 +177,29 @@ describe('loadPublicEnv', () => {
       loadPublicEnv({ NEXT_PUBLIC_APP_ENV: 'ci', NEXT_PUBLIC_API_BASE_URL: 'javascript:alert(1)' }),
     ).toThrow(/NEXT_PUBLIC_API_BASE_URL/);
   });
+
+  it('requires https browser endpoints in staging and production', () => {
+    expect(() =>
+      loadPublicEnv({
+        NEXT_PUBLIC_APP_ENV: 'production',
+        NEXT_PUBLIC_API_BASE_URL: 'http://api.example.test',
+      }),
+    ).toThrow(/NEXT_PUBLIC_API_BASE_URL/);
+    expect(() =>
+      loadPublicEnv({
+        NEXT_PUBLIC_APP_ENV: 'staging',
+        NEXT_PUBLIC_API_BASE_URL: 'https://api.example.test',
+        NEXT_PUBLIC_CLIENT_URL: 'http://client.example.test',
+      }),
+    ).toThrow(/NEXT_PUBLIC_CLIENT_URL/);
+    expect(
+      loadPublicEnv({
+        NEXT_PUBLIC_APP_ENV: 'production',
+        NEXT_PUBLIC_API_BASE_URL: 'https://api.example.test',
+        NEXT_PUBLIC_CLIENT_URL: 'https://client.example.test',
+      }),
+    ).toMatchObject({ NEXT_PUBLIC_APP_ENV: 'production' });
+  });
 });
 
 describe('assertNoSensitivePublicEnv', () => {
@@ -183,6 +231,23 @@ describe('createFoundationNextConfig', () => {
     const [rule] = await config.headers();
     expect(rule?.source).toBe('/:path*');
     expect(rule?.headers).toContainEqual({ key: 'X-Content-Type-Options', value: 'nosniff' });
+    const csp = rule?.headers.find((header) => header.key === 'Content-Security-Policy')?.value;
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("connect-src 'self' http://localhost:4000");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).not.toContain('upgrade-insecure-requests');
+  });
+
+  it('adds deployment-only CSP upgrading and keeps the API origin explicit', async () => {
+    const config = createFoundationNextConfig({
+      NEXT_PUBLIC_APP_ENV: 'production',
+      NEXT_PUBLIC_API_BASE_URL: 'https://api.example.test',
+    });
+    const [rule] = await config.headers();
+    const csp = rule?.headers.find((header) => header.key === 'Content-Security-Policy')?.value;
+    expect(csp).toContain("connect-src 'self' https://api.example.test");
+    expect(csp).toContain('upgrade-insecure-requests');
+    expect(csp).not.toContain('unsafe-eval');
   });
 
   it('stops the build when the public environment is invalid or sensitive', () => {
