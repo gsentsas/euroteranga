@@ -7,6 +7,7 @@ import { AuditService } from '../authorization/audit.service.js';
 import { BorderService } from '../borders/border.service.js';
 import { BoardingService, type CrewBoardingContext } from '../check-in/boarding.service.js';
 import { DatabaseService } from '../database/database.service.js';
+import { IncidentService } from '../incidents/incident.service.js';
 import { TrackingService } from '../tracking/tracking.service.js';
 import type {
   crewAssignmentCreateSchema,
@@ -74,6 +75,7 @@ export class CrewService {
     private readonly boarding: BoardingService,
     private readonly tracking: TrackingService,
     private readonly borders: BorderService,
+    private readonly incidents: IncidentService,
   ) {}
 
   async trips(actor: AuthPrincipal) {
@@ -326,6 +328,27 @@ export class CrewService {
           continue;
         }
 
+        if (event.type === 'INCIDENT_REPORTED') {
+          const result = await this.incidents.reportCrew(actor, tripReference, {
+            deviceId: input.deviceId,
+            clientEventId: event.clientEventId,
+            type: event.payload.incidentType,
+            severity: event.payload.severity,
+            description: event.payload.description,
+            openedAt: event.occurredAt,
+            routeWaypointId: event.payload.routeWaypointId,
+            locationLabel: event.payload.locationLabel,
+            baggageReference: event.payload.baggageReference,
+          });
+          results.push({
+            clientEventId: event.clientEventId,
+            status: 'ACKNOWLEDGED' as const,
+            created: result.created,
+            incidentReference: result.incident.reference,
+          });
+          continue;
+        }
+
         if (!boardingContext) throw new Error('boarding context missing after batch validation');
         const result = await this.boarding.scan(
           actor,
@@ -359,7 +382,8 @@ export class CrewService {
             status:
               error.code === 'BOARDING_CLIENT_EVENT_ID_REUSED' ||
               error.code === 'TRACKING_CLIENT_EVENT_ID_REUSED' ||
-              error.code === 'BORDER_CLIENT_EVENT_ID_REUSED'
+              error.code === 'BORDER_CLIENT_EVENT_ID_REUSED' ||
+              error.code === 'INCIDENT_CLIENT_EVENT_ID_REUSED'
                 ? ('CONFLICT' as const)
                 : ('REJECTED' as const),
             errorCode: error.code,

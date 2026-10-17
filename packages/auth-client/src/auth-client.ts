@@ -1305,6 +1305,32 @@ export type CrewOfflineEvent =
         routeWaypointId: string;
         eventType: 'ARRIVED' | 'CONTROL_STARTED' | 'CONTROL_COMPLETED' | 'DEPARTED';
       };
+    }
+  | {
+      clientEventId: string;
+      type: 'INCIDENT_REPORTED';
+      occurredAt: string;
+      payload: {
+        incidentType:
+          | 'BREAKDOWN'
+          | 'ACCIDENT'
+          | 'DELAY'
+          | 'BORDER'
+          | 'CUSTOMS'
+          | 'POLICE'
+          | 'PASSENGER'
+          | 'HEALTH'
+          | 'BAGGAGE'
+          | 'SECURITY'
+          | 'WEATHER'
+          | 'FERRY'
+          | 'OTHER';
+        severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+        description: string;
+        routeWaypointId?: string;
+        locationLabel?: string;
+        baggageReference?: string;
+      };
     };
 
 export interface CrewSyncResult {
@@ -1317,6 +1343,7 @@ export interface CrewSyncResult {
         boardingReference?: string;
         trackingObservationId?: string;
         borderEventId?: string;
+        incidentReference?: string;
       }
     | {
         clientEventId: string;
@@ -1339,6 +1366,128 @@ export interface CrewTripAssignment {
   revokedAt: string | null;
   revocationReason: string | null;
   crew: { id: string; email: string; status: string };
+}
+
+export type IncidentType =
+  | 'BREAKDOWN'
+  | 'ACCIDENT'
+  | 'DELAY'
+  | 'BORDER'
+  | 'CUSTOMS'
+  | 'POLICE'
+  | 'PASSENGER'
+  | 'HEALTH'
+  | 'BAGGAGE'
+  | 'SECURITY'
+  | 'WEATHER'
+  | 'FERRY'
+  | 'OTHER';
+
+export type IncidentSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type IncidentStatus =
+  'OPEN' | 'ASSESSING' | 'ACTION_REQUIRED' | 'MITIGATING' | 'RESOLVED' | 'CLOSED';
+export type IncidentSource = 'STAFF' | 'CREW';
+export type IncidentActionType =
+  'NOTE' | 'ACTION_PLAN' | 'MITIGATION' | 'PASSENGERS_INFORMED' | 'POSTMORTEM';
+
+export interface IncidentSummary {
+  id: string;
+  reference: string;
+  type: IncidentType;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  source: IncidentSource;
+  description: string;
+  locationLabel: string | null;
+  openedAt: string;
+  recordedAt: string;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  ownerIdentityId: string | null;
+  trip: { id: string; reference: string; status: TripStatus };
+  vehicle: { id: string; code: string } | null;
+  waypoint: {
+    id: string;
+    sequence: number;
+    code: string | null;
+    name: string | null;
+    checkpointType: string | null;
+  } | null;
+  baggage: {
+    id: string;
+    reference: string;
+    exceptionStatus: string | null;
+  } | null;
+  actionCount: number;
+  attachmentCount: number;
+}
+
+export interface IncidentAction {
+  id: string;
+  sequence: number;
+  type: IncidentActionType;
+  content: string;
+  clientActionId: string;
+  createdByIdentityId: string;
+  createdAt: string;
+}
+
+export interface IncidentAttachment {
+  id: string;
+  sha256: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedByIdentityId: string;
+  createdAt: string;
+}
+
+export interface IncidentDetail extends IncidentSummary {
+  actions: IncidentAction[];
+  attachments: IncidentAttachment[];
+}
+
+export interface IncidentListOptions {
+  cursor?: string;
+  limit?: number;
+  status?: IncidentStatus;
+  severity?: IncidentSeverity;
+  type?: IncidentType;
+  tripReference?: string;
+  ownerIdentityId?: string;
+}
+
+export interface IncidentOpenInput {
+  tripReference: string;
+  clientEventId: string;
+  type: IncidentType;
+  severity: IncidentSeverity;
+  description: string;
+  openedAt: string;
+  routeWaypointId?: string;
+  locationLabel?: string;
+  baggageReference?: string;
+  ownerIdentityId?: string;
+}
+
+export interface IncidentOpenResult {
+  created: boolean;
+  incident: IncidentSummary;
+}
+
+export interface IncidentActionInput {
+  clientActionId: string;
+  type: IncidentActionType;
+  content: string;
+}
+
+export interface IncidentActionResult {
+  created: boolean;
+  action: IncidentAction;
+}
+
+export interface IncidentOwner {
+  id: string;
+  email: string;
 }
 
 export type BorderEventType = 'ARRIVED' | 'CONTROL_STARTED' | 'CONTROL_COMPLETED' | 'DEPARTED';
@@ -3012,6 +3161,68 @@ export function createAuthClient(baseUrl: string) {
             'staff',
             `/v1/admin/regulatory-permits/${encodeURIComponent(reference)}/revoke`,
             input,
+          ),
+      },
+      incidents: {
+        list: (options: IncidentListOptions = {}) =>
+          call<Page<IncidentSummary>>(
+            'GET',
+            '/v1/admin/incidents?' +
+              query({
+                cursor: options.cursor,
+                limit: options.limit,
+                status: options.status,
+                severity: options.severity,
+                type: options.type,
+                tripReference: options.tripReference,
+                ownerIdentityId: options.ownerIdentityId,
+              }),
+          ),
+        owners: () => call<{ items: IncidentOwner[] }>('GET', '/v1/admin/incidents/owners'),
+        detail: (reference: string) =>
+          call<IncidentDetail>('GET', '/v1/admin/incidents/' + encodeURIComponent(reference)),
+        open: (input: IncidentOpenInput) =>
+          withCsrf<IncidentOpenResult>('staff', '/v1/admin/incidents', input),
+        addAction: (reference: string, input: IncidentActionInput) =>
+          withCsrf<IncidentActionResult>(
+            'staff',
+            '/v1/admin/incidents/' + encodeURIComponent(reference) + '/actions',
+            input,
+          ),
+        transition: (
+          reference: string,
+          input: { status: IncidentStatus; expectedStatus?: IncidentStatus },
+        ) =>
+          withCsrf<IncidentSummary>(
+            'staff',
+            '/v1/admin/incidents/' + encodeURIComponent(reference) + '/transition',
+            input,
+          ),
+        assignOwner: (
+          reference: string,
+          input: { ownerIdentityId: string | null; reason: string },
+        ) =>
+          withCsrf<IncidentSummary>(
+            'staff',
+            '/v1/admin/incidents/' + encodeURIComponent(reference) + '/owner',
+            input,
+          ),
+        uploadAttachment: (reference: string, file: File) => {
+          const form = new FormData();
+          form.append('file', file, file.name);
+          return withCsrfMultipart<IncidentAttachment>(
+            'staff',
+            '/v1/admin/incidents/' + encodeURIComponent(reference) + '/attachments',
+            form,
+          );
+        },
+        downloadAttachment: (reference: string, attachmentId: string) =>
+          privateDownload(
+            '/v1/admin/incidents/' +
+              encodeURIComponent(reference) +
+              '/attachments/' +
+              encodeURIComponent(attachmentId) +
+              '/download',
           ),
       },
       borders: {

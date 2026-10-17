@@ -3,6 +3,7 @@ import type { Readable } from 'node:stream';
 export const OBJECT_STORAGE_PROVIDER = Symbol('OBJECT_STORAGE_PROVIDER');
 
 export const PASSENGER_DOCUMENT_OBJECT_KEY = /^passenger-documents\/[0-9a-f]{2}\/[0-9a-f]{64}$/;
+export const INCIDENT_ATTACHMENT_OBJECT_KEY = /^incident-attachments\/[0-9a-f]{2}\/[0-9a-f]{64}$/;
 
 export type ObjectStorageErrorCode = 'UNAVAILABLE' | 'NOT_FOUND' | 'CONFLICT' | 'INVALID_KEY';
 
@@ -30,6 +31,12 @@ export interface ObjectStorageProvider {
 
 export function assertPassengerDocumentObjectKey(key: string): void {
   if (!PASSENGER_DOCUMENT_OBJECT_KEY.test(key)) throw new ObjectStorageError('INVALID_KEY');
+}
+
+export function assertPrivateObjectKey(key: string): void {
+  if (!PASSENGER_DOCUMENT_OBJECT_KEY.test(key) && !INCIDENT_ATTACHMENT_OBJECT_KEY.test(key)) {
+    throw new ObjectStorageError('INVALID_KEY');
+  }
 }
 
 /** Fail-safe provider used when the document feature is explicitly disabled. */

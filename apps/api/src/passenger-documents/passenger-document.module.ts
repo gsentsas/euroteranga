@@ -69,5 +69,6 @@ function malwareScanner(config: PassengerDocumentConfig): MalwareScanner {
     },
     PassengerDocumentService,
   ],
+  exports: [PASSENGER_DOCUMENT_CONFIG, OBJECT_STORAGE_PROVIDER, MALWARE_SCANNER],
 })
 export class PassengerDocumentModule {}

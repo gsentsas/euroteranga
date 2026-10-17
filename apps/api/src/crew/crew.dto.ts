@@ -56,6 +56,56 @@ export const crewSyncSchema = z
                 .strict(),
             })
             .strict(),
+          z
+            .object({
+              clientEventId,
+              type: z.literal('INCIDENT_REPORTED'),
+              occurredAt: z.iso.datetime({ offset: true }).transform((value) => new Date(value)),
+              payload: z
+                .object({
+                  incidentType: z.enum([
+                    'BREAKDOWN',
+                    'ACCIDENT',
+                    'DELAY',
+                    'BORDER',
+                    'CUSTOMS',
+                    'POLICE',
+                    'PASSENGER',
+                    'HEALTH',
+                    'BAGGAGE',
+                    'SECURITY',
+                    'WEATHER',
+                    'FERRY',
+                    'OTHER',
+                  ]),
+                  severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
+                  description: z.string().trim().min(10).max(2000),
+                  routeWaypointId: z.uuid().optional(),
+                  locationLabel: z.string().trim().min(1).max(160).optional(),
+                  baggageReference: z
+                    .string()
+                    .trim()
+                    .regex(/^ETG-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{12}$/)
+                    .optional(),
+                })
+                .superRefine((value, context) => {
+                  if (value.incidentType === 'BAGGAGE' && !value.baggageReference) {
+                    context.addIssue({
+                      code: 'custom',
+                      path: ['baggageReference'],
+                      message: 'required',
+                    });
+                  }
+                  if (value.incidentType !== 'BAGGAGE' && value.baggageReference) {
+                    context.addIssue({
+                      code: 'custom',
+                      path: ['baggageReference'],
+                      message: 'not allowed',
+                    });
+                  }
+                }),
+            })
+            .strict(),
         ]),
       )
       .min(1)

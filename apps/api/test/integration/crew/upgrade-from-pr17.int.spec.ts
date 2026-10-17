@@ -20,7 +20,7 @@ const DATABASE_PACKAGE = fileURLToPath(
 );
 const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const PR17_MIGRATION = '20261015180000_departure_readiness';
-const BORDER_MIGRATION = '20261017013000_borders';
+const INCIDENT_MIGRATION = '20261017083000_incidents';
 
 function deploy(config: string | null, url: string) {
   execFileSync(
@@ -128,8 +128,8 @@ describe('upgrade from a real PR-17 database', () => {
   });
 
   it('applies PR-18 through PR-20, preserves STAFF boarding and backfills no Crew data', async () => {
-    expect(await applied()).toHaveLength(20);
-    expect((await applied()).at(-1)).toBe(BORDER_MIGRATION);
+    expect(await applied()).toHaveLength(21);
+    expect((await applied()).at(-1)).toBe(INCIDENT_MIGRATION);
     const row = (
       await raw.$queryRawUnsafe<
         Array<{ value: string; crew_device_id: string | null; crew_assignment_id: string | null }>
@@ -154,6 +154,7 @@ describe('upgrade from a real PR-17 database', () => {
       'crew.boarding.scan',
       'crew.border.report',
       'crew.device.manage',
+      'crew.incident.report',
       'crew.tracking.report',
       'crew.trip.read',
     ]);
@@ -161,12 +162,12 @@ describe('upgrade from a real PR-17 database', () => {
       await raw.authorizationRolePermission.count({
         where: { permissionKey: { startsWith: 'crew.' } },
       }),
-    ).toBe(15);
+    ).toBe(18);
   });
 
-  it('is idempotent and reports all 20 migrations applied', async () => {
+  it('is idempotent and reports all 21 migrations applied', async () => {
     deploy(null, url);
-    expect(await applied()).toHaveLength(20);
+    expect(await applied()).toHaveLength(21);
     const status = execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'status'], {
       cwd: DATABASE_PACKAGE,
       env: { ...process.env, DATABASE_URL: url },

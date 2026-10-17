@@ -31,6 +31,7 @@ const EXPECTED_MATRIX: Record<
       'crew.boarding.scan',
       'crew.border.report',
       'crew.device.manage',
+      'crew.incident.report',
       'crew.tracking.report',
       'crew.trip.read',
       'departure.authorize',
@@ -41,6 +42,8 @@ const EXPECTED_MATRIX: Record<
       'identity.read',
       'identity.staff.provision',
       'identity.status.manage',
+      'incident.manage',
+      'incident.read',
       'manifest.export',
       'manifest.generate',
       'manifest.read',
@@ -94,6 +97,8 @@ const EXPECTED_MATRIX: Record<
       'identity.read',
       'identity.staff.provision',
       'identity.status.manage',
+      'incident.manage',
+      'incident.read',
       'manifest.export',
       'manifest.generate',
       'manifest.read',
@@ -140,6 +145,8 @@ const EXPECTED_MATRIX: Record<
       'fleet.manage',
       'fleet.read',
       'identity.read',
+      'incident.manage',
+      'incident.read',
       'manifest.export',
       'manifest.generate',
       'manifest.read',
@@ -180,6 +187,8 @@ const EXPECTED_MATRIX: Record<
       'departure.manage',
       'departure.read',
       'fleet.read',
+      'incident.manage',
+      'incident.read',
       'manifest.export',
       'manifest.generate',
       'manifest.read',
@@ -257,6 +266,7 @@ const EXPECTED_MATRIX: Record<
       'booking.read',
       'border.read',
       'checkin.read',
+      'incident.read',
       'network.read',
       'ops.access',
       'payment.read',
@@ -276,6 +286,7 @@ const EXPECTED_MATRIX: Record<
       'departure.read',
       'fleet.read',
       'identity.read',
+      'incident.read',
       'network.read',
       'ops.access',
       'payment.read',
@@ -294,6 +305,7 @@ const EXPECTED_MATRIX: Record<
       'crew.boarding.scan',
       'crew.border.report',
       'crew.device.manage',
+      'crew.incident.report',
       'crew.tracking.report',
       'crew.trip.read',
     ],
@@ -305,6 +317,7 @@ const EXPECTED_MATRIX: Record<
       'crew.boarding.scan',
       'crew.border.report',
       'crew.device.manage',
+      'crew.incident.report',
       'crew.tracking.report',
       'crew.trip.read',
     ],
@@ -429,6 +442,18 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['POST', '/v1/admin/regulatory-permits/ETRP-000000000000/revoke'],
   ['GET', '/v1/admin/borders/trips/01900000-0000-7000-8000-000000000000'],
   ['POST', '/v1/admin/borders/trips/01900000-0000-7000-8000-000000000000/events'],
+  ['GET', '/v1/admin/incidents'],
+  ['GET', '/v1/admin/incidents/owners'],
+  ['GET', '/v1/admin/incidents/ETI-000000000000'],
+  ['POST', '/v1/admin/incidents'],
+  ['POST', '/v1/admin/incidents/ETI-000000000000/actions'],
+  ['POST', '/v1/admin/incidents/ETI-000000000000/transition'],
+  ['POST', '/v1/admin/incidents/ETI-000000000000/owner'],
+  ['POST', '/v1/admin/incidents/ETI-000000000000/attachments'],
+  [
+    'GET',
+    '/v1/admin/incidents/ETI-000000000000/attachments/01900000-0000-7000-8000-000000000000/download',
+  ],
   ['GET', '/v1/admin/departure/trips/ET-UNKNOWN/readiness'],
   ['POST', '/v1/admin/departure/trips/ET-UNKNOWN/permit-policy'],
   ['POST', '/v1/admin/departure/trips/ET-UNKNOWN/authorize'],
@@ -595,6 +620,19 @@ describe('server-side RBAC', () => {
           })
         ).status,
       ).toBe(allowed('border.manage') ? 404 : 403);
+      // PR-21: incident reading and management are explicit grants. Neither
+      // tracking, border nor trip permissions imply incident authority.
+      expect((await api.get('/incidents')).status).toBe(allowed('incident.read') ? 200 : 403);
+      expect((await api.get('/incidents/ETI-000000000000')).status).toBe(
+        allowed('incident.read') ? 404 : 403,
+      );
+      expect(
+        (
+          await api.post('/incidents/ETI-000000000000/transition', {
+            status: 'ASSESSING',
+          })
+        ).status,
+      ).toBe(allowed('incident.manage') ? 404 : 403);
       // PR-17: whole-trip readiness, explicit authorization and dispatch are
       // independent from trip.manage and from intrinsic permit validity.
       expect((await api.get('/departure/trips/ET-UNKNOWN/readiness')).status).toBe(

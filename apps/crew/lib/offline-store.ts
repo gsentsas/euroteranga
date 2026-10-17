@@ -7,6 +7,7 @@ import {
   applyServerResult,
   createBoardingEvent,
   createBorderEvent,
+  createIncidentReportEvent,
   createTrackingCheckpointEvent,
   findPendingDuplicate,
   isExpired,
@@ -230,6 +231,27 @@ export async function queueBorderEvent(
   eventType: 'ARRIVED' | 'CONTROL_STARTED' | 'CONTROL_COMPLETED' | 'DEPARTED',
 ): Promise<LocalCrewEvent> {
   const event = createBorderEvent(tripReference, routeWaypointId, eventType);
+  const db = await database();
+  const tx = db.transaction(EVENTS, 'readwrite');
+  const store = tx.objectStore(EVENTS);
+  const current = (await request(store.getAll())) as LocalCrewEvent[];
+  const duplicate = findPendingDuplicate(current, event);
+  if (duplicate) {
+    await finished(tx);
+    db.close();
+    return duplicate;
+  }
+  store.add(event);
+  await finished(tx);
+  db.close();
+  return event;
+}
+
+export async function queueIncidentReport(
+  tripReference: string,
+  input: Parameters<typeof createIncidentReportEvent>[1],
+): Promise<LocalCrewEvent> {
+  const event = createIncidentReportEvent(tripReference, input);
   const db = await database();
   const tx = db.transaction(EVENTS, 'readwrite');
   const store = tx.objectStore(EVENTS);

@@ -43,9 +43,9 @@ CSRF on mutations:
   only (`crew.device.manage`);
 - `POST /trips/:tripReference/events/sync` — a strictly typed, bounded batch of
   `PASSENGER_BOARDING` events with one result per input event
-  (`crew.boarding.scan`). Route checkpoints use `crew.tracking.report`; operational border events use `crew.border.report`.
+  (`crew.boarding.scan`). Route checkpoints use `crew.tracking.report`; operational border events use `crew.border.report`; `INCIDENT_REPORTED` uses `crew.incident.report`.
 
-`DRIVER` and `CREW` receive those three Crew-realm permissions. They do not
+`DRIVER` and `CREW` receive the Crew-realm permissions required for assigned-trip boarding, tracking, border and incident reporting. They do not
 receive STAFF `trip.read`, `boarding.read` or `boarding.scan`, and receive no
 manifest, permit, readiness or departure permission. `SUPER_ADMIN` carries the
 three keys only so the existing anti-escalation rule can provision Crew roles;
@@ -65,6 +65,15 @@ pending count, current sync and actionable errors.
 **« Enregistré sur cet appareil »** means only that IndexedDB committed the
 event. **« Synchronisé avec EURO TERANGA »** means the Core API returned an
 acknowledgement. These phrases are never interchangeable.
+
+## Incident reports (PR-21)
+
+PR-21 reuses this same IndexedDB queue for `INCIDENT_REPORTED`. The local payload
+contains type, severity, bounded operational description and optional waypoint/location
+or baggage reference. The original `clientEventId` and `occurredAt` survive reload and
+retry. Server synchronization revalidates the live Crew assignment and enrolled device;
+local persistence is not server acceptance. No claim, compensation or finance state is
+created by the offline event.
 
 ## Boundary with dispatch
 

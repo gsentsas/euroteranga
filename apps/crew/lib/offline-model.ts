@@ -86,6 +86,57 @@ export function createBorderEvent(
   };
 }
 
+export function createIncidentReportEvent(
+  tripReference: string,
+  input: {
+    incidentType:
+      | 'BREAKDOWN'
+      | 'ACCIDENT'
+      | 'DELAY'
+      | 'BORDER'
+      | 'CUSTOMS'
+      | 'POLICE'
+      | 'PASSENGER'
+      | 'HEALTH'
+      | 'BAGGAGE'
+      | 'SECURITY'
+      | 'WEATHER'
+      | 'FERRY'
+      | 'OTHER';
+    severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    description: string;
+    routeWaypointId?: string;
+    locationLabel?: string;
+    baggageReference?: string;
+  },
+  options: { now?: Date; randomUUID?: () => string } = {},
+): LocalCrewEvent {
+  const now = options.now ?? new Date();
+  const timestamp = now.toISOString();
+  return {
+    clientEventId: newClientEventId(options.randomUUID),
+    type: 'INCIDENT_REPORTED',
+    occurredAt: timestamp,
+    payload: {
+      incidentType: input.incidentType,
+      severity: input.severity,
+      description: input.description.trim(),
+      ...(input.routeWaypointId ? { routeWaypointId: input.routeWaypointId } : {}),
+      ...(input.locationLabel ? { locationLabel: input.locationLabel.trim() } : {}),
+      ...(input.baggageReference
+        ? { baggageReference: input.baggageReference.trim().toUpperCase() }
+        : {}),
+    },
+    tripReference: tripReference.trim().toUpperCase(),
+    status: 'PENDING',
+    errorCode: null,
+    queuedAt: timestamp,
+    expiresAt: new Date(now.getTime() + EVENT_TTL_MS).toISOString(),
+    attempts: 0,
+    nextAttemptAt: timestamp,
+  };
+}
+
 export function orderEvents(events: readonly LocalCrewEvent[]): LocalCrewEvent[] {
   return [...events].sort(
     (a, b) =>
@@ -173,6 +224,16 @@ function samePayload(a: LocalCrewEvent, b: LocalCrewEvent): boolean {
     return (
       a.payload.routeWaypointId === b.payload.routeWaypointId &&
       a.payload.eventType === b.payload.eventType
+    );
+  }
+  if (a.type === 'INCIDENT_REPORTED' && b.type === 'INCIDENT_REPORTED') {
+    return (
+      a.payload.incidentType === b.payload.incidentType &&
+      a.payload.severity === b.payload.severity &&
+      a.payload.description === b.payload.description &&
+      a.payload.routeWaypointId === b.payload.routeWaypointId &&
+      a.payload.locationLabel === b.payload.locationLabel &&
+      a.payload.baggageReference === b.payload.baggageReference
     );
   }
   return false;

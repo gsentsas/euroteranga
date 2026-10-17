@@ -61,6 +61,9 @@ export const PERMISSIONS = {
   BORDER_READ: 'border.read',
   BORDER_MANAGE: 'border.manage',
   CREW_BORDER_REPORT: 'crew.border.report',
+  INCIDENT_READ: 'incident.read',
+  INCIDENT_MANAGE: 'incident.manage',
+  CREW_INCIDENT_REPORT: 'crew.incident.report',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

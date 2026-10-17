@@ -1,6 +1,12 @@
 'use client';
 
-import type { ApiError, CrewOfflineEvent, CrewTripSnapshot } from '@euroteranga/auth-client';
+import type {
+  ApiError,
+  CrewOfflineEvent,
+  CrewTripSnapshot,
+  IncidentSeverity,
+  IncidentType,
+} from '@euroteranga/auth-client';
 import { FormAlert, FormStatus } from '@euroteranga/ui';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -20,6 +26,7 @@ import {
   purgeExpiredData,
   queueBoarding,
   queueBorderEvent,
+  queueIncidentReport,
   queueTrackingCheckpoint,
   recoverInterruptedSync,
   replaceTripSnapshots,
@@ -65,6 +72,23 @@ function syncEvent(item: LocalCrewEvent): CrewOfflineEvent {
       payload: {
         routeWaypointId: item.payload.routeWaypointId,
         eventType: item.payload.eventType,
+      },
+    };
+  }
+  if (item.type === 'INCIDENT_REPORTED') {
+    return {
+      clientEventId: item.clientEventId,
+      type: item.type,
+      occurredAt: item.occurredAt,
+      payload: {
+        incidentType: item.payload.incidentType,
+        severity: item.payload.severity,
+        description: item.payload.description,
+        ...(item.payload.routeWaypointId ? { routeWaypointId: item.payload.routeWaypointId } : {}),
+        ...(item.payload.locationLabel ? { locationLabel: item.payload.locationLabel } : {}),
+        ...(item.payload.baggageReference
+          ? { baggageReference: item.payload.baggageReference }
+          : {}),
       },
     };
   }
@@ -122,6 +146,32 @@ function borderStateLabel(state: BorderState): string {
   }
 }
 
+const INCIDENT_TYPE_LABELS: Record<IncidentType, string> = {
+  BREAKDOWN: 'Panne',
+  ACCIDENT: 'Accident',
+  DELAY: 'Retard',
+  BORDER: 'Frontière',
+  CUSTOMS: 'Douane',
+  POLICE: 'Police',
+  PASSENGER: 'Passager',
+  HEALTH: 'Santé',
+  BAGGAGE: 'Bagage',
+  SECURITY: 'Sécurité',
+  WEATHER: 'Météo',
+  FERRY: 'Ferry',
+  OTHER: 'Autre',
+};
+
+const INCIDENT_SEVERITY_LABELS: Record<IncidentSeverity, string> = {
+  LOW: 'Faible',
+  MEDIUM: 'Moyenne',
+  HIGH: 'Élevée',
+  CRITICAL: 'Critique',
+};
+
+const INCIDENT_TYPES = Object.keys(INCIDENT_TYPE_LABELS) as IncidentType[];
+const INCIDENT_SEVERITIES = Object.keys(INCIDENT_SEVERITY_LABELS) as IncidentSeverity[];
+
 function eventLabel(status: LocalCrewEvent['status']) {
   switch (status) {
     case 'PENDING':
@@ -145,6 +195,11 @@ export function CrewWorkspace() {
   const [selectedTrip, setSelectedTrip] = useState('');
   const [qrPayload, setQrPayload] = useState('');
   const [checkpointWaypointId, setCheckpointWaypointId] = useState('');
+  const [incidentType, setIncidentType] = useState<IncidentType>('DELAY');
+  const [incidentSeverity, setIncidentSeverity] = useState<IncidentSeverity>('MEDIUM');
+  const [incidentDescription, setIncidentDescription] = useState('');
+  const [incidentLocation, setIncidentLocation] = useState('');
+  const [incidentBaggageReference, setIncidentBaggageReference] = useState('');
   const [device, setDevice] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -526,6 +581,52 @@ export function CrewWorkspace() {
     }
   }
 
+  async function submitIncident(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setNotice(null);
+    if (!selectedTrip || !selectedSnapshot) {
+      setError('Aucun voyage affecté n’est disponible.');
+      return;
+    }
+    if (
+      selectedSnapshot.trip.status !== 'SCHEDULED' &&
+      selectedSnapshot.trip.status !== 'IN_PROGRESS'
+    ) {
+      setError('Un incident ne peut être déclaré que sur un voyage planifié ou en cours.');
+      return;
+    }
+    const description = incidentDescription.trim();
+    if (description.length < 10) {
+      setError('Décrivez l’incident en au moins 10 caractères.');
+      return;
+    }
+    const baggageReference = incidentBaggageReference.trim().toUpperCase();
+    if (incidentType === 'BAGGAGE' && !baggageReference) {
+      setError('La référence bagage est obligatoire pour un incident bagage.');
+      return;
+    }
+
+    setRecording(true);
+    try {
+      await queueIncidentReport(selectedTrip, {
+        incidentType,
+        severity: incidentSeverity,
+        description,
+        ...(incidentLocation.trim() ? { locationLabel: incidentLocation.trim() } : {}),
+        ...(incidentType === 'BAGGAGE' ? { baggageReference } : {}),
+      });
+      setIncidentDescription('');
+      setIncidentLocation('');
+      setIncidentBaggageReference('');
+      setNotice('Incident enregistré sur cet appareil — synchronisation en attente.');
+      await refreshLocal();
+      if (online) await syncQueued(device ?? undefined, true);
+    } finally {
+      setRecording(false);
+    }
+  }
+
   async function retry(item: LocalCrewEvent) {
     await retryEvent(item.clientEventId);
     await refreshLocal();
@@ -741,6 +842,86 @@ export function CrewWorkspace() {
         )}
       </section>
 
+      <section className="crew-panel" aria-labelledby="crew-incident-title">
+        <h2 id="crew-incident-title">Déclarer un incident</h2>
+        <p className="et-hint">
+          La déclaration est d’abord enregistrée sur cet appareil. Elle reste disponible hors ligne
+          et sera synchronisée avec le serveur dès que possible.
+        </p>
+        <form className="et-form crew-scan-form" onSubmit={submitIncident}>
+          <label className="et-field">
+            Type d’incident
+            <select
+              className="et-select"
+              value={incidentType}
+              onChange={(event) => setIncidentType(event.target.value as IncidentType)}
+            >
+              {INCIDENT_TYPES.map((value) => (
+                <option key={value} value={value}>
+                  {INCIDENT_TYPE_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="et-field">
+            Sévérité
+            <select
+              className="et-select"
+              value={incidentSeverity}
+              onChange={(event) => setIncidentSeverity(event.target.value as IncidentSeverity)}
+            >
+              {INCIDENT_SEVERITIES.map((value) => (
+                <option key={value} value={value}>
+                  {INCIDENT_SEVERITY_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="et-field">
+            Description opérationnelle
+            <textarea
+              className="et-input"
+              rows={4}
+              maxLength={2000}
+              value={incidentDescription}
+              onChange={(event) => setIncidentDescription(event.target.value)}
+            />
+          </label>
+          <label className="et-field">
+            Lieu (optionnel)
+            <input
+              className="et-input"
+              value={incidentLocation}
+              maxLength={160}
+              autoComplete="off"
+              onChange={(event) => setIncidentLocation(event.target.value)}
+            />
+          </label>
+          {incidentType === 'BAGGAGE' ? (
+            <label className="et-field">
+              Référence bagage
+              <input
+                className="et-input et-code"
+                value={incidentBaggageReference}
+                maxLength={16}
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                onChange={(event) => setIncidentBaggageReference(event.target.value)}
+              />
+            </label>
+          ) : null}
+          <button
+            className="et-button crew-primary-action"
+            type="submit"
+            disabled={!selectedTrip || recording}
+            data-testid="crew-report-incident"
+          >
+            Enregistrer l’incident
+          </button>
+        </form>
+      </section>
+
       <section className="crew-panel" aria-labelledby="crew-queue-title">
         <div className="et-actions">
           <h2 id="crew-queue-title">File locale</h2>
@@ -760,7 +941,12 @@ export function CrewWorkspace() {
                       ? 'Embarquement'
                       : item.type === 'BORDER_EVENT'
                         ? `Frontière · ${item.payload.eventType}`
-                        : 'Checkpoint'}{' '}
+                        : item.type === 'INCIDENT_REPORTED'
+                          ? 'Incident · ' +
+                            INCIDENT_TYPE_LABELS[item.payload.incidentType] +
+                            ' · ' +
+                            INCIDENT_SEVERITY_LABELS[item.payload.severity]
+                          : 'Checkpoint'}{' '}
                     · {item.tripReference} · {formatDate(item.occurredAt)}
                     {item.errorCode ? ` · ${item.errorCode}` : ''}
                   </small>
