@@ -67,11 +67,13 @@ describe('public error redaction', () => {
       .set('Content-Type', 'application/json')
       .send(JSON.stringify({ email: 'x'.repeat(40_000), password: 'oversized body' }));
     expect(response.status).toBe(413);
-    // Refused by the JSON parser, before the request-id middleware runs.
+    // PR-24 installs the request context before parsing, so parser failures
+    // carry the same correlation id as routed requests.
+    expect(response.headers['x-request-id']).toMatch(/^[A-Za-z0-9._-]{8,128}$/);
     expect(response.body).toEqual({
       code: 'PAYLOAD_TOO_LARGE',
       message: 'The request payload is too large',
-      requestId: null,
+      requestId: response.headers['x-request-id'],
     });
     expect(response.text).not.toContain('xxxxxxxx');
   });
