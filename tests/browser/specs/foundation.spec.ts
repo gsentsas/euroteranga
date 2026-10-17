@@ -21,11 +21,13 @@ for (const app of frontendApps.filter((candidate) => candidate.name !== 'ops')) 
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(app.heading);
     await expect(page.getByRole('banner')).toBeVisible();
     await expect(page.getByRole('main')).toBeVisible();
-    await expect(page.getByRole('contentinfo')).toContainText(
-      ['web', 'booking', 'client', 'tracking'].includes(app.name)
-        ? 'Plateforme pilote'
-        : 'Platform under development',
-    );
+    const footerText =
+      app.name === 'crew'
+        ? 'Mode terrain'
+        : ['web', 'booking', 'client', 'tracking'].includes(app.name)
+          ? 'Plateforme pilote'
+          : 'Platform under development';
+    await expect(page.getByRole('contentinfo')).toContainText(footerText);
 
     // Let hydration and any client effects finish before asserting no errors.
     await page.waitForLoadState('networkidle');
