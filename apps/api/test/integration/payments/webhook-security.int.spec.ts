@@ -17,6 +17,7 @@ import {
   sendWebhook,
   WEBHOOK_PATH,
 } from '../../support/payment-helpers.js';
+import { SANDBOX_SIGNATURE_TOLERANCE_SECONDS } from '../../../src/payments/providers/sandbox-payment.provider.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
 
 /**
@@ -108,8 +109,15 @@ describe('payment webhook security', () => {
   it('refuses stale or future timestamps and a timestamp not covered by the signature', async () => {
     const attempt = await pendingAttempt();
     const now = Math.floor(Date.now() / 1000);
-    expectInvalid(await sendWebhook(t.app, env, attempt.raw, { timestamp: now - 301 }), 401);
-    expectInvalid(await sendWebhook(t.app, env, attempt.raw, { timestamp: now + 301 }), 401);
+    const outsideTolerance = SANDBOX_SIGNATURE_TOLERANCE_SECONDS + 60;
+    expectInvalid(
+      await sendWebhook(t.app, env, attempt.raw, { timestamp: now - outsideTolerance }),
+      401,
+    );
+    expectInvalid(
+      await sendWebhook(t.app, env, attempt.raw, { timestamp: now + outsideTolerance }),
+      401,
+    );
     const signed = await sendWebhook(t.app, env, attempt.raw, { timestamp: now - 10 });
     const header = signed.request.getHeader('ET-Sandbox-Signature') as string;
     const moved = header.replace(/^t=\d+/, `t=${now}`);
