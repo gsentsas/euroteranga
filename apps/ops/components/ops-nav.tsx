@@ -65,7 +65,7 @@ export function OpsNav() {
           aria-labelledby={`ops-nav-${group.key}`}
         >
           <h2 id={`ops-nav-${group.key}`}>{group.label}</h2>
-          <ul>
+          <ul aria-label={group.label}>
             {group.items.map((item) => {
               const active = item.key === selectedKey;
               return (
