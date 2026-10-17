@@ -27,8 +27,9 @@ export async function createApp(options: CreateAppOptions): Promise<NestExpressA
     logger: new NestJsonLogger(options.logger),
     // Surface bootstrap errors to the caller instead of exiting the process.
     abortOnError: false,
-    // Keeps the exact bytes of JSON bodies (request.rawBody): payment provider
-    // webhooks are authenticated by a signature over the raw payload.
+    // Register the JSON parser ourselves after request-id middleware so parser
+    // failures still receive a request id. rawBody keeps the exact webhook bytes.
+    bodyParser: false,
     rawBody: true,
   });
   configureApp(app, options);

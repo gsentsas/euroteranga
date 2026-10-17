@@ -252,8 +252,8 @@ again with the same database state is a no-op.
   `AUTH_MFA_ENROLLMENT_BLOCKED`.
 - Suspension and session revocation are available in OPS (PR-03); an
   administrative reset of an **enabled** TOTP is not.
-- Requests rejected by the JSON body parser (malformed JSON) carry no request
-  id: the parser runs before the request-id middleware.
+- Malformed and oversized JSON requests receive the same generated/validated
+  request id as routed requests; raw request bodies are never logged.
 - The "forgot password" path for an existing account performs a few database
   writes that an unknown address does not; mail is asynchronous and rate
   limits apply, but timing is not strictly constant.
