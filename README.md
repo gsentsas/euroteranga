@@ -1,6 +1,6 @@
 # EURO TERANGA
 
-> **Status: Foundation / Identity-Authentication / Authorization-RBAC-Audit / Network / Fleet / Trips / Seat maps / Pricing / Booking / Payments —
+> **Status: Foundation through PR-23 Reporting —
 > NOT PRODUCTION DEPLOYED.**
 >
 > The repository contains the technical foundation, authentication for three
@@ -24,14 +24,17 @@
 > - payments: a payment provider abstraction with payment attempts and
 >   idempotent, signed provider events. A succeeded payment confirms a booking,
 >   which then keeps its seats.
+> - reporting: permissioned OPS KPI over trips, bookings, finance, incidents,
+>   baggage and fleet, calculated server-side with strict per-currency buckets.
 >
 > **There is no real payment provider:** the only one, SANDBOX, simulates
 > payments locally for development, tests and CI, and is refused in staging
 > and production. No real money moves and no card data is ever collected. A
-> confirmed booking is paid but is not a ticket. There is no refund, ticket,
-> passenger, discount, check-in, crew, dispatch, maintenance, vehicle document
-> or tracking feature yet. Nothing is deployed and this is not
-> production-ready.
+> The repository now also contains passenger/document compliance, baggage,
+> check-in/boarding, manifests, permits, departure dispatch, Crew offline flows,
+> tracking, borders, incidents, operational finance/refunds and aggregated
+> reporting. There is still no real payment provider, statutory accounting or
+> production deployment; this remains pre-production software.
 
 EURO TERANGA is a future digital platform for operating international road
 passenger transport services between Europe and Africa.
@@ -64,10 +67,10 @@ database. The backend is a modular monolith. Details:
 | `apps/web`             | `@euroteranga/web`           | Next.js public site skeleton                                                      | 3000       |
 | `apps/booking`         | `@euroteranga/booking`       | Public search, historical seat selection, CUSTOMER holds and SANDBOX payment      | 3001       |
 | `apps/client`          | `@euroteranga/client`        | Customer auth, account, owned bookings and their payments                         | 3002       |
-| `apps/tracking`        | `@euroteranga/tracking`      | Next.js tracking skeleton (no tracking)                                           | 3003       |
-| `apps/ops`             | `@euroteranga/ops`           | Refine back-office: network, fleet, trips, seat maps, pricing, bookings, payments | 3004       |
-| `apps/crew`            | `@euroteranga/crew`          | Crew sign-in (not offline yet)                                                    | 3005       |
-| `apps/api`             | `@euroteranga/api`           | NestJS Core API — auth, RBAC and PR-04…PR-10 domains                              | 4000       |
+| `apps/tracking`        | `@euroteranga/tracking`      | Public tracking projection                                                        | 3003       |
+| `apps/ops`             | `@euroteranga/ops`           | Refine back-office including operations, finance and reporting                    | 3004       |
+| `apps/crew`            | `@euroteranga/crew`          | Crew operations with offline event queue                                          | 3005       |
+| `apps/api`             | `@euroteranga/api`           | NestJS Core API — auth, RBAC and operational domains through PR-23                | 4000       |
 | `packages/config`      | `@euroteranga/config`        | Validated environment configuration                                               | —          |
 | `packages/logger`      | `@euroteranga/logger`        | Structured JSON logs with redaction                                               | —          |
 | `packages/database`    | `@euroteranga/database`      | Prisma schema, migrations, client                                                 | —          |
