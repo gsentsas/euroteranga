@@ -59,7 +59,11 @@ export function OpsNav() {
   return (
     <nav className="ops-nav" aria-label="Navigation principale">
       {grouped.map((group) => (
-        <section className="ops-nav__group" key={group.key} aria-labelledby={`ops-nav-${group.key}`}>
+        <section
+          className="ops-nav__group"
+          key={group.key}
+          aria-labelledby={`ops-nav-${group.key}`}
+        >
           <h2 id={`ops-nav-${group.key}`}>{group.label}</h2>
           <ul>
             {group.items.map((item) => {

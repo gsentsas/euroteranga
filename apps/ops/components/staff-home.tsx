@@ -5,10 +5,30 @@ import Link from 'next/link';
 import { useAccess } from './staff-access';
 
 const shortcuts = [
-  { href: '/trips', label: 'Voyages', description: 'Planifier et suivre les rotations.', permission: 'trip.read' },
-  { href: '/departure', label: 'Départ / Dispatch', description: 'Contrôler la readiness avant départ.', permission: 'departure.read' },
-  { href: '/bookings', label: 'Réservations', description: 'Consulter les dossiers voyageurs.', permission: 'booking.read' },
-  { href: '/incidents', label: 'Incidents', description: 'Suivre les anomalies opérationnelles.', permission: 'incident.read' },
+  {
+    href: '/trips',
+    label: 'Voyages',
+    description: 'Planifier et suivre les rotations.',
+    permission: 'trip.read',
+  },
+  {
+    href: '/departure',
+    label: 'Départ / Dispatch',
+    description: 'Contrôler la readiness avant départ.',
+    permission: 'departure.read',
+  },
+  {
+    href: '/bookings',
+    label: 'Réservations',
+    description: 'Consulter les dossiers voyageurs.',
+    permission: 'booking.read',
+  },
+  {
+    href: '/incidents',
+    label: 'Incidents',
+    description: 'Suivre les anomalies opérationnelles.',
+    permission: 'incident.read',
+  },
 ] as const;
 
 /** Shown inside OpsShell for a STAFF session holding ops.access. */
@@ -26,11 +46,17 @@ export function StaffHome() {
           <p className="ops-dashboard__eyebrow">Session active</p>
           <h2 id="staff-session-title">Poste de travail opérationnel</h2>
           <p>
-            Connecté en tant que <strong data-testid="session-email">{identity?.email ?? '…'}</strong>.
-            Utilisez uniquement les espaces autorisés pour vos fonctions.
+            Connecté en tant que{' '}
+            <strong data-testid="session-email">{identity?.email ?? '…'}</strong>. Utilisez
+            uniquement les espaces autorisés pour vos fonctions.
           </p>
         </div>
-        <button type="button" className="et-button et-button--secondary" disabled={isPending} onClick={() => logout()}>
+        <button
+          type="button"
+          className="et-button et-button--secondary"
+          disabled={isPending}
+          onClick={() => logout()}
+        >
           Se déconnecter
         </button>
       </section>
@@ -62,7 +88,9 @@ export function StaffHome() {
             .filter((shortcut) => permissions.includes(shortcut.permission))
             .map((shortcut) => (
               <Link href={shortcut.href} className="ops-shortcut-card" key={shortcut.href}>
-                <span className="ops-shortcut-card__arrow" aria-hidden="true">→</span>
+                <span className="ops-shortcut-card__arrow" aria-hidden="true">
+                  →
+                </span>
                 <strong>{shortcut.label}</strong>
                 <span>{shortcut.description}</span>
               </Link>
@@ -73,8 +101,8 @@ export function StaffHome() {
       <section className="ops-dashboard__note">
         <strong>Principe de sécurité</strong>
         <p>
-          La navigation adapte ce qui est affiché à vos permissions, mais chaque action sensible
-          est de nouveau autorisée côté Core API.
+          La navigation adapte ce qui est affiché à vos permissions, mais chaque action sensible est
+          de nouveau autorisée côté Core API.
         </p>
       </section>
     </div>

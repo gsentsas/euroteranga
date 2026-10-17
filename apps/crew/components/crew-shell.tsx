@@ -20,7 +20,9 @@ export function CrewShell({
 
       <header className="crew-topbar">
         <Link className="crew-brand" href="/" aria-label="EURO TERANGA Crew — accueil">
-          <span className="crew-brand__mark" aria-hidden="true">ET</span>
+          <span className="crew-brand__mark" aria-hidden="true">
+            ET
+          </span>
           <span>
             EURO <strong>TERANGA</strong>
           </span>

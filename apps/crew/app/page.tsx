@@ -23,9 +23,18 @@ export default function HomePage() {
         </Link>
       </section>
       <div className="crew-home-grid">
-        <article><strong>Embarquement</strong><span>Scanner les QR voyageurs avec file hors ligne.</span></article>
-        <article><strong>Route</strong><span>Enregistrer checkpoints et événements frontière.</span></article>
-        <article><strong>Incidents</strong><span>Déclarer rapidement une anomalie sur le trajet.</span></article>
+        <article>
+          <strong>Embarquement</strong>
+          <span>Scanner les QR voyageurs avec file hors ligne.</span>
+        </article>
+        <article>
+          <strong>Route</strong>
+          <span>Enregistrer checkpoints et événements frontière.</span>
+        </article>
+        <article>
+          <strong>Incidents</strong>
+          <span>Déclarer rapidement une anomalie sur le trajet.</span>
+        </article>
       </div>
     </CrewShell>
   );
