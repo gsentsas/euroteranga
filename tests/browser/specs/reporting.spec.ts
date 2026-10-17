@@ -220,7 +220,8 @@ test.describe('PR-23 operational reporting', () => {
     await page.goto(appUrl(ops, '/reporting'));
     const workspace = page.getByTestId('reporting-workspace');
     await expect(workspace).toBeVisible();
-    await expect(workspace.getByText('50 %', { exact: false })).toBeVisible();
+    const loadFactorKpi = workspace.locator('article').filter({ hasText: 'Taux de remplissage' });
+    await expect(loadFactorKpi.getByText('50 %', { exact: true })).toBeVisible();
 
     const finance = workspace.getByRole('table', { name: 'Performance financière par devise' });
     await expect(finance.getByRole('row').filter({ hasText: 'EUR' })).toContainText('1 500,00 EUR');
@@ -252,7 +253,9 @@ test.describe('PR-23 operational reporting', () => {
   test('FINANCE does not receive reporting by default', async ({ context, page }) => {
     await staffSession(context, preauthenticatedSession('permitDenied'));
     await page.goto(appUrl(ops, '/reporting'));
-    await expect(page.getByText('Accès insuffisant')).toBeVisible();
+    await expect(
+      page.getByText('Vous n’avez pas la permission d’afficher cette page.', { exact: true }),
+    ).toBeVisible();
     await expect(page.getByTestId('reporting-workspace')).toHaveCount(0);
   });
 });
