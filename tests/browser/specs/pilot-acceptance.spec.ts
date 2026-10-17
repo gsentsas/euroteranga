@@ -51,7 +51,9 @@ test.describe('PR-25 pilot acceptance', () => {
     }
   });
 
-  test('booking search exposes the seeded pilot trip without mutating inventory', async ({ page }) => {
+  test('booking search exposes the seeded pilot trip without mutating inventory', async ({
+    page,
+  }) => {
     const seed = paymentSearch();
     const errors = pageErrors(page);
     await page.goto(appUrl(booking));

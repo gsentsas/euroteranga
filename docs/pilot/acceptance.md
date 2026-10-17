@@ -13,16 +13,16 @@ is waived silently.
 
 ## Automated go/no-go gates
 
-| Gate | Mandatory evidence |
-| --- | --- |
-| quality | lint, format, typecheck |
+| Gate     | Mandatory evidence                                            |
+| -------- | ------------------------------------------------------------- |
+| quality  | lint, format, typecheck                                       |
 | database | Prisma validate, deploy twice, migration status, connectivity |
-| test | unit tests and real PostgreSQL integration |
-| build | production build of all seven applications |
-| browser | full Playwright suite including pilot-acceptance.spec.ts |
-| security | forbidden-file checks, Gitleaks, dependency audit |
-| CodeQL | successful CodeQL workflow |
-| review | no unresolved blocking review/thread |
+| test     | unit tests and real PostgreSQL integration                    |
+| build    | production build of all seven applications                    |
+| browser  | full Playwright suite including pilot-acceptance.spec.ts      |
+| security | forbidden-file checks, Gitleaks, dependency audit             |
+| CodeQL   | successful CodeQL workflow                                    |
+| review   | no unresolved blocking review/thread                          |
 
 The CI workflow exposes an aggregate `pilot-acceptance` job that succeeds only
 when the six CI jobs above succeed. CodeQL remains a separate mandatory workflow.
@@ -121,19 +121,19 @@ Using synthetic or explicitly authorized pilot data only:
 
 ## Acceptance record
 
-| Field | Value |
-| --- | --- |
-| candidate SHA | |
-| CI run | |
-| CodeQL run | |
-| migration status | |
-| automated pilot browser | |
-| infrastructure owner | |
-| business pilot owner | |
-| rollback owner | |
-| unresolved risks | |
-| decision | GO / NO-GO |
-| decision timestamp | |
+| Field                   | Value      |
+| ----------------------- | ---------- |
+| candidate SHA           |            |
+| CI run                  |            |
+| CodeQL run              |            |
+| migration status        |            |
+| automated pilot browser |            |
+| infrastructure owner    |            |
+| business pilot owner    |            |
+| rollback owner          |            |
+| unresolved risks        |            |
+| decision                | GO / NO-GO |
+| decision timestamp      |            |
 
 ## Decision rule
 

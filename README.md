@@ -159,7 +159,7 @@ sensitive-looking variable uses this prefix.
 | `pnpm typecheck`               | TypeScript (strict) in every workspace                |
 | `pnpm test:unit`               | Unit tests (Vitest)                                   |
 | `pnpm test:integration`        | API integration tests — requires `DATABASE_URL`       |
-| `pnpm test:e2e`                | Browser tests (Playwright) — requires built frontends |\n| `pnpm pilot:acceptance`        | Dedicated non-destructive PR-25 pilot browser gate     |
+| `pnpm test:e2e`                | Browser tests (Playwright) — requires built frontends | \n  | `pnpm pilot:acceptance` | Dedicated non-destructive PR-25 pilot browser gate |
 | `pnpm test`                    | Unit + integration tests                              |
 | `pnpm db:validate`             | Validate the Prisma schema                            |
 | `pnpm db:migrate`              | Apply migrations (`prisma migrate deploy`)            |
@@ -186,7 +186,7 @@ read-only permissions and actions pinned to commit SHAs:
 | `test`     | Unit and integration tests against an ephemeral PostgreSQL                 |
 | `build`    | All seven applications build                                               |
 | `browser`  | Playwright: six frontends + auth flows against the real API and PostgreSQL |
-| `security` | Forbidden files and bypass markers, gitleaks (full history), `pnpm audit`  |\n| `pilot-acceptance` | Aggregate success of all mandatory CI jobs                           |
+| `security` | Forbidden files and bypass markers, gitleaks (full history), `pnpm audit`  | \n  | `pilot-acceptance` | Aggregate success of all mandatory CI jobs |
 
 `.github/workflows/codeql.yml` runs CodeQL (security-extended) on pull
 requests, on `main` and weekly. Dependabot proposes grouped weekly updates (npm, GitHub Actions) and monthly
