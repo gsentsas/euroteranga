@@ -37,7 +37,7 @@ const DATABASE_PACKAGE = fileURLToPath(
 );
 const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const BAGGAGE_MIGRATION = '20261014150000_baggage';
-const FINANCE_MIGRATION = '20261017143000_finance';
+const REPORTING_MIGRATION = '20261017160000_reporting';
 const HISTORICAL_TABLES = [
   'trip',
   'booking',
@@ -239,8 +239,8 @@ describe('upgrade from a real PR-13 database', () => {
 
   it('applies PR-14 and PR-15, keeps every PR-13 row identical and backfills nothing', async () => {
     const migrations = await applied();
-    expect(migrations).toHaveLength(22);
-    expect(migrations.at(-1)).toBe(FINANCE_MIGRATION);
+    expect(migrations).toHaveLength(23);
+    expect(migrations.at(-1)).toBe(REPORTING_MIGRATION);
     expect(await snapshot()).toEqual(before);
     for (const table of PR14_TABLES) expect(await count(table), table).toBe(0);
     expect(
@@ -284,6 +284,6 @@ describe('upgrade from a real PR-13 database', () => {
       encoding: 'utf8',
     });
     expect(status).toContain('Database schema is up to date');
-    expect(await applied()).toHaveLength(22);
+    expect(await applied()).toHaveLength(23);
   });
 });

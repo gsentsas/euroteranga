@@ -67,6 +67,8 @@ export const PERMISSIONS = {
   FINANCE_READ: 'finance.read',
   FINANCE_MANAGE: 'finance.manage',
   PAYMENT_REFUND: 'payment.refund',
+  REPORTING_VIEW: 'reporting.view',
+  REPORTING_EXPORT: 'reporting.export',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

@@ -2295,6 +2295,138 @@ export interface ComplianceReviewInput {
   previousReviewId: string | null;
 }
 
+/** PR-23 aggregated operational reporting. No passenger PII and no FX conversion. */
+export interface ReportingOverviewOptions {
+  from: string;
+  to: string;
+  routeId?: string;
+  tripId?: string;
+  vehicleId?: string;
+  status?: TripStatus;
+}
+
+export interface ReportingMoneySummary {
+  currencyCode: string;
+  currencyMinorUnit: number;
+  ticketRevenueMinor: string;
+  additionalRevenueMinor: string;
+  grossRevenueMinor: string;
+  refundMinor: string;
+  refundRate: number | null;
+  netRevenueMinor: string;
+  expenseMinor: string;
+  contributionMinor: string;
+  contributionRate: number | null;
+  payoutMinor: string;
+  outstandingExpenseMinor: string;
+  averageTicketRevenuePerConfirmedBookingMinor: string | null;
+  averageNetRevenuePerPassengerMinor: string | null;
+  averageNetRevenuePerSoldSeatMinor: string | null;
+  profitableTripCount: number;
+  lossTripCount: number;
+  breakEvenTripCount: number;
+}
+
+export interface ReportingRouteSummary {
+  routeVersionId: string;
+  routeId: string;
+  routeCode: string;
+  routeName: string;
+  routeVersion: number;
+  tripCount: number;
+  passengerCount: number;
+  soldSeatCount: number;
+  offeredSeatCapacity: number;
+  loadFactor: number | null;
+  cancellationCount: number;
+  incidentCount: number;
+  currencies: ReportingMoneySummary[];
+}
+
+export interface ReportingTripSummary {
+  id: string;
+  reference: string;
+  status: TripStatus;
+  plannedDepartureAt: string | null;
+  plannedArrivalAt: string | null;
+  route: { id: string; code: string; name: string; version: number };
+  vehicle: { id: string; code: string } | null;
+  bookingCount: number;
+  cancelledBookingCount: number;
+  passengerCount: number;
+  soldSeatCount: number;
+  offeredSeatCapacity: number;
+  loadFactor: number | null;
+  incidentCount: number;
+  currencies: ReportingMoneySummary[];
+}
+
+export interface ReportingOverview {
+  period: { from: string; to: string; semantics: '[from,to) on trip.plannedDepartureAt' };
+  filters: {
+    routeId: string | null;
+    tripId: string | null;
+    vehicleId: string | null;
+    status: TripStatus | null;
+  };
+  activity: {
+    tripCount: number;
+    draftTripCount: number;
+    scheduledTripCount: number;
+    inProgressTripCount: number;
+    completedTripCount: number;
+    cancelledTripCount: number;
+  };
+  commercial: {
+    bookingCount: number;
+    confirmedBookingCount: number;
+    cancelledBookingCount: number;
+    passengerCount: number;
+    soldSeatCount: number;
+    offeredSeatCapacity: number;
+    loadFactor: number | null;
+    cancellationRate: number | null;
+  };
+  finance: { currencies: ReportingMoneySummary[]; fxConversionApplied: false };
+  operations: {
+    departureSampleCount: number;
+    onTimeDepartureCount: number;
+    delayedDepartureCount: number;
+    averageDelayMinutes: number | null;
+    maximumDelayMinutes: number | null;
+    actualDurationSampleCount: number;
+    averageActualDurationMinutes: number | null;
+  };
+  incidents: {
+    incidentCount: number;
+    openIncidentCount: number;
+    resolvedIncidentCount: number;
+    severity: { LOW: number; MEDIUM: number; HIGH: number; CRITICAL: number };
+    averageResolutionMinutes: number | null;
+  };
+  baggage: {
+    baggageCount: number;
+    loadedBaggageCount: number;
+    deliveredBaggageCount: number;
+    anomalyBaggageCount: number;
+    baggageIncidentCount: number;
+    anomalyRate: number | null;
+  };
+  fleet: {
+    vehicleCount: number;
+    activeVehicleCount: number;
+    outOfServiceVehicleCount: number;
+    retiredVehicleCount: number;
+    usedVehicleCount: number;
+    activeUsedVehicleCount: number;
+    utilizationRate: number | null;
+    tripsPerUsedVehicle: number | null;
+  };
+  routes: ReportingRouteSummary[];
+  recentTrips: ReportingTripSummary[];
+  privacy: { containsPassengerPii: false };
+}
+
 function query(values: Record<string, string | number | undefined>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
@@ -3095,6 +3227,43 @@ export function createAuthClient(baseUrl: string) {
             'staff',
             `/v1/admin/payments/${encodeURIComponent(paymentId)}/cancel`,
             { reason },
+          ),
+      },
+      /** PR-23: aggregate reporting; server calculations remain authoritative. */
+      reporting: {
+        overview: (options: ReportingOverviewOptions) =>
+          call<ReportingOverview>(
+            'GET',
+            `/v1/admin/reporting/overview?${query({
+              from: options.from,
+              to: options.to,
+              routeId: options.routeId,
+              tripId: options.tripId,
+              vehicleId: options.vehicleId,
+              status: options.status,
+            })}`,
+          ),
+        exportCsv: (options: ReportingOverviewOptions) =>
+          privateDownload(
+            `/v1/admin/reporting/export.csv?${query({
+              from: options.from,
+              to: options.to,
+              routeId: options.routeId,
+              tripId: options.tripId,
+              vehicleId: options.vehicleId,
+              status: options.status,
+            })}`,
+          ),
+        exportXlsx: (options: ReportingOverviewOptions) =>
+          privateDownload(
+            `/v1/admin/reporting/export.xlsx?${query({
+              from: options.from,
+              to: options.to,
+              routeId: options.routeId,
+              tripId: options.tripId,
+              vehicleId: options.vehicleId,
+              status: options.status,
+            })}`,
           ),
       },
       /** PR-22 operational finance. No FX conversion and no general ledger. */
