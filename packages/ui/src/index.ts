@@ -9,3 +9,5 @@ export {
   useFormSubmit,
 } from './forms.js';
 export { SessionPanel, type SessionPanelData, type SessionPanelProps } from './session-panel.js';
+
+export { JourneyShell, type JourneyShellProps } from './journey-shell.js';
