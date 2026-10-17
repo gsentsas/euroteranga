@@ -1,7 +1,6 @@
 # EURO TERANGA
 
-> **Status: Foundation through PR-23 Reporting —
-> NOT PRODUCTION DEPLOYED.**
+> **Status: Foundation through PR-25 Pilot Acceptance —\n> NOT PRODUCTION DEPLOYED.**
 >
 > The repository contains the technical foundation, authentication for three
 > realms (customer, staff with mandatory TOTP, crew) and server-side
@@ -32,8 +31,7 @@
 > and production. No real money moves and no card data is ever collected. A
 > The repository now also contains passenger/document compliance, baggage,
 > check-in/boarding, manifests, permits, departure dispatch, Crew offline flows,
-> tracking, borders, incidents, operational finance/refunds and aggregated
-> reporting. There is still no real payment provider, statutory accounting or
+> tracking, borders, incidents, operational finance/refunds, aggregated reporting, security hardening and a\n> reproducible pilot-acceptance gate. There is still no real payment provider, statutory accounting or
 > production deployment; this remains pre-production software.
 
 EURO TERANGA is a future digital platform for operating international road
@@ -70,7 +68,7 @@ database. The backend is a modular monolith. Details:
 | `apps/tracking`        | `@euroteranga/tracking`      | Public tracking projection                                                   | 3003       |
 | `apps/ops`             | `@euroteranga/ops`           | Refine back-office including operations, finance and reporting               | 3004       |
 | `apps/crew`            | `@euroteranga/crew`          | Crew operations with offline event queue                                     | 3005       |
-| `apps/api`             | `@euroteranga/api`           | NestJS Core API — auth, RBAC and operational domains through PR-23           | 4000       |
+| `apps/api`             | `@euroteranga/api`           | NestJS Core API — auth, RBAC and operational domains through PR-24           | 4000       |
 | `packages/config`      | `@euroteranga/config`        | Validated environment configuration                                          | —          |
 | `packages/logger`      | `@euroteranga/logger`        | Structured JSON logs with redaction                                          | —          |
 | `packages/database`    | `@euroteranga/database`      | Prisma schema, migrations, client                                            | —          |
@@ -161,7 +159,7 @@ sensitive-looking variable uses this prefix.
 | `pnpm typecheck`               | TypeScript (strict) in every workspace                |
 | `pnpm test:unit`               | Unit tests (Vitest)                                   |
 | `pnpm test:integration`        | API integration tests — requires `DATABASE_URL`       |
-| `pnpm test:e2e`                | Browser tests (Playwright) — requires built frontends |
+| `pnpm test:e2e`                | Browser tests (Playwright) — requires built frontends |\n| `pnpm pilot:acceptance`        | Dedicated non-destructive PR-25 pilot browser gate     |
 | `pnpm test`                    | Unit + integration tests                              |
 | `pnpm db:validate`             | Validate the Prisma schema                            |
 | `pnpm db:migrate`              | Apply migrations (`prisma migrate deploy`)            |
@@ -188,13 +186,11 @@ read-only permissions and actions pinned to commit SHAs:
 | `test`     | Unit and integration tests against an ephemeral PostgreSQL                 |
 | `build`    | All seven applications build                                               |
 | `browser`  | Playwright: six frontends + auth flows against the real API and PostgreSQL |
-| `security` | Forbidden files and bypass markers, gitleaks (full history), `pnpm audit`  |
+| `security` | Forbidden files and bypass markers, gitleaks (full history), `pnpm audit`  |\n| `pilot-acceptance` | Aggregate success of all mandatory CI jobs                           |
 
 `.github/workflows/codeql.yml` runs CodeQL (security-extended) on pull
 requests, on `main` and weekly. Dependabot proposes grouped weekly updates (npm, GitHub Actions) and monthly
-Docker updates.
-
-## Contributing
+Docker updates. The pilot go/no-go matrix is documented in\n[`docs/pilot/acceptance.md`](docs/pilot/acceptance.md).\n\n## Contributing
 
 `main` is protected: every change goes through a branch and a pull request.
 See [`CONTRIBUTING.md`](CONTRIBUTING.md).
