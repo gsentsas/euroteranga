@@ -33,8 +33,7 @@
   border-radius: 1.1rem;
   background:
     linear-gradient(rgba(7, 59, 49, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(7, 59, 49, 0.05) 1px, transparent 1px),
-    #f7fbf9;
+    linear-gradient(90deg, rgba(7, 59, 49, 0.05) 1px, transparent 1px), #f7fbf9;
   background-size: 1.8rem 1.8rem;
 }
 

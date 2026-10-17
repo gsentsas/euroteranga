@@ -51,7 +51,11 @@ export function JourneyShell({
 
       <header className="et-journey-header">
         <div className="et-journey-container et-journey-header__inner">
-          <a className="et-journey-home" href="https://euroteranga.com/" aria-label="EURO TERANGA — Accueil">
+          <a
+            className="et-journey-home"
+            href="https://euroteranga.com/"
+            aria-label="EURO TERANGA — Accueil"
+          >
             <JourneyBrand />
           </a>
           <nav className="et-journey-nav" aria-label="Navigation voyageur">
