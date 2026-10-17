@@ -22,7 +22,7 @@ for (const app of frontendApps.filter((candidate) => candidate.name !== 'ops')) 
     await expect(page.getByRole('banner')).toBeVisible();
     await expect(page.getByRole('main')).toBeVisible();
     await expect(page.getByRole('contentinfo')).toContainText(
-      app.name === 'web' ? 'Plateforme pilote' : 'Platform under development',
+      ['web', 'booking', 'client', 'tracking'].includes(app.name)\n        ? 'Plateforme pilote'\n        : 'Platform under development',
     );
 
     // Let hydration and any client effects finish before asserting no errors.
