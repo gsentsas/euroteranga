@@ -4,9 +4,8 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
 export const metadata: Metadata = {
-  title: 'EURO TERANGA Client',
-  description: 'Espace client EURO TERANGA — environnement de fondation.',
-  // Foundation skeletons must not be indexed as if they were live services.
+  title: 'Espace client — EURO TERANGA',
+  description: 'Gérez vos réservations et votre voyage dans votre espace client EURO TERANGA.',
   robots: { index: false, follow: false },
 };
 

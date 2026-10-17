@@ -4,9 +4,8 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
 export const metadata: Metadata = {
-  title: 'EURO TERANGA Booking',
-  description: 'Réservation EURO TERANGA — environnement de fondation.',
-  // Foundation skeletons must not be indexed as if they were live services.
+  title: 'Réserver — EURO TERANGA',
+  description: 'Réservez votre voyage EURO TERANGA entre Paris et Dakar.',
   robots: { index: false, follow: false },
 };
 

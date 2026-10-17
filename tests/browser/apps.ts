@@ -27,22 +27,22 @@ export const frontendApps: readonly FrontendApp[] = [
     name: 'booking',
     port: frontendPort(3001),
     path: '/',
-    title: 'EURO TERANGA Booking',
-    heading: 'EURO TERANGA Booking',
+    title: 'Réserver — EURO TERANGA',
+    heading: 'Réservez votre Paris ↔ Dakar.',
   },
   {
     name: 'client',
     port: frontendPort(3002),
     path: '/',
-    title: 'EURO TERANGA Client',
-    heading: 'EURO TERANGA Client',
+    title: 'Espace client — EURO TERANGA',
+    heading: 'Votre voyage, au même endroit.',
   },
   {
     name: 'tracking',
     port: frontendPort(3003),
     path: '/',
-    title: 'EURO TERANGA Tracking',
-    heading: 'EURO TERANGA Tracking',
+    title: 'Suivi de voyage — EURO TERANGA',
+    heading: 'Gardez un œil sur votre trajet.',
   },
   // The OPS home page now requires a STAFF session; its public page is the login.
   {
