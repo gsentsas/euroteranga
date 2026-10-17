@@ -205,7 +205,7 @@ export default function HomePage() {
 
               <div className="public-trip-card__features">
                 <span className="public-trip-feature">
-                  <TicketIcon /> Billet numérique
+                  <TicketIcon /> Réservation numérique
                 </span>
                 <span className="public-trip-feature">
                   <PinIcon /> Suivi du trajet
@@ -403,7 +403,7 @@ export default function HomePage() {
                 <span className="public-card-icon">
                   <TicketIcon />
                 </span>
-                <h3>Billet et réservation</h3>
+                <h3>Réservation en ligne</h3>
                 <p>
                   Référence de réservation, siège et informations de voyage réunis au même endroit.
                 </p>
