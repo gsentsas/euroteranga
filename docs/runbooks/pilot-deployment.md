@@ -27,6 +27,24 @@ The deployment builds before switching, backs up PostgreSQL before migration,
 applies migrations, switches current atomically, restarts all services and
 performs loopback health checks. Proxy cutover validates nginx and public HTTPS.
 
+## Authentication retention
+
+`install-systemd.sh` installs and starts `euroteranga-auth-purge.timer`.
+
+The timer runs the existing idempotent `auth:purge-expired` CLI once per day,
+with up to 30 minutes of randomized delay and `Persistent=true`, so a missed
+run is executed after the server returns.
+
+Useful checks:
+
+- `systemctl status euroteranga-auth-purge.timer`
+- `systemctl list-timers euroteranga-auth-purge.timer`
+- `journalctl -u euroteranga-auth-purge.service -n 100 --no-pager`
+
+The purge deletes only expired/revoked temporary authentication artifacts. It
+does not delete identities, durable MFA credentials, security events or audit
+events.
+
 ## Observability
 
 - \`systemctl status 'euroteranga-*.service'\`
