@@ -49,10 +49,9 @@ test('web: public homepage exposes booking, account and tracking journeys', asyn
     'href',
     'https://booking.euroteranga.com/',
   );
-  await expect(page.getByRole('link', { name: 'Mon compte' })).toHaveAttribute(
-    'href',
-    'https://client.euroteranga.com/',
-  );
+  await expect(
+    page.getByRole('banner').getByRole('link', { name: 'Mon compte' }),
+  ).toHaveAttribute('href', 'https://client.euroteranga.com/');
   await expect(page.getByRole('link', { name: /Suivre un trajet/i }).first()).toHaveAttribute(
     'href',
     'https://tracking.euroteranga.com/',
