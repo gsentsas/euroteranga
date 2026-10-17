@@ -94,7 +94,7 @@ describe('PR-23 operational reporting', () => {
     });
     const departure = trip.plannedDepartureAt!;
     const exactlyExcluded = await adminApi(reporter).get(
-      `/reporting/overview?from=${encodeURIComponent(new Date(departure.getTime() - 60_000).toISOString())}&to=${encodeURIComponent(departure.toISOString())}`,
+      `/reporting/overview?from=${encodeURIComponent(new Date(departure.getTime() - 60_000).toISOString())}&to=${encodeURIComponent(departure.toISOString())}&tripId=${encodeURIComponent(fixture.tripId)}`,
     );
     expect(exactlyExcluded.status, exactlyExcluded.text).toBe(200);
     expect(exactlyExcluded.body.activity.tripCount).toBe(0);

@@ -87,7 +87,10 @@ describe('upgrade from a real PR-22 database', () => {
       `INSERT INTO "route" ("id","code","name","active","created_at","updated_at") VALUES ('01900000-0000-7000-8000-000000000391'::uuid,'UP23','Upgrade PR23',true,now(),now())`,
     );
     await raw.$executeRawUnsafe(
-      `INSERT INTO "route_version" ("id","route_id","version","status","published_at","created_at","updated_at") VALUES ('01900000-0000-7000-8000-000000000392'::uuid,'01900000-0000-7000-8000-000000000391'::uuid,1,'PUBLISHED',now(),now(),now())`,
+      `INSERT INTO "route_version" ("id","route_id","version","status","published_at","created_at","updated_at") VALUES ('01900000-0000-7000-8000-000000000392'::uuid,'01900000-0000-7000-8000-000000000391'::uuid,1,'DRAFT',NULL,now(),now())`,
+    );
+    await raw.$executeRawUnsafe(
+      `UPDATE "route_version" SET "status"='PUBLISHED',"published_at"=now(),"updated_at"=now() WHERE "id"='01900000-0000-7000-8000-000000000392'::uuid`,
     );
     await raw.$executeRawUnsafe(
       `INSERT INTO "trip" ("id","reference","route_version_id","status","planned_departure_at","planned_arrival_at","created_at","updated_at") VALUES ($1::uuid,'ET-UPGRADE-PR23','01900000-0000-7000-8000-000000000392'::uuid,'DRAFT',now()+interval '1 day',now()+interval '2 days',now(),now())`,
