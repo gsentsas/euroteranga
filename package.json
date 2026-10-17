@@ -21,6 +21,7 @@
     "test:unit": "pnpm --recursive --if-present run test:unit",
     "test:integration": "pnpm --filter @euroteranga/api run test:integration",
     "test:e2e": "pnpm --filter @euroteranga/browser-tests run test:e2e",
+    "pilot:acceptance": "pnpm --filter @euroteranga/browser-tests run test:pilot",
     "db:generate": "pnpm --filter @euroteranga/database run db:generate",
     "db:validate": "pnpm --filter @euroteranga/database run db:validate",
     "db:migrate": "pnpm --filter @euroteranga/database run db:migrate:deploy",
