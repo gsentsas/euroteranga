@@ -48,9 +48,17 @@ if [ ! -d "$RELEASE" ]; then
   TMP="$RELEASES/.${SHA}.tmp.$$"
   rm -rf "$TMP"
   install -d -m 0750 -o "$APP_USER" -g psacln "$TMP"
-  runuser -u "$APP_USER" -- git --git-dir="$MIRROR" archive "$SHA" | tar -x -C "$TMP"
-  echo "$SHA" >"$TMP/.release-sha"
-  chown "$APP_USER":psacln "$TMP/.release-sha"
+  runuser -u "$APP_USER" -- git --git-dir="$MIRROR" archive "$SHA" |
+    runuser -u "$APP_USER" -- tar -x -C "$TMP"
+
+  foreign_owner="$(find "$TMP" -xdev ! -user "$APP_USER" -print -quit)"
+  if [ -n "$foreign_owner" ]; then
+    echo "Refusing release tree with foreign ownership: $foreign_owner" >&2
+    rm -rf "$TMP"
+    exit 1
+  fi
+
+  runuser -u "$APP_USER" -- bash -c 'printf "%s\\n" "$1" >"$2/.release-sha"' _ "$SHA" "$TMP"
   runuser -u "$APP_USER" -- env HOME="$APP_ROOT" PATH="$NODE_PATH" \
     NEXT_PUBLIC_APP_ENV="$NEXT_PUBLIC_APP_ENV" \
     NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" \
