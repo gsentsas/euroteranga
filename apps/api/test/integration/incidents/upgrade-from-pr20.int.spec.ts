@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import { cpSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -32,8 +32,8 @@ describe('upgrade from a real PR-20 database', () => {
   let workDir: string;
   let url: string;
   const name = 'et_pr20_' + randomBytes(6).toString('hex');
-  const markerIso2 = 'Q' + String.fromCharCode(65 + (randomBytes(1)[0]! % 26));
-  const markerIso3 = markerIso2 + String.fromCharCode(65 + (randomBytes(1)[0]! % 26));
+  const markerIso2 = 'Q' + String.fromCharCode(65 + randomInt(26));
+  const markerIso3 = markerIso2 + String.fromCharCode(65 + randomInt(26));
 
   const applied = async () =>
     (
