@@ -137,10 +137,16 @@ describe('PR-24 authentication retention purge', () => {
         {
           identityId: oldStaff.id,
           tokenHash: token(),
+          createdAt: new Date(expired8d.getTime() - DAY_MS),
           expiresAt: expired8d,
           consumedAt: expired8d,
         },
-        { identityId: freshStaff.id, tokenHash: token(), expiresAt: expired6d },
+        {
+          identityId: freshStaff.id,
+          tokenHash: token(),
+          createdAt: new Date(expired6d.getTime() - DAY_MS),
+          expiresAt: expired6d,
+        },
       ],
     });
     await db.staffEnrollmentGrant.createMany({
