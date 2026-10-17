@@ -73,6 +73,11 @@ export function RefineProvider({ children }: { children: ReactNode }) {
             meta: { label: 'Finance', permission: 'finance.read' },
           },
           {
+            name: 'reporting',
+            list: '/reporting',
+            meta: { label: 'Reporting', permission: 'reporting.view' },
+          },
+          {
             name: 'baggage',
             list: '/baggage',
             meta: { label: 'Bagages', permission: 'baggage.read' },
