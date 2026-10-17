@@ -43,7 +43,7 @@ CSRF on mutations:
   only (`crew.device.manage`);
 - `POST /trips/:tripReference/events/sync` — a strictly typed, bounded batch of
   `PASSENGER_BOARDING` events with one result per input event
-  (`crew.boarding.scan`).
+  (`crew.boarding.scan`). Route checkpoints use `crew.tracking.report`; operational border events use `crew.border.report`.
 
 `DRIVER` and `CREW` receive those three Crew-realm permissions. They do not
 receive STAFF `trip.read`, `boarding.read` or `boarding.scan`, and receive no
@@ -72,3 +72,11 @@ An acknowledged boarding may make an existing manifest and departure
 fingerprint stale. Sync does not regenerate a manifest, calculate an alternate
 readiness result, authorize a departure or transition a trip. All those actions
 remain explicit server-side PR-15/PR-17 workflows.
+
+### IndexedDB schema migration
+
+The browser database keeps the stable name `euroteranga-crew-offline-v1`, but its schema is
+versioned independently. PR-20 raises the IndexedDB schema to version 2 so installations that
+previously created only part of the v1 stores are repaired in place: missing `meta`, `trips` or
+`events` stores are created during `onupgradeneeded`. Existing compatible data is preserved.
+Open tabs close their database handle on `versionchange` so another tab can complete the upgrade.

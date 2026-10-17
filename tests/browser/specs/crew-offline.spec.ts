@@ -230,6 +230,49 @@ async function mockAcknowledgedCrewSync(
 test.describe('PR-18 Crew PWA offline operations', () => {
   test.describe.configure({ mode: 'serial' });
 
+  test('repairs a legacy v1 IndexedDB missing Crew object stores', async ({ context, page }) => {
+    test.setTimeout(30_000);
+    const errors = trackPageErrors(page);
+    await addSessionCookie(context, 'crew', preauthenticatedSession('crew'));
+    await page.goto(appUrl(crewApp, '/connexion'));
+    await page.evaluate(async () => {
+      await new Promise<void>((resolve, reject) => {
+        const deletion = indexedDB.deleteDatabase('euroteranga-crew-offline-v1');
+        deletion.onsuccess = () => resolve();
+        deletion.onerror = () => reject(deletion.error);
+        deletion.onblocked = () => reject(new Error('legacy database deletion blocked'));
+      });
+      await new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open('euroteranga-crew-offline-v1', 1);
+        open.onupgradeneeded = () => {
+          open.result.createObjectStore('meta');
+        };
+        open.onsuccess = () => {
+          open.result.close();
+          resolve();
+        };
+        open.onerror = () => reject(open.error);
+      });
+    });
+
+    await page.goto(appUrl(crewApp, '/session'));
+    await expect(page.getByRole('heading', { name: 'Opérations équipage' })).toBeVisible();
+    await expect(page.getByText('Toutes les actions sont synchronisées.')).toBeVisible();
+    const schema = await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const open = indexedDB.open('euroteranga-crew-offline-v1');
+        open.onsuccess = () => resolve(open.result);
+        open.onerror = () => reject(open.error);
+      });
+      const result = { version: db.version, stores: Array.from(db.objectStoreNames) };
+      db.close();
+      return result;
+    });
+    expect(schema).toEqual({ version: 2, stores: ['events', 'meta', 'trips'] });
+    expect(errors.pageErrors).toEqual([]);
+    expect(errors.consoleErrors.join('\n')).not.toContain('InvalidStateError');
+  });
+
   test('boards offline, survives reload and synchronizes exactly once after reconnect', async ({
     browser,
     context,

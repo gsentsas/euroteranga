@@ -3,6 +3,7 @@ import type { Logger } from '@euroteranga/logger';
 import { Module, type DynamicModule, type Type } from '@nestjs/common';
 import { AuthorizationModule } from './authorization/authorization.module.js';
 import { BaggageModule } from './baggage/baggage.module.js';
+import { BorderModule } from './borders/border.module.js';
 import { CheckInModule } from './check-in/check-in.module.js';
 import { BookingModule } from './bookings/booking.module.js';
 import { ComplianceModule } from './compliance/compliance.module.js';
@@ -53,6 +54,7 @@ export class AppModule {
         PassengerDocumentModule,
         ComplianceModule,
         BaggageModule,
+        BorderModule,
         CheckInModule,
         CrewModule,
         ManifestModule,

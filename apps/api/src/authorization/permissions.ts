@@ -58,6 +58,9 @@ export const PERMISSIONS = {
   TRACKING_READ: 'tracking.read',
   TRACKING_MANAGE: 'tracking.manage',
   CREW_TRACKING_REPORT: 'crew.tracking.report',
+  BORDER_READ: 'border.read',
+  BORDER_MANAGE: 'border.manage',
+  CREW_BORDER_REPORT: 'crew.border.report',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
