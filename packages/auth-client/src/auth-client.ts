@@ -1263,6 +1263,9 @@ export interface CrewTripSnapshot {
       kind: 'STOP' | 'CHECKPOINT';
       code: string;
       name: string;
+      checkpointType: NetworkCheckpointType | null;
+      borderState:
+        'PENDING' | 'ARRIVED' | 'CONTROL_STARTED' | 'CONTROL_COMPLETED' | 'DEPARTED' | null;
     }>;
   };
 }
@@ -1293,6 +1296,15 @@ export type CrewOfflineEvent =
       type: 'TRACKING_CHECKPOINT';
       occurredAt: string;
       payload: { routeWaypointId: string };
+    }
+  | {
+      clientEventId: string;
+      type: 'BORDER_EVENT';
+      occurredAt: string;
+      payload: {
+        routeWaypointId: string;
+        eventType: 'ARRIVED' | 'CONTROL_STARTED' | 'CONTROL_COMPLETED' | 'DEPARTED';
+      };
     };
 
 export interface CrewSyncResult {
@@ -1304,6 +1316,7 @@ export interface CrewSyncResult {
         created: boolean;
         boardingReference?: string;
         trackingObservationId?: string;
+        borderEventId?: string;
       }
     | {
         clientEventId: string;
@@ -1326,6 +1339,45 @@ export interface CrewTripAssignment {
   revokedAt: string | null;
   revocationReason: string | null;
   crew: { id: string; email: string; status: string };
+}
+
+export type BorderEventType = 'ARRIVED' | 'CONTROL_STARTED' | 'CONTROL_COMPLETED' | 'DEPARTED';
+export type BorderEventSource = 'STAFF' | 'CREW';
+export type BorderState = 'PENDING' | BorderEventType;
+
+export interface BorderTripView {
+  trip: { id: string; reference: string; status: TripStatus };
+  borders: Array<{
+    routeWaypointId: string;
+    sequence: number;
+    code: string | null;
+    name: string | null;
+    currentState: BorderState;
+    latestOccurredAt: string | null;
+  }>;
+  events: Array<{
+    id: string;
+    tripId: string;
+    routeWaypointId: string;
+    type: BorderEventType;
+    source: BorderEventSource;
+    clientEventId: string;
+    occurredAt: string;
+    recordedAt: string;
+    waypoint: { sequence: number; code: string | null; name: string | null };
+  }>;
+}
+
+export interface BorderEventInput {
+  clientEventId: string;
+  routeWaypointId: string;
+  type: BorderEventType;
+  occurredAt: string;
+}
+
+export interface BorderEventResult {
+  created: boolean;
+  event: BorderTripView['events'][number];
 }
 
 export type TrackingVisibility = 'HIDDEN' | 'CHECKPOINT_ONLY' | 'APPROXIMATE' | 'PRECISE';
@@ -2959,6 +3011,16 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<RegulatoryPermitDetail>(
             'staff',
             `/v1/admin/regulatory-permits/${encodeURIComponent(reference)}/revoke`,
+            input,
+          ),
+      },
+      borders: {
+        trip: (tripId: string) =>
+          call<BorderTripView>('GET', '/v1/admin/borders/trips/' + encodeURIComponent(tripId)),
+        record: (tripId: string, input: BorderEventInput) =>
+          withCsrf<BorderEventResult>(
+            'staff',
+            '/v1/admin/borders/trips/' + encodeURIComponent(tripId) + '/events',
             input,
           ),
       },

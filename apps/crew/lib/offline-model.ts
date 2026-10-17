@@ -63,6 +63,29 @@ export function createTrackingCheckpointEvent(
   };
 }
 
+export function createBorderEvent(
+  tripReference: string,
+  routeWaypointId: string,
+  eventType: 'ARRIVED' | 'CONTROL_STARTED' | 'CONTROL_COMPLETED' | 'DEPARTED',
+  options: { now?: Date; randomUUID?: () => string } = {},
+): LocalCrewEvent {
+  const now = options.now ?? new Date();
+  const timestamp = now.toISOString();
+  return {
+    clientEventId: newClientEventId(options.randomUUID),
+    type: 'BORDER_EVENT',
+    occurredAt: timestamp,
+    payload: { routeWaypointId, eventType },
+    tripReference: tripReference.trim().toUpperCase(),
+    status: 'PENDING',
+    errorCode: null,
+    queuedAt: timestamp,
+    expiresAt: new Date(now.getTime() + EVENT_TTL_MS).toISOString(),
+    attempts: 0,
+    nextAttemptAt: timestamp,
+  };
+}
+
 export function orderEvents(events: readonly LocalCrewEvent[]): LocalCrewEvent[] {
   return [...events].sort(
     (a, b) =>
@@ -145,6 +168,12 @@ function samePayload(a: LocalCrewEvent, b: LocalCrewEvent): boolean {
   }
   if (a.type === 'TRACKING_CHECKPOINT' && b.type === 'TRACKING_CHECKPOINT') {
     return a.payload.routeWaypointId === b.payload.routeWaypointId;
+  }
+  if (a.type === 'BORDER_EVENT' && b.type === 'BORDER_EVENT') {
+    return (
+      a.payload.routeWaypointId === b.payload.routeWaypointId &&
+      a.payload.eventType === b.payload.eventType
+    );
   }
   return false;
 }

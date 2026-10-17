@@ -3,6 +3,7 @@ import {
   afterNetworkFailure,
   applyServerResult,
   createBoardingEvent,
+  createBorderEvent,
   EVENT_TTL_MS,
   findPendingDuplicate,
   isExpired,
@@ -53,6 +54,45 @@ describe('Crew offline queue model', () => {
       attempts: 0,
     });
     expect(Date.parse(queued.expiresAt) - NOW.getTime()).toBe(EVENT_TTL_MS);
+  });
+
+  it('queues border evidence with the same durable idempotent envelope', () => {
+    const uuid = '018f4f66-1234-7abc-8def-0123456789ac';
+    const queued = createBorderEvent(
+      ' et-test-1 ',
+      '01900000-0000-7000-8000-000000000010',
+      'ARRIVED',
+      { now: NOW, randomUUID: () => uuid },
+    );
+    expect(queued).toMatchObject({
+      clientEventId: `evt-${uuid}`,
+      type: 'BORDER_EVENT',
+      tripReference: 'ET-TEST-1',
+      occurredAt: NOW.toISOString(),
+      payload: {
+        routeWaypointId: '01900000-0000-7000-8000-000000000010',
+        eventType: 'ARRIVED',
+      },
+      status: 'PENDING',
+    });
+    expect(
+      findPendingDuplicate(
+        [queued],
+        createBorderEvent('ET-TEST-1', '01900000-0000-7000-8000-000000000010', 'ARRIVED', {
+          now: NOW,
+          randomUUID: () => '018f4f66-1234-7abc-8def-0123456789ad',
+        }),
+      ),
+    ).toBe(queued);
+    expect(
+      findPendingDuplicate(
+        [queued],
+        createBorderEvent('ET-TEST-1', '01900000-0000-7000-8000-000000000010', 'CONTROL_STARTED', {
+          now: NOW,
+          randomUUID: () => '018f4f66-1234-7abc-8def-0123456789ae',
+        }),
+      ),
+    ).toBeUndefined();
   });
 
   it.each(['PENDING', 'SYNCING'] as const)(

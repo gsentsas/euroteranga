@@ -20,6 +20,8 @@ const EXPECTED_MATRIX: Record<
       'boarding.scan',
       'booking.manage',
       'booking.read',
+      'border.manage',
+      'border.read',
       'checkin.manage',
       'checkin.read',
       'compliance.read',
@@ -27,6 +29,7 @@ const EXPECTED_MATRIX: Record<
       'compliance.rule.manage',
       'compliance.rule.read',
       'crew.boarding.scan',
+      'crew.border.report',
       'crew.device.manage',
       'crew.tracking.report',
       'crew.trip.read',
@@ -75,6 +78,8 @@ const EXPECTED_MATRIX: Record<
       'boarding.scan',
       'booking.manage',
       'booking.read',
+      'border.manage',
+      'border.read',
       'checkin.manage',
       'checkin.read',
       'compliance.read',
@@ -124,6 +129,8 @@ const EXPECTED_MATRIX: Record<
       'boarding.scan',
       'booking.manage',
       'booking.read',
+      'border.manage',
+      'border.read',
       'checkin.manage',
       'checkin.read',
       'compliance.read',
@@ -165,6 +172,8 @@ const EXPECTED_MATRIX: Record<
       'baggage.read',
       'boarding.read',
       'boarding.scan',
+      'border.manage',
+      'border.read',
       'checkin.manage',
       'checkin.read',
       'departure.authorize',
@@ -246,6 +255,7 @@ const EXPECTED_MATRIX: Record<
       'baggage.read',
       'booking.manage',
       'booking.read',
+      'border.read',
       'checkin.read',
       'network.read',
       'ops.access',
@@ -261,6 +271,7 @@ const EXPECTED_MATRIX: Record<
     privileged: false,
     permissions: [
       'audit.read',
+      'border.read',
       'compliance.rule.read',
       'departure.read',
       'fleet.read',
@@ -281,6 +292,7 @@ const EXPECTED_MATRIX: Record<
     privileged: false,
     permissions: [
       'crew.boarding.scan',
+      'crew.border.report',
       'crew.device.manage',
       'crew.tracking.report',
       'crew.trip.read',
@@ -291,6 +303,7 @@ const EXPECTED_MATRIX: Record<
     privileged: false,
     permissions: [
       'crew.boarding.scan',
+      'crew.border.report',
       'crew.device.manage',
       'crew.tracking.report',
       'crew.trip.read',
@@ -414,6 +427,8 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['POST', '/v1/admin/regulatory-permits/ETRP-000000000000'],
   ['POST', '/v1/admin/regulatory-permits/ETRP-000000000000/activate'],
   ['POST', '/v1/admin/regulatory-permits/ETRP-000000000000/revoke'],
+  ['GET', '/v1/admin/borders/trips/01900000-0000-7000-8000-000000000000'],
+  ['POST', '/v1/admin/borders/trips/01900000-0000-7000-8000-000000000000/events'],
   ['GET', '/v1/admin/departure/trips/ET-UNKNOWN/readiness'],
   ['POST', '/v1/admin/departure/trips/ET-UNKNOWN/permit-policy'],
   ['POST', '/v1/admin/departure/trips/ET-UNKNOWN/authorize'],
@@ -565,6 +580,21 @@ describe('server-side RBAC', () => {
       expect((await api.get('/manifests/ETM-000000000000/export.csv')).status).toBe(
         allowed('manifest.export') ? 404 : 403,
       );
+      // PR-20: border operations have explicit read/manage grants and do not
+      // inherit from tracking or trip management.
+      expect((await api.get('/borders/trips/01900000-0000-7000-8000-000000000000')).status).toBe(
+        allowed('border.read') ? 404 : 403,
+      );
+      expect(
+        (
+          await api.post('/borders/trips/01900000-0000-7000-8000-000000000000/events', {
+            clientEventId: 'evt-rbac-border-0001',
+            routeWaypointId: '01900000-0000-7000-8000-000000000001',
+            type: 'ARRIVED',
+            occurredAt: new Date().toISOString(),
+          })
+        ).status,
+      ).toBe(allowed('border.manage') ? 404 : 403);
       // PR-17: whole-trip readiness, explicit authorization and dispatch are
       // independent from trip.manage and from intrinsic permit validity.
       expect((await api.get('/departure/trips/ET-UNKNOWN/readiness')).status).toBe(

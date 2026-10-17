@@ -19,6 +19,7 @@ import {
   markTemporaryFailure,
   purgeExpiredData,
   queueBoarding,
+  queueBorderEvent,
   queueTrackingCheckpoint,
   recoverInterruptedSync,
   replaceTripSnapshots,
@@ -56,12 +57,69 @@ function syncEvent(item: LocalCrewEvent): CrewOfflineEvent {
       payload: { qrPayload: item.payload.qrPayload },
     };
   }
+  if (item.type === 'BORDER_EVENT') {
+    return {
+      clientEventId: item.clientEventId,
+      type: item.type,
+      occurredAt: item.occurredAt,
+      payload: {
+        routeWaypointId: item.payload.routeWaypointId,
+        eventType: item.payload.eventType,
+      },
+    };
+  }
   return {
     clientEventId: item.clientEventId,
     type: item.type,
     occurredAt: item.occurredAt,
     payload: { routeWaypointId: item.payload.routeWaypointId },
   };
+}
+
+type BorderState = 'PENDING' | 'ARRIVED' | 'CONTROL_STARTED' | 'CONTROL_COMPLETED' | 'DEPARTED';
+type BorderEventType = Exclude<BorderState, 'PENDING'>;
+
+function nextBorderEvent(state: BorderState): BorderEventType | null {
+  switch (state) {
+    case 'PENDING':
+      return 'ARRIVED';
+    case 'ARRIVED':
+      return 'CONTROL_STARTED';
+    case 'CONTROL_STARTED':
+      return 'CONTROL_COMPLETED';
+    case 'CONTROL_COMPLETED':
+      return 'DEPARTED';
+    case 'DEPARTED':
+      return null;
+  }
+}
+
+function borderEventLabel(type: BorderEventType): string {
+  switch (type) {
+    case 'ARRIVED':
+      return 'Signaler l’arrivée';
+    case 'CONTROL_STARTED':
+      return 'Démarrer le contrôle';
+    case 'CONTROL_COMPLETED':
+      return 'Terminer le contrôle';
+    case 'DEPARTED':
+      return 'Signaler le départ';
+  }
+}
+
+function borderStateLabel(state: BorderState): string {
+  switch (state) {
+    case 'PENDING':
+      return 'À venir';
+    case 'ARRIVED':
+      return 'Arrivé';
+    case 'CONTROL_STARTED':
+      return 'Contrôle en cours';
+    case 'CONTROL_COMPLETED':
+      return 'Contrôle terminé';
+    case 'DEPARTED':
+      return 'Franchie';
+  }
 }
 
 function eventLabel(status: LocalCrewEvent['status']) {
@@ -369,6 +427,30 @@ export function CrewWorkspace() {
     [selectedTrip, trips],
   );
 
+  const borderWaypoints = useMemo(() => {
+    const waypoints =
+      selectedSnapshot?.trip.waypoints.filter((waypoint) => waypoint.checkpointType === 'BORDER') ??
+      [];
+    return waypoints.map((waypoint) => {
+      let state = (waypoint.borderState ?? 'PENDING') as BorderState;
+      const local = events
+        .filter(
+          (item) =>
+            item.tripReference === selectedTrip &&
+            item.type === 'BORDER_EVENT' &&
+            item.payload.routeWaypointId === waypoint.id &&
+            (item.status === 'PENDING' || item.status === 'SYNCING'),
+        )
+        .sort((a, b) => a.queuedAt.localeCompare(b.queuedAt));
+      for (const item of local) {
+        if (item.type === 'BORDER_EVENT' && nextBorderEvent(state) === item.payload.eventType) {
+          state = item.payload.eventType;
+        }
+      }
+      return { ...waypoint, effectiveState: state, nextEvent: nextBorderEvent(state) };
+    });
+  }, [events, selectedSnapshot, selectedTrip]);
+
   useEffect(() => {
     setCheckpointWaypointId((current) => {
       if (selectedSnapshot?.trip.waypoints.some((waypoint) => waypoint.id === current)) {
@@ -419,6 +501,24 @@ export function CrewWorkspace() {
     try {
       await queueTrackingCheckpoint(selectedTrip, checkpointWaypointId);
       setNotice('Checkpoint enregistré sur cet appareil — synchronisation en attente.');
+      await refreshLocal();
+      if (online) await syncQueued(device ?? undefined, true);
+    } finally {
+      setRecording(false);
+    }
+  }
+
+  async function recordBorder(routeWaypointId: string, eventType: BorderEventType) {
+    setError(null);
+    setNotice(null);
+    if (!selectedTrip || selectedSnapshot?.trip.status !== 'IN_PROGRESS') {
+      setError('Les événements frontière sont disponibles uniquement pendant le voyage.');
+      return;
+    }
+    setRecording(true);
+    try {
+      await queueBorderEvent(selectedTrip, routeWaypointId, eventType);
+      setNotice('Événement frontière enregistré sur cet appareil — synchronisation en attente.');
       await refreshLocal();
       if (online) await syncQueued(device ?? undefined, true);
     } finally {
@@ -605,6 +705,42 @@ export function CrewWorkspace() {
         )}
       </section>
 
+      <section className="crew-panel" aria-labelledby="crew-border-title">
+        <h2 id="crew-border-title">Passages frontière</h2>
+        <p className="et-hint">
+          Journal opérationnel uniquement : ces actions ne constituent pas une décision douanière ni
+          une autorisation d’entrée sur le territoire.
+        </p>
+        {borderWaypoints.length === 0 ? (
+          <p>Aucun point frontière sur la route de ce voyage.</p>
+        ) : (
+          <ul className="crew-event-list">
+            {borderWaypoints.map((waypoint) => (
+              <li className="crew-event" key={waypoint.id}>
+                <div>
+                  <strong>
+                    {waypoint.sequence}. {waypoint.code} — {waypoint.name}
+                  </strong>
+                  <div>État : {borderStateLabel(waypoint.effectiveState)}</div>
+                </div>
+                {waypoint.nextEvent ? (
+                  <button
+                    type="button"
+                    className="et-button crew-primary-action"
+                    disabled={recording || selectedSnapshot?.trip.status !== 'IN_PROGRESS'}
+                    onClick={() => void recordBorder(waypoint.id, waypoint.nextEvent!)}
+                  >
+                    {borderEventLabel(waypoint.nextEvent)}
+                  </button>
+                ) : (
+                  <span className="et-tag">Terminé</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <section className="crew-panel" aria-labelledby="crew-queue-title">
         <div className="et-actions">
           <h2 id="crew-queue-title">File locale</h2>
@@ -620,8 +756,12 @@ export function CrewWorkspace() {
                   <strong>{eventLabel(item.status)}</strong>
                   <div className="et-code">{item.clientEventId.slice(0, 18)}…</div>
                   <small>
-                    {item.type === 'PASSENGER_BOARDING' ? 'Embarquement' : 'Checkpoint'} ·{' '}
-                    {item.tripReference} · {formatDate(item.occurredAt)}
+                    {item.type === 'PASSENGER_BOARDING'
+                      ? 'Embarquement'
+                      : item.type === 'BORDER_EVENT'
+                        ? `Frontière · ${item.payload.eventType}`
+                        : 'Checkpoint'}{' '}
+                    · {item.tripReference} · {formatDate(item.occurredAt)}
                     {item.errorCode ? ` · ${item.errorCode}` : ''}
                   </small>
                 </div>

@@ -6,6 +6,7 @@ import {
   afterTemporaryFailure,
   applyServerResult,
   createBoardingEvent,
+  createBorderEvent,
   createTrackingCheckpointEvent,
   findPendingDuplicate,
   isExpired,
@@ -18,7 +19,7 @@ import {
 export type { LocalCrewEvent } from './offline-model';
 
 const DB_NAME = 'euroteranga-crew-offline-v1';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const META = 'meta';
 const TRIPS = 'trips';
 const EVENTS = 'events';
@@ -44,15 +45,21 @@ async function database(): Promise<IDBDatabase> {
     open.onupgradeneeded = () => {
       const db = open.result;
       if (!db.objectStoreNames.contains(META)) db.createObjectStore(META);
-      if (!db.objectStoreNames.contains(TRIPS))
+      if (!db.objectStoreNames.contains(TRIPS)) {
         db.createObjectStore(TRIPS, { keyPath: 'trip.reference' });
+      }
       if (!db.objectStoreNames.contains(EVENTS)) {
         const events = db.createObjectStore(EVENTS, { keyPath: 'clientEventId' });
         events.createIndex('tripReference', 'tripReference');
         events.createIndex('status', 'status');
       }
     };
-    open.onsuccess = () => resolve(open.result);
+    open.onblocked = () => reject(new Error('IndexedDB upgrade blocked by another open Crew tab'));
+    open.onsuccess = () => {
+      const db = open.result;
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     open.onerror = () => reject(open.error ?? new Error('IndexedDB open failed'));
   });
 }
@@ -201,6 +208,28 @@ export async function queueTrackingCheckpoint(
   routeWaypointId: string,
 ): Promise<LocalCrewEvent> {
   const event = createTrackingCheckpointEvent(tripReference, routeWaypointId);
+  const db = await database();
+  const tx = db.transaction(EVENTS, 'readwrite');
+  const store = tx.objectStore(EVENTS);
+  const current = (await request(store.getAll())) as LocalCrewEvent[];
+  const duplicate = findPendingDuplicate(current, event);
+  if (duplicate) {
+    await finished(tx);
+    db.close();
+    return duplicate;
+  }
+  store.add(event);
+  await finished(tx);
+  db.close();
+  return event;
+}
+
+export async function queueBorderEvent(
+  tripReference: string,
+  routeWaypointId: string,
+  eventType: 'ARRIVED' | 'CONTROL_STARTED' | 'CONTROL_COMPLETED' | 'DEPARTED',
+): Promise<LocalCrewEvent> {
+  const event = createBorderEvent(tripReference, routeWaypointId, eventType);
   const db = await database();
   const tx = db.transaction(EVENTS, 'readwrite');
   const store = tx.objectStore(EVENTS);

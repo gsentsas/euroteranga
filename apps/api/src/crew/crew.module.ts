@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BorderModule } from '../borders/border.module.js';
 import { CheckInModule } from '../check-in/check-in.module.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { TrackingModule } from '../tracking/tracking.module.js';
@@ -7,7 +8,7 @@ import { CrewController } from './crew.controller.js';
 import { CrewService } from './crew.service.js';
 
 @Module({
-  imports: [DatabaseModule, CheckInModule, TrackingModule],
+  imports: [DatabaseModule, CheckInModule, TrackingModule, BorderModule],
   controllers: [CrewController, AdminCrewAssignmentController],
   providers: [CrewService],
 })

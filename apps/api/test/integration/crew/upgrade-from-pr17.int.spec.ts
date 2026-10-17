@@ -20,7 +20,7 @@ const DATABASE_PACKAGE = fileURLToPath(
 );
 const MIGRATIONS = join(DATABASE_PACKAGE, 'prisma', 'migrations');
 const PR17_MIGRATION = '20261015180000_departure_readiness';
-const TRACKING_MIGRATION = '20261016213000_tracking';
+const BORDER_MIGRATION = '20261017013000_borders';
 
 function deploy(config: string | null, url: string) {
   execFileSync(
@@ -127,9 +127,9 @@ describe('upgrade from a real PR-17 database', () => {
     if (workDir) rmSync(workDir, { recursive: true, force: true });
   });
 
-  it('applies PR-18 and PR-19, preserves STAFF boarding and backfills no Crew data', async () => {
-    expect(await applied()).toHaveLength(19);
-    expect((await applied()).at(-1)).toBe(TRACKING_MIGRATION);
+  it('applies PR-18 through PR-20, preserves STAFF boarding and backfills no Crew data', async () => {
+    expect(await applied()).toHaveLength(20);
+    expect((await applied()).at(-1)).toBe(BORDER_MIGRATION);
     const row = (
       await raw.$queryRawUnsafe<
         Array<{ value: string; crew_device_id: string | null; crew_assignment_id: string | null }>
@@ -152,6 +152,7 @@ describe('upgrade from a real PR-17 database', () => {
     });
     expect(permissions.map((permission) => permission.key)).toEqual([
       'crew.boarding.scan',
+      'crew.border.report',
       'crew.device.manage',
       'crew.tracking.report',
       'crew.trip.read',
@@ -160,12 +161,12 @@ describe('upgrade from a real PR-17 database', () => {
       await raw.authorizationRolePermission.count({
         where: { permissionKey: { startsWith: 'crew.' } },
       }),
-    ).toBe(12);
+    ).toBe(15);
   });
 
-  it('is idempotent and reports all 19 migrations applied', async () => {
+  it('is idempotent and reports all 20 migrations applied', async () => {
     deploy(null, url);
-    expect(await applied()).toHaveLength(19);
+    expect(await applied()).toHaveLength(20);
     const status = execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'status'], {
       cwd: DATABASE_PACKAGE,
       env: { ...process.env, DATABASE_URL: url },

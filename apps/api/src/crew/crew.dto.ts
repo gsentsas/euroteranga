@@ -38,6 +38,24 @@ export const crewSyncSchema = z
               payload: z.object({ routeWaypointId: z.uuid() }).strict(),
             })
             .strict(),
+          z
+            .object({
+              clientEventId,
+              type: z.literal('BORDER_EVENT'),
+              occurredAt: z.iso.datetime({ offset: true }).transform((value) => new Date(value)),
+              payload: z
+                .object({
+                  routeWaypointId: z.uuid(),
+                  eventType: z.enum([
+                    'ARRIVED',
+                    'CONTROL_STARTED',
+                    'CONTROL_COMPLETED',
+                    'DEPARTED',
+                  ]),
+                })
+                .strict(),
+            })
+            .strict(),
         ]),
       )
       .min(1)

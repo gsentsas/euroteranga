@@ -4,6 +4,7 @@ import type { z } from 'zod';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { PublicApiError } from '../auth/http/public-api-error.js';
 import { AuditService } from '../authorization/audit.service.js';
+import { BorderService } from '../borders/border.service.js';
 import { BoardingService, type CrewBoardingContext } from '../check-in/boarding.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { TrackingService } from '../tracking/tracking.service.js';
@@ -72,6 +73,7 @@ export class CrewService {
     private readonly audit: AuditService,
     private readonly boarding: BoardingService,
     private readonly tracking: TrackingService,
+    private readonly borders: BorderService,
   ) {}
 
   async trips(actor: AuthPrincipal) {
@@ -89,6 +91,7 @@ export class CrewService {
         expiresAt: true,
         trip: {
           select: {
+            id: true,
             reference: true,
             status: true,
             plannedDepartureAt: true,
@@ -103,7 +106,7 @@ export class CrewService {
                     id: true,
                     sequence: true,
                     stop: { select: { code: true, name: true } },
-                    checkpoint: { select: { code: true, name: true } },
+                    checkpoint: { select: { code: true, name: true, type: true } },
                   },
                 },
               },
@@ -112,6 +115,18 @@ export class CrewService {
         },
       },
     });
+    const borderRows = rows.length
+      ? await this.database.client.borderEvent.findMany({
+          where: { tripId: { in: rows.map((row) => row.trip.id) } },
+          orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
+          select: { tripId: true, routeWaypointId: true, type: true },
+        })
+      : [];
+    const borderState = new Map<string, string>();
+    for (const event of borderRows) {
+      borderState.set(`${event.tripId}:${event.routeWaypointId}`, event.type);
+    }
+
     const ttl = Date.now() + SNAPSHOT_TTL_MS;
     return {
       serverTime: now,
@@ -136,6 +151,11 @@ export class CrewService {
               kind: waypoint.checkpoint ? ('CHECKPOINT' as const) : ('STOP' as const),
               code: place.code,
               name: place.name,
+              checkpointType: waypoint.checkpoint?.type ?? null,
+              borderState:
+                waypoint.checkpoint?.type === 'BORDER'
+                  ? (borderState.get(`${row.trip.id}:${waypoint.id}`) ?? 'PENDING')
+                  : null,
             };
           }),
         },
@@ -289,6 +309,23 @@ export class CrewService {
           continue;
         }
 
+        if (event.type === 'BORDER_EVENT') {
+          const result = await this.borders.recordCrew(actor, tripReference, {
+            deviceId: input.deviceId,
+            clientEventId: event.clientEventId,
+            routeWaypointId: event.payload.routeWaypointId,
+            type: event.payload.eventType,
+            occurredAt: event.occurredAt,
+          });
+          results.push({
+            clientEventId: event.clientEventId,
+            status: 'ACKNOWLEDGED' as const,
+            created: result.created,
+            borderEventId: result.event.id,
+          });
+          continue;
+        }
+
         if (!boardingContext) throw new Error('boarding context missing after batch validation');
         const result = await this.boarding.scan(
           actor,
@@ -321,7 +358,8 @@ export class CrewService {
             clientEventId: event.clientEventId,
             status:
               error.code === 'BOARDING_CLIENT_EVENT_ID_REUSED' ||
-              error.code === 'TRACKING_CLIENT_EVENT_ID_REUSED'
+              error.code === 'TRACKING_CLIENT_EVENT_ID_REUSED' ||
+              error.code === 'BORDER_CLIENT_EVENT_ID_REUSED'
                 ? ('CONFLICT' as const)
                 : ('REJECTED' as const),
             errorCode: error.code,

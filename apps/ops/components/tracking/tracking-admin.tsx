@@ -1,6 +1,9 @@
 'use client';
 
 import type {
+  BorderEventType,
+  BorderState,
+  BorderTripView,
   TrackingDevice,
   TrackingProviderStatus,
   TrackingTripDetail,
@@ -33,6 +36,169 @@ const formatAt = (value: string | null | undefined) =>
         timeStyle: 'short',
       }).format(new Date(value))
     : '—';
+
+const BORDER_STATE_LABELS: Record<BorderState, string> = {
+  PENDING: 'À venir',
+  ARRIVED: 'Arrivé',
+  CONTROL_STARTED: 'Contrôle en cours',
+  CONTROL_COMPLETED: 'Contrôle terminé',
+  DEPARTED: 'Franchie',
+};
+
+function nextBorderEvent(state: BorderState): BorderEventType | null {
+  switch (state) {
+    case 'PENDING':
+      return 'ARRIVED';
+    case 'ARRIVED':
+      return 'CONTROL_STARTED';
+    case 'CONTROL_STARTED':
+      return 'CONTROL_COMPLETED';
+    case 'CONTROL_COMPLETED':
+      return 'DEPARTED';
+    case 'DEPARTED':
+      return null;
+  }
+}
+
+const BORDER_ACTION_LABELS: Record<BorderEventType, string> = {
+  ARRIVED: 'Signaler l’arrivée',
+  CONTROL_STARTED: 'Démarrer le contrôle',
+  CONTROL_COMPLETED: 'Terminer le contrôle',
+  DEPARTED: 'Signaler le départ',
+};
+
+function BorderPanel({
+  tripId,
+  tripStatus,
+}: {
+  tripId: string;
+  tripStatus: TrackingTripDetail['status'];
+}) {
+  const canRead = useCan('border.read');
+  const canManage = useCan('border.manage');
+  const [view, setView] = useState<BorderTripView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!canRead) return;
+    const result = await auth.admin.borders.trip(tripId);
+    if (!result.ok) {
+      setError(result.error.message);
+      return;
+    }
+    setView(result.data);
+  }, [canRead, tripId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (!canRead) return null;
+
+  const record = async (routeWaypointId: string, type: BorderEventType) => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await auth.admin.borders.record(tripId, {
+        clientEventId: `evt-${crypto.randomUUID()}`,
+        routeWaypointId,
+        type,
+        occurredAt: new Date().toISOString(),
+      });
+      if (!result.ok) {
+        setError(result.error.message);
+        return;
+      }
+      setNotice(
+        result.data.created ? 'Événement frontière enregistré.' : 'Événement déjà enregistré.',
+      );
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section
+      className="et-network-panel"
+      aria-labelledby="border-ops-title"
+      data-testid="border-ops-panel"
+    >
+      <h3 id="border-ops-title">Passages frontière</h3>
+      <p className="et-hint">
+        Journal opérationnel de passage uniquement. Il ne vaut ni décision douanière, ni visa, ni
+        autorisation d’entrée sur le territoire.
+      </p>
+      <FormAlert message={error} />
+      {notice ? <FormStatus>{notice}</FormStatus> : null}
+      {!view ? (
+        <p role="status">Chargement des frontières…</p>
+      ) : view.borders.length === 0 ? (
+        <p>Aucun point frontière sur cette route.</p>
+      ) : (
+        <div className="et-table-wrap">
+          <table data-testid="border-ops-table">
+            <caption>État opérationnel des passages frontière</caption>
+            <thead>
+              <tr>
+                <th>Étape</th>
+                <th>État</th>
+                <th>Dernier événement</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.borders.map((border) => {
+                const next = nextBorderEvent(border.currentState);
+                return (
+                  <tr key={border.routeWaypointId}>
+                    <th scope="row">
+                      {border.sequence}. {border.code ?? '—'} — {border.name ?? 'Frontière'}
+                    </th>
+                    <td>{BORDER_STATE_LABELS[border.currentState]}</td>
+                    <td>{formatAt(border.latestOccurredAt)}</td>
+                    <td>
+                      {next && canManage ? (
+                        <button
+                          type="button"
+                          className="et-button et-button--secondary"
+                          disabled={busy || tripStatus !== 'IN_PROGRESS'}
+                          onClick={() => void record(border.routeWaypointId, next)}
+                        >
+                          {BORDER_ACTION_LABELS[next]}
+                        </button>
+                      ) : next ? (
+                        'Lecture seule'
+                      ) : (
+                        'Terminé'
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {view?.events.length ? (
+        <details>
+          <summary>Historique ({view.events.length})</summary>
+          <ol>
+            {view.events.map((event) => (
+              <li key={event.id}>
+                {formatAt(event.occurredAt)} — {event.waypoint.code ?? 'Frontière'} —{' '}
+                {BORDER_STATE_LABELS[event.type]} — {event.source}
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
+    </section>
+  );
+}
 
 function ConfigPanel({
   detail,
@@ -342,6 +508,7 @@ function TrackingDetail({
       <ConfigPanel detail={detail} devices={devices} disabled={busy} onChanged={reload} />
       <DevicePanel detail={detail} disabled={busy} onCreated={reload} />
       <TokenPanel detail={detail} disabled={busy} onChanged={reload} />
+      <BorderPanel tripId={detail.id} tripStatus={detail.status} />
 
       <h3>Timeline des observations</h3>
       <div className="et-table-wrap">
