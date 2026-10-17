@@ -1,0 +1,25 @@
+[Unit]
+Description=EURO TERANGA expired authentication artifact purge
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+User=euroteranga.com_5p804yhows7
+Group=psacln
+WorkingDirectory=/var/www/vhosts/euroteranga.com/current
+EnvironmentFile=/var/www/vhosts/euroteranga.com/.secrets/api.env
+Environment=PATH=/opt/plesk/node/24/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/plesk/node/24/bin/pnpm --filter @euroteranga/api auth:purge-expired
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
