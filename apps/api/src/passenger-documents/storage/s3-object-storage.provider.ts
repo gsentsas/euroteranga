@@ -7,7 +7,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import {
-  assertPassengerDocumentObjectKey,
+  assertPrivateObjectKey,
   ObjectStorageError,
   type ObjectStorageProvider,
   type StoredObject,
@@ -48,7 +48,7 @@ export class S3ObjectStorageProvider implements ObjectStorageProvider {
     sizeBytes: number;
     mimeType: string;
   }): Promise<void> {
-    assertPassengerDocumentObjectKey(input.key);
+    assertPrivateObjectKey(input.key);
     try {
       await this.client.send(
         new PutObjectCommand({
@@ -70,7 +70,7 @@ export class S3ObjectStorageProvider implements ObjectStorageProvider {
   }
 
   async get(key: string): Promise<StoredObject> {
-    assertPassengerDocumentObjectKey(key);
+    assertPrivateObjectKey(key);
     try {
       const response = await this.client.send(
         new GetObjectCommand({ Bucket: this.options.bucket, Key: key }),
@@ -90,7 +90,7 @@ export class S3ObjectStorageProvider implements ObjectStorageProvider {
   }
 
   async head(key: string): Promise<{ sizeBytes: number }> {
-    assertPassengerDocumentObjectKey(key);
+    assertPrivateObjectKey(key);
     try {
       const response = await this.client.send(
         new HeadObjectCommand({ Bucket: this.options.bucket, Key: key }),
@@ -103,7 +103,7 @@ export class S3ObjectStorageProvider implements ObjectStorageProvider {
   }
 
   async delete(key: string): Promise<void> {
-    assertPassengerDocumentObjectKey(key);
+    assertPrivateObjectKey(key);
     try {
       await this.client.send(new DeleteObjectCommand({ Bucket: this.options.bucket, Key: key }));
     } catch {

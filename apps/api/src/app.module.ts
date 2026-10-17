@@ -14,6 +14,7 @@ import { CrewModule } from './crew/crew.module.js';
 import { DepartureReadinessModule } from './departure-readiness/departure-readiness.module.js';
 import { FleetModule } from './fleet/fleet.module.js';
 import { HealthModule } from './health/health.module.js';
+import { IncidentModule } from './incidents/incident.module.js';
 import { ManifestModule } from './manifests/manifest.module.js';
 import { NetworkModule } from './network/network.module.js';
 import { PaymentModule } from './payments/payment.module.js';
@@ -55,6 +56,7 @@ export class AppModule {
         ComplianceModule,
         BaggageModule,
         BorderModule,
+        IncidentModule,
         CheckInModule,
         CrewModule,
         ManifestModule,

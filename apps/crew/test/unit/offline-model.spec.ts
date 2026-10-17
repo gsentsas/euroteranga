@@ -4,6 +4,7 @@ import {
   applyServerResult,
   createBoardingEvent,
   createBorderEvent,
+  createIncidentReportEvent,
   EVENT_TTL_MS,
   findPendingDuplicate,
   isExpired,
@@ -93,6 +94,68 @@ describe('Crew offline queue model', () => {
         }),
       ),
     ).toBeUndefined();
+  });
+
+  it('queues an incident report with normalized durable offline evidence', () => {
+    const uuid = '018f4f66-1234-7abc-8def-0123456789af';
+    const queued = createIncidentReportEvent(
+      ' et-test-1 ',
+      {
+        incidentType: 'BREAKDOWN',
+        severity: 'CRITICAL',
+        description: '  Panne moteur immobilisante signalee par le conducteur.  ',
+        routeWaypointId: '01900000-0000-7000-8000-000000000010',
+        locationLabel: '  Aire de controle A1  ',
+      },
+      { now: NOW, randomUUID: () => uuid },
+    );
+    expect(queued.clientEventId).toBe('evt-' + uuid);
+    expect(queued).toMatchObject({
+      type: 'INCIDENT_REPORTED',
+      tripReference: 'ET-TEST-1',
+      occurredAt: NOW.toISOString(),
+      payload: {
+        incidentType: 'BREAKDOWN',
+        severity: 'CRITICAL',
+        description: 'Panne moteur immobilisante signalee par le conducteur.',
+        routeWaypointId: '01900000-0000-7000-8000-000000000010',
+        locationLabel: 'Aire de controle A1',
+      },
+      status: 'PENDING',
+      attempts: 0,
+    });
+  });
+
+  it('deduplicates only identical pending incident reports', () => {
+    const first = createIncidentReportEvent(
+      'ET-TEST-1',
+      {
+        incidentType: 'DELAY',
+        severity: 'MEDIUM',
+        description: 'Retard operationnel de quarante-cinq minutes.',
+      },
+      { now: NOW, randomUUID: () => '018f4f66-1234-7abc-8def-0123456789b0' },
+    );
+    const same = createIncidentReportEvent(
+      'ET-TEST-1',
+      {
+        incidentType: 'DELAY',
+        severity: 'MEDIUM',
+        description: 'Retard operationnel de quarante-cinq minutes.',
+      },
+      { now: NOW, randomUUID: () => '018f4f66-1234-7abc-8def-0123456789b1' },
+    );
+    const changed = createIncidentReportEvent(
+      'ET-TEST-1',
+      {
+        incidentType: 'DELAY',
+        severity: 'HIGH',
+        description: 'Retard operationnel de quarante-cinq minutes.',
+      },
+      { now: NOW, randomUUID: () => '018f4f66-1234-7abc-8def-0123456789b2' },
+    );
+    expect(findPendingDuplicate([first], same)).toBe(first);
+    expect(findPendingDuplicate([first], changed)).toBeUndefined();
   });
 
   it.each(['PENDING', 'SYNCING'] as const)(

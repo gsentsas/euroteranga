@@ -43,6 +43,11 @@ export function RefineProvider({ children }: { children: ReactNode }) {
             meta: { label: 'Tracking', permission: 'tracking.read' },
           },
           {
+            name: 'incidents',
+            list: '/incidents',
+            meta: { label: 'Incidents', permission: 'incident.read' },
+          },
+          {
             name: 'seat-maps',
             list: '/seat-maps',
             meta: { label: 'Plans de sièges', permission: 'seatmap.read' },

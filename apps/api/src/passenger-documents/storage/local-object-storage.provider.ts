@@ -3,7 +3,7 @@ import { chmod, lstat, mkdir, open, rm } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import {
-  assertPassengerDocumentObjectKey,
+  assertPrivateObjectKey,
   ObjectStorageError,
   type ObjectStorageProvider,
   type StoredObject,
@@ -125,7 +125,7 @@ export class LocalObjectStorageProvider implements ObjectStorageProvider {
   }
 
   private path(key: string): string {
-    assertPassengerDocumentObjectKey(key);
+    assertPrivateObjectKey(key);
     const path = resolve(this.root, key);
     if (!path.startsWith(`${this.root}${sep}`)) throw new ObjectStorageError('INVALID_KEY');
     return path;

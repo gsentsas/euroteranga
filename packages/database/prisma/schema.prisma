@@ -155,6 +155,63 @@ enum BorderEventSource {
   @@map("border_event_source")
 }
 
+/// PR-21: operational incident categories. CUSTOMS/POLICE/BORDER are factual
+/// operational classifications only and never express a legal decision.
+enum IncidentType {
+  BREAKDOWN
+  ACCIDENT
+  DELAY
+  BORDER
+  CUSTOMS
+  POLICE
+  PASSENGER
+  HEALTH
+  BAGGAGE
+  SECURITY
+  WEATHER
+  FERRY
+  OTHER
+
+  @@map("incident_type")
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@map("incident_severity")
+}
+
+enum IncidentStatus {
+  OPEN
+  ASSESSING
+  ACTION_REQUIRED
+  MITIGATING
+  RESOLVED
+  CLOSED
+
+  @@map("incident_status")
+}
+
+enum IncidentSource {
+  STAFF
+  CREW
+
+  @@map("incident_source")
+}
+
+enum IncidentActionType {
+  NOTE
+  ACTION_PLAN
+  MITIGATION
+  PASSENGERS_INFORMED
+  POSTMORTEM
+
+  @@map("incident_action_type")
+}
+
 /// PR-10: payment service providers. SANDBOX is local and test-only: it calls
 /// no external service and is refused in staging and production.
 enum PaymentProvider {
@@ -416,6 +473,10 @@ model AuthIdentity {
   trackingTokensRevoked            TrackingPublicToken[]    @relation("TrackingPublicTokenRevoker")
   trackingDevicesCreated           TrackingDevice[]         @relation("TrackingDeviceCreator")
   borderEventsRecorded             BorderEvent[]            @relation("BorderEventRecorder")
+  incidentsOpened                  Incident[]               @relation("IncidentOpener")
+  incidentsOwned                   Incident[]               @relation("IncidentOwner")
+  incidentActions                  IncidentAction[]         @relation("IncidentActionActor")
+  incidentAttachments              IncidentAttachment[]     @relation("IncidentAttachmentUploader")
 
   // The same address may exist in two realms as two unrelated identities.
   @@unique([realm, normalizedEmail])
@@ -817,6 +878,7 @@ model RouteWaypoint {
   baggageEvents        BaggageEvent[]
   trackingObservations TrackingObservation[]
   borderEvents         BorderEvent[]
+  incidents            Incident[]
 
   @@unique([routeVersionId, sequence])
   @@index([stopId])
@@ -851,6 +913,7 @@ model Vehicle {
   trips               Trip[]
   regulatoryPermits   RegulatoryPermit[]
   trackingDevices     TrackingDevice[]
+  incidents           Incident[]
 
   @@unique([registrationCountryId, registrationPlate])
   @@index([status, id])
@@ -905,6 +968,7 @@ model Trip {
   trackingObservations    TrackingObservation[]
   trackingPublicTokens    TrackingPublicToken[]
   borderEvents            BorderEvent[]
+  incidents               Incident[]
 
   @@index([status, id])
   @@index([routeVersionId, id])
@@ -1182,6 +1246,7 @@ model Baggage {
 
   bookingPassenger BookingPassenger @relation(fields: [bookingId, passengerId], references: [bookingId, passengerId], onDelete: Restrict, map: "baggage_booking_passenger_fkey")
   events           BaggageEvent[]
+  incidents        Incident[]
 
   @@index([bookingId, passengerId, id])
   @@index([lifecycleStatus, id])
@@ -1726,6 +1791,100 @@ model BorderEvent {
   @@map("border_event")
 }
 
+/// PR-21: one operational incident tied to a concrete trip. Initial facts are
+/// immutable; status and owner changes are controlled by PostgreSQL. Evolving
+/// information is kept as append-only IncidentAction rows.
+model Incident {
+  id                 String           @id @default(uuid(7)) @db.Uuid
+  /// Public, opaque reference: ETI- + 12 CSPRNG Crockford characters.
+  reference          String           @unique @db.VarChar(16)
+  tripId             String           @map("trip_id") @db.Uuid
+  vehicleId          String?          @map("vehicle_id") @db.Uuid
+  routeWaypointId    String?          @map("route_waypoint_id") @db.Uuid
+  baggageId          String?          @map("baggage_id") @db.Uuid
+  type               IncidentType
+  severity           IncidentSeverity
+  status             IncidentStatus   @default(OPEN)
+  source             IncidentSource
+  description        String           @db.VarChar(2000)
+  locationLabel      String?          @map("location_label") @db.VarChar(160)
+  openedAt           DateTime         @map("opened_at") @db.Timestamptz(3)
+  recordedAt         DateTime         @default(now()) @map("recorded_at") @db.Timestamptz(3)
+  resolvedAt         DateTime?        @map("resolved_at") @db.Timestamptz(3)
+  closedAt           DateTime?        @map("closed_at") @db.Timestamptz(3)
+  openedByIdentityId String           @map("opened_by_identity_id") @db.Uuid
+  ownerIdentityId    String?          @map("owner_identity_id") @db.Uuid
+  clientEventId      String           @map("client_event_id") @db.VarChar(64)
+  payloadFingerprint String           @map("payload_fingerprint") @db.Char(64)
+  crewAssignmentId   String?          @map("crew_assignment_id") @db.Uuid
+  crewDeviceId       String?          @map("crew_device_id") @db.Uuid
+
+  trip           Trip                 @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  vehicle        Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  routeWaypoint  RouteWaypoint?       @relation(fields: [routeWaypointId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  baggage        Baggage?             @relation(fields: [baggageId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  openedBy       AuthIdentity         @relation("IncidentOpener", fields: [openedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  owner          AuthIdentity?        @relation("IncidentOwner", fields: [ownerIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  crewAssignment CrewTripAssignment?  @relation(fields: [crewAssignmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  crewDevice     CrewDevice?          @relation(fields: [crewDeviceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  actions        IncidentAction[]
+  attachments    IncidentAttachment[]
+
+  @@unique([tripId, clientEventId])
+  @@index([status, severity, recordedAt, id])
+  @@index([tripId, recordedAt, id])
+  @@index([vehicleId, status])
+  @@index([routeWaypointId])
+  @@index([baggageId])
+  @@index([ownerIdentityId, status])
+  @@index([crewAssignmentId])
+  @@index([crewDeviceId])
+  @@map("incident")
+}
+
+/// Append-only operational action journal. Status transitions remain on
+/// Incident so querying the current queue never requires folding the journal.
+model IncidentAction {
+  id                  String             @id @default(uuid(7)) @db.Uuid
+  incidentId          String             @map("incident_id") @db.Uuid
+  sequence            Int
+  type                IncidentActionType
+  content             String             @db.VarChar(2000)
+  clientActionId      String             @map("client_action_id") @db.VarChar(64)
+  payloadFingerprint  String             @map("payload_fingerprint") @db.Char(64)
+  createdByIdentityId String             @map("created_by_identity_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  incident  Incident     @relation(fields: [incidentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy AuthIdentity @relation("IncidentActionActor", fields: [createdByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([incidentId, sequence])
+  @@unique([incidentId, clientActionId])
+  @@index([incidentId, createdAt, id])
+  @@index([createdByIdentityId, createdAt])
+  @@map("incident_action")
+}
+
+/// Private operational evidence. Bytes stay in the existing private object
+/// store; PostgreSQL holds only integrity metadata and authorization links.
+model IncidentAttachment {
+  id                   String   @id @default(uuid(7)) @db.Uuid
+  incidentId           String   @map("incident_id") @db.Uuid
+  objectKey            String   @unique @map("object_key") @db.VarChar(96)
+  sha256               String   @db.Char(64)
+  mimeType             String   @map("mime_type") @db.VarChar(64)
+  sizeBytes            Int      @map("size_bytes")
+  uploadedByIdentityId String   @map("uploaded_by_identity_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  incident   Incident     @relation(fields: [incidentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  uploadedBy AuthIdentity @relation("IncidentAttachmentUploader", fields: [uploadedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([incidentId, createdAt, id])
+  @@index([uploadedByIdentityId, createdAt])
+  @@map("incident_attachment")
+}
+
 model CrewDevice {
   id                  String    @id @default(uuid(7)) @db.Uuid
   /// Public random identifier generated by the PWA. Context only, never authentication.
@@ -1744,6 +1903,7 @@ model CrewDevice {
   boardings            PassengerBoarding[]
   trackingObservations TrackingObservation[]
   borderEvents         BorderEvent[]
+  incidentReports      Incident[]
 
   @@index([identityId, revokedAt, expiresAt])
   @@index([expiresAt])
@@ -1768,6 +1928,7 @@ model CrewTripAssignment {
   boardings            PassengerBoarding[]
   trackingObservations TrackingObservation[]
   borderEvents         BorderEvent[]
+  incidentReports      Incident[]
 
   @@index([tripId, revokedAt])
   @@index([crewIdentityId, revokedAt, expiresAt])
