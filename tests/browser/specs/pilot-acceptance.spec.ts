@@ -71,7 +71,7 @@ test.describe('PR-25 pilot acceptance', () => {
     const errors = pageErrors(page);
     await sessionCookie(context, 'customer', preauthenticatedSession('paymentCustomer'));
     await page.goto(appUrl(client, '/compte'));
-    await expect(page.getByRole('heading', { name: 'Mon compte' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Préparez votre voyage.' })).toBeVisible();
     await expect(
       page.getByRole('article', { name: paymentSeed().confirmedBookingReference }),
     ).toContainText('Confirmée');
