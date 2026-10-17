@@ -149,7 +149,7 @@ cycle can form; the concurrency tests run these races on PostgreSQL.
 PR-10 rules for cancellations:
 
 - a CONFIRMED booking cannot be cancelled by its CUSTOMER or by STAFF:
-  `409 BOOKING_CONFIRMED`, until a refund workflow exists;
+  `409 BOOKING_CONFIRMED`, until its succeeded payment is fully refunded (PR-22);
 - a trip with a CONFIRMED booking cannot be cancelled:
   `409 TRIP_HAS_CONFIRMED_BOOKINGS`;
 - cancelling a HELD booking also cancels its PENDING payment attempt

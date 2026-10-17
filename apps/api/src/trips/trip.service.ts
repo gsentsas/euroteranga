@@ -502,7 +502,7 @@ export class TripService {
           throw TripErrors.dispatchStarted();
         }
         // PR-09: release every active hold first (trip already FOR UPDATE).
-        // PR-10: refused when a booking is CONFIRMED (no refund workflow yet);
+        // PR-22: only confirmed bookings not yet fully refunded block cancellation;
         // PENDING payment attempts are cancelled with their holds.
         const reference = await tx.trip.findUniqueOrThrow({
           where: { id },

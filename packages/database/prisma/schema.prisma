@@ -212,6 +212,36 @@ enum IncidentActionType {
   @@map("incident_action_type")
 }
 
+/// PR-22: operational finance entries only, not a general ledger.
+enum FinanceRevenueType {
+  BAGGAGE
+  OPTION
+  OTHER
+
+  @@map("finance_revenue_type")
+}
+
+enum FinanceExpenseType {
+  FUEL
+  FERRY
+  TOLL
+  CREW
+  HOTEL
+  MAINTENANCE
+  BORDER
+  INSURANCE
+  OTHER
+
+  @@map("finance_expense_type")
+}
+
+enum FinanceEntryStatus {
+  ACTIVE
+  VOIDED
+
+  @@map("finance_entry_status")
+}
+
 /// PR-10: payment service providers. SANDBOX is local and test-only: it calls
 /// no external service and is refused in staging and production.
 enum PaymentProvider {
@@ -477,6 +507,14 @@ model AuthIdentity {
   incidentsOwned                   Incident[]               @relation("IncidentOwner")
   incidentActions                  IncidentAction[]         @relation("IncidentActionActor")
   incidentAttachments              IncidentAttachment[]     @relation("IncidentAttachmentUploader")
+  financeRevenuesCreated           TripRevenue[]            @relation("TripRevenueCreator")
+  financeRevenuesVoided            TripRevenue[]            @relation("TripRevenueVoider")
+  financeExpensesCreated           TripExpense[]            @relation("TripExpenseCreator")
+  financeExpensesVoided            TripExpense[]            @relation("TripExpenseVoider")
+  refundsRecorded                  Refund[]                 @relation("RefundRecorder")
+  creditNotesIssued                CreditNote[]             @relation("CreditNoteIssuer")
+  payoutsRecorded                  Payout[]                 @relation("PayoutRecorder")
+  financeReceiptsUploaded          FinanceReceipt[]         @relation("FinanceReceiptUploader")
 
   // The same address may exist in two realms as two unrelated identities.
   @@unique([realm, normalizedEmail])
@@ -969,6 +1007,8 @@ model Trip {
   trackingPublicTokens    TrackingPublicToken[]
   borderEvents            BorderEvent[]
   incidents               Incident[]
+  financeRevenues         TripRevenue[]
+  financeExpenses         TripExpense[]
 
   @@index([status, id])
   @@index([routeVersionId, id])
@@ -1247,6 +1287,7 @@ model Baggage {
   bookingPassenger BookingPassenger @relation(fields: [bookingId, passengerId], references: [bookingId, passengerId], onDelete: Restrict, map: "baggage_booking_passenger_fkey")
   events           BaggageEvent[]
   incidents        Incident[]
+  financeRevenues  TripRevenue[]
 
   @@index([bookingId, passengerId, id])
   @@index([lifecycleStatus, id])
@@ -1392,6 +1433,7 @@ model Payment {
   booking          Booking        @relation(fields: [bookingId], references: [id], onDelete: Restrict)
   customerIdentity AuthIdentity   @relation("PaymentCustomer", fields: [customerIdentityId], references: [id], onDelete: Restrict)
   events           PaymentEvent[]
+  refunds          Refund[]
 
   // At most one PENDING and one SUCCEEDED attempt per booking: partial unique
   // indexes created in the PR-10 migration (like the earlier partial indexes,
@@ -1883,6 +1925,146 @@ model IncidentAttachment {
   @@index([incidentId, createdAt, id])
   @@index([uploadedByIdentityId, createdAt])
   @@map("incident_attachment")
+}
+
+/// PR-22: additional trip revenue. Ticket revenue is never duplicated here:
+/// it is derived from existing SUCCEEDED Payment rows.
+model TripRevenue {
+  id                  String             @id @default(uuid(7)) @db.Uuid
+  reference           String             @unique @db.VarChar(17)
+  tripId              String             @map("trip_id") @db.Uuid
+  baggageId           String?            @map("baggage_id") @db.Uuid
+  type                FinanceRevenueType
+  status              FinanceEntryStatus @default(ACTIVE)
+  amountMinor         BigInt             @map("amount_minor")
+  currencyCode        String             @map("currency_code") @db.VarChar(3)
+  currencyMinorUnit   Int                @map("currency_minor_unit")
+  description         String             @db.VarChar(500)
+  occurredAt          DateTime           @map("occurred_at") @db.Timestamptz(3)
+  createdByIdentityId String             @map("created_by_identity_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  voidedByIdentityId  String?            @map("voided_by_identity_id") @db.Uuid
+  voidedAt            DateTime?          @map("voided_at") @db.Timestamptz(3)
+  voidReason          String?            @map("void_reason") @db.VarChar(500)
+
+  trip      Trip          @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  baggage   Baggage?      @relation(fields: [baggageId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy AuthIdentity  @relation("TripRevenueCreator", fields: [createdByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  voidedBy  AuthIdentity? @relation("TripRevenueVoider", fields: [voidedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tripId, status, occurredAt, id])
+  @@index([baggageId])
+  @@index([createdByIdentityId, createdAt])
+  @@map("trip_revenue")
+}
+
+model TripExpense {
+  id                  String             @id @default(uuid(7)) @db.Uuid
+  reference           String             @unique @db.VarChar(17)
+  tripId              String             @map("trip_id") @db.Uuid
+  type                FinanceExpenseType
+  status              FinanceEntryStatus @default(ACTIVE)
+  amountMinor         BigInt             @map("amount_minor")
+  currencyCode        String             @map("currency_code") @db.VarChar(3)
+  currencyMinorUnit   Int                @map("currency_minor_unit")
+  description         String             @db.VarChar(500)
+  vendorLabel         String?            @map("vendor_label") @db.VarChar(160)
+  occurredAt          DateTime           @map("occurred_at") @db.Timestamptz(3)
+  createdByIdentityId String             @map("created_by_identity_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  voidedByIdentityId  String?            @map("voided_by_identity_id") @db.Uuid
+  voidedAt            DateTime?          @map("voided_at") @db.Timestamptz(3)
+  voidReason          String?            @map("void_reason") @db.VarChar(500)
+
+  trip      Trip             @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy AuthIdentity     @relation("TripExpenseCreator", fields: [createdByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  voidedBy  AuthIdentity?    @relation("TripExpenseVoider", fields: [voidedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  payouts   Payout[]
+  receipts  FinanceReceipt[]
+
+  @@index([tripId, status, occurredAt, id])
+  @@index([createdByIdentityId, createdAt])
+  @@map("trip_expense")
+}
+
+model Refund {
+  id                   String   @id @default(uuid(7)) @db.Uuid
+  reference            String   @unique @db.VarChar(17)
+  paymentId            String   @map("payment_id") @db.Uuid
+  clientRefundId       String   @map("client_refund_id") @db.VarChar(64)
+  amountMinor          BigInt   @map("amount_minor")
+  currencyCode         String   @map("currency_code") @db.VarChar(3)
+  currencyMinorUnit    Int      @map("currency_minor_unit")
+  reason               String   @db.VarChar(500)
+  recordedByIdentityId String   @map("recorded_by_identity_id") @db.Uuid
+  recordedAt           DateTime @default(now()) @map("recorded_at") @db.Timestamptz(3)
+
+  payment    Payment      @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  recordedBy AuthIdentity @relation("RefundRecorder", fields: [recordedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  creditNote CreditNote?
+
+  @@unique([paymentId, clientRefundId])
+  @@index([paymentId, recordedAt, id])
+  @@index([recordedByIdentityId, recordedAt])
+  @@map("refund")
+}
+
+model CreditNote {
+  id                 String   @id @default(uuid(7)) @db.Uuid
+  reference          String   @unique @db.VarChar(17)
+  refundId           String   @unique @map("refund_id") @db.Uuid
+  amountMinor        BigInt   @map("amount_minor")
+  currencyCode       String   @map("currency_code") @db.VarChar(3)
+  currencyMinorUnit  Int      @map("currency_minor_unit")
+  issuedByIdentityId String   @map("issued_by_identity_id") @db.Uuid
+  issuedAt           DateTime @default(now()) @map("issued_at") @db.Timestamptz(3)
+
+  refund   Refund       @relation(fields: [refundId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  issuedBy AuthIdentity @relation("CreditNoteIssuer", fields: [issuedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([issuedByIdentityId, issuedAt])
+  @@map("credit_note")
+}
+
+model Payout {
+  id                   String   @id @default(uuid(7)) @db.Uuid
+  reference            String   @unique @db.VarChar(17)
+  expenseId            String   @map("expense_id") @db.Uuid
+  clientPayoutId       String   @map("client_payout_id") @db.VarChar(64)
+  amountMinor          BigInt   @map("amount_minor")
+  currencyCode         String   @map("currency_code") @db.VarChar(3)
+  currencyMinorUnit    Int      @map("currency_minor_unit")
+  note                 String?  @db.VarChar(500)
+  recordedByIdentityId String   @map("recorded_by_identity_id") @db.Uuid
+  paidAt               DateTime @map("paid_at") @db.Timestamptz(3)
+  recordedAt           DateTime @default(now()) @map("recorded_at") @db.Timestamptz(3)
+
+  expense    TripExpense  @relation(fields: [expenseId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  recordedBy AuthIdentity @relation("PayoutRecorder", fields: [recordedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([expenseId, clientPayoutId])
+  @@index([expenseId, paidAt, id])
+  @@index([recordedByIdentityId, recordedAt])
+  @@map("payout")
+}
+
+model FinanceReceipt {
+  id                   String   @id @default(uuid(7)) @db.Uuid
+  reference            String   @unique @db.VarChar(17)
+  expenseId            String   @map("expense_id") @db.Uuid
+  objectKey            String   @unique @map("object_key") @db.VarChar(96)
+  sha256               String   @db.Char(64)
+  mimeType             String   @map("mime_type") @db.VarChar(64)
+  sizeBytes            Int      @map("size_bytes")
+  uploadedByIdentityId String   @map("uploaded_by_identity_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  expense    TripExpense  @relation(fields: [expenseId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  uploadedBy AuthIdentity @relation("FinanceReceiptUploader", fields: [uploadedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([expenseId, createdAt, id])
+  @@index([uploadedByIdentityId, createdAt])
+  @@map("finance_receipt")
 }
 
 model CrewDevice {

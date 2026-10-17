@@ -14,6 +14,7 @@ import { CrewModule } from './crew/crew.module.js';
 import { DepartureReadinessModule } from './departure-readiness/departure-readiness.module.js';
 import { FleetModule } from './fleet/fleet.module.js';
 import { HealthModule } from './health/health.module.js';
+import { FinanceModule } from './finance/finance.module.js';
 import { IncidentModule } from './incidents/incident.module.js';
 import { ManifestModule } from './manifests/manifest.module.js';
 import { NetworkModule } from './network/network.module.js';
@@ -47,6 +48,7 @@ export class AppModule {
         ),
         NetworkModule,
         FleetModule,
+        FinanceModule,
         TripModule,
         SeatMapModule,
         PricingModule,

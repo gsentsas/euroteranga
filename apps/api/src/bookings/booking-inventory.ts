@@ -1,7 +1,11 @@
 import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import type { AuditService } from '../authorization/audit.service.js';
-import { cancelPendingPayments, lockPendingPayments } from '../payments/payment-transitions.js';
+import {
+  cancelPendingPayments,
+  isPaymentFullyRefunded,
+  lockFinancialPayments,
+} from '../payments/payment-transitions.js';
 import { BookingErrors } from './booking.errors.js';
 
 /**
@@ -216,8 +220,9 @@ export interface TripHoldsCancellation {
  * Trip cancellation cascade, inside the trip's transaction (trip already
  * locked FOR UPDATE). Lock order: the trip's PENDING payments, then every
  * non-cancelled booking of the trip (both by id). When a booking is
- * CONFIRMED, nothing changes and the caller refuses the cancellation (no
- * refund workflow yet). Otherwise the PENDING attempts are cancelled
+ * CONFIRMED and not fully refunded, nothing changes and the caller refuses
+ * cancellation. Fully refunded confirmed bookings are cancelled and release
+ * their inventory. Otherwise the PENDING attempts are cancelled
  * (PAYMENT_CANCELLED), expired holds release their inventory, and every
  * active hold is cancelled with its seats and locks released
  * (BOOKING_CANCELLED_BY_TRIP), all by the STAFF member cancelling the trip.
@@ -227,16 +232,31 @@ export async function cancelTripHolds(
   audit: AuditService,
   input: { tripId: string; tripReference: string; actor: AuthPrincipal; reason: string },
 ): Promise<TripHoldsCancellation> {
-  // Payment initiation holds the trip FOR SHARE: no new attempt can appear now.
-  const pendingPayments = await lockPendingPayments(tx, { tripId: input.tripId });
-  const bookings = await tx.$queryRaw<Array<{ id: string; confirmed: boolean }>>`
-    SELECT b."id", b."confirmed_at" IS NOT NULL AS "confirmed"
-    FROM "booking" b
-    WHERE b."trip_id" = ${input.tripId}::uuid AND b."cancelled_at" IS NULL
-    ORDER BY b."id"
-    FOR UPDATE OF b
-  `;
-  const confirmedBookingCount = bookings.filter((booking) => booking.confirmed).length;
+  // Refund insertion locks the same SUCCEEDED payment rows. Lock every
+  // PENDING/SUCCEEDED payment before taking any booking lock.
+  const lockedPayments = await lockFinancialPayments(tx, { tripId: input.tripId });
+  const pendingPayments = lockedPayments
+    .filter((payment) => payment.status === 'PENDING')
+    .map((payment) => ({
+      id: payment.id,
+      reference: payment.reference,
+      bookingReference: payment.bookingReference,
+    }));
+  const bookings = await tx.$queryRawUnsafe<
+    Array<{ id: string; reference: string; confirmed: boolean }>
+  >(
+    'SELECT b."id",b."reference",b."confirmed_at" IS NOT NULL AS "confirmed" FROM "booking" b WHERE b."trip_id"=$1::uuid AND b."cancelled_at" IS NULL ORDER BY b."id" FOR UPDATE OF b',
+    input.tripId,
+  );
+  const confirmed = bookings.filter((booking) => booking.confirmed);
+  const refundable = new Set<string>();
+  for (const booking of confirmed) {
+    const payment = lockedPayments.find(
+      (candidate) => candidate.bookingId === booking.id && candidate.status === 'SUCCEEDED',
+    );
+    if (payment && (await isPaymentFullyRefunded(tx, payment))) refundable.add(booking.id);
+  }
+  const confirmedBookingCount = confirmed.length - refundable.size;
   if (confirmedBookingCount > 0) {
     return { confirmedBookingCount, cancelledBookingCount: 0, cancelledPaymentCount: 0 };
   }
@@ -257,7 +277,8 @@ export async function cancelTripHolds(
     ORDER BY b."id"
     FOR UPDATE OF b
   `;
-  if (active.length === 0) {
+  const refundedConfirmed = confirmed.filter((booking) => refundable.has(booking.id));
+  if (active.length === 0 && refundedConfirmed.length === 0) {
     return {
       confirmedBookingCount: 0,
       cancelledBookingCount: 0,
@@ -265,7 +286,7 @@ export async function cancelTripHolds(
     };
   }
   const now = await databaseNow(tx);
-  for (const booking of active) {
+  for (const booking of [...active, ...refundedConfirmed]) {
     const seatLabels = await seatLabelsOf(tx, booking.id);
     await releaseCancelledHold(tx, booking.id, now, reason);
     await audit.record(
@@ -274,7 +295,7 @@ export async function cancelTripHolds(
         action: 'BOOKING_CANCELLED_BY_TRIP',
         resourceType: 'booking',
         resourceId: booking.id,
-        before: { status: 'HELD' },
+        before: { status: refundable.has(booking.id) ? 'CONFIRMED' : 'HELD' },
         after: { status: 'CANCELLED', cancelledAt: now },
         metadata: {
           reference: booking.reference,
@@ -289,7 +310,7 @@ export async function cancelTripHolds(
   }
   return {
     confirmedBookingCount: 0,
-    cancelledBookingCount: active.length,
+    cancelledBookingCount: active.length + refundedConfirmed.length,
     cancelledPaymentCount: pendingPayments.length,
   };
 }

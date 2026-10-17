@@ -9,6 +9,51 @@ export interface LockedPendingPayment {
   bookingReference: string;
 }
 
+export interface LockedFinancialPayment extends LockedPendingPayment {
+  bookingId: string;
+  status: 'PENDING' | 'SUCCEEDED';
+  amountMinor: bigint;
+}
+
+export async function lockFinancialPayments(
+  tx: DatabaseTransaction,
+  where: { bookingId: string } | { tripId: string },
+): Promise<LockedFinancialPayment[]> {
+  type Row = {
+    id: string;
+    reference: string;
+    booking_id: string;
+    booking_reference: string;
+    status: 'PENDING' | 'SUCCEEDED';
+    amount_minor: bigint;
+  };
+  const sql =
+    'bookingId' in where
+      ? 'SELECT p."id",p."reference",p."booking_id",b."reference" AS "booking_reference",p."status"::text AS "status",p."amount_minor" FROM "payment" p JOIN "booking" b ON b."id"=p."booking_id" WHERE p."booking_id"=$1::uuid AND p."status" IN ($2::payment_status,$3::payment_status) ORDER BY p."id" FOR UPDATE OF p'
+      : 'SELECT p."id",p."reference",p."booking_id",b."reference" AS "booking_reference",p."status"::text AS "status",p."amount_minor" FROM "payment" p JOIN "booking" b ON b."id"=p."booking_id" WHERE b."trip_id"=$1::uuid AND p."status" IN ($2::payment_status,$3::payment_status) ORDER BY p."id" FOR UPDATE OF p';
+  const value = 'bookingId' in where ? where.bookingId : where.tripId;
+  const rows = await tx.$queryRawUnsafe<Row[]>(sql, value, 'PENDING', 'SUCCEEDED');
+  return rows.map((row) => ({
+    id: row.id,
+    reference: row.reference,
+    bookingId: row.booking_id,
+    bookingReference: row.booking_reference,
+    status: row.status,
+    amountMinor: row.amount_minor,
+  }));
+}
+
+export async function isPaymentFullyRefunded(
+  tx: DatabaseTransaction,
+  payment: Pick<LockedFinancialPayment, 'id' | 'amountMinor'>,
+): Promise<boolean> {
+  const aggregate = await tx.refund.aggregate({
+    where: { paymentId: payment.id },
+    _sum: { amountMinor: true },
+  });
+  return (aggregate._sum.amountMinor ?? 0n) === payment.amountMinor;
+}
+
 /**
  * Locks the PENDING attempts of the given bookings, in id order. Callers lock
  * payments before bookings (lock hierarchy trip -> payment -> booking), like
