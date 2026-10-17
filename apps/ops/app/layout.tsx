@@ -6,15 +6,14 @@ import { RefineProvider } from './refine-provider';
 
 export const metadata: Metadata = {
   title: 'EURO TERANGA Ops',
-  description: 'Back-office des opérations EURO TERANGA — environnement de fondation.',
-  // Foundation skeletons must not be indexed as if they were live services.
+  description: 'Centre de contrôle interne des opérations EURO TERANGA.',
   robots: { index: false, follow: false },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="fr">
-      <body>
+      <body className="ops-app">
         <RefineProvider>{children}</RefineProvider>
       </body>
     </html>
