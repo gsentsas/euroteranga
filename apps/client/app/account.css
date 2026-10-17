@@ -1,28 +1,124 @@
+.et-client-home {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: -4.1rem;
+  position: relative;
+  z-index: 4;
+}
+
+.et-client-welcome {
+  max-width: 48rem;
+  padding: 1.5rem;
+  border: 1px solid rgba(7, 59, 49, 0.1);
+  border-radius: 1.35rem;
+  background: #fff;
+  box-shadow: 0 20px 55px rgba(7, 59, 49, 0.15);
+}
+
+.et-client-eyebrow {
+  margin: 0 0 0.4rem;
+  color: #13705b;
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.et-client-welcome h2 {
+  margin: 0;
+  font-size: clamp(1.7rem, 4vw, 2.5rem);
+  letter-spacing: -0.03em;
+}
+
+.et-client-welcome > p:not(.et-client-eyebrow) {
+  color: #5a6762;
+}
+
+.et-client-link-button {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 .et-account-sections,
 .et-booking-list {
   display: grid;
-  gap: var(--et-space-5);
+  gap: 1.25rem;
+}
+
+.et-account-sections {
+  margin-top: -4.1rem;
+  position: relative;
+  z-index: 4;
+}
+
+.et-account-sections > section {
+  padding: 1.45rem;
+  border: 1px solid #dce5e0;
+  border-radius: 1.25rem;
+  background: #fff;
+  box-shadow: 0 16px 38px rgba(7, 59, 49, 0.08);
+}
+
+.et-account-sections > section > .et-actions:first-child {
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid #edf1ef;
+}
+
+.et-account-sections > section > h2,
+.et-account-sections > section > .et-actions h2 {
+  margin: 0;
+  font-size: clamp(1.35rem, 3vw, 1.8rem);
+}
+
+.et-account-sections > section > p {
+  color: #5a6762;
+}
+
+.et-account-sections > section:first-child {
+  border-top: 0.3rem solid #0b5d4b;
+}
+
+.et-account-sections > section:first-child dl {
+  display: grid;
+  grid-template-columns: minmax(8rem, 12rem) 1fr;
+  gap: 0.55rem 1rem;
+  padding: 1rem;
+  border-radius: 0.9rem;
+  background: #f7fcf9;
+}
+
+.et-account-sections > section:first-child dt {
+  color: #5a6762;
+  font-weight: 700;
+}
+
+.et-account-sections > section:first-child dd {
+  margin: 0;
 }
 
 .et-customer-booking {
-  padding: var(--et-space-4);
-  border: 1px solid var(--et-color-border);
-  border-radius: var(--et-radius);
-  background: var(--et-color-surface-raised);
+  padding: 1.2rem;
+  border: 1px solid #dce5e0;
+  border-radius: 1rem;
+  background: #fffdf9;
 }
 
-.et-customer-booking h3 {
+.et-customer-booking h3,
+.et-customer-booking h4 {
   margin: 0;
 }
 
 .et-booking-details {
   display: grid;
   grid-template-columns: minmax(7rem, 10rem) 1fr;
-  gap: var(--et-space-2) var(--et-space-3);
-  margin-block: var(--et-space-3);
+  gap: 0.6rem 1rem;
+  margin-block: 1rem;
 }
 
 .et-booking-details dt {
+  color: #5a6762;
+  font-size: 0.86rem;
   font-weight: 700;
 }
 
@@ -30,52 +126,70 @@
   margin: 0;
 }
 
-@media (max-width: 36rem) {
-  .et-booking-details {
-    grid-template-columns: 1fr;
-  }
-}
-
 .et-customer-booking-payment {
-  margin-bottom: var(--et-space-3);
-  padding: var(--et-space-2) var(--et-space-3);
-  border-left: 4px solid var(--et-color-border);
+  margin-bottom: 1rem;
+  padding: 0.8rem 1rem;
+  border-left: 4px solid #e7aa2f;
+  border-radius: 0 0.8rem 0.8rem 0;
+  background: #fff9ea;
 }
 
 .et-passenger-form {
-  margin-block: 1.25rem;
-  max-width: 44rem;
+  margin-block: 1.1rem;
+  max-width: none;
+  padding: 1.1rem;
+  border: 1px solid #dce5e0;
+  border-radius: 1rem;
+  background: #f9fcfa;
+}
+
+.et-passenger-form h3 {
+  margin-top: 0;
 }
 
 .et-passenger-form label {
   display: grid;
   gap: 0.35rem;
+  color: #073b31;
+  font-weight: 700;
 }
 
 .et-passenger-form input,
 .et-passenger-form select {
-  border: 1px solid var(--et-color-border);
-  border-radius: 0.35rem;
+  min-height: 3rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #aebdb6;
+  border-radius: 0.8rem;
+  background: #fff;
   font: inherit;
-  padding: 0.65rem;
 }
 
 .et-passenger-list,
 .et-document-list {
   display: grid;
-  gap: 1rem;
+  gap: 0.8rem;
+}
+
+.et-passenger-list + .et-passenger-list {
+  margin-top: 1rem;
 }
 
 .et-document-list {
-  list-style: none;
+  margin: 0.8rem 0;
   padding: 0;
+  list-style: none;
 }
 
 .et-document-list li {
-  align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid #e3eae6;
+  border-radius: 0.75rem;
+  background: #fff;
 }
 
 .et-baggage-qr {
@@ -86,9 +200,42 @@
 }
 
 .et-baggage-qr img {
-  background: #ffffff;
-  border: 1px solid var(--et-color-border);
-  border-radius: 0.35rem;
   height: auto;
   max-width: 100%;
+  padding: 0.4rem;
+  border: 1px solid #dce5e0;
+  border-radius: 0.8rem;
+  background: #fff;
+}
+
+.et-account-sections select {
+  min-height: 2.8rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #aebdb6;
+  border-radius: 0.75rem;
+  background: #fff;
+  font: inherit;
+}
+
+@media (max-width: 48rem) {
+  .et-client-home,
+  .et-account-sections {
+    margin-top: -2.4rem;
+  }
+}
+
+@media (max-width: 36rem) {
+  .et-booking-details,
+  .et-account-sections > section:first-child dl {
+    grid-template-columns: 1fr;
+  }
+
+  .et-account-sections {
+    gap: 0.9rem;
+  }
+
+  .et-account-sections > section,
+  .et-client-welcome {
+    padding: 1rem;
+  }
 }

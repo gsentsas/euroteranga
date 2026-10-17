@@ -29,7 +29,7 @@ function trackPageErrors(page: Page): string[] {
 
 test('client: login and registration pages are accessible forms', async ({ page }) => {
   await page.goto(appUrl(client, '/connexion'));
-  await expect(page).toHaveTitle('Connexion — EURO TERANGA Client');
+  await expect(page).toHaveTitle('Connexion — EURO TERANGA');
   await expect(page.getByLabel('Adresse e-mail')).toHaveAttribute('autocomplete', 'email');
   await expect(page.getByLabel('Mot de passe', { exact: true })).toHaveAttribute(
     'autocomplete',
@@ -43,7 +43,7 @@ test('client: login and registration pages are accessible forms', async ({ page 
   );
 
   await page.goto(appUrl(client, '/inscription'));
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Créer un compte');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Créez votre espace voyage.');
   await expect(page.getByLabel('Mot de passe', { exact: true })).toHaveAttribute(
     'autocomplete',
     'new-password',

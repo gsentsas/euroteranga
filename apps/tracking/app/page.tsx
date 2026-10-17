@@ -1,21 +1,30 @@
-import { FoundationShell } from '@euroteranga/ui';
+import { JourneyShell } from '@euroteranga/ui';
 import { publicEnv } from '../lib/env';
 
 export default function HomePage() {
   return (
-    <FoundationShell
-      product="Tracking"
-      title="EURO TERANGA Tracking"
-      subtitle="Suivi sécurisé des voyages"
+    <JourneyShell
+      area="Suivi"
+      title="Gardez un œil sur votre trajet."
+      subtitle="Le suivi public montre uniquement les informations autorisées pour votre voyage."
       environment={publicEnv.NEXT_PUBLIC_APP_ENV}
+      current="tracking"
     >
-      <section className="tracking-card">
-        <h2>Accès au suivi</h2>
-        <p>
-          Ouvrez le lien de suivi sécurisé qui vous a été transmis pour consulter les informations
-          publiées pour votre voyage.
-        </p>
+      <section className="tracking-access-card">
+        <div>
+          <p className="tracking-kicker">Lien sécurisé</p>
+          <h2>Accédez au suivi transmis pour votre voyage.</h2>
+          <p>
+            Ouvrez le lien de suivi reçu avec vos informations de voyage. Aucun trajet ni aucune
+            position n’est affiché sans un lien valide.
+          </p>
+        </div>
+        <div className="tracking-access-visual" aria-hidden="true">
+          <span className="tracking-access-line" />
+          <span className="tracking-access-pin tracking-access-pin--a" />
+          <span className="tracking-access-pin tracking-access-pin--b" />
+        </div>
       </section>
-    </FoundationShell>
+    </JourneyShell>
   );
 }

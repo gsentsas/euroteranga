@@ -1,7 +1,7 @@
 'use client';
 
 import type { PublicTrackingProjection, TrackingProviderStatus } from '@euroteranga/auth-client';
-import { FoundationShell } from '@euroteranga/ui';
+import { JourneyShell } from '@euroteranga/ui';
 import { useEffect, useState } from 'react';
 import { auth } from '../lib/auth';
 import { publicEnv } from '../lib/env';
@@ -43,11 +43,12 @@ export function PublicTracking({ token }: { token: string }) {
   }, [token]);
 
   return (
-    <FoundationShell
-      product="Tracking"
-      title="Suivi EURO TERANGA"
-      subtitle="Informations opérationnelles publiées pour ce voyage"
+    <JourneyShell
+      area="Suivi de voyage"
+      title="Où en est votre voyage ?"
+      subtitle="Consultez les informations opérationnelles publiées pour votre trajet."
       environment={publicEnv.NEXT_PUBLIC_APP_ENV}
+      current="tracking"
     >
       {state === 'loading' ? <p role="status">Chargement du suivi…</p> : null}
 
@@ -136,6 +137,6 @@ export function PublicTracking({ token }: { token: string }) {
           </p>
         </div>
       ) : null}
-    </FoundationShell>
+    </JourneyShell>
   );
 }

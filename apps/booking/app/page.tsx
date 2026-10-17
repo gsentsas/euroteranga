@@ -1,16 +1,17 @@
-import { FoundationShell } from '@euroteranga/ui';
+import { JourneyShell } from '@euroteranga/ui';
 import { BookingFlow } from '../components/booking-flow';
 import { publicEnv } from '../lib/env';
 
 export default function HomePage() {
   return (
-    <FoundationShell
-      product="Booking"
-      title="EURO TERANGA Booking"
-      subtitle="Choisissez votre trajet et retenez vos sièges"
+    <JourneyShell
+      area="Réservation"
+      title="Réservez votre Paris ↔ Dakar."
+      subtitle="Recherchez un départ réellement ouvert, choisissez votre siège et gardez le contrôle jusqu’à la confirmation."
       environment={publicEnv.NEXT_PUBLIC_APP_ENV}
+      current="booking"
     >
       <BookingFlow />
-    </FoundationShell>
+    </JourneyShell>
   );
 }

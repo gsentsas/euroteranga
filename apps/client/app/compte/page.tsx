@@ -1,21 +1,23 @@
-import { FoundationShell } from '@euroteranga/ui';
+import { JourneyShell } from '@euroteranga/ui';
 import type { Metadata } from 'next';
 import { AccountView } from '../../components/account-view';
 import { CustomerBaggage } from '../../components/customer-baggage';
-import { CustomerCheckIn } from '../../components/customer-check-in';
 import { CustomerBookings } from '../../components/customer-bookings';
+import { CustomerCheckIn } from '../../components/customer-check-in';
 import { CustomerCompliance } from '../../components/customer-compliance';
 import { CustomerPassengers } from '../../components/customer-passengers';
 import { publicEnv } from '../../lib/env';
 
-export const metadata: Metadata = { title: 'Mon compte — EURO TERANGA Client' };
+export const metadata: Metadata = { title: 'Mon espace — EURO TERANGA' };
 
 export default function Page() {
   return (
-    <FoundationShell
-      product="Client"
-      title="Mon compte"
+    <JourneyShell
+      area="Mon espace"
+      title="Préparez votre voyage."
+      subtitle="Réservations, voyageurs, documents, bagages et check-in réunis dans un seul espace."
       environment={publicEnv.NEXT_PUBLIC_APP_ENV}
+      current="client"
     >
       <div className="et-account-sections">
         <AccountView />
@@ -25,6 +27,6 @@ export default function Page() {
         <CustomerBaggage />
         <CustomerCheckIn />
       </div>
-    </FoundationShell>
+    </JourneyShell>
   );
 }
