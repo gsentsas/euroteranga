@@ -230,14 +230,14 @@ It uses one retention snapshot and deletes only temporary authentication
 artifacts. Security/audit events and durable identity/MFA credentials are not
 deleted by this command.
 
-| Data                              | Retention after expiry/revocation | Indexed time field |
-| --------------------------------- | -------------------------------- | ------------------ |
-| Verification / reset tokens       | 7 days                           | `expires_at`       |
-| MFA challenges                    | 1 day                            | `expires_at`       |
-| Rate-limit buckets                | immediately after expiry         | `expires_at`       |
-| Revoked / expired sessions        | 90 days                          | session expiry/revocation fields |
-| Staff invitations                 | 7 days                           | `expires_at`       |
-| Staff MFA enrollment grants       | 7 days                           | `expires_at`       |
+| Data                        | Retention after expiry/revocation | Indexed time field               |
+| --------------------------- | --------------------------------- | -------------------------------- |
+| Verification / reset tokens | 7 days                            | `expires_at`                     |
+| MFA challenges              | 1 day                             | `expires_at`                     |
+| Rate-limit buckets          | immediately after expiry          | `expires_at`                     |
+| Revoked / expired sessions  | 90 days                           | session expiry/revocation fields |
+| Staff invitations           | 7 days                            | `expires_at`                     |
+| Staff MFA enrollment grants | 7 days                            | `expires_at`                     |
 
 Production should schedule the CLI daily in the platform scheduler. Running it
 again with the same database state is a no-op.
