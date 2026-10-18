@@ -74,7 +74,7 @@ export function OpsNav({ onNavigate }: { onNavigate?: () => void } = {}) {
                     href={item.route ?? '/'}
                     className={active ? 'ops-nav__link ops-nav__link--active' : 'ops-nav__link'}
                     aria-current={active ? 'page' : undefined}
-                    onClick={onNavigate}
+                    onClick={() => onNavigate?.()}
                   >
                     <span className="ops-nav__bullet" aria-hidden="true" />
                     <span>{item.label ?? item.name}</span>
