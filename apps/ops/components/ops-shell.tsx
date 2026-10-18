@@ -5,6 +5,7 @@ import { Authenticated } from '@refinedev/core';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { publicEnv } from '../lib/env';
+import { OpsGlobalSearch } from './ops-global-search';
 import { OpsNav } from './ops-nav';
 import { AccessGate, AccessProvider } from './staff-access';
 
@@ -61,6 +62,7 @@ export function OpsShell({
 
           <header className="ops-topbar">
             <OpsBrand />
+            <OpsGlobalSearch />
             <div className="ops-topbar__meta">
               <span className="ops-live-indicator">
                 <span aria-hidden="true" />
