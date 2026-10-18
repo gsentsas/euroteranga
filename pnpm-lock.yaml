@@ -534,6 +534,12 @@ importers:
       '@euroteranga/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@euroteranga/content':
+        specifier: workspace:*
+        version: link:../../packages/content
+      '@euroteranga/site':
+        specifier: workspace:*
+        version: link:../../packages/site
       '@euroteranga/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -727,6 +733,9 @@ importers:
         specifier: workspace:*
         version: link:../content
     devDependencies:
+      '@euroteranga/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@types/react':
         specifier: 'catalog:'
         version: 19.3.0
