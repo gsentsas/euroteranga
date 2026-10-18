@@ -212,8 +212,10 @@ test.describe('PR-14 check-in and boarding', () => {
     await workspace.getByRole('button', { name: 'Filtrer' }).click();
     const row = workspace.getByRole('row').filter({ hasText: seed.counterPassenger.reference });
     await expect(row).toContainText('Siège non affecté');
-    await row.getByRole('button', { name: 'Consulter' }).click();
+    const consult = row.getByRole('button', { name: 'Consulter' });
+    await consult.click();
     await expect(page.locator('#check-in-detail-panel')).toBeFocused();
+    await expect(row).toHaveClass(/ops-table-row--selected/);
 
     const detail = page.getByTestId('check-in-detail');
     await expect(detail).toContainText('Coura Comptoir');
@@ -230,6 +232,10 @@ test.describe('PR-14 check-in and boarding', () => {
     await expect(detail).toContainText('Enregistré');
     await expect(detail).toContainText('Comptoir');
     await expect(page.getByRole('button', { name: /forcer|ignorer|contourner/i })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Retour à la liste' }).click();
+    await expect(page.locator('#check-in-detail-panel')).toHaveCount(0);
+    await expect(consult).toBeFocused();
+    await expect(row).not.toHaveClass(/ops-table-row--selected/);
     // The counter agent cannot board through the API either.
     const scan = await directAdminApi(page.request).post('/boarding/scan', {
       qrPayload: 'ETPAX1:ETQ-0000000000000000',
