@@ -663,6 +663,16 @@
   background: #f8fbf9;
 }
 
+.ops-detail-region {
+  scroll-margin-top: 5.75rem;
+  border-radius: 0.9rem;
+}
+
+.ops-detail-region:focus {
+  outline: 3px solid rgba(231, 170, 47, 0.55);
+  outline-offset: 0.25rem;
+}
+
 @media (max-width: 72rem) {
   .ops-workbench {
     grid-template-columns: 14.5rem minmax(0, 1fr);
