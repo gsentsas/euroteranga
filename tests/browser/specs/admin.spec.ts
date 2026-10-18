@@ -45,27 +45,6 @@ test('ops: a STAFF session without ops.access is denied, in the UI and by the AP
   expect(errors).toEqual([]);
 });
 
-test('ops: global search finds an authorized booking and opens its workspace', async ({ page }) => {
-  test.setTimeout(60_000);
-  const errors = trackPageErrors(page);
-  const seed = bookingSeed();
-  await signInAndEnroll(page, FIXTURES.superAdmin.email);
-
-  const search = page.getByRole('searchbox', { name: 'Recherche globale' });
-  await expect(search).toBeVisible();
-  await search.fill(seed.staffBookingReference);
-
-  const results = page.getByRole('region', { name: 'Résultats globaux' });
-  await expect(results).toBeVisible();
-  const booking = results.getByRole('link').filter({ hasText: seed.staffBookingReference }).first();
-  await expect(booking).toBeVisible();
-  await booking.click();
-
-  await expect(page).toHaveURL(appUrl(ops, '/bookings'));
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Réservations');
-  expect(errors).toEqual([]);
-});
-
 test('ops: SUPER_ADMIN signs in with MFA, invites, manages roles and status, reads the audit', async ({
   page,
 }) => {
@@ -87,6 +66,22 @@ test('ops: SUPER_ADMIN signs in with MFA, invites, manages roles and status, rea
   await page.getByRole('button', { name: 'Valider' }).click();
   await expect(page).toHaveURL(appUrl(ops, '/'));
   await expect(page.getByTestId('session-roles')).toHaveText('SUPER_ADMIN');
+
+  // UI-4C: the global search reuses the same authenticated session and existing read permissions.
+  const bookingSearchSeed = bookingSeed();
+  const globalSearch = page.getByRole('searchbox', { name: 'Recherche globale' });
+  await expect(globalSearch).toBeVisible();
+  await globalSearch.fill(bookingSearchSeed.staffBookingReference);
+  const globalResults = page.getByRole('region', { name: 'Résultats globaux' });
+  await expect(globalResults).toBeVisible();
+  const bookingResult = globalResults
+    .getByRole('link')
+    .filter({ hasText: bookingSearchSeed.staffBookingReference })
+    .first();
+  await expect(bookingResult).toBeVisible();
+  await bookingResult.click();
+  await expect(page).toHaveURL(appUrl(ops, '/bookings'));
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Réservations');
 
   for (const label of ['Utilisateurs', 'Rôles', 'Journal d’audit']) {
     await expect(mainNav(page).getByRole('link', { name: label })).toBeVisible();
