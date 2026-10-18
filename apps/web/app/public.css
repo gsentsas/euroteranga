@@ -1035,3 +1035,26 @@ body {
     transition: none;
   }
 }
+
+.public-not-found {
+  display: flex;
+  align-items: center;
+  min-height: 70vh;
+  padding: 4rem 0;
+}
+
+.public-not-found__inner {
+  max-width: 44rem;
+}
+
+.public-not-found h1 {
+  margin: 0.5rem 0 1rem;
+  color: var(--public-green-950);
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.1;
+}
+
+.public-not-found p {
+  color: var(--public-muted);
+  font-size: 1.1rem;
+}
