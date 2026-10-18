@@ -1155,3 +1155,93 @@
     display: none;
   }
 }
+
+/* UI-4E: consistent loading, empty and error feedback across OPS. */
+.ops-state {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 4.5rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--ops-line);
+  border-radius: 0.8rem;
+  background: #fff;
+  color: var(--ops-text);
+}
+
+.ops-state__indicator {
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid #9eb5ac;
+  border-radius: 50%;
+}
+
+.ops-state__content {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.ops-state__content strong {
+  color: var(--ops-navy-900);
+}
+
+.ops-state__content span {
+  color: var(--ops-muted);
+  font-size: 0.82rem;
+}
+
+.ops-state__action {
+  justify-self: end;
+}
+
+.ops-state--loading .ops-state__indicator {
+  border-color: #bdd3ca;
+  border-top-color: var(--ops-green-700);
+  animation: ops-state-spin 0.8s linear infinite;
+}
+
+.ops-state--empty {
+  background: #fbfdfc;
+}
+
+.ops-state--empty .ops-state__indicator {
+  border-color: #9eb5ac;
+  background: #eef5f2;
+}
+
+.ops-state--error {
+  border-color: #ddb6bc;
+  background: #fff7f8;
+}
+
+.ops-state--error .ops-state__indicator {
+  border-color: #b23a48;
+  background: #b23a48;
+}
+
+@keyframes ops-state-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ops-state--loading .ops-state__indicator {
+    animation: none;
+    border-color: var(--ops-green-700);
+  }
+}
+
+@media (max-width: 38rem) {
+  .ops-state {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .ops-state__action {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+}
+
