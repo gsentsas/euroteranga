@@ -283,7 +283,6 @@ function BoardingPanel({ canScan }: { canScan: boolean }) {
   const [deviceId, setDeviceId] = useState('ops-console');
   const [resolved, setResolved] = useState<BoardingResolution | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const resolve = async (event: FormEvent) => {
@@ -339,7 +338,6 @@ function BoardingPanel({ canScan }: { canScan: boolean }) {
         Le QR identifie seulement un enregistrement : le serveur revérifie chaque contrôle avant
         d’embarquer. Un voyageur ne peut être embarqué qu’une fois.
       </p>
-      <FormAlert message={error} />
       {notice ? (
         <FormStatus>
           <p>{notice}</p>
