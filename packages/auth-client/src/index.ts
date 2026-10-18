@@ -266,6 +266,7 @@ export {
   type ContentDocument,
   type ContentDraftInput,
   type ContentEntryDetail,
+  type ContentIssue,
   type ContentEntrySummary,
   type ContentKind,
   type ContentListOptions,
