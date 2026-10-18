@@ -1,7 +1,36 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
-const BOOKING_URL = 'https://booking.euroteranga.com/';
-const CLIENT_URL = 'https://client.euroteranga.com/';
-const TRACKING_URL = 'https://tracking.euroteranga.com/';
+import { BOOKING_URL, CLIENT_URL, TRACKING_URL } from '../lib/links';
+import { DEFAULT_DESCRIPTION, SITE_NAME, jsonLd, siteSeo } from '../lib/seo';
+
+export const metadata: Metadata = { alternates: { canonical: '/' } };
+
+/** Organization and WebSite only: no rating, review, offer or price is asserted. */
+function StructuredData() {
+  const seo = siteSeo();
+  const url = seo.siteUrl.toString();
+  const data = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      '@id': `${url}#organization`,
+      name: SITE_NAME,
+      url,
+      logo: new URL('/icon.svg', seo.siteUrl).toString(),
+      description: DEFAULT_DESCRIPTION,
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      '@id': `${url}#website`,
+      name: SITE_NAME,
+      url,
+      inLanguage: 'fr-FR',
+      publisher: { '@id': `${url}#organization` },
+    },
+  ];
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(data) }} />;
+}
 
 function ArrowIcon() {
   return (
@@ -103,6 +132,7 @@ function Brand() {
 export default function HomePage() {
   return (
     <div className="public-site">
+      <StructuredData />
       <a className="et-skip-link" href="#main">
         Aller au contenu
       </a>
