@@ -75,6 +75,25 @@ test('ops fleet: SUPER_ADMIN registers, edits and moves a synthetic vehicle thro
   await expect(history.nth(0)).toContainText('En service → Hors service — Panne synthétique');
   await expect(history.nth(1)).toContainText('Planifié → En service');
   await expect(page.getByRole('row').filter({ hasText: code })).toContainText('Hors service');
+
+  // UI-4F: permanent retirement requires an explicit second intent.
+  const retirement = detail.getByRole('form', { name: `Changer le statut du véhicule ${code}` });
+  await retirement.getByLabel('Nouveau statut').selectOption({ label: 'Retiré' });
+  await retirement.getByLabel('Motif du changement').fill('Fin de service synthétique');
+  await retirement.getByRole('button', { name: 'Retirer définitivement le véhicule' }).click();
+  const retirementConfirmation = retirement.getByRole('group', {
+    name: `Confirmer le retrait définitif de ${code}`,
+  });
+  await expect(retirementConfirmation).toBeVisible();
+  await expect(detail.getByTestId('vehicle-status')).toHaveText('Hors service');
+  await retirementConfirmation.getByRole('button', { name: 'Confirmer le retrait' }).click();
+  await expect(notice(page, `Statut du véhicule ${code} : Retiré.`)).toBeVisible();
+  await expect(detail.getByTestId('vehicle-status')).toHaveText('Retiré');
+  await expect(page.getByRole('row').filter({ hasText: code })).toContainText('Retiré');
+  await expect(
+    detail.getByRole('form', { name: `Changer le statut du véhicule ${code}` }),
+  ).toHaveCount(0);
+
   expect(errors).toEqual([]);
 });
 
