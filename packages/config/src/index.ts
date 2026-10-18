@@ -17,5 +17,9 @@ export {
   publicEnvSchema,
   type PublicEnv,
 } from './public-env.js';
-export { buildFoundationSecurityHeaders, foundationSecurityHeaders } from './security-headers.js';
+export {
+  buildFoundationSecurityHeaders,
+  foundationSecurityHeaders,
+  HSTS_VALUE,
+} from './security-headers.js';
 export { createFoundationNextConfig, type FoundationNextConfig } from './next-config.js';

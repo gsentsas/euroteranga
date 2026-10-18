@@ -8,10 +8,9 @@ export interface FoundationSecurityHeader {
 /**
  * Baseline HTTP security headers shared by every Next.js frontend.
  *
- * HSTS remains the responsibility of the TLS-terminating reverse proxy: it
- * must only be enabled once every public subdomain is HTTPS-only. PR-24 adds
- * an application CSP that keeps scripts/connects on known origins while
- * retaining the inline bootstrap required by the current Next.js runtime.
+ * PR-24 adds an application CSP that keeps scripts/connects on known origins
+ * while retaining the inline bootstrap required by the current Next.js
+ * runtime.
  */
 export const foundationSecurityHeaders: ReadonlyArray<FoundationSecurityHeader> = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -46,11 +45,24 @@ function contentSecurityPolicy(env: PublicEnv): string {
   return directives.join('; ');
 }
 
+/**
+ * OPS-DEPLOY-1: every public host is HTTPS-only (valid certificates on the
+ * apex and all sub-domains), so each deployed frontend sends HSTS itself,
+ * with the same value as the Core API (helmet). Before, only the apex sent
+ * it, from the proxy. No `preload`: inclusion in browser preload lists is a
+ * separate, hard-to-reverse owner decision. Local and CI builds serve plain
+ * HTTP and never send it.
+ */
+export const HSTS_VALUE = 'max-age=31536000; includeSubDomains';
+
 export function buildFoundationSecurityHeaders(
   env: PublicEnv,
 ): ReadonlyArray<FoundationSecurityHeader> {
+  const deployed =
+    env.NEXT_PUBLIC_APP_ENV === 'staging' || env.NEXT_PUBLIC_APP_ENV === 'production';
   return [
     { key: 'Content-Security-Policy', value: contentSecurityPolicy(env) },
     ...foundationSecurityHeaders,
+    ...(deployed ? [{ key: 'Strict-Transport-Security', value: HSTS_VALUE }] : []),
   ];
 }
