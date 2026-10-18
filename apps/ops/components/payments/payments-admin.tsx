@@ -9,6 +9,7 @@ import {
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsConfirmSubmit } from '../ops-confirm-submit';
 import { OpsEmptyState, OpsErrorState, OpsLoadingState } from '../ops-data-state';
 import { OpsDetailRegion } from '../ops-detail-region';
 import { useCan } from '../staff-access';
@@ -103,9 +104,13 @@ function PaymentDetail({
             autoComplete="off"
             maxLength={500}
           />
-          <button type="submit" className="et-button" disabled={busy || reason.trim().length < 3}>
-            Annuler la tentative
-          </button>
+          <OpsConfirmSubmit
+            actionLabel="Annuler la tentative"
+            confirmLabel="Confirmer l’annulation"
+            title={`Confirmer l’annulation de la tentative ${payment.reference}`}
+            description="La tentative en attente sera abandonnée. Cette action ne peut jamais la marquer comme réussie."
+            disabled={busy || reason.trim().length < 3}
+          />
         </form>
       ) : null}
     </section>
