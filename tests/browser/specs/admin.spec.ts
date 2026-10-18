@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { appByName, appUrl } from '../apps.js';
-import { FIXTURE_PASSWORD, FIXTURES, invitationToken } from '../fixtures.js';
+import { bookingSeed, FIXTURE_PASSWORD, FIXTURES, invitationToken } from '../fixtures.js';
 import { directAdminApi, signInAndEnroll } from '../staff.js';
 
 const ops = appByName('ops');
@@ -42,6 +42,27 @@ test('ops: a STAFF session without ops.access is denied, in the UI and by the AP
   expect(((await identities.json()) as { code: string }).code).toBe('FORBIDDEN');
   const access = await api.get('/access/me');
   expect(await access.json()).toEqual({ roles: [], permissions: [] });
+  expect(errors).toEqual([]);
+});
+
+test('ops: global search finds an authorized booking and opens its workspace', async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors = trackPageErrors(page);
+  const seed = bookingSeed();
+  await signInAndEnroll(page, FIXTURES.superAdmin.email);
+
+  const search = page.getByRole('searchbox', { name: 'Recherche globale' });
+  await expect(search).toBeVisible();
+  await search.fill(seed.staffBookingReference);
+
+  const results = page.getByRole('region', { name: 'Résultats globaux' });
+  await expect(results).toBeVisible();
+  const booking = results.getByRole('link').filter({ hasText: seed.staffBookingReference }).first();
+  await expect(booking).toBeVisible();
+  await booking.click();
+
+  await expect(page).toHaveURL(appUrl(ops, '/bookings'));
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Réservations');
   expect(errors).toEqual([]);
 });
 
