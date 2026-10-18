@@ -12,6 +12,7 @@ import type {
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsDetailRegion } from '../ops-detail-region';
 import { useCan } from '../staff-access';
 
 const CHECK_LABELS: Record<CheckInGate, string> = {
@@ -565,12 +566,17 @@ export function CheckInAdmin() {
       </form>
 
       {detail ? (
-        <Detail
-          key={`${detail.booking.reference}/${detail.passenger?.reference ?? ''}/${detail.checkIn?.reference ?? ''}`}
-          detail={detail}
-          canManage={canManage}
-          onChanged={changed}
-        />
+        <OpsDetailRegion
+          id="check-in-detail-panel"
+          focusKey={`${detail.booking.reference}/${detail.passenger?.reference ?? ''}`}
+        >
+          <Detail
+            key={`${detail.booking.reference}/${detail.passenger?.reference ?? ''}/${detail.checkIn?.reference ?? ''}`}
+            detail={detail}
+            canManage={canManage}
+            onChanged={changed}
+          />
+        </OpsDetailRegion>
       ) : null}
       <section aria-labelledby="check-in-list-title">
         <h2 id="check-in-list-title">Voyageurs</h2>
@@ -615,6 +621,11 @@ export function CheckInAdmin() {
                       <button
                         type="button"
                         className="et-button et-button--secondary"
+                        aria-controls="check-in-detail-panel"
+                        aria-expanded={
+                          detail?.booking.reference === item.booking.reference &&
+                          detail?.passenger?.reference === item.passenger.reference
+                        }
                         onClick={() =>
                           void select(item.booking.reference, item.passenger.reference)
                         }
