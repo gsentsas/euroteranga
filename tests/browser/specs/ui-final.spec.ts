@@ -30,8 +30,9 @@ for (const app of frontendApps) {
           .filter(Boolean);
         const duplicateIds = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
 
-        const missingImageAlt = Array.from(document.querySelectorAll<HTMLImageElement>('img:not([alt])'))
-          .map((image) => image.currentSrc || image.src || '<inline image>');
+        const missingImageAlt = Array.from(
+          document.querySelectorAll<HTMLImageElement>('img:not([alt])'),
+        ).map((image) => image.currentSrc || image.src || '<inline image>');
 
         const documentWidth = Math.max(
           document.documentElement.scrollWidth,
