@@ -81,6 +81,12 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
   const cancel = detail.getByRole('form', { name: `Annuler le voyage ${reference}` });
   await cancel.getByLabel('Motif de l’annulation', { exact: true }).fill('Annulation synthétique');
   await cancel.getByRole('button', { name: 'Annuler le voyage' }).click();
+  const cancellationConfirmation = cancel.getByRole('group', {
+    name: `Confirmer l’annulation du voyage ${reference}`,
+  });
+  await expect(cancellationConfirmation).toBeVisible();
+  await expect(detail.getByTestId('trip-status')).toHaveText('Planifié');
+  await cancellationConfirmation.getByRole('button', { name: 'Confirmer l’annulation' }).click();
   await expect(notice(page, `Voyage ${reference} annulé.`)).toBeVisible();
   await expect(detail.getByTestId('trip-status')).toHaveText('Annulé');
   await expect(detail.getByRole('form')).toHaveCount(0);

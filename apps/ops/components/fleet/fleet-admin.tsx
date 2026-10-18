@@ -10,6 +10,7 @@ import type {
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
+import { OpsConfirmSubmit } from '../ops-confirm-submit';
 import { OpsDetailRegion } from '../ops-detail-region';
 import { assignedLabel } from '../seat-maps/seat-map-format';
 import { SeatMapAssignmentForm } from '../seat-maps/seat-map-assignment-form';
@@ -230,13 +231,23 @@ function StatusForm({
         />
       </div>
       {target === 'RETIRED' ? (
-        <p className="et-hint">
-          Le retrait est définitif : le véhicule ne pourra plus être modifié.
-        </p>
-      ) : null}
-      <button className="et-button" type="submit" disabled={busy || !target}>
-        Appliquer le changement de statut
-      </button>
+        <>
+          <p className="et-hint">
+            Le retrait est définitif : le véhicule ne pourra plus être modifié.
+          </p>
+          <OpsConfirmSubmit
+            actionLabel="Retirer définitivement le véhicule"
+            confirmLabel="Confirmer le retrait"
+            title={`Confirmer le retrait définitif de ${vehicle.code}`}
+            description="Après confirmation, le véhicule restera retiré et son statut ne pourra plus être modifié."
+            disabled={busy || reason.trim().length < 3}
+          />
+        </>
+      ) : (
+        <button className="et-button" type="submit" disabled={busy || !target}>
+          Appliquer le changement de statut
+        </button>
+      )}
     </form>
   );
 }
