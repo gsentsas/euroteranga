@@ -420,6 +420,22 @@ technical document acceptance is not regulatory validity. See
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
 
+## Public website content (CMS-1)
+
+`apps/api/src/content` manages the public website as structured content (see
+[`docs/domain/content.md`](../domain/content.md) and
+[ADR-034](../adr/ADR-034-first-party-structured-cms.md)):
+
+- `ContentEntry` holds pages and two singletons (settings, navigation);
+  `ContentRevision` holds the `DRAFT`, `PUBLISHED` and `SUPERSEDED`
+  revisions, with immutable history in PostgreSQL;
+- `@euroteranga/content` defines the closed set of blocks, links and rich
+  text, shared by the API, OPS and the website. There is no HTML and no
+  price field;
+- the permissions are `content.read`, `content.manage` and `seo.manage`,
+  with the `CONTENT_EDITOR` role;
+- public reads under `/v1/content` return published content only.
+
 ## Decisions
 
 Recorded in [`docs/adr/`](../adr/README.md): modular monolith (ADR-001),

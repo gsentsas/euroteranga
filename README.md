@@ -74,6 +74,7 @@ database. The backend is a modular monolith. Details:
 | `packages/database`    | `@euroteranga/database`      | Prisma schema, migrations, client                                            | —          |
 | `packages/ui`          | `@euroteranga/ui`            | Brand mark, page shell, forms, tokens                                        | —          |
 | `packages/auth-client` | `@euroteranga/auth-client`   | Typed browser client for Core API                                            | —          |
+| `packages/content`     | `@euroteranga/content`       | Structured website content model (blocks, settings, navigation)              | —          |
 | `tests/browser`        | `@euroteranga/browser-tests` | Playwright foundation, auth and business flows                               | —          |
 
 Ports are a local development convention only; production does not depend on

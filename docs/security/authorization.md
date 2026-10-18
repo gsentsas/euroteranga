@@ -24,74 +24,77 @@ ADR-017 to ADR-020. This document contains no secret value.
 
 ### Permission catalogue
 
-| Permission                 | Allows                                                            |
-| -------------------------- | ----------------------------------------------------------------- |
-| `ops.access`               | Using the OPS back-office at all (required by every route)        |
-| `identity.read`            | Listing STAFF/CREW identities and their access                    |
-| `identity.status.manage`   | Suspending, reactivating, disabling an identity                   |
-| `session.revoke.any`       | Closing every session of another identity                         |
-| `role.read`                | Reading the role catalogue                                        |
-| `role.assign`              | Granting and revoking roles (subject to anti-escalation)          |
-| `identity.staff.provision` | Inviting STAFF members                                            |
-| `mfa.enrollment.authorize` | Authorizing a first TOTP enrollment again                         |
-| `audit.read`               | Reading the audit trail                                           |
-| `privileged.manage`        | Acting on privileged roles and on their holders                   |
-| `network.read`             | Reading countries, stops, checkpoints and routes (PR-04)          |
-| `network.manage`           | Managing them, drafting and publishing route versions             |
-| `fleet.read`               | Reading the vehicle registry and status history (PR-05)           |
-| `fleet.manage`             | Registering vehicles, editing them, changing their status         |
-| `trip.read`                | Reading trips, their timetable and vehicle (PR-06)                |
-| `trip.manage`              | Creating, timing, scheduling, cancelling trips; vehicles          |
-| `seatmap.read`             | Reading seat maps, versions, cells and capacity (PR-07)           |
-| `seatmap.manage`           | Creating seat maps, editing drafts, publishing versions           |
-| `pricing.read`             | Reading fare tables, versions and fares (PR-08)                   |
-| `pricing.manage`           | Creating fare tables, editing drafts, publishing versions         |
-| `booking.read`             | Reading customer holds, journeys, seats and prices (PR-09)        |
-| `booking.manage`           | Cancelling active customer holds with a reason                    |
-| `payment.read`             | Reading payment attempts and provider events (PR-10)              |
-| `payment.manage`           | Cancelling a PENDING attempt (never marking one paid)             |
-| `payment.refund`           | Recording bounded refunds against succeeded payments (PR-22)      |
-| `finance.read`             | Reading operational trip finance, contribution and settlements    |
-| `finance.manage`           | Managing additional trip revenue/expenses, payouts and receipts   |
-| `reporting.view`           | Reading aggregated operational/commercial/financial KPI (PR-23)   |
-| `reporting.export`         | Exporting the same authorized aggregate reporting (PR-23)         |
-| `passenger.document.read`  | Reading passenger-document metadata and accepted bytes            |
-| `compliance.read`          | Reading passenger compliance evaluations and reviews              |
-| `compliance.review`        | Evaluating a booking passenger, reasoned human review             |
-| `compliance.rule.read`     | Reading regulatory rules, versions and provenance                 |
-| `compliance.rule.manage`   | Drafting, verifying, publishing and retiring rule versions        |
-| `baggage.read`             | Reading baggage, its QR payload and event history (PR-13)         |
-| `baggage.manage`           | Registering baggage, recording weight and baggage events          |
-| `checkin.read`             | Reading check-in readiness, seat assignments and check-ins        |
-| `checkin.manage`           | Assigning booked seats and checking in ready passengers           |
-| `boarding.read`            | Resolving a boarding QR and reading the boarding state            |
-| `boarding.scan`            | Boarding a checked-in passenger by QR scan                        |
-| `manifest.read`            | Reading immutable passenger manifest history/snapshots            |
-| `manifest.generate`        | Generating a new immutable manifest version                       |
-| `manifest.export`          | Exporting a stored manifest snapshot as private CSV               |
-| `permit.read`              | Reading operational permits and intrinsic validity                |
-| `permit.manage`            | Creating, editing, activating and revoking permits                |
-| `departure.read`           | Reading whole-trip readiness and dispatch history                 |
-| `departure.authorize`      | Authorizing the current READY departure fingerprint               |
-| `departure.manage`         | Publishing permit policy and recording trip dispatch              |
-| `crew.trip.read`           | Reading only trips assigned to the Crew identity (PR-18)          |
-| `crew.device.manage`       | Managing only devices owned by the Crew identity (PR-18)          |
-| `crew.boarding.scan`       | Synchronizing boarding events for an assigned trip (PR-18)        |
-| `tracking.read`            | Reading internal tracking configuration and history (PR-19)       |
-| `tracking.manage`          | Managing tracking devices, config and observations (PR-19)        |
-| `crew.tracking.report`     | Reporting route checkpoints for an assigned trip (PR-19)          |
-| `border.read`              | Reading operational border-crossing state/history (PR-20)         |
-| `border.manage`            | Recording STAFF operational border events (PR-20)                 |
-| `crew.border.report`       | Recording border events for an assigned Crew trip (PR-20)         |
-| `incident.read`            | Reading operational incident queues and evidence metadata (PR-21) |
-| `incident.manage`          | Opening, assigning, progressing and documenting incidents (PR-21) |
-| `crew.incident.report`     | Reporting an incident for an assigned Crew trip (PR-21)           |
+| Permission                 | Allows                                                                              |
+| -------------------------- | ----------------------------------------------------------------------------------- |
+| `ops.access`               | Using the OPS back-office at all (required by every route)                          |
+| `identity.read`            | Listing STAFF/CREW identities and their access                                      |
+| `identity.status.manage`   | Suspending, reactivating, disabling an identity                                     |
+| `session.revoke.any`       | Closing every session of another identity                                           |
+| `role.read`                | Reading the role catalogue                                                          |
+| `role.assign`              | Granting and revoking roles (subject to anti-escalation)                            |
+| `identity.staff.provision` | Inviting STAFF members                                                              |
+| `mfa.enrollment.authorize` | Authorizing a first TOTP enrollment again                                           |
+| `audit.read`               | Reading the audit trail                                                             |
+| `privileged.manage`        | Acting on privileged roles and on their holders                                     |
+| `network.read`             | Reading countries, stops, checkpoints and routes (PR-04)                            |
+| `network.manage`           | Managing them, drafting and publishing route versions                               |
+| `fleet.read`               | Reading the vehicle registry and status history (PR-05)                             |
+| `fleet.manage`             | Registering vehicles, editing them, changing their status                           |
+| `trip.read`                | Reading trips, their timetable and vehicle (PR-06)                                  |
+| `trip.manage`              | Creating, timing, scheduling, cancelling trips; vehicles                            |
+| `seatmap.read`             | Reading seat maps, versions, cells and capacity (PR-07)                             |
+| `seatmap.manage`           | Creating seat maps, editing drafts, publishing versions                             |
+| `pricing.read`             | Reading fare tables, versions and fares (PR-08)                                     |
+| `pricing.manage`           | Creating fare tables, editing drafts, publishing versions                           |
+| `booking.read`             | Reading customer holds, journeys, seats and prices (PR-09)                          |
+| `booking.manage`           | Cancelling active customer holds with a reason                                      |
+| `payment.read`             | Reading payment attempts and provider events (PR-10)                                |
+| `payment.manage`           | Cancelling a PENDING attempt (never marking one paid)                               |
+| `payment.refund`           | Recording bounded refunds against succeeded payments (PR-22)                        |
+| `finance.read`             | Reading operational trip finance, contribution and settlements                      |
+| `finance.manage`           | Managing additional trip revenue/expenses, payouts and receipts                     |
+| `reporting.view`           | Reading aggregated operational/commercial/financial KPI (PR-23)                     |
+| `reporting.export`         | Exporting the same authorized aggregate reporting (PR-23)                           |
+| `content.read`             | Reading public website content, drafts and history (CMS-1)                          |
+| `content.manage`           | Creating, editing, publishing, restoring and archiving public content (CMS-1)       |
+| `seo.manage`               | Changing the search metadata (title, description, indexing) of public pages (CMS-1) |
+| `passenger.document.read`  | Reading passenger-document metadata and accepted bytes                              |
+| `compliance.read`          | Reading passenger compliance evaluations and reviews                                |
+| `compliance.review`        | Evaluating a booking passenger, reasoned human review                               |
+| `compliance.rule.read`     | Reading regulatory rules, versions and provenance                                   |
+| `compliance.rule.manage`   | Drafting, verifying, publishing and retiring rule versions                          |
+| `baggage.read`             | Reading baggage, its QR payload and event history (PR-13)                           |
+| `baggage.manage`           | Registering baggage, recording weight and baggage events                            |
+| `checkin.read`             | Reading check-in readiness, seat assignments and check-ins                          |
+| `checkin.manage`           | Assigning booked seats and checking in ready passengers                             |
+| `boarding.read`            | Resolving a boarding QR and reading the boarding state                              |
+| `boarding.scan`            | Boarding a checked-in passenger by QR scan                                          |
+| `manifest.read`            | Reading immutable passenger manifest history/snapshots                              |
+| `manifest.generate`        | Generating a new immutable manifest version                                         |
+| `manifest.export`          | Exporting a stored manifest snapshot as private CSV                                 |
+| `permit.read`              | Reading operational permits and intrinsic validity                                  |
+| `permit.manage`            | Creating, editing, activating and revoking permits                                  |
+| `departure.read`           | Reading whole-trip readiness and dispatch history                                   |
+| `departure.authorize`      | Authorizing the current READY departure fingerprint                                 |
+| `departure.manage`         | Publishing permit policy and recording trip dispatch                                |
+| `crew.trip.read`           | Reading only trips assigned to the Crew identity (PR-18)                            |
+| `crew.device.manage`       | Managing only devices owned by the Crew identity (PR-18)                            |
+| `crew.boarding.scan`       | Synchronizing boarding events for an assigned trip (PR-18)                          |
+| `tracking.read`            | Reading internal tracking configuration and history (PR-19)                         |
+| `tracking.manage`          | Managing tracking devices, config and observations (PR-19)                          |
+| `crew.tracking.report`     | Reporting route checkpoints for an assigned trip (PR-19)                            |
+| `border.read`              | Reading operational border-crossing state/history (PR-20)                           |
+| `border.manage`            | Recording STAFF operational border events (PR-20)                                   |
+| `crew.border.report`       | Recording border events for an assigned Crew trip (PR-20)                           |
+| `incident.read`            | Reading operational incident queues and evidence metadata (PR-21)                   |
+| `incident.manage`          | Opening, assigning, progressing and documenting incidents (PR-21)                   |
+| `crew.incident.report`     | Reporting an incident for an assigned Crew trip (PR-21)                             |
 
 ### Role matrix
 
 | Role                                | Realm | Privileged | Permissions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ----------------------------------- | ----- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SUPER_ADMIN`                       | STAFF | yes        | all 60 permission keys; the six `crew.*` grants exist for role anti-escalation, not to cross the realm guard                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `SUPER_ADMIN`                       | STAFF | yes        | all 63 permission keys; the six `crew.*` grants exist for role anti-escalation, not to cross the realm guard                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `DIRECTOR`                          | STAFF | no         | all STAFF-facing permissions except `privileged.manage`; no `crew.*` permission                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `OPS_MANAGER`                       | STAFF | no         | `ops.access`, `identity.read`, `role.read`, `network.read`, `network.manage`, `fleet.read`, `fleet.manage`, `trip.read`, `trip.manage`, `seatmap.read`, `seatmap.manage`, `pricing.read`, `pricing.manage`, `booking.read`, `booking.manage`, `payment.read`, `passenger.document.read`, `compliance.read`, `baggage.read`, `baggage.manage`, `checkin.read`, `checkin.manage`, `boarding.read`, `boarding.scan`, `manifest.read`, `manifest.generate`, `manifest.export`, `permit.read`, `permit.manage`, `departure.read`, `departure.authorize`, `departure.manage`, `tracking.read`, `tracking.manage`, `border.read`, `border.manage`, `incident.read`, `incident.manage`, `finance.read`, `reporting.view`, `reporting.export` |
 | `DISPATCHER`                        | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `trip.manage`, `seatmap.read`, `pricing.read`, `baggage.read`, `baggage.manage`, `checkin.read`, `checkin.manage`, `boarding.read`, `boarding.scan`, `manifest.read`, `manifest.generate`, `manifest.export`, `permit.read`, `departure.read`, `departure.authorize`, `departure.manage`, `tracking.read`, `tracking.manage`, `border.read`, `border.manage`, `incident.read`, `incident.manage` (no booking or permit-management permission)                                                                                                                                                                                                                               |
@@ -99,6 +102,7 @@ ADR-017 to ADR-020. This document contains no secret value.
 | `COMPLIANCE_AGENT`                  | STAFF | no         | `ops.access`, `network.read`, `fleet.read`, `trip.read`, `seatmap.read`, `passenger.document.read`, `compliance.read`, `compliance.review`, `compliance.rule.read`, `permit.read` (no pricing, payment or permit-management permission)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `BOOKING_AGENT`, `CUSTOMER_SUPPORT` | STAFF | no         | `ops.access`, `network.read`, `trip.read`, `seatmap.read`, `pricing.read`, `booking.read`, `booking.manage`, `payment.read`, `baggage.read`, `checkin.read`; `BOOKING_AGENT` also `baggage.manage`, `checkin.manage`; `CUSTOMER_SUPPORT` also has `tracking.read`, `border.read`, `incident.read` (no fleet or boarding permission by default)                                                                                                                                                                                                                                                                                                                                                                                       |
 | `FINANCE`                           | STAFF | no         | `ops.access`, `pricing.read`, `payment.read`, `payment.manage`, `finance.read`, `finance.manage`, `payment.refund` (no network, fleet, trip, seat-map or booking permission by default)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `CONTENT_EDITOR`                    | STAFF | no         | `ops.access`, `content.read`, `content.manage` (no `seo.manage`, no operations permission)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `DRIVER`, `CREW`                    | CREW  | no         | `crew.trip.read`, `crew.device.manage`, `crew.boarding.scan`, `crew.tracking.report`, `crew.border.report`, `crew.incident.report`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 A STAFF identity without any role, or with roles lacking `ops.access`, can
@@ -378,3 +382,16 @@ A refund is intentionally not implied by `payment.manage`: cancelling a
 PENDING attempt and recording money refunded from a SUCCEEDED payment are
 different capabilities. The FINANCE role receives all three PR-22 finance
 permissions; OPS_MANAGER and AUDITOR receive read-only finance access.
+
+## CMS-1 content permissions
+
+Public website content is separate from operations: no operational
+permission implies `content.*`, and no `content.*` permission gives access to
+operations. `CONTENT_EDITOR` lets a marketing or communication person edit
+the website without seeing passengers, bookings or trips.
+
+Changing the search metadata of a page also requires `seo.manage`. This
+covers its search title, its description and whether it may be indexed.
+Without it, an editor can still change the page content, and a new page is
+created non-indexable. `SUPER_ADMIN` and `DIRECTOR` hold all three
+permissions.
