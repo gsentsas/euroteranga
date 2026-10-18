@@ -141,6 +141,17 @@ test('ops: SUPER_ADMIN signs in with MFA, invites, manages roles and status, rea
       page.getByRole('row').filter({ hasText: action }).filter({ hasText: admin.email }).first(),
     ).toBeVisible();
   }
+  await page.setViewportSize({ width: 390, height: 844 });
+  const menuButton = page.getByRole('button', { name: 'Menu' });
+  await expect(menuButton).toBeVisible();
+  await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+  await menuButton.click();
+  await expect(menuButton).toHaveAttribute('aria-expanded', 'true');
+  await expect(mainNav(page)).toBeVisible();
+  await mainNav(page).getByRole('link', { name: 'Vue d’ensemble' }).click();
+  await expect(page).toHaveURL(appUrl(ops, '/'));
+  await expect(page.getByRole('button', { name: 'Menu' })).toHaveAttribute('aria-expanded', 'false');
+
   expect(errors).toEqual([]);
 });
 
