@@ -8,6 +8,7 @@ import {
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsEmptyState, OpsErrorState, OpsLoadingState } from '../ops-data-state';
 import { OpsDetailRegion } from '../ops-detail-region';
 import { PAYMENT_STATUS_LABELS } from '../payments/payment-format';
 import { useCan } from '../staff-access';
@@ -174,11 +175,15 @@ export function BookingsAdmin() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AdminBooking | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(
     async (cursor?: string) => {
+      setLoadError(null);
+      if (!cursor) setBookings(null);
       const result = await auth.admin.bookings.bookings({
         limit: 100,
         ...(cursor ? { cursor } : {}),
@@ -186,9 +191,10 @@ export function BookingsAdmin() {
         ...(appliedReference ? { reference: appliedReference } : {}),
       });
       if (!result.ok) {
-        setError(result.error.message);
+        setLoadError(result.error.message);
         return;
       }
+      setLoadError(null);
       setBookings((current) =>
         cursor ? [...(current ?? []), ...result.data.items] : result.data.items,
       );
@@ -198,9 +204,11 @@ export function BookingsAdmin() {
   );
 
   const loadDetail = useCallback(async (bookingId: string) => {
+    setDetail(null);
+    setDetailError(null);
     const result = await auth.admin.bookings.booking(bookingId);
     if (result.ok) setDetail(result.data);
-    else setError(result.error.message);
+    else setDetailError(result.error.message);
   }, []);
 
   useEffect(() => {
@@ -209,7 +217,10 @@ export function BookingsAdmin() {
 
   useEffect(() => {
     if (selectedId) void loadDetail(selectedId);
-    else setDetail(null);
+    else {
+      setDetail(null);
+      setDetailError(null);
+    }
   }, [loadDetail, selectedId]);
 
   const cancel = async (reason: string) => {
@@ -286,8 +297,15 @@ export function BookingsAdmin() {
 
       <section aria-labelledby="admin-bookings-title">
         <h2 id="admin-bookings-title">Réservations</h2>
-        {!bookings ? <p role="status">Chargement des réservations…</p> : null}
-        {bookings ? (
+        {!bookings && !loadError ? <OpsLoadingState title="Chargement des réservations" /> : null}
+        {!bookings && loadError ? (
+          <OpsErrorState
+            title="Impossible de charger les réservations"
+            message={loadError}
+            onRetry={() => void load()}
+          />
+        ) : null}
+        {bookings && bookings.length > 0 ? (
           <div className="et-table-wrap">
             <table className="et-table">
               <caption>Réservations des clients</caption>
@@ -344,7 +362,19 @@ export function BookingsAdmin() {
             </table>
           </div>
         ) : null}
-        {bookings?.length === 0 ? <p>Aucune réservation.</p> : null}
+        {bookings?.length === 0 ? (
+          <OpsEmptyState
+            title="Aucune réservation"
+            description="Aucun dossier ne correspond aux filtres actuellement appliqués."
+          />
+        ) : null}
+        {bookings && loadError ? (
+          <OpsErrorState
+            title="Impossible d’actualiser la liste"
+            message={loadError}
+            onRetry={() => void load(nextCursor ?? undefined)}
+          />
+        ) : null}
         {nextCursor ? (
           <button
             type="button"
@@ -356,7 +386,16 @@ export function BookingsAdmin() {
         ) : null}
       </section>
 
-      {selectedId && !detail ? <p role="status">Chargement de la réservation…</p> : null}
+      {selectedId && !detail && !detailError ? (
+        <OpsLoadingState title="Chargement de la réservation" />
+      ) : null}
+      {selectedId && detailError ? (
+        <OpsErrorState
+          title="Impossible d’ouvrir cette réservation"
+          message={detailError}
+          onRetry={() => void loadDetail(selectedId)}
+        />
+      ) : null}
       {detail ? (
         <OpsDetailRegion
           id="booking-detail-panel"

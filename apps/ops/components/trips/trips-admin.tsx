@@ -11,6 +11,7 @@ import { TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
+import { OpsEmptyState, OpsErrorState, OpsLoadingState } from '../ops-data-state';
 import { OpsDetailRegion } from '../ops-detail-region';
 import { usePublishedSeatMapVersions } from '../seat-maps/use-published-versions';
 import { useCan } from '../staff-access';
@@ -133,9 +134,11 @@ export function TripsAdmin() {
   const canReadPricing = useCan('pricing.read');
   const canAssignPricing = useCan('trip.manage', 'pricing.read');
   const filterId = useId();
-  const { run, busy, feedback, setError } = useAdminFeedback();
+  const { run, busy, feedback } = useAdminFeedback();
   const [status, setStatus] = useState<TripStatus | ''>('');
   const [trips, setTrips] = useState<AdminTripSummary[] | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [versions, setVersions] = useState<VersionOption[]>([]);
   const [vehicles, setVehicles] = useState<AdminVehicle[]>([]);
@@ -144,30 +147,32 @@ export function TripsAdmin() {
 
   const load = useCallback(
     async (cursor?: string) => {
+      setListError(null);
+      if (!cursor) setTrips(null);
       const result = await auth.admin.trips.trips({
         ...(cursor ? { cursor } : {}),
         ...(status ? { status } : {}),
       });
       if (!result.ok) {
-        setError(result.error.message);
+        setListError(result.error.message);
         return;
       }
+      setListError(null);
       setTrips((previous) =>
         cursor ? [...(previous ?? []), ...result.data.items] : result.data.items,
       );
       setNextCursor(result.data.nextCursor);
     },
-    [setError, status],
+    [status],
   );
 
-  const loadDetail = useCallback(
-    async (tripId: string) => {
-      const result = await auth.admin.trips.trip(tripId);
-      if (result.ok) setDetail(result.data);
-      else setError(result.error.message);
-    },
-    [setError],
-  );
+  const loadDetail = useCallback(async (tripId: string) => {
+    setDetail(null);
+    setDetailError(null);
+    const result = await auth.admin.trips.trip(tripId);
+    if (result.ok) setDetail(result.data);
+    else setDetailError(result.error.message);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -186,15 +191,16 @@ export function TripsAdmin() {
 
   useEffect(() => {
     if (selectedId) void loadDetail(selectedId);
-    else setDetail(null);
+    else {
+      setDetail(null);
+      setDetailError(null);
+    }
   }, [loadDetail, selectedId]);
 
   const reload = async () => {
     await load();
     if (selectedId) await loadDetail(selectedId);
   };
-
-  if (!trips) return <p role="status">Chargement des voyages…</p>;
 
   return (
     <div className="et-network" data-testid="trips-workspace">
@@ -233,52 +239,74 @@ export function TripsAdmin() {
             ))}
           </select>
         </div>
-        <div className="et-table-wrap">
-          <table className="et-table">
-            <caption>Voyages</caption>
-            <thead>
-              <tr>
-                <th scope="col">Référence</th>
-                <th scope="col">Route</th>
-                <th scope="col">Départ prévu</th>
-                <th scope="col">Véhicule</th>
-                <th scope="col">Statut</th>
-                <th scope="col">Fiche</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trips.map((trip) => (
-                <tr
-                  key={trip.id}
-                  className={selectedId === trip.id ? 'ops-table-row--selected' : undefined}
-                >
-                  <th scope="row">
-                    <span className="et-tag">{trip.reference}</span>
-                  </th>
-                  <td>
-                    {trip.routeVersion.route.code} · v{trip.routeVersion.version}
-                  </td>
-                  <td>{formatUtc(trip.plannedDepartureAt)}</td>
-                  <td>{trip.vehicle?.code ?? '—'}</td>
-                  <td>{TRIP_STATUS_LABELS[trip.status]}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="et-button et-button--secondary"
-                      aria-label={`Consulter le voyage ${trip.reference}`}
-                      aria-controls="trip-detail-panel"
-                      aria-expanded={selectedId === trip.id && Boolean(detail)}
-                      onClick={() => setSelectedId(trip.id)}
-                    >
-                      Consulter
-                    </button>
-                  </td>
+        {!trips && !listError ? <OpsLoadingState title="Chargement des voyages" /> : null}
+        {!trips && listError ? (
+          <OpsErrorState
+            title="Impossible de charger les voyages"
+            message={listError}
+            onRetry={() => void load()}
+          />
+        ) : null}
+        {trips && trips.length > 0 ? (
+          <div className="et-table-wrap">
+            <table className="et-table">
+              <caption>Voyages</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Référence</th>
+                  <th scope="col">Route</th>
+                  <th scope="col">Départ prévu</th>
+                  <th scope="col">Véhicule</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col">Fiche</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {trips.length === 0 ? <p>Aucun voyage.</p> : null}
+              </thead>
+              <tbody>
+                {trips.map((trip) => (
+                  <tr
+                    key={trip.id}
+                    className={selectedId === trip.id ? 'ops-table-row--selected' : undefined}
+                  >
+                    <th scope="row">
+                      <span className="et-tag">{trip.reference}</span>
+                    </th>
+                    <td>
+                      {trip.routeVersion.route.code} · v{trip.routeVersion.version}
+                    </td>
+                    <td>{formatUtc(trip.plannedDepartureAt)}</td>
+                    <td>{trip.vehicle?.code ?? '—'}</td>
+                    <td>{TRIP_STATUS_LABELS[trip.status]}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="et-button et-button--secondary"
+                        aria-label={`Consulter le voyage ${trip.reference}`}
+                        aria-controls="trip-detail-panel"
+                        aria-expanded={selectedId === trip.id && Boolean(detail)}
+                        onClick={() => setSelectedId(trip.id)}
+                      >
+                        Consulter
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+        {trips?.length === 0 ? (
+          <OpsEmptyState
+            title="Aucun voyage"
+            description="Aucun voyage ne correspond au statut actuellement sélectionné."
+          />
+        ) : null}
+        {trips && listError ? (
+          <OpsErrorState
+            title="Impossible d’actualiser les voyages"
+            message={listError}
+            onRetry={() => void load(nextCursor ?? undefined)}
+          />
+        ) : null}
         {nextCursor ? (
           <button
             type="button"
@@ -290,7 +318,16 @@ export function TripsAdmin() {
         ) : null}
       </section>
 
-      {selectedId && !detail ? <p role="status">Chargement du voyage…</p> : null}
+      {selectedId && !detail && !detailError ? (
+        <OpsLoadingState title="Chargement du voyage" />
+      ) : null}
+      {selectedId && detailError ? (
+        <OpsErrorState
+          title="Impossible d’ouvrir ce voyage"
+          message={detailError}
+          onRetry={() => void loadDetail(selectedId)}
+        />
+      ) : null}
       {detail ? (
         <OpsDetailRegion
           id="trip-detail-panel"
