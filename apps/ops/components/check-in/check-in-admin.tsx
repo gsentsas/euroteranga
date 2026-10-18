@@ -569,6 +569,7 @@ export function CheckInAdmin() {
         <OpsDetailRegion
           id="check-in-detail-panel"
           focusKey={`${detail.booking.reference}/${detail.passenger?.reference ?? ''}`}
+          onClose={() => setDetail(null)}
         >
           <Detail
             key={`${detail.booking.reference}/${detail.passenger?.reference ?? ''}/${detail.checkIn?.reference ?? ''}`}
@@ -598,7 +599,15 @@ export function CheckInAdmin() {
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <tr key={`${item.booking.reference}/${item.passenger.reference}`}>
+                  <tr
+                    key={`${item.booking.reference}/${item.passenger.reference}`}
+                    className={
+                      detail?.booking.reference === item.booking.reference &&
+                      detail?.passenger?.reference === item.passenger.reference
+                        ? 'ops-table-row--selected'
+                        : undefined
+                    }
+                  >
                     <td>
                       {item.passenger.givenName} {item.passenger.familyName}
                       <br />

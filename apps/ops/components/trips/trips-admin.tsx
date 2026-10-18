@@ -248,7 +248,10 @@ export function TripsAdmin() {
             </thead>
             <tbody>
               {trips.map((trip) => (
-                <tr key={trip.id}>
+                <tr
+                  key={trip.id}
+                  className={selectedId === trip.id ? 'ops-table-row--selected' : undefined}
+                >
                   <th scope="row">
                     <span className="et-tag">{trip.reference}</span>
                   </th>
@@ -289,7 +292,11 @@ export function TripsAdmin() {
 
       {selectedId && !detail ? <p role="status">Chargement du voyage…</p> : null}
       {detail ? (
-        <OpsDetailRegion id="trip-detail-panel" focusKey={selectedId}>
+        <OpsDetailRegion
+          id="trip-detail-panel"
+          focusKey={selectedId}
+          onClose={() => setSelectedId(null)}
+        >
           <TripDetail
             trip={detail}
             vehicles={vehicles}

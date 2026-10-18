@@ -305,7 +305,10 @@ export function BookingsAdmin() {
               </thead>
               <tbody>
                 {bookings.map((booking) => (
-                  <tr key={booking.id}>
+                  <tr
+                    key={booking.id}
+                    className={selectedId === booking.id ? 'ops-table-row--selected' : undefined}
+                  >
                     <th scope="row" className="et-code">
                       {booking.reference}
                     </th>
@@ -355,7 +358,11 @@ export function BookingsAdmin() {
 
       {selectedId && !detail ? <p role="status">Chargement de la réservation…</p> : null}
       {detail ? (
-        <OpsDetailRegion id="booking-detail-panel" focusKey={selectedId}>
+        <OpsDetailRegion
+          id="booking-detail-panel"
+          focusKey={selectedId}
+          onClose={() => setSelectedId(null)}
+        >
           <BookingDetail booking={detail} canManage={canManage} busy={busy} onCancel={cancel} />
         </OpsDetailRegion>
       ) : null}

@@ -106,16 +106,23 @@ test('ops trips: trip.read consults without any mutation control; the API refuse
   await expect(page.getByTestId('trips-workspace')).toBeVisible();
   await expect(page.getByRole('form', { name: 'Créer un voyage' })).toHaveCount(0);
 
-  await page
-    .getByRole('button', { name: `Consulter le voyage ${seed.seededTripReference}` })
-    .click();
+  const consult = page.getByRole('button', {
+    name: `Consulter le voyage ${seed.seededTripReference}`,
+  });
+  const selectedRow = page.getByRole('row').filter({ has: consult });
+  await consult.click();
   await expect(page.locator('#trip-detail-panel')).toBeFocused();
+  await expect(selectedRow).toHaveClass(/ops-table-row--selected/);
   const detail = page.getByRole('region', { name: `Voyage ${seed.seededTripReference}` });
   await expect(detail.getByTestId('trip-status')).toHaveText('Brouillon');
   await expect(detail.getByRole('form')).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: /^(Créer|Enregistrer|Planifier|Annuler)/ }),
   ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Retour à la liste' }).click();
+  await expect(page.locator('#trip-detail-panel')).toHaveCount(0);
+  await expect(consult).toBeFocused();
+  await expect(selectedRow).not.toHaveClass(/ops-table-row--selected/);
 
   const api = directAdminApi(page.request);
   const list = await api.get('/trips?limit=100');

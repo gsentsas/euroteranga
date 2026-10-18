@@ -131,10 +131,13 @@ test('ops booking agent: MFA, list, detail and reasoned cancellation', async ({ 
   await expect(row).toContainText(payments.confirmedBookingReference);
   await expect(row).toContainText('Réussi');
   await expect(row).toContainText('123,45 EUR');
-  await page
-    .getByRole('button', { name: `Consulter le paiement ${payments.paymentReference}` })
-    .click();
+  const paymentConsult = page.getByRole('button', {
+    name: `Consulter le paiement ${payments.paymentReference}`,
+  });
+  const paymentRow = page.getByRole('row').filter({ has: paymentConsult });
+  await paymentConsult.click();
   await expect(page.locator('#payment-detail-panel')).toBeFocused();
+  await expect(paymentRow).toHaveClass(/ops-table-row--selected/);
   const payment = page.getByRole('region', { name: `Paiement ${payments.paymentReference}` });
   await expect(payment).toContainText('Confirmée');
   await expect(payment.getByTestId('payment-timeline')).toContainText(
@@ -143,6 +146,10 @@ test('ops booking agent: MFA, list, detail and reasoned cancellation', async ({ 
   // payment.read only: no cancellation form, and no "mark paid" control at all.
   await expect(payment.getByRole('form')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /payé|forcer|marquer/i })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Retour à la liste' }).click();
+  await expect(page.locator('#payment-detail-panel')).toHaveCount(0);
+  await expect(paymentConsult).toBeFocused();
+  await expect(paymentRow).not.toHaveClass(/ops-table-row--selected/);
   expect(errors).toEqual([]);
 });
 

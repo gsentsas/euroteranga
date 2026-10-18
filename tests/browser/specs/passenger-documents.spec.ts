@@ -140,8 +140,10 @@ test.describe('PR-11 passenger documents', () => {
     const row = workspace.getByRole('row').filter({ hasText: documentReference });
     await expect(row).toContainText(passengerReference);
     await expect(row).toContainText('Accepté techniquement');
-    await row.getByRole('button', { name: 'Consulter' }).click();
+    const consult = row.getByRole('button', { name: 'Consulter' });
+    await consult.click();
     await expect(page.locator('#passenger-document-detail-panel')).toBeFocused();
+    await expect(row).toHaveClass(/ops-table-row--selected/);
     const detail = page.getByTestId('passenger-document-detail');
     await expect(detail).toContainText(documentReference);
     await expect(detail).toContainText('ne conclut ni à la validité juridique');
@@ -153,6 +155,10 @@ test.describe('PR-11 passenger documents', () => {
     );
     expect(apiDetail.status()).toBe(200);
     expect(((await apiDetail.json()) as { reference: string }).reference).toBe(documentReference);
+    await page.getByRole('button', { name: 'Retour à la liste' }).click();
+    await expect(page.locator('#passenger-document-detail-panel')).toHaveCount(0);
+    await expect(consult).toBeFocused();
+    await expect(row).not.toHaveClass(/ops-table-row--selected/);
     expect(errors).toEqual([]);
   });
 

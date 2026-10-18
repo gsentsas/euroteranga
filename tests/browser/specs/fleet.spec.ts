@@ -88,12 +88,19 @@ test('ops fleet: fleet.read consults without any mutation control; the API refus
   await expect(page.getByTestId('fleet-workspace')).toBeVisible();
   await expect(page.getByRole('form', { name: 'Enregistrer un véhicule' })).toHaveCount(0);
 
-  await page.getByRole('button', { name: `Consulter le véhicule ${code}` }).click();
+  const consult = page.getByRole('button', { name: `Consulter le véhicule ${code}` });
+  const selectedRow = page.getByRole('row').filter({ has: consult });
+  await consult.click();
   await expect(page.locator('#vehicle-detail-panel')).toBeFocused();
+  await expect(selectedRow).toHaveClass(/ops-table-row--selected/);
   const detail = page.getByRole('region', { name: `Véhicule ${code}` });
   await expect(detail.getByTestId('vehicle-status')).toHaveText('Planifié');
   await expect(detail.getByRole('form')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^(Enregistrer|Appliquer)/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Retour à la liste' }).click();
+  await expect(page.locator('#vehicle-detail-panel')).toHaveCount(0);
+  await expect(consult).toBeFocused();
+  await expect(selectedRow).not.toHaveClass(/ops-table-row--selected/);
 
   const api = directAdminApi(page.request);
   const list = await api.get(`/fleet/vehicles?limit=100`);

@@ -703,7 +703,10 @@ export function NetworkAdmin() {
             </thead>
             <tbody>
               {data.routes.map((route) => (
-                <tr key={route.id}>
+                <tr
+                  key={route.id}
+                  className={selectedRouteId === route.id ? 'ops-table-row--selected' : undefined}
+                >
                   <th scope="row">
                     <span className="et-tag">{route.code}</span>
                   </th>
@@ -745,7 +748,11 @@ export function NetworkAdmin() {
         </div>
         {selectedRouteId && !routeDetail ? <p role="status">Chargement de la route…</p> : null}
         {routeDetail ? (
-          <OpsDetailRegion id="route-detail-panel" focusKey={selectedRouteId}>
+          <OpsDetailRegion
+            id="route-detail-panel"
+            focusKey={selectedRouteId}
+            onClose={() => setSelectedRouteId(null)}
+          >
             <RouteEditor
               route={routeDetail}
               stops={data.stops}

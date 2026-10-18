@@ -665,12 +665,54 @@
 
 .ops-detail-region {
   scroll-margin-top: 5.75rem;
+  overflow: hidden;
+  border: 1px solid #b9cdc4;
   border-radius: 0.9rem;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(7, 31, 26, 0.09);
 }
 
 .ops-detail-region:focus {
   outline: 3px solid rgba(231, 170, 47, 0.55);
   outline-offset: 0.25rem;
+}
+
+.ops-detail-region__toolbar {
+  position: sticky;
+  top: 4.75rem;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--ops-line);
+  background: #f4faf7;
+}
+
+.ops-detail-region__toolbar > span {
+  color: var(--ops-green-800);
+  font-size: 0.75rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ops-detail-region > .et-network-panel {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.ops-app .ops-table-row--selected,
+.ops-app .ops-table-row--selected:hover {
+  background: #e9f5f0;
+  box-shadow: inset 4px 0 0 var(--ops-green-700);
+}
+
+.ops-table-row--selected th,
+.ops-table-row--selected td {
+  border-bottom-color: #c6dad1;
 }
 
 @media (max-width: 72rem) {
