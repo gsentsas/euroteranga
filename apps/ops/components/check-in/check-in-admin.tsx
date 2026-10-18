@@ -12,6 +12,7 @@ import type {
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsEmptyState, OpsErrorState, OpsLoadingState } from '../ops-data-state';
 import { OpsDetailRegion } from '../ops-detail-region';
 import { useCan } from '../staff-access';
 
@@ -427,13 +428,18 @@ export function CheckInAdmin() {
     passengerReference: '',
   });
   const [items, setItems] = useState<StaffCheckInListItem[] | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [detail, setDetail] = useState<StaffCheckInDetail | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(
     async (cursor?: string) => {
+      setListError(null);
+      if (!cursor) setItems(null);
       const result = await auth.admin.checkIn.list({
         limit: 25,
         ...(cursor ? { cursor } : {}),
@@ -444,9 +450,10 @@ export function CheckInAdmin() {
         ...(boardingStatus ? { boardingStatus } : {}),
       });
       if (!result.ok) {
-        setError(result.error.message);
+        setListError(result.error.message);
         return;
       }
+      setListError(null);
       setItems((current) =>
         cursor ? [...(current ?? []), ...result.data.items] : result.data.items,
       );
@@ -460,10 +467,13 @@ export function CheckInAdmin() {
   }, [load]);
 
   const select = async (booking: string, passenger: string) => {
-    setError(null);
+    const key = `${booking}/${passenger}`;
+    setSelectedKey(key);
+    setDetail(null);
+    setDetailError(null);
     const result = await auth.admin.checkIn.detail(booking, passenger);
     if (result.ok) setDetail(result.data);
-    else setError(result.error.message);
+    else setDetailError(result.error.message);
   };
 
   const changed = async (message: string) => {
@@ -565,11 +575,28 @@ export function CheckInAdmin() {
         </button>
       </form>
 
+      {selectedKey && !detail && !detailError ? (
+        <OpsLoadingState title="Chargement de la fiche voyageur" />
+      ) : null}
+      {selectedKey && detailError ? (
+        <OpsErrorState
+          title="Impossible d’ouvrir cette fiche voyageur"
+          message={detailError}
+          onRetry={() => {
+            const [booking, passenger] = selectedKey.split('/');
+            if (booking && passenger) void select(booking, passenger);
+          }}
+        />
+      ) : null}
       {detail ? (
         <OpsDetailRegion
           id="check-in-detail-panel"
-          focusKey={`${detail.booking.reference}/${detail.passenger?.reference ?? ''}`}
-          onClose={() => setDetail(null)}
+          focusKey={selectedKey}
+          onClose={() => {
+            setSelectedKey(null);
+            setDetail(null);
+            setDetailError(null);
+          }}
         >
           <Detail
             key={`${detail.booking.reference}/${detail.passenger?.reference ?? ''}/${detail.checkIn?.reference ?? ''}`}
@@ -581,8 +608,15 @@ export function CheckInAdmin() {
       ) : null}
       <section aria-labelledby="check-in-list-title">
         <h2 id="check-in-list-title">Voyageurs</h2>
-        {!items ? <p role="status">Chargement des voyageurs…</p> : null}
-        {items ? (
+        {!items && !listError ? <OpsLoadingState title="Chargement des voyageurs" /> : null}
+        {!items && listError ? (
+          <OpsErrorState
+            title="Impossible de charger les voyageurs"
+            message={listError}
+            onRetry={() => void load()}
+          />
+        ) : null}
+        {items && items.length > 0 ? (
           <div className="et-table-wrap">
             <table>
               <caption>Voyageurs de réservations confirmées</caption>
@@ -602,8 +636,7 @@ export function CheckInAdmin() {
                   <tr
                     key={`${item.booking.reference}/${item.passenger.reference}`}
                     className={
-                      detail?.booking.reference === item.booking.reference &&
-                      detail?.passenger?.reference === item.passenger.reference
+                      selectedKey === `${item.booking.reference}/${item.passenger.reference}`
                         ? 'ops-table-row--selected'
                         : undefined
                     }
@@ -632,8 +665,8 @@ export function CheckInAdmin() {
                         className="et-button et-button--secondary"
                         aria-controls="check-in-detail-panel"
                         aria-expanded={
-                          detail?.booking.reference === item.booking.reference &&
-                          detail?.passenger?.reference === item.passenger.reference
+                          Boolean(detail) &&
+                          selectedKey === `${item.booking.reference}/${item.passenger.reference}`
                         }
                         onClick={() =>
                           void select(item.booking.reference, item.passenger.reference)
@@ -648,7 +681,19 @@ export function CheckInAdmin() {
             </table>
           </div>
         ) : null}
-        {items?.length === 0 ? <p>Aucun voyageur.</p> : null}
+        {items?.length === 0 ? (
+          <OpsEmptyState
+            title="Aucun voyageur"
+            description="Aucun voyageur ne correspond aux filtres de check-in actuellement appliqués."
+          />
+        ) : null}
+        {items && listError ? (
+          <OpsErrorState
+            title="Impossible d’actualiser les voyageurs"
+            message={listError}
+            onRetry={() => void load(nextCursor ?? undefined)}
+          />
+        ) : null}
         {nextCursor ? (
           <button
             type="button"
