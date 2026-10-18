@@ -283,6 +283,7 @@ function BoardingPanel({ canScan }: { canScan: boolean }) {
   const [deviceId, setDeviceId] = useState('ops-console');
   const [resolved, setResolved] = useState<BoardingResolution | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const resolve = async (event: FormEvent) => {
@@ -338,6 +339,7 @@ function BoardingPanel({ canScan }: { canScan: boolean }) {
         Le QR identifie seulement un enregistrement : le serveur revérifie chaque contrôle avant
         d’embarquer. Un voyageur ne peut être embarqué qu’une fois.
       </p>
+      <FormAlert message={error} />
       {notice ? (
         <FormStatus>
           <p>{notice}</p>
@@ -431,7 +433,6 @@ export function CheckInAdmin() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [detail, setDetail] = useState<StaffCheckInDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(
@@ -497,7 +498,6 @@ export function CheckInAdmin() {
         serveur ; aucun forçage n’existe. Un voyageur embarqué ne signifie pas que le voyage peut
         partir.
       </p>
-      <FormAlert message={error} />
       {notice ? (
         <FormStatus>
           <p>{notice}</p>
