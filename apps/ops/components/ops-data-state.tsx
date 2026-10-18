@@ -12,8 +12,8 @@ export function OpsLoadingState({
   return (
     <div
       className="ops-data-state ops-data-state--loading"
-      role="status"
       aria-live="polite"
+      aria-atomic="true"
       data-testid="ops-loading-state"
     >
       <span className="ops-data-state__spinner" aria-hidden="true" />
