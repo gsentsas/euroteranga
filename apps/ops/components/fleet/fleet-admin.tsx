@@ -480,14 +480,14 @@ export function FleetAdmin() {
       {detail ? (
         <OpsDetailRegion id="vehicle-detail-panel" focusKey={selectedId}>
           <VehicleDetail
-          vehicle={detail}
-          countries={countries}
-          canManage={canManage}
-          canAssignSeatMap={canAssignSeatMap}
-          seatMapOptions={seatMapOptions}
-          run={run}
-          busy={busy}
-          onReload={reload}
+            vehicle={detail}
+            countries={countries}
+            canManage={canManage}
+            canAssignSeatMap={canAssignSeatMap}
+            seatMapOptions={seatMapOptions}
+            run={run}
+            busy={busy}
+            onReload={reload}
           />
         </OpsDetailRegion>
       ) : null}
