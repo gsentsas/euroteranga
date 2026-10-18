@@ -7,7 +7,7 @@ export const FleetErrors = {
     new PublicApiError(
       409,
       'VEHICLE_IDENTIFIER_CONFLICT',
-      'Ce code, ce VIN ou cette immatriculation est déjà utilisé.',
+      'Ce code, ce nom, ce VIN ou cette immatriculation est déjà utilisé.',
     ),
   registrationIncomplete: () =>
     new PublicApiError(

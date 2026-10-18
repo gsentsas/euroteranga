@@ -16,7 +16,7 @@ import { OpsDetailRegion } from '../ops-detail-region';
 import { usePublishedSeatMapVersions } from '../seat-maps/use-published-versions';
 import { useCan } from '../staff-access';
 import { TripDetail } from './trip-detail';
-import { formatUtc, TRIP_STATUS_LABELS } from './trip-format';
+import { formatUtc, TRIP_STATUS_LABELS, vehicleIdentity } from './trip-format';
 
 type Run = ReturnType<typeof useAdminFeedback>['run'];
 
@@ -114,7 +114,7 @@ function CreateTripForm({
           <option value="">Aucun véhicule</option>
           {vehicles.map((option) => (
             <option key={option.id} value={option.id}>
-              {option.code} — {option.manufacturer} {option.model}
+              {vehicleIdentity(option)} — {option.manufacturer} {option.model}
             </option>
           ))}
         </select>
