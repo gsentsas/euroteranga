@@ -95,11 +95,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
   if (state.status === 'denied') return <AccessDenied />;
   if (state.status === 'error') {
     return (
-      <OpsState
-        kind="error"
-        title="Impossible de vérifier les accès"
-        detail={state.message}
-      />
+      <OpsState kind="error" title="Impossible de vérifier les accès" detail={state.message} />
     );
   }
   return children;
