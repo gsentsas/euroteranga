@@ -9,6 +9,7 @@ import {
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsDetailRegion } from '../ops-detail-region';
 import { useCan } from '../staff-access';
 import { BOOKING_STATUS_LABELS, formatInstant, PAYMENT_STATUS_LABELS } from './payment-format';
 
@@ -291,6 +292,8 @@ export function PaymentsAdmin() {
                         type="button"
                         className="et-button et-button--secondary"
                         aria-label={`Consulter le paiement ${payment.reference}`}
+                        aria-controls="payment-detail-panel"
+                        aria-expanded={selectedId === payment.id && Boolean(detail)}
                         onClick={() => setSelectedId(payment.id)}
                       >
                         Consulter
@@ -316,7 +319,9 @@ export function PaymentsAdmin() {
 
       {selectedId && !detail ? <p role="status">Chargement du paiement…</p> : null}
       {detail ? (
-        <PaymentDetail payment={detail} canManage={canManage} busy={busy} onCancel={cancel} />
+        <OpsDetailRegion id="payment-detail-panel" focusKey={selectedId}>
+          <PaymentDetail payment={detail} canManage={canManage} busy={busy} onCancel={cancel} />
+        </OpsDetailRegion>
       ) : null}
     </div>
   );

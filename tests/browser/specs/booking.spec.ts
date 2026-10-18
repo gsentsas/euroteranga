@@ -101,6 +101,7 @@ test('ops booking agent: MFA, list, detail and reasoned cancellation', async ({ 
   await page
     .getByRole('button', { name: `Consulter la réservation ${seed.staffBookingReference}` })
     .click();
+  await expect(page.locator('#booking-detail-panel')).toBeFocused();
   const detail = page.getByRole('region', {
     name: `Réservation ${seed.staffBookingReference}`,
   });
@@ -133,6 +134,7 @@ test('ops booking agent: MFA, list, detail and reasoned cancellation', async ({ 
   await page
     .getByRole('button', { name: `Consulter le paiement ${payments.paymentReference}` })
     .click();
+  await expect(page.locator('#payment-detail-panel')).toBeFocused();
   const payment = page.getByRole('region', { name: `Paiement ${payments.paymentReference}` });
   await expect(payment).toContainText('Confirmée');
   await expect(payment.getByTestId('payment-timeline')).toContainText(

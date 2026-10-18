@@ -11,6 +11,7 @@ import { TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
+import { OpsDetailRegion } from '../ops-detail-region';
 import { usePublishedSeatMapVersions } from '../seat-maps/use-published-versions';
 import { useCan } from '../staff-access';
 import { TripDetail } from './trip-detail';
@@ -262,6 +263,8 @@ export function TripsAdmin() {
                       type="button"
                       className="et-button et-button--secondary"
                       aria-label={`Consulter le voyage ${trip.reference}`}
+                      aria-controls="trip-detail-panel"
+                      aria-expanded={selectedId === trip.id && Boolean(detail)}
                       onClick={() => setSelectedId(trip.id)}
                     >
                       Consulter
@@ -286,18 +289,20 @@ export function TripsAdmin() {
 
       {selectedId && !detail ? <p role="status">Chargement du voyage…</p> : null}
       {detail ? (
-        <TripDetail
-          trip={detail}
-          vehicles={vehicles}
-          canManage={canManage}
-          canAssignSeatMap={canAssignSeatMap}
-          seatMapOptions={seatMapOptions}
-          canReadPricing={canReadPricing}
-          canAssignPricing={canAssignPricing}
-          run={run}
-          busy={busy}
-          onReload={reload}
-        />
+        <OpsDetailRegion id="trip-detail-panel" focusKey={selectedId}>
+          <TripDetail
+            trip={detail}
+            vehicles={vehicles}
+            canManage={canManage}
+            canAssignSeatMap={canAssignSeatMap}
+            seatMapOptions={seatMapOptions}
+            canReadPricing={canReadPricing}
+            canAssignPricing={canAssignPricing}
+            run={run}
+            busy={busy}
+            onReload={reload}
+          />
+        </OpsDetailRegion>
       ) : null}
     </div>
   );

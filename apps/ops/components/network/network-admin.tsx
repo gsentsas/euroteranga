@@ -12,6 +12,7 @@ import { TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
+import { OpsDetailRegion } from '../ops-detail-region';
 import { useCan } from '../staff-access';
 import { RouteEditor } from './route-editor';
 
@@ -715,6 +716,8 @@ export function NetworkAdmin() {
                       type="button"
                       className="et-button et-button--secondary"
                       aria-label={`Consulter la route ${route.code}`}
+                      aria-controls="route-detail-panel"
+                      aria-expanded={selectedRouteId === route.id && Boolean(routeDetail)}
                       onClick={() => setSelectedRouteId(route.id)}
                     >
                       Consulter
@@ -742,18 +745,20 @@ export function NetworkAdmin() {
         </div>
         {selectedRouteId && !routeDetail ? <p role="status">Chargement de la route…</p> : null}
         {routeDetail ? (
-          <RouteEditor
-            route={routeDetail}
-            stops={data.stops}
-            checkpoints={data.checkpoints}
-            canManage={canManage}
-            busy={busy}
-            run={run}
-            onReload={async () => {
-              await loadRoute(routeDetail.id);
-              await load();
-            }}
-          />
+          <OpsDetailRegion id="route-detail-panel" focusKey={selectedRouteId}>
+            <RouteEditor
+              route={routeDetail}
+              stops={data.stops}
+              checkpoints={data.checkpoints}
+              canManage={canManage}
+              busy={busy}
+              run={run}
+              onReload={async () => {
+                await loadRoute(routeDetail.id);
+                await load();
+              }}
+            />
+          </OpsDetailRegion>
         ) : null}
       </section>
     </div>

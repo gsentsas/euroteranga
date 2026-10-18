@@ -141,6 +141,7 @@ test.describe('PR-11 passenger documents', () => {
     await expect(row).toContainText(passengerReference);
     await expect(row).toContainText('Accepté techniquement');
     await row.getByRole('button', { name: 'Consulter' }).click();
+    await expect(page.locator('#passenger-document-detail-panel')).toBeFocused();
     const detail = page.getByTestId('passenger-document-detail');
     await expect(detail).toContainText(documentReference);
     await expect(detail).toContainText('ne conclut ni à la validité juridique');
