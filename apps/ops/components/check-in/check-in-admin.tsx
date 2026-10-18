@@ -13,6 +13,7 @@ import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { OpsDetailRegion } from '../ops-detail-region';
+import { OpsState } from '../ops-state';
 import { useCan } from '../staff-access';
 
 const CHECK_LABELS: Record<CheckInGate, string> = {
@@ -581,7 +582,13 @@ export function CheckInAdmin() {
       ) : null}
       <section aria-labelledby="check-in-list-title">
         <h2 id="check-in-list-title">Voyageurs</h2>
-        {!items ? <p role="status">Chargement des voyageurs…</p> : null}
+        {!items ? (
+          <OpsState
+            kind="loading"
+            title="Chargement des voyageurs"
+            detail="Récupération des dossiers de check-in et d’embarquement."
+          />
+        ) : null}
         {items ? (
           <div className="et-table-wrap">
             <table>
@@ -648,7 +655,13 @@ export function CheckInAdmin() {
             </table>
           </div>
         ) : null}
-        {items?.length === 0 ? <p>Aucun voyageur.</p> : null}
+        {items?.length === 0 ? (
+          <OpsState
+            kind="empty"
+            title="Aucun voyageur"
+            detail="Aucun dossier ne correspond aux filtres actuels."
+          />
+        ) : null}
         {nextCursor ? (
           <button
             type="button"
