@@ -1,0 +1,30 @@
+# EURO TERANGA private malware scanner.
+#
+# This stack does not enable passenger-document uploads by itself. The API
+# remains fail-closed until approved private S3-compatible storage is also
+# configured and api.env is changed explicitly.
+#
+# ClamAV is reachable from the host only through loopback. Its signature
+# database is persisted independently from the container lifecycle.
+name: euroteranga-documents
+
+services:
+  clamav:
+    image: clamav/clamav@sha256:638d90201ee7ee6a82d249a2fc23b132e578673b5f1f2766852b127676ca1ef6
+    container_name: euroteranga-clamav
+    restart: unless-stopped
+    init: true
+    ports:
+      - '127.0.0.1:3310:3310'
+    volumes:
+      - euroteranga-clamav-db:/var/lib/clamav
+    healthcheck:
+      test: ['CMD-SHELL', 'clamdcheck.sh']
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 6m
+    stop_grace_period: 30s
+
+volumes:
+  euroteranga-clamav-db:
