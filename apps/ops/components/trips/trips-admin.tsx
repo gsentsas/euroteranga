@@ -12,6 +12,7 @@ import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
 import { OpsDetailRegion } from '../ops-detail-region';
+import { OpsState } from '../ops-state';
 import { usePublishedSeatMapVersions } from '../seat-maps/use-published-versions';
 import { useCan } from '../staff-access';
 import { TripDetail } from './trip-detail';
@@ -194,7 +195,15 @@ export function TripsAdmin() {
     if (selectedId) await loadDetail(selectedId);
   };
 
-  if (!trips) return <p role="status">Chargement des voyages…</p>;
+  if (!trips) {
+    return (
+      <OpsState
+        kind="loading"
+        title="Chargement des voyages"
+        detail="Récupération des rotations et de leur statut opérationnel."
+      />
+    );
+  }
 
   return (
     <div className="et-network" data-testid="trips-workspace">
@@ -278,7 +287,13 @@ export function TripsAdmin() {
             </tbody>
           </table>
         </div>
-        {trips.length === 0 ? <p>Aucun voyage.</p> : null}
+        {trips.length === 0 ? (
+          <OpsState
+            kind="empty"
+            title="Aucun voyage"
+            detail="Aucun voyage ne correspond aux filtres actuels."
+          />
+        ) : null}
         {nextCursor ? (
           <button
             type="button"
@@ -290,7 +305,13 @@ export function TripsAdmin() {
         ) : null}
       </section>
 
-      {selectedId && !detail ? <p role="status">Chargement du voyage…</p> : null}
+      {selectedId && !detail ? (
+        <OpsState
+          kind="loading"
+          title="Chargement du voyage"
+          detail="Récupération de la fiche opérationnelle."
+        />
+      ) : null}
       {detail ? (
         <OpsDetailRegion
           id="trip-detail-panel"
