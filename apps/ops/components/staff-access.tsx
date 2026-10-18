@@ -5,6 +5,7 @@ import { useLogout } from '@refinedev/core';
 import { useRouter } from 'next/navigation';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { auth } from '../lib/auth';
+import { OpsState } from './ops-state';
 
 /** Permission a STAFF identity needs to use the operations back-office. */
 export const OPS_ACCESS = 'ops.access';
@@ -82,13 +83,23 @@ function AccessDenied() {
 /** Renders its children only once the caller holds `ops.access`. */
 export function AccessGate({ children }: { children: ReactNode }) {
   const state = useAccess();
-  if (state.status === 'loading') return <p role="status">Vérification des accès…</p>;
+  if (state.status === 'loading') {
+    return (
+      <OpsState
+        kind="loading"
+        title="Vérification des accès"
+        detail="Contrôle des permissions de votre session…"
+      />
+    );
+  }
   if (state.status === 'denied') return <AccessDenied />;
   if (state.status === 'error') {
     return (
-      <div className="et-alert" role="alert">
-        {state.message}
-      </div>
+      <OpsState
+        kind="error"
+        title="Impossible de vérifier les accès"
+        detail={state.message}
+      />
     );
   }
   return children;
@@ -103,7 +114,13 @@ export function RequirePermission({
   children: ReactNode;
 }) {
   if (!useCan(permission)) {
-    return <p role="status">Vous n’avez pas la permission d’afficher cette page.</p>;
+    return (
+      <OpsState
+        kind="error"
+        title="Accès insuffisant"
+        detail="Vous n’avez pas la permission d’afficher cette page."
+      />
+    );
   }
   return children;
 }
