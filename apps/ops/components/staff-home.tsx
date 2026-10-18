@@ -153,7 +153,9 @@ export function StaffHome() {
         if (cancelled) return;
         setMetrics(
           Object.fromEntries(
-            items.filter((item): item is DashboardMetric => item !== null).map((item) => [item.key, item]),
+            items
+              .filter((item): item is DashboardMetric => item !== null)
+              .map((item) => [item.key, item]),
           ),
         );
       })
