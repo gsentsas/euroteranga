@@ -21,6 +21,13 @@ import { BROWSER_API_URL, directAdminApi } from '../staff.js';
 const crewApp = appByName('crew');
 const CLIENT_ORIGIN = `http://localhost:${appByName('client').port}`;
 
+const CLOCK_PAUSE_LEAD_MS = 10_000;
+
+async function installPausedClock(page: Page): Promise<void> {
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + CLOCK_PAUSE_LEAD_MS));
+}
+
 function trackPageErrors(page: Page) {
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
@@ -438,8 +445,7 @@ test.describe('PR-18 Crew PWA offline operations', () => {
       sync,
       async () => syncResponseGate,
     );
-    await page.clock.install();
-    await page.clock.pauseAt(new Date());
+    await installPausedClock(page);
 
     await context.setOffline(false);
     await page.clock.runFor(0);
@@ -511,8 +517,7 @@ test.describe('PR-18 Crew PWA offline operations', () => {
     });
     const sync = { requests: 0, clientEventIds: [] } satisfies SyncCapture;
     await mockAcknowledgedCrewSync(page, seed.crewTripReference, sync);
-    await page.clock.install();
-    await page.clock.pauseAt(new Date());
+    await installPausedClock(page);
 
     await context.setOffline(false);
     await page.clock.runFor(0);
@@ -559,8 +564,7 @@ test.describe('PR-18 Crew PWA offline operations', () => {
     });
     const sync = { requests: 0, clientEventIds: [] } satisfies SyncCapture;
     await mockAcknowledgedCrewSync(page, seed.crewTripReference, sync);
-    await page.clock.install();
-    await page.clock.pauseAt(new Date());
+    await installPausedClock(page);
 
     await context.setOffline(false);
     await page.clock.runFor(0);
@@ -596,8 +600,7 @@ test.describe('PR-18 Crew PWA offline operations', () => {
       }
       await route.continue();
     });
-    await page.clock.install();
-    await page.clock.pauseAt(new Date());
+    await installPausedClock(page);
 
     await context.setOffline(false);
     await page.clock.runFor(0);
@@ -636,8 +639,7 @@ test.describe('PR-18 Crew PWA offline operations', () => {
     });
     const sync = { requests: 0, clientEventIds: [] } satisfies SyncCapture;
     await mockAcknowledgedCrewSync(page, seed.crewTripReference, sync);
-    await page.clock.install();
-    await page.clock.pauseAt(new Date());
+    await installPausedClock(page);
 
     await context.setOffline(false);
     await page.clock.runFor(0);
@@ -706,8 +708,7 @@ test.describe('PR-18 Crew PWA offline operations', () => {
       syncRequests += 1;
       await route.continue();
     });
-    await page.clock.install();
-    await page.clock.pauseAt(new Date());
+    await installPausedClock(page);
 
     await context.setOffline(false);
     await page.clock.runFor(0);
