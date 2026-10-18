@@ -614,6 +614,12 @@ importers:
       '@euroteranga/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@euroteranga/content':
+        specifier: workspace:*
+        version: link:../../packages/content
+      '@euroteranga/site':
+        specifier: workspace:*
+        version: link:../../packages/site
       '@euroteranga/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -708,6 +714,31 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.2
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.3(@types/node@24.19.2)(vite@8.3.4(@types/node@24.19.2)(jiti@2.7.0))
+
+  packages/site:
+    dependencies:
+      '@euroteranga/content':
+        specifier: workspace:*
+        version: link:../content
+    devDependencies:
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.3.0(@types/react@19.3.0)
+      react:
+        specifier: 'catalog:'
+        version: 19.3.0
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.3.0(react@19.3.0)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

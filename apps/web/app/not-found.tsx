@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { BOOKING_URL } from '../lib/links';
+import { DEFAULT_SITE_SETTINGS } from '@euroteranga/content';
+
+const BOOKING_URL = process.env.PUBLIC_BOOKING_URL ?? DEFAULT_SITE_SETTINGS.apps.bookingUrl;
 
 // Next.js adds `noindex` to not-found responses by itself.
 export const metadata: Metadata = { title: 'Page introuvable' };

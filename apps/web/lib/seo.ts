@@ -33,3 +33,28 @@ export function jsonLd(value: unknown): string {
 export function robotsOf(seo: SiteSeo) {
   return robotsDirective(seo);
 }
+
+/**
+ * Open Graph and Twitter fields shared by every page. A page's `openGraph`
+ * replaces the layout's instead of merging with it, so each page spreads
+ * these and only adds its own title, description and URL.
+ */
+export const SOCIAL_IMAGE = {
+  url: '/opengraph-image',
+  width: 1200,
+  height: 630,
+  alt: 'EURO TERANGA — autocar Paris ↔ Dakar',
+};
+
+export function openGraphBase() {
+  return {
+    type: 'website' as const,
+    locale: 'fr_FR',
+    siteName: SITE_NAME,
+    images: [SOCIAL_IMAGE],
+  };
+}
+
+export function twitterBase() {
+  return { card: 'summary_large_image' as const, images: ['/twitter-image'] };
+}

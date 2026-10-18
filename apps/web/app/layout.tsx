@@ -1,8 +1,16 @@
 import '@euroteranga/ui/tokens.css';
-import './public.css';
+import '@euroteranga/site/site.css';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
-import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, SITE_NAME, robotsOf, siteSeo } from '../lib/seo';
+import {
+  DEFAULT_DESCRIPTION,
+  DEFAULT_TITLE,
+  SITE_NAME,
+  openGraphBase,
+  robotsOf,
+  siteSeo,
+  twitterBase,
+} from '../lib/seo';
 
 // Rendered on the server for each request: the indexing decision and the
 // canonical origin follow the running environment (see lib/seo.ts).
@@ -15,18 +23,8 @@ export function generateMetadata(): Metadata {
     title: { default: DEFAULT_TITLE, template: `%s — ${SITE_NAME}` },
     description: DEFAULT_DESCRIPTION,
     applicationName: SITE_NAME,
-    openGraph: {
-      title: DEFAULT_TITLE,
-      description: DEFAULT_DESCRIPTION,
-      type: 'website',
-      locale: 'fr_FR',
-      siteName: SITE_NAME,
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: DEFAULT_TITLE,
-      description: DEFAULT_DESCRIPTION,
-    },
+    openGraph: { ...openGraphBase(), title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION },
+    twitter: { ...twitterBase(), title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION },
     robots: robotsOf(seo),
     formatDetection: { telephone: false, address: false, email: false },
   };
