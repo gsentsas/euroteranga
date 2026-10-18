@@ -7,7 +7,7 @@ import {
 import { Injectable } from '@nestjs/common';
 import type { z } from 'zod';
 import { PublicApiError } from '../auth/http/public-api-error.js';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import type { Actor, AuthPrincipal } from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { cancelTripHolds } from '../bookings/booking-inventory.js';
 import { DatabaseService } from '../database/database.service.js';
@@ -374,7 +374,7 @@ export class TripService {
   }
 
   /** DRAFT only, on a currently PUBLISHED route version; no implicit timetable. */
-  async createTrip(input: TripCreate, actor: AuthPrincipal) {
+  async createTrip(input: TripCreate, actor: Actor) {
     const id = await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const version = await tx.routeVersion.findUnique({
@@ -409,7 +409,7 @@ export class TripService {
   }
 
   /** Atomic replacement of the complete DRAFT timetable. */
-  async replaceTimetable(id: string, input: TripTimetable, actor: AuthPrincipal) {
+  async replaceTimetable(id: string, input: TripTimetable, actor: Actor) {
     await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const trip = await lockTrip(tx, id);
@@ -468,7 +468,7 @@ export class TripService {
   }
 
   /** DRAFT -> SCHEDULED after a full re-validation; the timetable is then frozen. */
-  async schedule(id: string, actor: AuthPrincipal) {
+  async schedule(id: string, actor: Actor) {
     await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const trip = await lockTrip(tx, id);
@@ -570,7 +570,7 @@ export class TripService {
    * Assign, change or remove the vehicle of a DRAFT or SCHEDULED trip. The
    * new vehicle must be ACTIVE. A reason is required once SCHEDULED.
    */
-  async assignVehicle(id: string, input: TripVehicle, actor: AuthPrincipal) {
+  async assignVehicle(id: string, input: TripVehicle, actor: Actor) {
     await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const trip = await lockTrip(tx, id);
@@ -625,7 +625,7 @@ export class TripService {
    * Lock order: trip FOR UPDATE, vehicle FOR SHARE, seat_map then
    * seat_map_version FOR SHARE.
    */
-  async assignSeatMap(id: string, input: TripSeatMap, actor: AuthPrincipal) {
+  async assignSeatMap(id: string, input: TripSeatMap, actor: Actor) {
     await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const trip = await lockTrip(tx, id);
@@ -671,7 +671,7 @@ export class TripService {
    * pricing exactly the trip's route version. Nothing is assigned implicitly.
    * Lock order: trip FOR UPDATE, fare_table then fare_table_version FOR SHARE.
    */
-  async assignFareTable(id: string, input: TripFareTable, actor: AuthPrincipal) {
+  async assignFareTable(id: string, input: TripFareTable, actor: Actor) {
     await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const trip = await lockTrip(tx, id);

@@ -2,7 +2,7 @@ import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
 import type { z } from 'zod';
 import { PublicApiError } from '../auth/http/public-api-error.js';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import type { Actor } from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { checkCells, seatCountOf } from './seat-map-cells.js';
@@ -148,7 +148,7 @@ export class SeatMapService {
     };
   }
 
-  async createSeatMap(input: SeatMapCreate, actor: AuthPrincipal) {
+  async createSeatMap(input: SeatMapCreate, actor: Actor) {
     const id = await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const map = await tx.seatMap.create({ data: input });
@@ -168,7 +168,7 @@ export class SeatMapService {
     return this.seatMap(id);
   }
 
-  async updateSeatMap(id: string, input: SeatMapUpdate, actor: AuthPrincipal) {
+  async updateSeatMap(id: string, input: SeatMapUpdate, actor: Actor) {
     await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         await lockSeatMap(tx, id);
@@ -197,7 +197,7 @@ export class SeatMapService {
     return this.seatMap(id);
   }
 
-  async createVersion(seatMapId: string, actor: AuthPrincipal) {
+  async createVersion(seatMapId: string, actor: Actor) {
     await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         await lockSeatMap(tx, seatMapId);
@@ -228,12 +228,7 @@ export class SeatMapService {
   }
 
   /** Atomic replacement of the complete DRAFT layout. */
-  async replaceCells(
-    seatMapId: string,
-    versionId: string,
-    input: SeatMapCells,
-    actor: AuthPrincipal,
-  ) {
+  async replaceCells(seatMapId: string, versionId: string, input: SeatMapCells, actor: Actor) {
     await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         await lockSeatMap(tx, seatMapId);
@@ -273,7 +268,7 @@ export class SeatMapService {
    * DRAFT -> PUBLISHED, retiring the current PUBLISHED version in the same
    * transaction. Requires an active seat map and at least one SEAT.
    */
-  async publish(seatMapId: string, versionId: string, actor: AuthPrincipal) {
+  async publish(seatMapId: string, versionId: string, actor: Actor) {
     await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const map = await lockSeatMap(tx, seatMapId);

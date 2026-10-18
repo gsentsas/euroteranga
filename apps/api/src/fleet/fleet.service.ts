@@ -2,7 +2,7 @@ import { Prisma, type DatabaseTransaction, type VehicleStatus } from '@euroteran
 import { Injectable } from '@nestjs/common';
 import type { z } from 'zod';
 import { PublicApiError } from '../auth/http/public-api-error.js';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import type { Actor } from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import {
@@ -140,7 +140,7 @@ export class FleetService {
     return { ...vehicleView(vehicle), statusHistory };
   }
 
-  createVehicle(input: VehicleCreate, actor: AuthPrincipal) {
+  createVehicle(input: VehicleCreate, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const plate = input.registrationPlate ?? null;
@@ -176,7 +176,7 @@ export class FleetService {
   }
 
   /** Administrative data only: status and retiredAt are not accepted here. */
-  updateVehicle(id: string, input: VehicleUpdate, actor: AuthPrincipal) {
+  updateVehicle(id: string, input: VehicleUpdate, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const locked = await lockVehicle(tx, id);
@@ -235,7 +235,7 @@ export class FleetService {
    * transition, update, audit — one transaction. A failed audit insert rolls
    * the status change back.
    */
-  changeStatus(id: string, input: VehicleStatusChange, actor: AuthPrincipal) {
+  changeStatus(id: string, input: VehicleStatusChange, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const locked = await lockVehicle(tx, id);
@@ -278,7 +278,7 @@ export class FleetService {
    * map. Existing trips keep their own historical seat map.
    * Lock order: vehicle FOR UPDATE, then seat_map / seat_map_version FOR SHARE.
    */
-  assignSeatMap(id: string, input: VehicleSeatMap, actor: AuthPrincipal) {
+  assignSeatMap(id: string, input: VehicleSeatMap, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const locked = await lockVehicle(tx, id);

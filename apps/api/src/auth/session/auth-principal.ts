@@ -10,3 +10,20 @@ export interface AuthPrincipal {
   realm: Realm;
   sessionId: string;
 }
+
+/**
+ * An operator command run outside HTTP, such as the pilot data bootstrap.
+ * It has no identity and no session: its audit events carry a null actor
+ * and record `source` in their metadata (`systemActor`).
+ */
+export interface SystemActor {
+  readonly kind: 'system';
+  readonly source: string;
+}
+
+/** Who performs a domain mutation: an authenticated caller or an operator command. */
+export type Actor = AuthPrincipal | SystemActor;
+
+export function isSystemActor(actor: Actor): actor is SystemActor {
+  return 'kind' in actor && actor.kind === 'system';
+}

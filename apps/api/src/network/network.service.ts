@@ -1,7 +1,7 @@
 import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
 import type { z } from 'zod';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import type { Actor } from '../auth/session/auth-principal.js';
 import { PublicApiError } from '../auth/http/public-api-error.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
@@ -131,7 +131,7 @@ export class NetworkService {
     return pageOf(rows, query.limit);
   }
 
-  createCountry(input: CountryCreate, actor: AuthPrincipal) {
+  createCountry(input: CountryCreate, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const country = await tx.country.create({ data: input });
@@ -150,7 +150,7 @@ export class NetworkService {
     );
   }
 
-  updateCountry(id: string, input: CountryUpdate, actor: AuthPrincipal) {
+  updateCountry(id: string, input: CountryUpdate, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const before = await tx.country.findUnique({ where: { id } });
@@ -191,7 +191,7 @@ export class NetworkService {
     return { ...page, items: page.items.map(locationView) };
   }
 
-  createStop(input: StopCreate, actor: AuthPrincipal) {
+  createStop(input: StopCreate, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         if (
@@ -210,7 +210,7 @@ export class NetworkService {
     );
   }
 
-  updateStop(id: string, input: StopUpdate, actor: AuthPrincipal) {
+  updateStop(id: string, input: StopUpdate, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const existing = await tx.stop.findUnique({ where: { id }, include: { country: true } });
@@ -257,7 +257,7 @@ export class NetworkService {
     return { ...page, items: page.items.map(locationView) };
   }
 
-  createCheckpoint(input: CheckpointCreate, actor: AuthPrincipal) {
+  createCheckpoint(input: CheckpointCreate, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         if (
@@ -282,7 +282,7 @@ export class NetworkService {
     );
   }
 
-  updateCheckpoint(id: string, input: CheckpointUpdate, actor: AuthPrincipal) {
+  updateCheckpoint(id: string, input: CheckpointUpdate, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const existing = await tx.checkpoint.findUnique({
@@ -359,7 +359,7 @@ export class NetworkService {
     };
   }
 
-  createRoute(input: RouteCreate, actor: AuthPrincipal) {
+  createRoute(input: RouteCreate, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const route = await tx.route.create({ data: input });
@@ -378,7 +378,7 @@ export class NetworkService {
     );
   }
 
-  updateRoute(id: string, input: RouteUpdate, actor: AuthPrincipal) {
+  updateRoute(id: string, input: RouteUpdate, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const before = await tx.route.findUnique({ where: { id } });
@@ -401,7 +401,7 @@ export class NetworkService {
     );
   }
 
-  createRouteVersion(routeId: string, actor: AuthPrincipal) {
+  createRouteVersion(routeId: string, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         await lockRoute(tx, routeId);
@@ -431,12 +431,7 @@ export class NetworkService {
     );
   }
 
-  replaceWaypoints(
-    routeId: string,
-    versionId: string,
-    input: ReplaceWaypoints,
-    actor: AuthPrincipal,
-  ) {
+  replaceWaypoints(routeId: string, versionId: string, input: ReplaceWaypoints, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         await lockRoute(tx, routeId);
@@ -516,7 +511,7 @@ export class NetworkService {
     );
   }
 
-  publishRouteVersion(routeId: string, versionId: string, actor: AuthPrincipal) {
+  publishRouteVersion(routeId: string, versionId: string, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         // All publication and waypoint replacement operations take locks in
