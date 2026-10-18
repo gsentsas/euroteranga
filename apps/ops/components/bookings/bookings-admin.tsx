@@ -9,6 +9,7 @@ import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { OpsDetailRegion } from '../ops-detail-region';
+import { OpsState } from '../ops-state';
 import { PAYMENT_STATUS_LABELS } from '../payments/payment-format';
 import { useCan } from '../staff-access';
 
@@ -286,7 +287,13 @@ export function BookingsAdmin() {
 
       <section aria-labelledby="admin-bookings-title">
         <h2 id="admin-bookings-title">Réservations</h2>
-        {!bookings ? <p role="status">Chargement des réservations…</p> : null}
+        {!bookings ? (
+          <OpsState
+            kind="loading"
+            title="Chargement des réservations"
+            detail="Récupération des dossiers correspondant aux filtres actuels."
+          />
+        ) : null}
         {bookings ? (
           <div className="et-table-wrap">
             <table className="et-table">
@@ -344,7 +351,13 @@ export function BookingsAdmin() {
             </table>
           </div>
         ) : null}
-        {bookings?.length === 0 ? <p>Aucune réservation.</p> : null}
+        {bookings?.length === 0 ? (
+          <OpsState
+            kind="empty"
+            title="Aucune réservation"
+            detail="Aucun dossier ne correspond aux filtres actuels."
+          />
+        ) : null}
         {nextCursor ? (
           <button
             type="button"
@@ -356,7 +369,13 @@ export function BookingsAdmin() {
         ) : null}
       </section>
 
-      {selectedId && !detail ? <p role="status">Chargement de la réservation…</p> : null}
+      {selectedId && !detail ? (
+        <OpsState
+          kind="loading"
+          title="Chargement de la réservation"
+          detail="Récupération de la fiche et de son historique."
+        />
+      ) : null}
       {detail ? (
         <OpsDetailRegion
           id="booking-detail-panel"
