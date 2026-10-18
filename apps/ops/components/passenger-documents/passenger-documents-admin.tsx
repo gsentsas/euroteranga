@@ -231,7 +231,11 @@ export function PassengerDocumentsAdmin() {
       </form>
 
       {detail ? (
-        <OpsDetailRegion id="passenger-document-detail-panel" focusKey={detail.reference}>
+        <OpsDetailRegion
+          id="passenger-document-detail-panel"
+          focusKey={detail.reference}
+          onClose={() => setDetail(null)}
+        >
           <Detail document={detail} download={download} busy={busy} />
         </OpsDetailRegion>
       ) : null}
@@ -257,7 +261,10 @@ export function PassengerDocumentsAdmin() {
               </thead>
               <tbody>
                 {documents.map((item) => (
-                  <tr key={item.reference}>
+                  <tr
+                  key={item.reference}
+                  className={detail?.reference === item.reference ? 'ops-table-row--selected' : undefined}
+                >
                     <td>
                       {item.passenger.givenName} {item.passenger.familyName}
                       <br />
