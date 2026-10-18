@@ -186,9 +186,11 @@ There is **no public STAFF or CREW registration** and no bootstrap endpoint.
 - Operator commands run as a named **system actor** (`SystemActor`). The
   pilot data bootstrap (DATA-1) is one: its events carry no identity or
   session (`actor_identity_id` and `session_id` are null), and record
-  `metadata.systemActor = "pilot-bootstrap"`. Only the network, seat-map,
-  fleet, pricing and trip operations it uses accept a system actor. Every
-  other mutation still requires an authenticated principal.
+  `metadata.systemActor = "pilot-bootstrap"`. It calls the network,
+  seat-map, fleet, pricing and trip service operations with this system
+  actor. Other service methods also accept an `Actor`, but their HTTP
+  controllers only ever pass the authenticated `AuthPrincipal`: no HTTP
+  request can act as a system actor.
 - Booking adds `BOOKING_HELD`, `BOOKING_CANCELLED` and
   `BOOKING_CANCELLED_BY_TRIP`. Each event shares the business transaction; an
   audit failure rolls back the hold/cancellation and inventory changes.

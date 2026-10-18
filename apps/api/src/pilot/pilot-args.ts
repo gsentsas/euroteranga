@@ -42,7 +42,13 @@ export function parsePilotArgs(argv: readonly string[], today: Date): PilotArgsR
   }
   const todayDate = today.toISOString().slice(0, 10);
   const anchorDate = values['anchor-date'] ?? todayDate;
-  if (!DATE.test(anchorDate) || Number.isNaN(Date.parse(`${anchorDate}T00:00:00Z`))) {
+  // Date.parse shifts impossible days (2030-04-31 → May 1): require a round trip.
+  const parsedAnchor = Date.parse(`${anchorDate}T00:00:00Z`);
+  if (
+    !DATE.test(anchorDate) ||
+    Number.isNaN(parsedAnchor) ||
+    new Date(parsedAnchor).toISOString().slice(0, 10) !== anchorDate
+  ) {
     return { ok: false, message: '--anchor-date must be a calendar date (YYYY-MM-DD).' };
   }
   if (anchorDate < todayDate) {

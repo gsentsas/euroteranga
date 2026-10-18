@@ -146,6 +146,9 @@ describe('pilot CLI arguments', () => {
       ['--anchor-date', '2030-02-28'],
       ['--anchor-date', '01/03/2030'],
       ['--anchor-date', '2030-02-31x'],
+      // Future days that do not exist: Date.parse would shift them to May 1 / March 1.
+      ['--anchor-date', '2030-04-31'],
+      ['--anchor-date', '2031-02-29'],
       ['--trips-per-direction', '0'],
       ['--trips-per-direction', '9'],
       ['--trips-per-direction', '2.5'],
