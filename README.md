@@ -125,6 +125,8 @@ All configuration comes from environment variables, validated at startup.
 | `NEXT_PUBLIC_APP_ENV`      | Frontends   | Environment label shown in the UI                          |
 | `NEXT_PUBLIC_API_BASE_URL` | Frontends   | Core API base URL                                          |
 | `NEXT_PUBLIC_CLIENT_URL`   | Booking     | Public Client app URL used for account links               |
+| `PUBLIC_SITE_URL`          | Web         | Canonical origin of the public website (runtime)           |
+| `SEO_INDEXING_ENABLED`     | Web         | `true` allows indexing, in production only (fail-closed)   |
 
 Authentication adds `AUTH_CSRF_KEY`, `AUTH_HMAC_KEY`,
 `AUTH_TOTP_ENCRYPTION_KEY` (secrets, base64), per-realm origins
@@ -144,6 +146,9 @@ staging and production), `AUTH_STAFF_INVITATION_TTL_SECONDS` and
 with `pnpm auth:bootstrap-super-admin` (CLI only): see
 [`docs/security/authorization.md`](docs/security/authorization.md) and
 [`docs/runbooks/bootstrap-super-admin.md`](docs/runbooks/bootstrap-super-admin.md).
+
+Search-engine indexing is closed by default everywhere: see
+[`docs/runbooks/seo-indexing.md`](docs/runbooks/seo-indexing.md).
 
 `NEXT_PUBLIC_*` values are embedded in browser code: builds fail when a
 sensitive-looking variable uses this prefix.
