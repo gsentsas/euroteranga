@@ -297,9 +297,7 @@ export function BookingsAdmin() {
 
       <section aria-labelledby="admin-bookings-title">
         <h2 id="admin-bookings-title">Réservations</h2>
-        {!bookings && !loadError ? (
-          <OpsLoadingState title="Chargement des réservations" />
-        ) : null}
+        {!bookings && !loadError ? <OpsLoadingState title="Chargement des réservations" /> : null}
         {!bookings && loadError ? (
           <OpsErrorState
             title="Impossible de charger les réservations"
