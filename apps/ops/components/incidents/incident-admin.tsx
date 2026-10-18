@@ -12,6 +12,7 @@ import type {
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsState } from '../ops-state';
 import { useCan } from '../staff-access';
 
 const TYPE_LABELS: Record<IncidentType, string> = {
@@ -760,11 +761,23 @@ export function IncidentAdmin() {
           <tbody>
             {items === null ? (
               <tr>
-                <td colSpan={8}>Chargement…</td>
+                <td colSpan={8}>
+                  <OpsState
+                    kind="loading"
+                    title="Chargement des incidents"
+                    detail="Récupération du journal opérationnel."
+                  />
+                </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={8}>Aucun incident.</td>
+                <td colSpan={8}>
+                  <OpsState
+                    kind="empty"
+                    title="Aucun incident"
+                    detail="Aucun incident ne correspond aux filtres actuels."
+                  />
+                </td>
               </tr>
             ) : (
               items.map((item) => (
