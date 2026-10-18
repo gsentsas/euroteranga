@@ -25,10 +25,7 @@ export function OpsLoadingState({
   );
 }
 
-export function OpsEmptyState({
-  title,
-  description,
-}: BaseProps) {
+export function OpsEmptyState({ title, description }: BaseProps) {
   return (
     <div className="ops-data-state ops-data-state--empty" data-testid="ops-empty-state">
       <span className="ops-data-state__icon" aria-hidden="true">
@@ -54,7 +51,11 @@ export function OpsErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <div className="ops-data-state ops-data-state--error" role="alert" data-testid="ops-error-state">
+    <div
+      className="ops-data-state ops-data-state--error"
+      role="alert"
+      data-testid="ops-error-state"
+    >
       <span className="ops-data-state__icon" aria-hidden="true">
         !
       </span>
