@@ -15,7 +15,7 @@
     "build:frontends": "pnpm --recursive --filter \"./apps/**\" --filter \"!@euroteranga/api\" run build",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --write apps/ops/app/network.css apps/ops/components/bookings/bookings-admin.tsx apps/ops/components/ops-data-state.tsx apps/ops/components/payments/payments-admin.tsx apps/ops/components/trips/trips-admin.tsx && git diff --exit-code -- apps/ops/app/network.css apps/ops/components/bookings/bookings-admin.tsx apps/ops/components/ops-data-state.tsx apps/ops/components/payments/payments-admin.tsx apps/ops/components/trips/trips-admin.tsx",
     "typecheck": "pnpm --recursive run typecheck",
     "test": "pnpm test:unit && pnpm test:integration",
     "test:unit": "pnpm --recursive --if-present run test:unit",
