@@ -18,6 +18,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "catalog:",
     "@euroteranga/config": "workspace:*",
+    "@euroteranga/content": "workspace:*",
     "@euroteranga/database": "workspace:*",
     "@euroteranga/logger": "workspace:*",
     "@nestjs/common": "catalog:",
