@@ -287,10 +287,11 @@ New surfaces bring new requirements:
 Twenty-three migrations are applied in order, and CI deploys them twice.
 Gaps:
 
-- **Drift:** CI does not check that `schema.prisma` matches the migrated
-  database (F-CI-03). Drift has already happened once, in PR-14, through a
-  foreign key named without `map:`. A `prisma migrate diff --exit-code` step
-  closes it.
+- **Drift:** the historical PR-14 mismatch (a foreign key named without
+  `map:`) is now covered by F-CI-03. After deploying every migration, the CI
+  `database` job runs
+  `pnpm --filter @euroteranga/database exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code`
+  and fails if the migrated database differs from `schema.prisma`.
 - **Data procedures:** there is no reference or pilot data procedure
   (F-DATA-02).
 - **Maintenance:** there is no maintenance procedure for growing append-only
