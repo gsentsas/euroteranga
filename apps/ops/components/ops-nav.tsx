@@ -41,7 +41,7 @@ function resourceGroup(name: string): (typeof GROUPS)[number] {
  * permissions returned by the Core API. This is display-only; the server
  * authorizes every underlying request independently.
  */
-export function OpsNav() {
+export function OpsNav({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { menuItems, selectedKey } = useMenu();
   const state = useAccess();
   if (state.status !== 'ready') return null;
@@ -74,6 +74,7 @@ export function OpsNav() {
                     href={item.route ?? '/'}
                     className={active ? 'ops-nav__link ops-nav__link--active' : 'ops-nav__link'}
                     aria-current={active ? 'page' : undefined}
+                    onClick={() => onNavigate?.()}
                   >
                     <span className="ops-nav__bullet" aria-hidden="true" />
                     <span>{item.label ?? item.name}</span>

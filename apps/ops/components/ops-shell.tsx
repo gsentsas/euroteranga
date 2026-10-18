@@ -3,7 +3,7 @@
 import { FoundationShell } from '@euroteranga/ui';
 import { Authenticated } from '@refinedev/core';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { publicEnv } from '../lib/env';
 import { OpsGlobalSearch } from './ops-global-search';
 import { OpsNav } from './ops-nav';
@@ -38,6 +38,7 @@ export function OpsShell({
   subtitle?: string;
   children: ReactNode;
 }) {
+  const [navOpen, setNavOpen] = useState(false);
   const foundation = {
     product: 'Ops',
     title,
@@ -62,6 +63,16 @@ export function OpsShell({
 
           <header className="ops-topbar">
             <OpsBrand />
+            <button
+              type="button"
+              className="ops-nav-toggle"
+              aria-controls="ops-sidebar"
+              aria-expanded={navOpen}
+              onClick={() => setNavOpen((open) => !open)}
+            >
+              <span aria-hidden="true">☰</span>
+              <span>Menu</span>
+            </button>
             <OpsGlobalSearch />
             <div className="ops-topbar__meta">
               <span className="ops-live-indicator">
@@ -72,17 +83,35 @@ export function OpsShell({
             </div>
           </header>
 
-          <aside className="ops-sidebar">
+          <aside
+            id="ops-sidebar"
+            className={navOpen ? 'ops-sidebar ops-sidebar--open' : 'ops-sidebar'}
+          >
+            <div className="ops-sidebar__mobile-heading">
+              <strong>Navigation</strong>
+              <button type="button" aria-label="Fermer le menu" onClick={() => setNavOpen(false)}>
+                ×
+              </button>
+            </div>
             <div className="ops-sidebar__heading">
               <span>Navigation</span>
               <strong>Opérations</strong>
             </div>
-            <OpsNav />
+            <OpsNav onNavigate={() => setNavOpen(false)} />
             <div className="ops-sidebar__footer">
               <span>EURO TERANGA</span>
               <small>Back-office interne · accès contrôlé</small>
             </div>
           </aside>
+
+          {navOpen ? (
+            <button
+              type="button"
+              className="ops-sidebar-backdrop"
+              aria-label="Fermer le menu"
+              onClick={() => setNavOpen(false)}
+            />
+          ) : null}
 
           <main id="main" className="ops-main" tabIndex={-1}>
             <header className="ops-page-header">
