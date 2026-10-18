@@ -249,7 +249,9 @@ export type PreauthenticatedFixture =
   | 'checkInDenied'
   | 'permitManager'
   | 'permitReader'
-  | 'permitDenied';
+  | 'permitDenied'
+  | 'contentEditor'
+  | 'contentDenied';
 
 const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string> = {
   crew: 'E2E_CREW_SESSION',
@@ -270,6 +272,8 @@ const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string
   permitManager: 'E2E_PERMIT_MANAGER_SESSION',
   permitReader: 'E2E_PERMIT_READER_SESSION',
   permitDenied: 'E2E_PERMIT_DENIED_SESSION',
+  contentEditor: 'E2E_CONTENT_EDITOR_SESSION',
+  contentDenied: 'E2E_CONTENT_DENIED_SESSION',
 };
 
 /**

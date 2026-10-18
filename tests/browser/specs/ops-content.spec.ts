@@ -1,13 +1,27 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { appByName, appUrl } from '../apps.js';
-import { FIXTURES } from '../fixtures.js';
-import { BROWSER_API_URL, directAdminApi, signInAndEnroll } from '../staff.js';
+import { preauthenticatedSession } from '../fixtures.js';
+import { BROWSER_API_URL, directAdminApi } from '../staff.js';
 
 const ops = appByName('ops');
 const web = appByName('web');
 
 function mainNav(page: Page) {
   return page.getByRole('navigation', { name: 'Navigation principale' });
+}
+
+/** Pre-created session: these scenarios do not consume the shared login-IP budget. */
+async function signedIn(context: BrowserContext, name: 'contentEditor' | 'contentDenied') {
+  await context.addCookies([
+    {
+      name: 'et_staff_session',
+      value: preauthenticatedSession(name),
+      url: BROWSER_API_URL,
+      httpOnly: true,
+      secure: false,
+      sameSite: 'Strict',
+    },
+  ]);
 }
 
 function notice(page: Page, text: string) {
@@ -32,7 +46,8 @@ test.describe('ops website content editor', () => {
     const run = process.env.E2E_RUN_ID ?? '';
     const path = `/e2e-editeur-${run}`;
 
-    await signInAndEnroll(page, FIXTURES.contentEditor.email);
+    await signedIn(page.context(), 'contentEditor');
+    await page.goto(appUrl(ops, '/'));
     await mainNav(page).getByRole('link', { name: 'Contenus du site' }).click();
     await expect(page).toHaveURL(appUrl(ops, '/contenus'));
     await expect(page.getByTestId('content-workspace')).toBeVisible();
@@ -180,7 +195,8 @@ test.describe('ops website content editor', () => {
   test('without content.read the menu is absent and the API refuses the content', async ({
     page,
   }) => {
-    await signInAndEnroll(page, FIXTURES.contentDenied.email);
+    await signedIn(page.context(), 'contentDenied');
+    await page.goto(appUrl(ops, '/'));
     await expect(mainNav(page)).toBeVisible();
     await expect(mainNav(page).getByRole('link', { name: 'Contenus du site' })).toHaveCount(0);
     await page.goto(appUrl(ops, '/contenus'));
