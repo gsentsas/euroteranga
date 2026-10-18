@@ -150,7 +150,10 @@ test('ops: SUPER_ADMIN signs in with MFA, invites, manages roles and status, rea
   await expect(mainNav(page)).toBeVisible();
   await mainNav(page).getByRole('link', { name: 'Vue d’ensemble' }).click();
   await expect(page).toHaveURL(appUrl(ops, '/'));
-  await expect(page.getByRole('button', { name: 'Menu' })).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('button', { name: 'Menu' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
 
   expect(errors).toEqual([]);
 });
