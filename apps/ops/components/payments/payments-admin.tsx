@@ -271,7 +271,10 @@ export function PaymentsAdmin() {
               </thead>
               <tbody>
                 {payments.map((payment) => (
-                  <tr key={payment.id}>
+                  <tr
+                    key={payment.id}
+                    className={selectedId === payment.id ? 'ops-table-row--selected' : undefined}
+                  >
                     <th scope="row" className="et-code">
                       {payment.reference}
                     </th>
@@ -319,7 +322,11 @@ export function PaymentsAdmin() {
 
       {selectedId && !detail ? <p role="status">Chargement du paiement…</p> : null}
       {detail ? (
-        <OpsDetailRegion id="payment-detail-panel" focusKey={selectedId}>
+        <OpsDetailRegion
+          id="payment-detail-panel"
+          focusKey={selectedId}
+          onClose={() => setSelectedId(null)}
+        >
           <PaymentDetail payment={detail} canManage={canManage} busy={busy} onCancel={cancel} />
         </OpsDetailRegion>
       ) : null}
