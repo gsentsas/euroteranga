@@ -420,6 +420,14 @@ technical document acceptance is not regulatory validity. See
 Health probes: `/health` (basic), `/health/live` (process alive),
 `/health/ready` (PostgreSQL answers `SELECT 1` within 2 s, otherwise 503).
 
+## Trip tracking (PR-19)
+
+`apps/api/src/tracking` stores append-only observations (GPS, checkpoints,
+Crew, OPS) per trip. It decides what may leave the operational boundary
+through a per-trip visibility (`HIDDEN`, `CHECKPOINT_ONLY`, `APPROXIMATE`,
+`PRECISE`) and revocable hashed public links. No GPS provider is connected
+yet. See [`docs/domain/tracking.md`](../domain/tracking.md).
+
 ## Decisions
 
 Recorded in [`docs/adr/`](../adr/README.md): modular monolith (ADR-001),

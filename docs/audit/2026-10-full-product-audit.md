@@ -120,7 +120,7 @@ Weaknesses:
 | Regulatory permits                  | ✅  | ✅     | —           | ✅ ✅ ✅                 | ✅   |
 | Departure readiness and dispatch    | ✅  | ✅     | —           | ✅ ✅ ✅                 | ✅   |
 | Crew PWA (offline)                  | ✅  | —      | ✅ (Crew)   | ✅ ✅ ✅                 | ✅   |
-| Tracking                            | ✅  | ✅     | ✅          | ✅ ✅ ✅                 | ❌   |
+| Tracking                            | ✅  | ✅     | ✅          | ✅ ✅ ✅                 | ✅   |
 | Borders                             | ✅  | ✅     | ✅ (Crew)   | ✅ ✅ ✅                 | ✅   |
 | Incidents                           | ✅  | ✅     | ✅ (Crew)   | ✅ ✅ ✅                 | ✅   |
 | Finance and refunds                 | ✅  | ✅     | —           | ✅ ✅ ✅                 | ✅   |
@@ -204,12 +204,12 @@ Criticality:
 
 ### Documentation
 
-| ID       | Category | Description                                                                                                                       | Evidence                       | Impact                                             | Crit. | Solution                                                                  | Effort | Status             | PR      |
-| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------- | ----- | ------------------------------------------------------------------------- | ------ | ------------------ | ------- |
-| F-DOC-01 | Docs     | The README states "NOT PRODUCTION DEPLOYED", contains literal `\n` sequences, a truncated sentence and broken table rows          | `README.md`                    | Misleading status; broken rendering                | P2    | Rewrite the status and fix the formatting                                 | S      | FIXED              | AUDIT-0 |
-| F-DOC-02 | Docs     | The pilot deployment runbook shows escaped backticks (`` \`bash …\` ``), so the commands cannot be copied as rendered             | `pilot-deployment.md`          | Operator error during a deployment                 | P2    | Use real code spans and blocks                                            | S      | FIXED              | AUDIT-0 |
-| F-DOC-04 | Docs     | Tracking (PR-19) has no domain or security document, unlike every other domain                                                    | `docs/domain`, `docs/security` | Visibility levels and token rules are only in code | P2    | `docs/domain/tracking.md`                                                 | S      | READY_TO_IMPLEMENT | DOCS-1  |
-| F-DOC-03 | Docs     | The architecture overview still says "Implementation starts in PR-01… No business feature is implemented yet", and stops at PR-16 | `docs/architecture/README.md`  | Stale reference document                           | P2    | Update the header, and add a current domain map and the ADR index entries | S      | FIXED              | AUDIT-0 |
+| ID       | Category | Description                                                                                                                       | Evidence                       | Impact                                             | Crit. | Solution                                                                  | Effort | Status | PR      |
+| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------- | ----- | ------------------------------------------------------------------------- | ------ | ------ | ------- |
+| F-DOC-01 | Docs     | The README states "NOT PRODUCTION DEPLOYED", contains literal `\n` sequences, a truncated sentence and broken table rows          | `README.md`                    | Misleading status; broken rendering                | P2    | Rewrite the status and fix the formatting                                 | S      | FIXED  | AUDIT-0 |
+| F-DOC-02 | Docs     | The pilot deployment runbook shows escaped backticks (`` \`bash …\` ``), so the commands cannot be copied as rendered             | `pilot-deployment.md`          | Operator error during a deployment                 | P2    | Use real code spans and blocks                                            | S      | FIXED  | AUDIT-0 |
+| F-DOC-04 | Docs     | Tracking (PR-19) has no domain or security document, unlike every other domain                                                    | `docs/domain`, `docs/security` | Visibility levels and token rules are only in code | P2    | `docs/domain/tracking.md`                                                 | S      | FIXED  | DOCS-1  |
+| F-DOC-03 | Docs     | The architecture overview still says "Implementation starts in PR-01… No business feature is implemented yet", and stops at PR-16 | `docs/architecture/README.md`  | Stale reference document                           | P2    | Update the header, and add a current domain map and the ADR index entries | S      | FIXED  | AUDIT-0 |
 
 ## UI and UX
 
