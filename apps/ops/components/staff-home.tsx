@@ -2,6 +2,8 @@
 
 import { useGetIdentity, useLogout } from '@refinedev/core';
 import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import { auth } from '../lib/auth';
 import { useAccess } from './staff-access';
 
 const shortcuts = [
@@ -31,6 +33,20 @@ const shortcuts = [
   },
 ] as const;
 
+type DashboardMetric = {
+  key: string;
+  label: string;
+  value: string;
+  detail: string;
+  href: string;
+  permission: string;
+  tone?: 'default' | 'warning' | 'danger';
+};
+
+function pageCount(items: readonly unknown[], nextCursor: string | null): string {
+  return `${items.length}${nextCursor ? '+' : ''}`;
+}
+
 /** Shown inside OpsShell for a STAFF session holding ops.access. */
 export function StaffHome() {
   const { data: identity } = useGetIdentity<{ id: string; email: string }>();
@@ -38,6 +54,119 @@ export function StaffHome() {
   const state = useAccess();
   const roles = state.status === 'ready' ? state.access.roles : [];
   const permissions = state.status === 'ready' ? state.access.permissions : [];
+  const [metrics, setMetrics] = useState<Record<string, DashboardMetric>>({});
+  const [pulseLoading, setPulseLoading] = useState(false);
+
+  const can = useMemo(() => new Set(permissions), [permissions]);
+
+  useEffect(() => {
+    if (state.status !== 'ready') return;
+
+    let cancelled = false;
+    const jobs: Array<Promise<DashboardMetric | null>> = [];
+
+    if (can.has('trip.read')) {
+      jobs.push(
+        auth.admin.trips.trips({ limit: 100 }).then((result) => {
+          if (!result.ok) return null;
+          const active = result.data.items.filter((trip) =>
+            ['SCHEDULED', 'IN_PROGRESS'].includes(trip.status),
+          );
+          return {
+            key: 'trips',
+            label: 'Voyages actifs',
+            value: pageCount(active, result.data.nextCursor),
+            detail: 'Planifiés ou en cours',
+            href: '/trips',
+            permission: 'trip.read',
+          } satisfies DashboardMetric;
+        }),
+      );
+    }
+
+    if (can.has('incident.read')) {
+      jobs.push(
+        auth.admin.incidents.list({ limit: 100 }).then((result) => {
+          if (!result.ok) return null;
+          const open = result.data.items.filter(
+            (incident) => !['RESOLVED', 'CLOSED'].includes(incident.status),
+          );
+          const critical = open.filter((incident) =>
+            ['HIGH', 'CRITICAL'].includes(incident.severity),
+          ).length;
+          return {
+            key: 'incidents',
+            label: 'Incidents ouverts',
+            value: pageCount(open, result.data.nextCursor),
+            detail: critical ? `${critical} haute priorité` : 'Aucune haute priorité',
+            href: '/incidents',
+            permission: 'incident.read',
+            tone: critical ? 'danger' : 'default',
+          } satisfies DashboardMetric;
+        }),
+      );
+    }
+
+    if (can.has('payment.read')) {
+      jobs.push(
+        auth.admin.payments.listPayments({ status: 'PENDING', limit: 100 }).then((result) => {
+          if (!result.ok) return null;
+          return {
+            key: 'payments',
+            label: 'Paiements à vérifier',
+            value: pageCount(result.data.items, result.data.nextCursor),
+            detail: 'Tentatives encore en attente',
+            href: '/payments',
+            permission: 'payment.read',
+            tone: result.data.items.length ? 'warning' : 'default',
+          } satisfies DashboardMetric;
+        }),
+      );
+    }
+
+    if (can.has('checkin.read')) {
+      jobs.push(
+        auth.admin.checkIn.list({ checkInStatus: 'NOT_CHECKED_IN', limit: 100 }).then((result) => {
+          if (!result.ok) return null;
+          const blocked = result.data.items.filter((item) => !item.readiness.eligible).length;
+          return {
+            key: 'checkin',
+            label: 'Check-in restant',
+            value: pageCount(result.data.items, result.data.nextCursor),
+            detail: blocked ? `${blocked} dossier(s) bloqué(s)` : 'Aucun blocage dans la liste',
+            href: '/check-in',
+            permission: 'checkin.read',
+            tone: blocked ? 'warning' : 'default',
+          } satisfies DashboardMetric;
+        }),
+      );
+    }
+
+    if (!jobs.length) {
+      setMetrics({});
+      return;
+    }
+
+    setPulseLoading(true);
+    void Promise.all(jobs)
+      .then((items) => {
+        if (cancelled) return;
+        setMetrics(
+          Object.fromEntries(
+            items.filter((item): item is DashboardMetric => item !== null).map((item) => [item.key, item]),
+          ),
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setPulseLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [can, state.status]);
+
+  const visibleMetrics = Object.values(metrics).filter((metric) => can.has(metric.permission));
 
   return (
     <div className="ops-dashboard">
@@ -47,8 +176,8 @@ export function StaffHome() {
           <h2 id="staff-session-title">Poste de travail opérationnel</h2>
           <p>
             Connecté en tant que{' '}
-            <strong data-testid="session-email">{identity?.email ?? '…'}</strong>. Utilisez
-            uniquement les espaces autorisés pour vos fonctions.
+            <strong data-testid="session-email">{identity?.email ?? '…'}</strong>. Les indicateurs
+            ci-dessous utilisent uniquement les données autorisées pour votre rôle.
           </p>
         </div>
         <button
@@ -75,6 +204,32 @@ export function StaffHome() {
           <strong>Contrôlé par l’API</strong>
         </article>
       </section>
+
+      {visibleMetrics.length || pulseLoading ? (
+        <section aria-labelledby="ops-pulse-title" data-testid="ops-operational-pulse">
+          <div className="ops-section-heading ops-section-heading--split">
+            <div>
+              <p className="ops-dashboard__eyebrow">Vue opérationnelle</p>
+              <h2 id="ops-pulse-title">À surveiller maintenant</h2>
+            </div>
+            {pulseLoading ? <span className="ops-dashboard__loading">Actualisation…</span> : null}
+          </div>
+          <div className="ops-dashboard__pulse">
+            {visibleMetrics.map((metric) => (
+              <Link
+                href={metric.href}
+                key={metric.key}
+                className={`ops-metric-card ops-metric-card--${metric.tone ?? 'default'}`}
+              >
+                <span>{metric.label}</span>
+                <strong>{metric.value}</strong>
+                <small>{metric.detail}</small>
+                <b>Consulter →</b>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section aria-labelledby="ops-shortcuts-title">
         <div className="ops-section-heading">
