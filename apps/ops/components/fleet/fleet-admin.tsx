@@ -10,6 +10,7 @@ import type {
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
+import { OpsDetailRegion } from '../ops-detail-region';
 import { assignedLabel } from '../seat-maps/seat-map-format';
 import { SeatMapAssignmentForm } from '../seat-maps/seat-map-assignment-form';
 import {
@@ -451,6 +452,8 @@ export function FleetAdmin() {
                       type="button"
                       className="et-button et-button--secondary"
                       aria-label={`Consulter le véhicule ${vehicle.code}`}
+                      aria-controls="vehicle-detail-panel"
+                      aria-expanded={selectedId === vehicle.id && Boolean(detail)}
                       onClick={() => setSelectedId(vehicle.id)}
                     >
                       Consulter
@@ -475,7 +478,8 @@ export function FleetAdmin() {
 
       {selectedId && !detail ? <p role="status">Chargement du véhicule…</p> : null}
       {detail ? (
-        <VehicleDetail
+        <OpsDetailRegion id="vehicle-detail-panel" focusKey={selectedId}>
+          <VehicleDetail
           vehicle={detail}
           countries={countries}
           canManage={canManage}
@@ -484,7 +488,8 @@ export function FleetAdmin() {
           run={run}
           busy={busy}
           onReload={reload}
-        />
+          />
+        </OpsDetailRegion>
       ) : null}
     </div>
   );
