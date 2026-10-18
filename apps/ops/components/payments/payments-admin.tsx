@@ -263,9 +263,7 @@ export function PaymentsAdmin() {
 
       <section aria-labelledby="admin-payments-title">
         <h2 id="admin-payments-title">Paiements</h2>
-        {!payments && !loadError ? (
-          <OpsLoadingState title="Chargement des paiements" />
-        ) : null}
+        {!payments && !loadError ? <OpsLoadingState title="Chargement des paiements" /> : null}
         {!payments && loadError ? (
           <OpsErrorState
             title="Impossible de charger les paiements"
