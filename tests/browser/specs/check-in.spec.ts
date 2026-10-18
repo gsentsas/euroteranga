@@ -213,6 +213,7 @@ test.describe('PR-14 check-in and boarding', () => {
     const row = workspace.getByRole('row').filter({ hasText: seed.counterPassenger.reference });
     await expect(row).toContainText('Siège non affecté');
     await row.getByRole('button', { name: 'Consulter' }).click();
+    await expect(page.locator('#check-in-detail-panel')).toBeFocused();
 
     const detail = page.getByTestId('check-in-detail');
     await expect(detail).toContainText('Coura Comptoir');
