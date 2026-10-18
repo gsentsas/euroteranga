@@ -112,6 +112,12 @@ test('ops booking agent: MFA, list, detail and reasoned cancellation', async ({ 
   });
   await cancel.getByLabel('Motif de l’annulation').fill('Demande du client — scénario synthétique');
   await cancel.getByRole('button', { name: 'Annuler la réservation' }).click();
+  const cancellationConfirmation = cancel.getByRole('group', {
+    name: `Confirmer l’annulation de la réservation ${seed.staffBookingReference}`,
+  });
+  await expect(cancellationConfirmation).toBeVisible();
+  await expect(detail).toContainText('Provisoire');
+  await cancellationConfirmation.getByRole('button', { name: 'Confirmer l’annulation' }).click();
   await expect(
     page
       .getByRole('status')
