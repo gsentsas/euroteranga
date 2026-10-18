@@ -1,38 +1,29 @@
 # EURO TERANGA
 
-> **Status: Foundation through PR-25 Pilot Acceptance —\n> NOT PRODUCTION DEPLOYED.**
+> **Status: pilot platform — deployed for a controlled pilot, not production-ready.**
 >
-> The repository contains the technical foundation, authentication for three
-> realms (customer, staff with mandatory TOTP, crew) and server-side
-> authorization: roles and permissions, controlled STAFF provisioning by
-> invitation, an append-only audit trail. It also contains the first
-> operations domains:
+> The pilot runs on `euroteranga.com` and its sub-domains (Plesk, systemd,
+> PostgreSQL 16; see [`docs/runbooks/pilot-deployment.md`](docs/runbooks/pilot-deployment.md)).
+> The code covers every operational domain of the Paris ↔ Dakar corridor:
 >
-> - network: countries, stops, checkpoints and immutable versioned routes;
-> - fleet core: the vehicle registry with its lifecycle;
-> - trips: planned occurrences of published route versions, with a UTC
->   timetable frozen at scheduling and an optional vehicle;
-> - seat maps: versioned physical layouts with computed capacity, the
->   current seat map of a vehicle and the historical seat map of a trip;
-> - pricing: versioned base fare tables between stops, in exact integer
->   minor units of an explicit currency, and the historical pricing of a
->   trip, resolved on the server.
-> - booking: public journey search and segment-aware availability, authenticated
->   CUSTOMER seat holds, owned booking history/cancellation and permissioned
->   STAFF administration.
-> - payments: a payment provider abstraction with payment attempts and
->   idempotent, signed provider events. A succeeded payment confirms a booking,
->   which then keeps its seats.
-> - reporting: permissioned OPS KPI over trips, bookings, finance, incidents,
->   baggage and fleet, calculated server-side with strict per-currency buckets.
+> - identity for three realms (customer, STAFF with mandatory TOTP, crew),
+>   RBAC and an append-only audit trail;
+> - network, fleet, seat maps, pricing and trips;
+> - booking with segment seat holds, payments behind a provider abstraction;
+> - passenger documents, compliance, baggage, check-in and boarding;
+> - manifests, regulatory permits, departure readiness and dispatch;
+> - Crew offline PWA, tracking, borders, incidents, operational finance and
+>   reporting.
 >
-> **There is no real payment provider:** the only one, SANDBOX, simulates
-> payments locally for development, tests and CI, and is refused in staging
-> and production. No real money moves and no card data is ever collected. A
-> The repository now also contains passenger/document compliance, baggage,
-> check-in/boarding, manifests, permits, departure dispatch, Crew offline flows,
-> tracking, borders, incidents, operational finance/refunds, aggregated reporting, security hardening and a\n> reproducible pilot-acceptance gate. There is still no real payment provider, statutory accounting or
-> production deployment; this remains pre-production software.
+> What still blocks real operations (details in
+> [`docs/audit/2026-10-full-product-audit.md`](docs/audit/2026-10-full-product-audit.md)):
+>
+> - **no real payment provider:** SANDBOX simulates payments for development,
+>   tests and CI only, and is refused in staging and production. No money
+>   moves and no card data is collected;
+> - **passenger-document storage and malware scanning are disabled** until a
+>   private S3-compatible store and the ClamAV stack are provisioned;
+> - no statutory accounting, legal pages or commercial terms yet.
 
 EURO TERANGA is a future digital platform for operating international road
 passenger transport services between Europe and Africa.
@@ -62,13 +53,13 @@ database. The backend is a modular monolith. Details:
 
 | Path                   | Package                      | What it is today                                                             | Local port |
 | ---------------------- | ---------------------------- | ---------------------------------------------------------------------------- | ---------- |
-| `apps/web`             | `@euroteranga/web`           | Next.js public site skeleton                                                 | 3000       |
+| `apps/web`             | `@euroteranga/web`           | Next.js public website                                                       | 3000       |
 | `apps/booking`         | `@euroteranga/booking`       | Public search, historical seat selection, CUSTOMER holds and SANDBOX payment | 3001       |
 | `apps/client`          | `@euroteranga/client`        | Customer auth, account, owned bookings and their payments                    | 3002       |
 | `apps/tracking`        | `@euroteranga/tracking`      | Public tracking projection                                                   | 3003       |
 | `apps/ops`             | `@euroteranga/ops`           | Refine back-office including operations, finance and reporting               | 3004       |
 | `apps/crew`            | `@euroteranga/crew`          | Crew operations with offline event queue                                     | 3005       |
-| `apps/api`             | `@euroteranga/api`           | NestJS Core API — auth, RBAC and operational domains through PR-24           | 4000       |
+| `apps/api`             | `@euroteranga/api`           | NestJS Core API — auth, RBAC and every operational domain                    | 4000       |
 | `packages/config`      | `@euroteranga/config`        | Validated environment configuration                                          | —          |
 | `packages/logger`      | `@euroteranga/logger`        | Structured JSON logs with redaction                                          | —          |
 | `packages/database`    | `@euroteranga/database`      | Prisma schema, migrations, client                                            | —          |
@@ -159,7 +150,8 @@ sensitive-looking variable uses this prefix.
 | `pnpm typecheck`               | TypeScript (strict) in every workspace                |
 | `pnpm test:unit`               | Unit tests (Vitest)                                   |
 | `pnpm test:integration`        | API integration tests — requires `DATABASE_URL`       |
-| `pnpm test:e2e`                | Browser tests (Playwright) — requires built frontends | \n  | `pnpm pilot:acceptance` | Dedicated non-destructive PR-25 pilot browser gate |
+| `pnpm test:e2e`                | Browser tests (Playwright) — requires built frontends |
+| `pnpm pilot:acceptance`        | Dedicated non-destructive pilot browser gate          |
 | `pnpm test`                    | Unit + integration tests                              |
 | `pnpm db:validate`             | Validate the Prisma schema                            |
 | `pnpm db:migrate`              | Apply migrations (`prisma migrate deploy`)            |
@@ -179,18 +171,22 @@ pnpm test:e2e
 `.github/workflows/ci.yml` runs on every pull request and on `main`, with
 read-only permissions and actions pinned to commit SHAs:
 
-| Job        | Proves                                                                     |
-| ---------- | -------------------------------------------------------------------------- |
-| `quality`  | Frozen-lockfile install, lint, format, typecheck                           |
-| `database` | Prisma validate, migration deploy (twice), status, `SELECT 1`              |
-| `test`     | Unit and integration tests against an ephemeral PostgreSQL                 |
-| `build`    | All seven applications build                                               |
-| `browser`  | Playwright: six frontends + auth flows against the real API and PostgreSQL |
-| `security` | Forbidden files and bypass markers, gitleaks (full history), `pnpm audit`  | \n  | `pilot-acceptance` | Aggregate success of all mandatory CI jobs |
+| Job                | Proves                                                                      |
+| ------------------ | --------------------------------------------------------------------------- |
+| `quality`          | Frozen-lockfile install, lint, format, typecheck                            |
+| `database`         | Prisma validate, migration deploy (twice), status, schema drift, `SELECT 1` |
+| `test`             | Unit and integration tests against an ephemeral PostgreSQL                  |
+| `build`            | All seven applications build                                                |
+| `browser`          | Playwright: six frontends + auth flows against the real API and PostgreSQL  |
+| `security`         | Forbidden files and bypass markers, gitleaks (full history), `pnpm audit`   |
+| `pilot-acceptance` | Aggregate success of all mandatory CI jobs                                  |
 
 `.github/workflows/codeql.yml` runs CodeQL (security-extended) on pull
 requests, on `main` and weekly. Dependabot proposes grouped weekly updates (npm, GitHub Actions) and monthly
-Docker updates. The pilot go/no-go matrix is documented in\n[`docs/pilot/acceptance.md`](docs/pilot/acceptance.md).\n\n## Contributing
+Docker updates. The pilot go/no-go matrix is documented in
+[`docs/pilot/acceptance.md`](docs/pilot/acceptance.md).
+
+## Contributing
 
 `main` is protected: every change goes through a branch and a pull request.
 See [`CONTRIBUTING.md`](CONTRIBUTING.md).
