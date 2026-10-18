@@ -291,16 +291,16 @@ export function TripsAdmin() {
       {detail ? (
         <OpsDetailRegion id="trip-detail-panel" focusKey={selectedId}>
           <TripDetail
-          trip={detail}
-          vehicles={vehicles}
-          canManage={canManage}
-          canAssignSeatMap={canAssignSeatMap}
-          seatMapOptions={seatMapOptions}
-          canReadPricing={canReadPricing}
-          canAssignPricing={canAssignPricing}
-          run={run}
-          busy={busy}
-          onReload={reload}
+            trip={detail}
+            vehicles={vehicles}
+            canManage={canManage}
+            canAssignSeatMap={canAssignSeatMap}
+            seatMapOptions={seatMapOptions}
+            canReadPricing={canReadPricing}
+            canAssignPricing={canAssignPricing}
+            run={run}
+            busy={busy}
+            onReload={reload}
           />
         </OpsDetailRegion>
       ) : null}
