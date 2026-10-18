@@ -109,6 +109,7 @@ test('ops trips: trip.read consults without any mutation control; the API refuse
   await page
     .getByRole('button', { name: `Consulter le voyage ${seed.seededTripReference}` })
     .click();
+  await expect(page.locator('#trip-detail-panel')).toBeFocused();
   const detail = page.getByRole('region', { name: `Voyage ${seed.seededTripReference}` });
   await expect(detail.getByTestId('trip-status')).toHaveText('Brouillon');
   await expect(detail.getByRole('form')).toHaveCount(0);
