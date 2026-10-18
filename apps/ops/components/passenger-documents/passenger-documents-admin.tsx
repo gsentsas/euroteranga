@@ -8,6 +8,7 @@ import {
 import { FormAlert, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsDetailRegion } from '../ops-detail-region';
 
 const TYPE_LABELS: Record<PassengerDocumentType, string> = {
   PASSPORT: 'Passeport',
@@ -229,7 +230,11 @@ export function PassengerDocumentsAdmin() {
         </button>
       </form>
 
-      {detail ? <Detail document={detail} download={download} busy={busy} /> : null}
+      {detail ? (
+        <OpsDetailRegion id="passenger-document-detail-panel" focusKey={detail.reference}>
+          <Detail document={detail} download={download} busy={busy} />
+        </OpsDetailRegion>
+      ) : null}
       <section aria-labelledby="passenger-documents-list-title">
         <h2 id="passenger-documents-list-title">Documents passagers</h2>
         {!documents ? <p role="status">Chargement des documents…</p> : null}
@@ -269,6 +274,8 @@ export function PassengerDocumentsAdmin() {
                       <button
                         type="button"
                         className="et-button et-button--secondary"
+                        aria-controls="passenger-document-detail-panel"
+                        aria-expanded={detail?.reference === item.reference}
                         onClick={() => void select(item.reference)}
                       >
                         Consulter
