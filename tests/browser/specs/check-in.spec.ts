@@ -223,7 +223,9 @@ test.describe('PR-14 check-in and boarding', () => {
     await expect(detail.getByRole('button', { name: 'Enregistrer le passager' })).toBeDisabled();
     await detail.getByLabel('Siège réservé').selectOption('1A');
     await detail.getByRole('button', { name: 'Affecter le siège' }).click();
-    await expect(workspace.getByRole('status')).toContainText('Siège 1A affecté.');
+    await expect(
+      workspace.getByRole('status').filter({ hasText: 'Siège 1A affecté.' }),
+    ).toBeVisible();
     await expect(detail.getByTestId('check-in-seat')).toHaveText('1A');
     await expect(detail.getByTestId('check-in-readiness').locator('tbody tr')).toHaveCount(6);
     await expect(detail).toContainText('Prêt pour le check-in');
