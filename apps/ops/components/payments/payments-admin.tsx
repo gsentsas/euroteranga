@@ -10,6 +10,7 @@ import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { OpsDetailRegion } from '../ops-detail-region';
+import { OpsState } from '../ops-state';
 import { useCan } from '../staff-access';
 import { BOOKING_STATUS_LABELS, formatInstant, PAYMENT_STATUS_LABELS } from './payment-format';
 
@@ -252,7 +253,13 @@ export function PaymentsAdmin() {
 
       <section aria-labelledby="admin-payments-title">
         <h2 id="admin-payments-title">Paiements</h2>
-        {!payments ? <p role="status">Chargement des paiements…</p> : null}
+        {!payments ? (
+          <OpsState
+            kind="loading"
+            title="Chargement des paiements"
+            detail="Récupération des tentatives correspondant aux filtres actuels."
+          />
+        ) : null}
         {payments ? (
           <div className="et-table-wrap">
             <table className="et-table">
@@ -308,7 +315,13 @@ export function PaymentsAdmin() {
             </table>
           </div>
         ) : null}
-        {payments?.length === 0 ? <p>Aucun paiement.</p> : null}
+        {payments?.length === 0 ? (
+          <OpsState
+            kind="empty"
+            title="Aucun paiement"
+            detail="Aucune tentative ne correspond aux filtres actuels."
+          />
+        ) : null}
         {nextCursor ? (
           <button
             type="button"
@@ -320,7 +333,13 @@ export function PaymentsAdmin() {
         ) : null}
       </section>
 
-      {selectedId && !detail ? <p role="status">Chargement du paiement…</p> : null}
+      {selectedId && !detail ? (
+        <OpsState
+          kind="loading"
+          title="Chargement du paiement"
+          detail="Récupération de la tentative et de son historique prestataire."
+        />
+      ) : null}
       {detail ? (
         <OpsDetailRegion
           id="payment-detail-panel"
