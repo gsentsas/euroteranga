@@ -188,6 +188,14 @@ export const FIXTURES = {
   },
 
   /** PR-16: administers synthetic operational permits. */
+  /** CMS-2: content.read + content.manage, without seo.manage. */
+  get contentEditor(): Fixture {
+    return { realm: 'STAFF', email: runScoped('content-editor'), roles: ['CONTENT_EDITOR'] };
+  },
+  /** ops.access without any content permission. */
+  get contentDenied(): Fixture {
+    return { realm: 'STAFF', email: runScoped('content-denied'), roles: ['DISPATCHER'] };
+  },
   get permitManager(): Fixture {
     return { realm: 'STAFF', email: runScoped('permit-manager'), roles: ['OPS_MANAGER'] };
   },
