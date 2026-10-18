@@ -53,7 +53,7 @@ database. The backend is a modular monolith. Details:
 
 | Path                   | Package                      | What it is today                                                             | Local port |
 | ---------------------- | ---------------------------- | ---------------------------------------------------------------------------- | ---------- |
-| `apps/web`             | `@euroteranga/web`           | Next.js public website                                                       | 3000       |
+| `apps/web`             | `@euroteranga/web`           | Public website rendered from the CMS, prices from Pricing                    | 3000       |
 | `apps/booking`         | `@euroteranga/booking`       | Public search, historical seat selection, CUSTOMER holds and SANDBOX payment | 3001       |
 | `apps/client`          | `@euroteranga/client`        | Customer auth, account, owned bookings and their payments                    | 3002       |
 | `apps/tracking`        | `@euroteranga/tracking`      | Public tracking projection                                                   | 3003       |
@@ -66,6 +66,7 @@ database. The backend is a modular monolith. Details:
 | `packages/ui`          | `@euroteranga/ui`            | Brand mark, page shell, forms, tokens                                        | —          |
 | `packages/auth-client` | `@euroteranga/auth-client`   | Typed browser client for Core API                                            | —          |
 | `packages/content`     | `@euroteranga/content`       | Structured website content model (blocks, settings, navigation)              | —          |
+| `packages/site`        | `@euroteranga/site`          | Server rendering of the public website content (blocks, header, footer)      | —          |
 | `tests/browser`        | `@euroteranga/browser-tests` | Playwright foundation, auth and business flows                               | —          |
 
 Ports are a local development convention only; production does not depend on

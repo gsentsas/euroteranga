@@ -161,12 +161,50 @@ rolls the mutation back). It carries the kind, key, revision numbers and a
 SHA-256 fingerprint of the document, never the document itself: the
 revisions table is the content history.
 
+## Website rendering (WEB-1)
+
+The public website (`apps/web`) renders the published content on the server
+with `@euroteranga/site`. The same package is meant for the OPS preview
+(CMS-2), so editors preview exactly what visitors get.
+
+- **Routing:** one catch-all route serves every published path. A path that
+  is not a valid content path, or that has no published page, is a 404.
+- **Default content:**
+  - while nothing is published, or when the Core API cannot be reached, the
+    home page falls back to the default content of `@euroteranga/content`,
+    so the site never goes blank;
+  - any other page answers a French "temporarily unavailable" page when the
+    API cannot be reached.
+- **Site settings and navigation:** the published versions are used, or the
+  defaults until they are published.
+- **Prices:** "from" prices come from the public search API (Pricing),
+  never from the CMS:
+  - the lowest current fare per direction among bookable trips, for the
+    `PAR` and `DKR` stops;
+  - shown only when every fare uses the same currency;
+  - otherwise "Tarif affiché à la réservation".
+- **Rendering:**
+  - text is React text and rich text is a typed tree, so markup typed by an
+    editor is displayed literally;
+  - a page without a hero gets its title as its single H1;
+  - images render only when the media library resolves them (MEDIA-1).
+- **Caching:** API reads are cached by Next.js for 60 s (300 s for prices
+  and stops), so a publication appears within a minute.
+- **Server-side configuration** (read at runtime by `euroteranga-web`):
+
+  | Variable                                                         | Purpose                                                                                                                 |
+  | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+  | `CORE_API_INTERNAL_URL`                                          | Optional loopback API base for server-side reads (e.g. `http://127.0.0.1:3206`); defaults to `NEXT_PUBLIC_API_BASE_URL` |
+  | `PUBLIC_BOOKING_URL`, `PUBLIC_CLIENT_URL`, `PUBLIC_TRACKING_URL` | Optional overrides of the application links of the site settings (local, CI, staging)                                   |
+
+- **Sitemap:** it lists the served, indexable CMS pages, and only the home
+  page when the API cannot answer.
+
 ## Deliberately not in CMS-1
 
 - **OPS editor and preview:** CMS-2.
 - **Media library:** MEDIA-1. Blocks already reference media ids
   (`mediaIds` lists them).
-- **Website rendering:** WEB-1.
 - **Testimonials:** not modelled, so that no fake review can be published.
 - **Scheduled publication:** not modelled.
 - **Real-time co-editing:** not modelled.
