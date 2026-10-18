@@ -89,11 +89,7 @@ export function OpsShell({
           >
             <div className="ops-sidebar__mobile-heading">
               <strong>Navigation</strong>
-              <button
-                type="button"
-                aria-label="Fermer le menu"
-                onClick={() => setNavOpen(false)}
-              >
+              <button type="button" aria-label="Fermer le menu" onClick={() => setNavOpen(false)}>
                 ×
               </button>
             </div>
