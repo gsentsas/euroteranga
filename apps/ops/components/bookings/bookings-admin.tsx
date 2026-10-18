@@ -8,6 +8,7 @@ import {
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsDetailRegion } from '../ops-detail-region';
 import { PAYMENT_STATUS_LABELS } from '../payments/payment-format';
 import { useCan } from '../staff-access';
 
@@ -327,6 +328,8 @@ export function BookingsAdmin() {
                         type="button"
                         className="et-button et-button--secondary"
                         aria-label={`Consulter la réservation ${booking.reference}`}
+                        aria-controls="booking-detail-panel"
+                        aria-expanded={selectedId === booking.id && Boolean(detail)}
                         onClick={() => setSelectedId(booking.id)}
                       >
                         Consulter
@@ -352,7 +355,9 @@ export function BookingsAdmin() {
 
       {selectedId && !detail ? <p role="status">Chargement de la réservation…</p> : null}
       {detail ? (
-        <BookingDetail booking={detail} canManage={canManage} busy={busy} onCancel={cancel} />
+        <OpsDetailRegion id="booking-detail-panel" focusKey={selectedId}>
+          <BookingDetail booking={detail} canManage={canManage} busy={busy} onCancel={cancel} />
+        </OpsDetailRegion>
       ) : null}
     </div>
   );
