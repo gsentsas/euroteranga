@@ -89,6 +89,7 @@ test('ops fleet: fleet.read consults without any mutation control; the API refus
   await expect(page.getByRole('form', { name: 'Enregistrer un véhicule' })).toHaveCount(0);
 
   await page.getByRole('button', { name: `Consulter le véhicule ${code}` }).click();
+  await expect(page.locator('#vehicle-detail-panel')).toBeFocused();
   const detail = page.getByRole('region', { name: `Véhicule ${code}` });
   await expect(detail.getByTestId('vehicle-status')).toHaveText('Planifié');
   await expect(detail.getByRole('form')).toHaveCount(0);
