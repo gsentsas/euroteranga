@@ -438,7 +438,10 @@ export function FleetAdmin() {
             </thead>
             <tbody>
               {vehicles.map((vehicle) => (
-                <tr key={vehicle.id}>
+                <tr
+                  key={vehicle.id}
+                  className={selectedId === vehicle.id ? 'ops-table-row--selected' : undefined}
+                >
                   <th scope="row">
                     <span className="et-tag">{vehicle.code}</span>
                   </th>
@@ -478,7 +481,11 @@ export function FleetAdmin() {
 
       {selectedId && !detail ? <p role="status">Chargement du véhicule…</p> : null}
       {detail ? (
-        <OpsDetailRegion id="vehicle-detail-panel" focusKey={selectedId}>
+        <OpsDetailRegion
+          id="vehicle-detail-panel"
+          focusKey={selectedId}
+          onClose={() => setSelectedId(null)}
+        >
           <VehicleDetail
             vehicle={detail}
             countries={countries}
