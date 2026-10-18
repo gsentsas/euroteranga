@@ -41,6 +41,8 @@
 }
 
 .et-booking-stop {
+  min-width: 0;
+  min-inline-size: 0;
   display: grid;
   gap: 0.6rem;
   margin: 0;
@@ -48,6 +50,17 @@
   border: 1px solid #dce5e0;
   border-radius: 1rem;
   background: #fffdf8;
+}
+
+.et-booking-stop > .et-field {
+  min-width: 0;
+}
+
+.et-booking-stop .et-input,
+.et-booking-stop .et-select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .et-booking-stop legend {
@@ -293,6 +306,10 @@
 }
 
 @media (max-width: 36rem) {
+  .et-booking-search-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .et-booking-summary {
     grid-template-columns: 1fr;
   }
