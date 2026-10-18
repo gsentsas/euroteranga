@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export function OpsConfirmSubmit({
   actionLabel,
@@ -16,10 +16,26 @@ export function OpsConfirmSubmit({
   disabled?: boolean;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const actionRef = useRef<HTMLButtonElement>(null);
+  const returnRef = useRef<HTMLButtonElement>(null);
+  const openedRef = useRef(false);
+
+  useEffect(() => {
+    if (confirming) {
+      openedRef.current = true;
+      returnRef.current?.focus();
+      return;
+    }
+    if (openedRef.current) {
+      openedRef.current = false;
+      actionRef.current?.focus();
+    }
+  }, [confirming]);
 
   if (!confirming) {
     return (
       <button
+        ref={actionRef}
         type="button"
         className="et-button ops-sensitive-action"
         disabled={disabled}
@@ -31,13 +47,21 @@ export function OpsConfirmSubmit({
   }
 
   return (
-    <div className="ops-confirm-action" role="group" aria-label={title}>
+    <div
+      className="ops-confirm-action"
+      role="group"
+      aria-label={title}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') setConfirming(false);
+      }}
+    >
       <div>
         <strong>{title}</strong>
         <p>{description}</p>
       </div>
       <div className="ops-confirm-action__buttons">
         <button
+          ref={returnRef}
           type="button"
           className="et-button et-button--secondary"
           disabled={disabled}
