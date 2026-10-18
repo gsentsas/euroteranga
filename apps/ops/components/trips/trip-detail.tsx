@@ -4,6 +4,7 @@ import type { AdminTrip, AdminVehicle, TripTimetableInput } from '@euroteranga/a
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import type { useAdminFeedback } from '../admin/admin-feedback';
+import { OpsConfirmSubmit } from '../ops-confirm-submit';
 import { TripPricingPanel } from '../pricing/trip-pricing-panel';
 import { assignedLabel } from '../seat-maps/seat-map-format';
 import { SeatMapAssignmentForm } from '../seat-maps/seat-map-assignment-form';
@@ -297,9 +298,13 @@ function CancelForm({
         />
       </div>
       <p className="et-hint">L’annulation est définitive.</p>
-      <button className="et-button et-button--secondary" type="submit" disabled={busy}>
-        Annuler le voyage
-      </button>
+      <OpsConfirmSubmit
+        actionLabel="Annuler le voyage"
+        confirmLabel="Confirmer l’annulation"
+        title={`Confirmer l’annulation du voyage ${trip.reference}`}
+        description="Le voyage passera définitivement au statut annulé et ne pourra plus être modifié."
+        disabled={busy || reason.trim().length < 3}
+      />
     </form>
   );
 }
