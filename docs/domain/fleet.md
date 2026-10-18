@@ -31,6 +31,7 @@ maintenance record.
 | Field                   | Rules                                                                                         |
 | ----------------------- | --------------------------------------------------------------------------------------------- |
 | `code`                  | Internal stable identifier. Trimmed, uppercase, `[A-Z0-9][A-Z0-9_-]{0,31}`, unique.           |
+| `name`                  | Optional operational name (e.g. "Teranga 01"). Trimmed, inner spaces collapsed, 1–80, unique. |
 | `vin`                   | Optional, uppercase, unique when present. **Shape check only** (see below).                   |
 | `registrationPlate`     | Optional. Trimmed, uppercase, inner spaces collapsed, 1–16 characters, no control characters. |
 | `registrationCountryId` | Optional FK to the PR-04 `Country` (`ON DELETE RESTRICT`).                                    |

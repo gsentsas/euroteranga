@@ -74,6 +74,10 @@ jobs:
         run: pnpm db:migrate
       - name: Migration status is up to date
         run: pnpm db:migrate:status
+      - name: Schema matches the migrated database (no drift)
+        run: >-
+          pnpm --filter @euroteranga/database exec prisma migrate diff
+          --from-config-datasource --to-schema prisma/schema.prisma --exit-code
       - name: Database connectivity (SELECT 1 through Prisma)
         run: echo 'SELECT 1;' | pnpm --filter @euroteranga/database exec prisma db execute --stdin
 

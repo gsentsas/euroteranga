@@ -1,11 +1,11 @@
-# EURO TERANGA — Target Architecture
+# EURO TERANGA — Architecture
 
-> These are target architectural decisions.
-> Implementation starts in PR-01 Foundation.
->
-> PR-01 implements the technical foundation only (see below). No business
-> feature is implemented yet. Pinned toolchain versions are recorded in
-> `package.json`, `.node-version` and the catalog in `pnpm-workspace.yaml`.
+> The validated target decisions below are implemented on `main` (PR-01 to
+> PR-25, then the UI and OPS series). The domain sections are kept in
+> delivery order. The current gaps and the roadmap are tracked in
+> [`docs/audit/2026-10-full-product-audit.md`](../audit/2026-10-full-product-audit.md).
+> Pinned toolchain versions are recorded in `package.json`, `.node-version`
+> and the catalog in `pnpm-workspace.yaml`.
 
 ## Vision
 
@@ -439,8 +439,8 @@ Health probes: `/health` (basic), `/health/live` (process alive),
 ## Decisions
 
 Recorded in [`docs/adr/`](../adr/README.md): modular monolith (ADR-001),
-PostgreSQL and Prisma (ADR-002), NestJS (ADR-003), Refine (ADR-004), Plesk
-deployment target — not yet decided (ADR-010), monorepo tooling (ADR-011),
+PostgreSQL and Prisma (ADR-002), NestJS (ADR-003), Refine (ADR-004), the Plesk
+deployment target (ADR-010, implemented by OPS-1 as systemd services), monorepo tooling (ADR-011),
 authentication (ADR-012 to ADR-016), authorization (ADR-017 to ADR-020),
 route versioning (ADR-021), vehicle lifecycle (ADR-022), trip lifecycle
 (ADR-023), seat-map versioning (ADR-024) and versioned fare tables with
@@ -454,10 +454,22 @@ manifests (ADR-030) and the generic regulatory-permit lifecycle with intrinsic
 validity (ADR-031), plus operational trip finance without a general ledger
 (ADR-033).
 
-Still open: production object-storage and malware-scanner provisioning,
-offline crew synchronisation, the choice and integration of a real payment
-provider (including provider-side refund execution), a data-driven operational permit-requirement
-catalogue, departure readiness/dispatch, and the production deployment model.
+Delivered since: departure readiness and dispatch (PR-17, ADR-032), the Crew
+offline PWA (PR-18, ADR-007), tracking (PR-19), borders (PR-20), incidents
+(PR-21), operational finance (PR-22, ADR-033), reporting (PR-23), security
+hardening (PR-24), the pilot-acceptance gate (PR-25), the Plesk/systemd pilot
+deployment (OPS-1, see
+[`docs/runbooks/pilot-deployment.md`](../runbooks/pilot-deployment.md)) and the
+private ClamAV scanner stack (OPS-3A, see
+[`docs/runbooks/private-document-scanner.md`](../runbooks/private-document-scanner.md)).
+
+Still open:
+
+- production provisioning of private object storage and the malware scanner;
+- the choice and integration of a real payment provider, including
+  provider-side refund execution;
+- a data-driven catalogue of operational permit requirements;
+- the content management system, public media and SEO configuration.
 
 ### PR-17 — departure readiness and dispatch
 

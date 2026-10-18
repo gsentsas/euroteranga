@@ -17,6 +17,7 @@ import {
   toUtcInput,
   TRIP_ACTION_LABELS,
   TRIP_STATUS_LABELS,
+  vehicleIdentity,
 } from './trip-format';
 
 type Run = ReturnType<typeof useAdminFeedback>['run'];
@@ -222,7 +223,7 @@ function VehicleForm({
           ) : null}
           {vehicles.map((vehicle) => (
             <option key={vehicle.id} value={vehicle.id}>
-              {vehicle.code} — {vehicle.manufacturer} {vehicle.model}
+              {vehicleIdentity(vehicle)} — {vehicle.manufacturer} {vehicle.model}
             </option>
           ))}
         </select>
@@ -444,7 +445,7 @@ export function TripDetail({
         <dt>Véhicule</dt>
         <dd data-testid="trip-vehicle">
           {trip.vehicle
-            ? `${trip.vehicle.code} — ${trip.vehicle.manufacturer} ${trip.vehicle.model}`
+            ? `${vehicleIdentity(trip.vehicle)} — ${trip.vehicle.manufacturer} ${trip.vehicle.model}`
             : 'Aucun'}
         </dd>
       </dl>

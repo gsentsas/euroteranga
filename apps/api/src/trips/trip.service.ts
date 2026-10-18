@@ -62,6 +62,7 @@ const tripSummaryInclude = {
     select: {
       id: true,
       code: true,
+      name: true,
       status: true,
       manufacturer: true,
       model: true,
@@ -200,6 +201,35 @@ async function lockActiveVehicle(tx: DatabaseTransaction, id: string) {
   const vehicle = await lockVehicle(tx, id);
   if (vehicle.status !== 'ACTIVE') throw TripErrors.vehicleUnavailable();
   return vehicle;
+}
+
+/**
+ * FLEET-1: a vehicle never serves two SCHEDULED or IN_PROGRESS trips whose
+ * planned windows overlap (half-open, so back-to-back trips are allowed).
+ * The advisory lock serializes availability decisions for one vehicle; the
+ * PostgreSQL trigger takes the same lock and repeats the check.
+ */
+async function assertVehicleAvailable(
+  tx: DatabaseTransaction,
+  vehicleId: string,
+  tripId: string,
+  window: { plannedDepartureAt: Date; plannedArrivalAt: Date },
+): Promise<void> {
+  await tx.$executeRaw`
+    SELECT pg_advisory_xact_lock(hashtextextended(${'trip-vehicle:' + vehicleId}, 0))
+  `;
+  const conflicts = await tx.$queryRaw<Array<{ reference: string }>>`
+    SELECT "reference" FROM "trip"
+    WHERE "vehicle_id" = ${vehicleId}::uuid
+      AND "id" <> ${tripId}::uuid
+      AND "status" IN ('SCHEDULED', 'IN_PROGRESS')
+      AND "planned_departure_at" < ${window.plannedArrivalAt}
+      AND "planned_arrival_at" > ${window.plannedDepartureAt}
+    ORDER BY "planned_departure_at", "id"
+    LIMIT 1
+  `;
+  const conflict = conflicts[0];
+  if (conflict) throw TripErrors.vehicleOverlap(conflict.reference);
 }
 
 /**
@@ -457,6 +487,7 @@ export class TripService {
         if (!check.ok) throw TripErrors.timetableInvalid(check.message);
         const vehicle = trip.vehicleId ? await lockActiveVehicle(tx, trip.vehicleId) : null;
         assertCompatible(trip.seatMapVersionId, vehicle);
+        if (vehicle) await assertVehicleAvailable(tx, vehicle.id, id, check);
 
         const scheduledAt = new Date();
         await tx.trip.update({
@@ -555,6 +586,18 @@ export class TripService {
 
         const next = input.vehicleId ? await lockActiveVehicle(tx, input.vehicleId) : null;
         assertCompatible(trip.seatMapVersionId, next);
+        if (next && trip.status === 'SCHEDULED') {
+          const window = await tx.trip.findUniqueOrThrow({
+            where: { id },
+            select: { plannedDepartureAt: true, plannedArrivalAt: true },
+          });
+          if (window.plannedDepartureAt && window.plannedArrivalAt) {
+            await assertVehicleAvailable(tx, next.id, id, {
+              plannedDepartureAt: window.plannedDepartureAt,
+              plannedArrivalAt: window.plannedArrivalAt,
+            });
+          }
+        }
         const previousCode = await vehicleCode(tx, trip.vehicleId);
         await tx.trip.update({ where: { id }, data: { vehicleId: next?.id ?? null } });
         await this.audit.record(

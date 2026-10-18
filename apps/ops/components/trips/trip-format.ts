@@ -66,3 +66,8 @@ export function placeOf(waypoint: AdminTripRouteWaypoint): {
     timezone: place?.timezone ?? 'UTC',
   };
 }
+
+/** "ET-COACH-001 « Teranga 01 »": the code, then the operational name when set. */
+export function vehicleIdentity(vehicle: { code: string; name: string | null }): string {
+  return vehicle.name ? `${vehicle.code} « ${vehicle.name} »` : vehicle.code;
+}

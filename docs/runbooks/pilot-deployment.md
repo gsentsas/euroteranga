@@ -14,14 +14,14 @@ This runbook implements ADR-010 for the public staging/pilot environment.
 
 Run as root from a checked-out release.
 
-1. Create pilot DB/secrets:
-   \`bash infrastructure/plesk/bootstrap-pilot-env.sh\`
-2. Install units:
-   \`bash infrastructure/plesk/install-systemd.sh\`
-3. Deploy exact main SHA:
-   \`bash infrastructure/plesk/deploy-release.sh <40-char-main-sha>\`
-4. After loopback health is green, cut over Plesk:
-   \`bash infrastructure/plesk/configure-plesk-proxy.sh\`
+1. Create the pilot database and secrets:
+   `bash infrastructure/plesk/bootstrap-pilot-env.sh`
+2. Install the units:
+   `bash infrastructure/plesk/install-systemd.sh`
+3. Deploy an exact `main` SHA:
+   `bash infrastructure/plesk/deploy-release.sh <40-char-main-sha>`
+4. Once loopback health is green, cut over Plesk:
+   `bash infrastructure/plesk/configure-plesk-proxy.sh`
 
 The deployment builds before switching, backs up PostgreSQL before migration,
 applies migrations, switches current atomically, restarts all services and
@@ -47,17 +47,17 @@ events.
 
 ## Observability
 
-- \`systemctl status 'euroteranga-*.service'\`
-- \`journalctl -u euroteranga-api.service -n 200 --no-pager\`
-- Plesk logs: \`/var/www/vhosts/system/<host>/logs/\`
+- `systemctl status 'euroteranga-*.service'`
+- `journalctl -u euroteranga-api.service -n 200 --no-pager`
+- Plesk logs: `/var/www/vhosts/system/<host>/logs/`
 
 ## Rollback
 
-- \`bash infrastructure/plesk/rollback-release.sh\`
-- or \`bash infrastructure/plesk/rollback-release.sh <known-release-sha>\`
+- `bash infrastructure/plesk/rollback-release.sh`
+- or `bash infrastructure/plesk/rollback-release.sh <known-release-sha>`
 
 Code rollback does not reverse database migrations. Pre-migration dumps are
-stored in \`/var/www/vhosts/euroteranga.com/backups/\`.
+stored in `/var/www/vhosts/euroteranga.com/backups/`.
 
 ## Pilot NO-GO items
 

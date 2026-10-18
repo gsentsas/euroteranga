@@ -290,6 +290,8 @@ export type VehicleStatus = 'PLANNED' | 'ACTIVE' | 'OUT_OF_SERVICE' | 'RETIRED';
 export interface AdminVehicle {
   id: string;
   code: string;
+  /** Operational name used by the teams (e.g. "Teranga 01"). */
+  name: string | null;
   vin: string | null;
   registrationPlate: string | null;
   registrationCountryId: string | null;
@@ -333,6 +335,7 @@ export interface VehicleListOptions {
 
 export interface VehicleCreateInput {
   code: string;
+  name?: string | null;
   vin?: string | null;
   registrationPlate?: string | null;
   registrationCountryId?: string | null;
@@ -380,6 +383,7 @@ export interface AdminTripSummary {
   vehicle: {
     id: string;
     code: string;
+    name: string | null;
     status: VehicleStatus;
     manufacturer: string;
     model: string;
