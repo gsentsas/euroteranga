@@ -4,6 +4,8 @@ APP_ROOT=/var/www/vhosts/euroteranga.com
 RELEASES="$APP_ROOT/releases"
 CURRENT="$APP_ROOT/current"
 SERVICES=(web booking client tracking ops crew api)
+# shellcheck source=lib/readiness.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/readiness.sh"
 [ "$(id -u)" -eq 0 ] || { echo "Must run as root" >&2; exit 1; }
 TARGET="${1:-}"
 if [ -z "$TARGET" ]; then
@@ -18,11 +20,7 @@ LINK="$APP_ROOT/.current.rollback.$$"
 ln -s "$TARGET_DIR" "$LINK"
 mv -Tf "$LINK" "$CURRENT"
 for service in "${SERVICES[@]}"; do systemctl restart "euroteranga-${service}.service"; done
-curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3206/health/ready |
-  grep -q '"status":"ok"'
-for port in 3200 3201 3202 3203 3204 3205; do
-  curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:${port}/" >/dev/null
-done
+wait_until_ready "release ${TARGET:0:12}" || { echo "Rolled-back release is not ready" >&2; exit 1; }
 [ -z "$CURRENT_DIR" ] || basename "$CURRENT_DIR" >"$APP_ROOT/.deploy/previous-sha"
 echo "ROLLED_BACK_TO=$TARGET"
 echo "Database schema was not changed by this rollback"

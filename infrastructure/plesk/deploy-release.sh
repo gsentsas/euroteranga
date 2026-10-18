@@ -12,6 +12,8 @@ GIT_URL="${EUROTERANGA_GIT_URL:-https://github.com/gsentsas/euroteranga.git}"
 NODE_PATH=/opt/plesk/node/24/bin:/usr/local/bin:/usr/bin:/bin
 KEEP_RELEASES="${KEEP_RELEASES:-4}"
 SERVICES=(web booking client tracking ops crew api)
+# shellcheck source=lib/readiness.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/readiness.sh"
 
 usage() { echo "Usage: deploy-release.sh <40-char-main-commit-sha>" >&2; exit 2; }
 [ "$(id -u)" -eq 0 ] || { echo "Must run as root" >&2; exit 1; }
@@ -89,34 +91,20 @@ mv -Tf "$NEW_LINK" "$CURRENT"
 restart_all() {
   for service in "${SERVICES[@]}"; do systemctl restart "euroteranga-${service}.service"; done
 }
-verify_loopback_once() {
-  curl --fail --silent --show-error --max-time 2 http://127.0.0.1:3206/health/ready |
-    grep -q '"status":"ok"'
-  for port in 3200 3201 3202 3203 3204 3205; do
-    curl --fail --silent --show-error --max-time 2 "http://127.0.0.1:${port}/" >/dev/null
-  done
-}
-
-wait_for_loopback() {
-  local attempt
-  for attempt in $(seq 1 30); do
-    if verify_loopback_once; then
-      return 0
-    fi
-    sleep 1
-  done
-  return 1
-}
-
 restart_all
-if ! wait_for_loopback; then
-  echo "New release failed loopback health checks" >&2
+if ! wait_until_ready "release ${SHA:0:12}"; then
+  echo "New release failed its readiness checks" >&2
   if [ -n "$PREVIOUS" ] && [ -d "$PREVIOUS" ]; then
     ROLLBACK_LINK="$APP_ROOT/.current.rollback.$$"
     ln -s "$PREVIOUS" "$ROLLBACK_LINK"
     mv -Tf "$ROLLBACK_LINK" "$CURRENT"
     restart_all
     echo "Application symlink restored to $(basename "$PREVIOUS")" >&2
+    if wait_until_ready "previous release $(basename "$PREVIOUS" | cut -c1-12)"; then
+      echo "Previous release is serving again" >&2
+    else
+      echo "Previous release is NOT ready either: manual intervention required" >&2
+    fi
     echo "Database migrations were not rolled back automatically" >&2
   fi
   exit 1
