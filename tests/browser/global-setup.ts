@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { createDatabaseClient } from '@euroteranga/database';
 import { hash } from '@node-rs/argon2';
+import { contentSeed } from './content-seed.js';
 import {
   bookingReaderRole,
   bookingSeed,
@@ -146,6 +147,7 @@ export default async function globalSetup(): Promise<void> {
     await seedComplianceData(db);
     await seedBaggageData(db);
     await seedCheckInData(db);
+    await seedContentData(db);
   } finally {
     await db.$disconnect();
   }
@@ -1067,4 +1069,49 @@ async function seedPricingData(
     where: { id: trip.id },
     data: { plannedDepartureAt: departure, plannedArrivalAt: arrival },
   });
+}
+
+/**
+ * WEB-1: one published CMS page per run (written under every PostgreSQL
+ * guard: created as DRAFT, then published), so the public website renders
+ * CMS content. The home page is left unpublished: it shows the default
+ * content fallback.
+ */
+async function seedContentData(db: ReturnType<typeof createDatabaseClient>): Promise<void> {
+  const { path, title } = contentSeed();
+  const entry = await db.contentEntry.create({ data: { kind: 'PAGE', key: path } });
+  const revision = await db.contentRevision.create({
+    data: {
+      entryId: entry.id,
+      revision: 1,
+      document: {
+        title,
+        seo: {
+          description: 'Page de démonstration publiée pour les tests navigateur.',
+          indexable: true,
+        },
+        blocks: [
+          {
+            type: 'richText',
+            title: 'Contenu publié',
+            body: [
+              {
+                kind: 'paragraph',
+                spans: [
+                  { text: 'Ce paragraphe vient du CMS. ' },
+                  { text: '<b>Le balisage reste du texte.</b>', bold: true },
+                ],
+              },
+            ],
+          },
+          {
+            type: 'cta',
+            title: 'Prêt à partir ?',
+            button: { label: 'Rechercher un voyage', target: { kind: 'app', app: 'booking' } },
+          },
+        ],
+      },
+    },
+  });
+  await db.contentRevision.update({ where: { id: revision.id }, data: { status: 'PUBLISHED' } });
 }
