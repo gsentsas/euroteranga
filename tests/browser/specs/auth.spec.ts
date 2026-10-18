@@ -139,12 +139,12 @@ test('ops: staff logs in with password, enrolls TOTP, reaches the console, logs 
 
   await page.getByRole('button', { name: 'J’ai conservé mes codes, continuer' }).click();
   await expect(page).toHaveURL(appUrl(ops, '/'));
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Operations Control Center');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Centre de contrôle');
   await expect(page.getByTestId('session-email')).toHaveText(FIXTURES.staff.email);
   await expect(
     page
       .getByRole('navigation', { name: 'Navigation principale' })
-      .getByRole('link', { name: 'Foundation' }),
+      .getByRole('link', { name: 'Vue d’ensemble' }),
   ).toBeVisible();
 
   await page.getByRole('button', { name: 'Se déconnecter' }).click();

@@ -21,7 +21,7 @@ export function RefineProvider({ children }: { children: ReactNode }) {
         routerProvider={routerProvider}
         authProvider={authProvider}
         resources={[
-          { name: 'foundation', list: '/', meta: { label: 'Foundation' } },
+          { name: 'foundation', list: '/', meta: { label: 'Vue d’ensemble' } },
           {
             name: 'network',
             list: '/network',
