@@ -705,9 +705,7 @@ export function NetworkAdmin() {
               {data.routes.map((route) => (
                 <tr
                   key={route.id}
-                  className={
-                    selectedRouteId === route.id ? 'ops-table-row--selected' : undefined
-                  }
+                  className={selectedRouteId === route.id ? 'ops-table-row--selected' : undefined}
                 >
                   <th scope="row">
                     <span className="et-tag">{route.code}</span>

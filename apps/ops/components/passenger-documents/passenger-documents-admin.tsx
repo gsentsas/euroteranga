@@ -262,9 +262,11 @@ export function PassengerDocumentsAdmin() {
               <tbody>
                 {documents.map((item) => (
                   <tr
-                  key={item.reference}
-                  className={detail?.reference === item.reference ? 'ops-table-row--selected' : undefined}
-                >
+                    key={item.reference}
+                    className={
+                      detail?.reference === item.reference ? 'ops-table-row--selected' : undefined
+                    }
+                  >
                     <td>
                       {item.passenger.givenName} {item.passenger.familyName}
                       <br />

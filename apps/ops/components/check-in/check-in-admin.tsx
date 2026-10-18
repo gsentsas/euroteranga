@@ -600,14 +600,14 @@ export function CheckInAdmin() {
               <tbody>
                 {items.map((item) => (
                   <tr
-                  key={`${item.booking.reference}/${item.passenger.reference}`}
-                  className={
-                    detail?.booking.reference === item.booking.reference &&
-                    detail?.passenger?.reference === item.passenger.reference
-                      ? 'ops-table-row--selected'
-                      : undefined
-                  }
-                >
+                    key={`${item.booking.reference}/${item.passenger.reference}`}
+                    className={
+                      detail?.booking.reference === item.booking.reference &&
+                      detail?.passenger?.reference === item.passenger.reference
+                        ? 'ops-table-row--selected'
+                        : undefined
+                    }
+                  >
                     <td>
                       {item.passenger.givenName} {item.passenger.familyName}
                       <br />
