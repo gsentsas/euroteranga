@@ -14,7 +14,12 @@ for (const app of frontendApps) {
       const runtimeErrors: string[] = [];
       page.on('pageerror', (error) => runtimeErrors.push(error.message));
       page.on('console', (message) => {
-        if (message.type() === 'error') runtimeErrors.push(message.text());
+        if (message.type() !== 'error') return;
+        const text = message.text();
+        // OPS probes the current STAFF session on its public login page.
+        // A 401 here is the expected anonymous state, not a runtime failure.
+        if (app.name === 'ops' && text.includes('401 (Unauthorized)')) return;
+        runtimeErrors.push(text);
       });
 
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
