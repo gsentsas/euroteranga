@@ -1235,3 +1235,58 @@
     border-color: var(--ops-green-700);
   }
 }
+
+
+/* UI-4F: explicit second intent before sensitive or irreversible actions. */
+.ops-sensitive-action {
+  border-color: #9d2636;
+  background: #9d2636;
+}
+
+.ops-sensitive-action:hover,
+.ops-sensitive-action:focus-visible {
+  border-color: #7d1e2b;
+  background: #7d1e2b;
+}
+
+.ops-confirm-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid #e0b6bc;
+  border-radius: 0.8rem;
+  background: #fff8f8;
+}
+
+.ops-confirm-action strong {
+  display: block;
+  color: #7d1e2b;
+  font-size: 0.9rem;
+}
+
+.ops-confirm-action p {
+  margin: 0.2rem 0 0;
+  color: #6f4b50;
+  font-size: 0.8rem;
+}
+
+.ops-confirm-action__buttons {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@media (max-width: 38rem) {
+  .ops-confirm-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ops-confirm-action__buttons {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
