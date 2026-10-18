@@ -115,6 +115,7 @@ function EditVehicleForm({
   useEffect(() => {
     setValues({
       code: vehicle.code,
+      name: vehicle.name ?? '',
       manufacturer: vehicle.manufacturer,
       model: vehicle.model,
       modelYear: vehicle.modelYear === null ? '' : String(vehicle.modelYear),
@@ -276,6 +277,8 @@ function VehicleDetail({
     <section aria-labelledby="vehicle-detail-title" className="et-network-panel">
       <h2 id="vehicle-detail-title">Véhicule {vehicle.code}</h2>
       <dl data-testid="vehicle-detail">
+        <dt>Nom opérationnel</dt>
+        <dd data-testid="vehicle-name">{vehicle.name ?? '—'}</dd>
         <dt>Statut</dt>
         <dd data-testid="vehicle-status">{STATUS_LABELS[vehicle.status]}</dd>
         <dt>Constructeur et modèle</dt>
@@ -455,6 +458,7 @@ export function FleetAdmin() {
                 >
                   <th scope="row">
                     <span className="et-tag">{vehicle.code}</span>
+                    {vehicle.name ? <span className="ops-vehicle-name">{vehicle.name}</span> : null}
                   </th>
                   <td>
                     {vehicle.manufacturer} {vehicle.model}

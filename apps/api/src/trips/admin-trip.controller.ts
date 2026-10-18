@@ -158,7 +158,10 @@ export class AdminTripController {
   @UseGuards(CsrfGuard)
   @RequirePermissions(PERMISSIONS.TRIP_MANAGE)
   @ApiOkResponse({ description: 'DRAFT -> SCHEDULED; the timetable is frozen.' })
-  @ApiConflictResponse({ type: ErrorBody, description: 'TRIP_NOT_DRAFT or TRIP_CANCELLED' })
+  @ApiConflictResponse({
+    type: ErrorBody,
+    description: 'TRIP_NOT_DRAFT, TRIP_CANCELLED or TRIP_VEHICLE_OVERLAP',
+  })
   @ApiUnprocessableEntityResponse({
     type: ErrorBody,
     description: 'TRIP_TIMETABLE_INVALID or TRIP_VEHICLE_UNAVAILABLE',
@@ -195,7 +198,10 @@ export class AdminTripController {
   @UseGuards(CsrfGuard)
   @RequirePermissions(PERMISSIONS.TRIP_MANAGE)
   @ApiOkResponse({ description: 'Vehicle assigned, changed or removed, and audited.' })
-  @ApiConflictResponse({ type: ErrorBody, description: 'TRIP_CANCELLED or TRIP_VEHICLE_CONFLICT' })
+  @ApiConflictResponse({
+    type: ErrorBody,
+    description: 'TRIP_CANCELLED, TRIP_VEHICLE_CONFLICT or TRIP_VEHICLE_OVERLAP',
+  })
   @ApiUnprocessableEntityResponse({
     type: ErrorBody,
     description: 'TRIP_VEHICLE_UNAVAILABLE or TRIP_REASON_REQUIRED',

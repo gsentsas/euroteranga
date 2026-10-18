@@ -6,6 +6,7 @@ import { useId } from 'react';
 
 export interface VehicleFormValues {
   code: string;
+  name: string;
   manufacturer: string;
   model: string;
   modelYear: string;
@@ -16,6 +17,7 @@ export interface VehicleFormValues {
 
 export const EMPTY_VEHICLE: VehicleFormValues = {
   code: '',
+  name: '',
   manufacturer: '',
   model: '',
   modelYear: '',
@@ -28,6 +30,7 @@ export const EMPTY_VEHICLE: VehicleFormValues = {
 export function toVehicleInput(values: VehicleFormValues): VehicleCreateInput {
   return {
     code: values.code,
+    name: values.name.trim() || null,
     manufacturer: values.manufacturer,
     model: values.model,
     modelYear: values.modelYear.trim() ? Number(values.modelYear) : null,
@@ -67,6 +70,16 @@ export function VehicleFields({
         autoComplete="off"
         maxLength={32}
         hint="Identifiant interne : lettres, chiffres, _ ou -."
+      />
+      <TextField
+        label={`Nom opérationnel ${context} (facultatif)`}
+        name="name"
+        value={values.name}
+        onChange={set('name')}
+        autoComplete="off"
+        maxLength={80}
+        required={false}
+        hint="Nom utilisé par les équipes, par exemple « Teranga 01 ». Unique."
       />
       <TextField
         label={`Constructeur ${context}`}

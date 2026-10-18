@@ -38,6 +38,9 @@ test('ops fleet: SUPER_ADMIN registers, edits and moves a synthetic vehicle thro
   const create = page.getByRole('form', { name: 'Enregistrer un véhicule' });
   await create.getByLabel('Code du nouveau véhicule', { exact: true }).fill(code.toLowerCase());
   await create
+    .getByLabel('Nom opérationnel du nouveau véhicule (facultatif)')
+    .fill(`Teranga E2E ${runId}`);
+  await create
     .getByLabel('Constructeur du nouveau véhicule', { exact: true })
     .fill('Constructeur synthétique');
   await create.getByLabel('Modèle du nouveau véhicule', { exact: true }).fill('Autocar test');
@@ -48,6 +51,7 @@ test('ops fleet: SUPER_ADMIN registers, edits and moves a synthetic vehicle thro
 
   const detail = page.getByRole('region', { name: `Véhicule ${code}` });
   await expect(detail.getByTestId('vehicle-status')).toHaveText('Planifié');
+  await expect(detail.getByTestId('vehicle-name')).toHaveText(`Teranga E2E ${runId}`);
   await expect(page.getByRole('row').filter({ hasText: code })).toContainText('Planifié');
 
   // Administrative edit (never the status).
