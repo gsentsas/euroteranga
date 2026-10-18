@@ -145,6 +145,11 @@ with `pnpm auth:bootstrap-super-admin` (CLI only): see
 [`docs/security/authorization.md`](docs/security/authorization.md) and
 [`docs/runbooks/bootstrap-super-admin.md`](docs/runbooks/bootstrap-super-admin.md).
 
+The pilot dataset (Paris ↔ Dakar corridor, two coaches, fares and future
+trips) is created with `pnpm data:bootstrap-pilot`. It is idempotent, and it
+refuses production without `--confirm-production`: see
+[`docs/runbooks/pilot-data-bootstrap.md`](docs/runbooks/pilot-data-bootstrap.md).
+
 `NEXT_PUBLIC_*` values are embedded in browser code: builds fail when a
 sensitive-looking variable uses this prefix.
 
@@ -165,6 +170,7 @@ sensitive-looking variable uses this prefix.
 | `pnpm db:migrate`              | Apply migrations (`prisma migrate deploy`)            |
 | `pnpm db:migrate:status`       | Show migration status                                 |
 | `pnpm check:forbidden-files`   | Repository hygiene gate                               |
+| `pnpm data:bootstrap-pilot`    | Idempotent pilot dataset (corridor, coaches, trips)   |
 
 Browser tests locally:
 
