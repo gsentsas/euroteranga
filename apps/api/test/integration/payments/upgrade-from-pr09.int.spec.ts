@@ -13,6 +13,7 @@ import { client, cookiesOf, TEST_PASSWORD } from '../../support/auth-helpers.js'
 import { bookingApi, type CustomerActor } from '../../support/booking-helpers.js';
 import { paymentApi, settle } from '../../support/payment-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
+import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -247,8 +248,8 @@ describe('upgrade from a PR-09 database (isolated database)', () => {
     expect(afterPaymentSnapshot).toEqual(before);
 
     const applied = await appliedMigrations();
-    expect(applied).toHaveLength(23);
-    expect(applied.at(-1)).toBe(REPORTING_MIGRATION);
+    expect(applied).toEqual(CURRENT_MIGRATIONS);
+    expect(applied).toContain(REPORTING_MIGRATION);
     expect(await snapshot()).toEqual(before);
     expect(
       await count(`SELECT count(*) AS count FROM booking WHERE confirmed_at IS NOT NULL`),

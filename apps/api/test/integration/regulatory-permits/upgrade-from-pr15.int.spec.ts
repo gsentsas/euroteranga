@@ -13,6 +13,7 @@ import {
 import { createIdentity, db } from '../../support/auth-helpers.js';
 import { bookableFixture } from '../../support/booking-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
+import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -140,8 +141,8 @@ describe('upgrade from a real PR-15 database', () => {
 
   it('applies only PR-16, preserves PR-15 rows and backfills no permit', async () => {
     const migrations = await applied();
-    expect(migrations).toHaveLength(23);
-    expect(migrations.at(-1)).toBe(REPORTING_MIGRATION);
+    expect(migrations).toEqual(CURRENT_MIGRATIONS);
+    expect(migrations).toContain(REPORTING_MIGRATION);
     expect(await snapshot()).toEqual(before);
 
     const [permitCount, permissionCount, grantCount] = await Promise.all([
@@ -165,7 +166,7 @@ describe('upgrade from a real PR-15 database', () => {
 
   it('is idempotent under a second deploy and reports all 23 migrations applied', async () => {
     deploy(null, url);
-    expect(await applied()).toHaveLength(23);
+    expect(await applied()).toEqual(CURRENT_MIGRATIONS);
     const status = execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'status'], {
       cwd: DATABASE_PACKAGE,
       env: { ...process.env, DATABASE_URL: url },

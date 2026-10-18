@@ -11,6 +11,7 @@ import { staffActor, type StaffActor } from '../../support/admin-helpers.js';
 import { customerActor, type CustomerActor } from '../../support/booking-helpers.js';
 import { compliantPassenger, staffCheckInApi } from '../../support/check-in-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
+import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -139,8 +140,8 @@ describe('upgrade from a real PR-14 database', () => {
 
   it('applies only PR-15, preserves PR-14 rows and backfills no manifest', async () => {
     const migrations = await applied();
-    expect(migrations).toHaveLength(23);
-    expect(migrations.at(-1)).toBe(REPORTING_MIGRATION);
+    expect(migrations).toEqual(CURRENT_MIGRATIONS);
+    expect(migrations).toContain(REPORTING_MIGRATION);
     expect(await snapshot()).toEqual(before);
     const [manifestCount, permissionCount, grantCount] = await Promise.all([
       raw.$queryRawUnsafe<Array<{ count: bigint }>>(
@@ -160,7 +161,7 @@ describe('upgrade from a real PR-14 database', () => {
 
   it('is idempotent under a second deploy and reports all 23 migrations applied', async () => {
     deploy(null, url);
-    expect(await applied()).toHaveLength(23);
+    expect(await applied()).toEqual(CURRENT_MIGRATIONS);
     const status = execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'status'], {
       cwd: DATABASE_PACKAGE,
       env: { ...process.env, DATABASE_URL: url },

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDatabaseClient } from '@euroteranga/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -116,8 +117,8 @@ describe('upgrade from a real PR-22 database', () => {
   });
 
   it('applies only PR-23 and preserves PR-22 finance data', async () => {
-    expect(await applied()).toHaveLength(23);
-    expect((await applied()).at(-1)).toBe(PR23_MIGRATION);
+    expect(await applied()).toEqual(CURRENT_MIGRATIONS);
+    expect(await applied()).toContain(PR23_MIGRATION);
     const revenue = await raw.tripRevenue.findUniqueOrThrow({
       where: { id: tripRevenueId },
       select: { amountMinor: true, currencyCode: true, status: true },
@@ -155,7 +156,7 @@ describe('upgrade from a real PR-22 database', () => {
 
   it('is idempotent and reports all 23 migrations applied', async () => {
     deploy(null, url);
-    expect(await applied()).toHaveLength(23);
+    expect(await applied()).toEqual(CURRENT_MIGRATIONS);
     const status = execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'status'], {
       cwd: DATABASE_PACKAGE,
       env: { ...process.env, DATABASE_URL: url },

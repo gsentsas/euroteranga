@@ -14,6 +14,7 @@ import {
   staffCheckInApi,
 } from '../../support/check-in-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
+import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -128,8 +129,8 @@ describe('upgrade from a real PR-17 database', () => {
   });
 
   it('applies PR-18 through PR-20, preserves STAFF boarding and backfills no Crew data', async () => {
-    expect(await applied()).toHaveLength(23);
-    expect((await applied()).at(-1)).toBe(REPORTING_MIGRATION);
+    expect(await applied()).toEqual(CURRENT_MIGRATIONS);
+    expect(await applied()).toContain(REPORTING_MIGRATION);
     const row = (
       await raw.$queryRawUnsafe<
         Array<{ value: string; crew_device_id: string | null; crew_assignment_id: string | null }>
@@ -167,7 +168,7 @@ describe('upgrade from a real PR-17 database', () => {
 
   it('is idempotent and reports all 23 migrations applied', async () => {
     deploy(null, url);
-    expect(await applied()).toHaveLength(23);
+    expect(await applied()).toEqual(CURRENT_MIGRATIONS);
     const status = execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'status'], {
       cwd: DATABASE_PACKAGE,
       env: { ...process.env, DATABASE_URL: url },

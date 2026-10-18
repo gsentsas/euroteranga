@@ -21,6 +21,7 @@ import {
   uploadDocument,
 } from '../../support/passenger-document-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
+import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -197,8 +198,8 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
     expect(afterPassengerSnapshot).toEqual(before);
     expect(afterPassengerCounts).toEqual([0, 0, 0]);
     const migrations = await applied();
-    expect(migrations).toHaveLength(23);
-    expect(migrations.at(-1)).toBe(REPORTING_MIGRATION);
+    expect(migrations).toEqual(CURRENT_MIGRATIONS);
+    expect(migrations).toContain(REPORTING_MIGRATION);
     // The comparison is only meaningful if every PR-10 state is really present.
     const rows = (value: string | null) =>
       JSON.parse(value ?? '[]') as Array<Record<string, unknown>>;
@@ -246,6 +247,6 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
       encoding: 'utf8',
     });
     expect(status).toContain('Database schema is up to date');
-    expect(await applied()).toHaveLength(23);
+    expect(await applied()).toEqual(CURRENT_MIGRATIONS);
   });
 });

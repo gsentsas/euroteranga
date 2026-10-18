@@ -14,6 +14,7 @@ import {
 } from '../../support/booking-helpers.js';
 import { paymentApi, settle } from '../../support/payment-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
+import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -154,8 +155,8 @@ describe('upgrade from a real PR-21 database', () => {
   });
 
   it('applies PR-22 and PR-23 on top of PR-21 and preserves the paid booking', async () => {
-    expect(await applied()).toHaveLength(23);
-    expect((await applied()).at(-1)).toBe(REPORTING_MIGRATION);
+    expect(await applied()).toEqual(CURRENT_MIGRATIONS);
+    expect(await applied()).toContain(REPORTING_MIGRATION);
 
     const payment = await raw.payment.findUniqueOrThrow({
       where: { reference: paymentReference },
@@ -217,7 +218,7 @@ describe('upgrade from a real PR-21 database', () => {
 
   it('is idempotent and reports all 23 migrations applied', async () => {
     deploy(null, url);
-    expect(await applied()).toHaveLength(23);
+    expect(await applied()).toEqual(CURRENT_MIGRATIONS);
     const status = execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'status'], {
       cwd: DATABASE_PACKAGE,
       env: { ...process.env, DATABASE_URL: url },
