@@ -251,46 +251,46 @@ export function TripsAdmin() {
           <div className="et-table-wrap">
             <table className="et-table">
               <caption>Voyages</caption>
-            <thead>
-              <tr>
-                <th scope="col">Référence</th>
-                <th scope="col">Route</th>
-                <th scope="col">Départ prévu</th>
-                <th scope="col">Véhicule</th>
-                <th scope="col">Statut</th>
-                <th scope="col">Fiche</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trips.map((trip) => (
-                <tr
-                  key={trip.id}
-                  className={selectedId === trip.id ? 'ops-table-row--selected' : undefined}
-                >
-                  <th scope="row">
-                    <span className="et-tag">{trip.reference}</span>
-                  </th>
-                  <td>
-                    {trip.routeVersion.route.code} · v{trip.routeVersion.version}
-                  </td>
-                  <td>{formatUtc(trip.plannedDepartureAt)}</td>
-                  <td>{trip.vehicle?.code ?? '—'}</td>
-                  <td>{TRIP_STATUS_LABELS[trip.status]}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="et-button et-button--secondary"
-                      aria-label={`Consulter le voyage ${trip.reference}`}
-                      aria-controls="trip-detail-panel"
-                      aria-expanded={selectedId === trip.id && Boolean(detail)}
-                      onClick={() => setSelectedId(trip.id)}
-                    >
-                      Consulter
-                    </button>
-                  </td>
+              <thead>
+                <tr>
+                  <th scope="col">Référence</th>
+                  <th scope="col">Route</th>
+                  <th scope="col">Départ prévu</th>
+                  <th scope="col">Véhicule</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col">Fiche</th>
                 </tr>
-              ))}
-            </tbody>
+              </thead>
+              <tbody>
+                {trips.map((trip) => (
+                  <tr
+                    key={trip.id}
+                    className={selectedId === trip.id ? 'ops-table-row--selected' : undefined}
+                  >
+                    <th scope="row">
+                      <span className="et-tag">{trip.reference}</span>
+                    </th>
+                    <td>
+                      {trip.routeVersion.route.code} · v{trip.routeVersion.version}
+                    </td>
+                    <td>{formatUtc(trip.plannedDepartureAt)}</td>
+                    <td>{trip.vehicle?.code ?? '—'}</td>
+                    <td>{TRIP_STATUS_LABELS[trip.status]}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="et-button et-button--secondary"
+                        aria-label={`Consulter le voyage ${trip.reference}`}
+                        aria-controls="trip-detail-panel"
+                        aria-expanded={selectedId === trip.id && Boolean(detail)}
+                        onClick={() => setSelectedId(trip.id)}
+                      >
+                        Consulter
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
         ) : null}
