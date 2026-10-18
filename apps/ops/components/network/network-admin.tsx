@@ -686,9 +686,8 @@ export function NetworkAdmin() {
             busy={busy}
             onCreated={(routeId) => {
               void load().then(() => setSelectedRouteId(routeId));
-              }}
-            />
-          </OpsDetailRegion>
+            }}
+          />
         ) : null}
         <div className="et-table-wrap">
           <table className="et-table">
