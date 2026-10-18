@@ -1,5 +1,5 @@
 import '@euroteranga/ui/tokens.css';
-import './public.css';
+import '@euroteranga/site/site.css';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, SITE_NAME, robotsOf, siteSeo } from '../lib/seo';

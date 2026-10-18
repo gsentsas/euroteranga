@@ -1,17 +1,18 @@
 import { siteUrlOf } from '@euroteranga/config';
 import type { MetadataRoute } from 'next';
+import { loadSitemapPaths } from '../lib/content';
 import { siteSeo } from '../lib/seo';
 
 export const dynamic = 'force-dynamic';
 
-/** Public, indexable pages only. Private applications are never listed. */
-export const PUBLIC_PATHS = ['/'] as const;
-
-export default function sitemap(): MetadataRoute.Sitemap {
+/** Served, indexable CMS pages only. Private applications are never listed. */
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const seo = siteSeo();
-  return PUBLIC_PATHS.map((path) => ({
-    url: siteUrlOf(seo, path),
-    changeFrequency: 'weekly',
-    priority: path === '/' ? 1 : 0.7,
+  const paths = await loadSitemapPaths();
+  return paths.map((item) => ({
+    url: siteUrlOf(seo, item.path),
+    ...(item.updatedAt ? { lastModified: new Date(item.updatedAt) } : {}),
+    changeFrequency: 'weekly' as const,
+    priority: item.path === '/' ? 1 : 0.7,
   }));
 }
