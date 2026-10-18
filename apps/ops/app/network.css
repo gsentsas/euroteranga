@@ -1236,15 +1236,14 @@
   }
 }
 
-
 /* UI-4F: explicit second intent before sensitive or irreversible actions. */
-.ops-sensitive-action {
+.ops-app .ops-sensitive-action {
   border-color: #9d2636;
   background: #9d2636;
 }
 
-.ops-sensitive-action:hover,
-.ops-sensitive-action:focus-visible {
+.ops-app .ops-sensitive-action:hover,
+.ops-app .ops-sensitive-action:focus-visible {
   border-color: #7d1e2b;
   background: #7d1e2b;
 }
