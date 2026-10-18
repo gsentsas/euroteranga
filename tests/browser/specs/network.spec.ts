@@ -164,8 +164,14 @@ test('ops network: network.read can consult but cannot mutate', async ({ page })
 
   const consult = page.getByRole('button', { name: /^Consulter la route / }).first();
   await expect(consult).toBeVisible();
+  const selectedRow = page.getByRole('row').filter({ has: consult });
   await consult.click();
   await expect(page.locator('#route-detail-panel')).toBeFocused();
+  await expect(selectedRow).toHaveClass(/ops-table-row--selected/);
+  await page.getByRole('button', { name: 'Retour à la liste' }).click();
+  await expect(page.locator('#route-detail-panel')).toHaveCount(0);
+  await expect(consult).toBeFocused();
+  await expect(selectedRow).not.toHaveClass(/ops-table-row--selected/);
 
   const api = directAdminApi(page.request);
   expect((await api.get('/network/countries?limit=10')).status()).toBe(200);
