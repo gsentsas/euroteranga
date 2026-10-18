@@ -9,6 +9,7 @@ import {
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsEmptyState, OpsErrorState, OpsLoadingState } from '../ops-data-state';
 import { OpsDetailRegion } from '../ops-detail-region';
 import { useCan } from '../staff-access';
 import { BOOKING_STATUS_LABELS, formatInstant, PAYMENT_STATUS_LABELS } from './payment-format';
@@ -127,11 +128,15 @@ export function PaymentsAdmin() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AdminPaymentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(
     async (cursor?: string) => {
+      setLoadError(null);
+      if (!cursor) setPayments(null);
       const result = await auth.admin.payments.listPayments({
         limit: 100,
         ...(cursor ? { cursor } : {}),
@@ -140,9 +145,10 @@ export function PaymentsAdmin() {
         ...(applied.paymentReference ? { paymentReference: applied.paymentReference } : {}),
       });
       if (!result.ok) {
-        setError(result.error.message);
+        setLoadError(result.error.message);
         return;
       }
+      setLoadError(null);
       setPayments((current) =>
         cursor ? [...(current ?? []), ...result.data.items] : result.data.items,
       );
@@ -152,9 +158,11 @@ export function PaymentsAdmin() {
   );
 
   const loadDetail = useCallback(async (paymentId: string) => {
+    setDetail(null);
+    setDetailError(null);
     const result = await auth.admin.payments.getPayment(paymentId);
     if (result.ok) setDetail(result.data);
-    else setError(result.error.message);
+    else setDetailError(result.error.message);
   }, []);
 
   useEffect(() => {
@@ -163,7 +171,10 @@ export function PaymentsAdmin() {
 
   useEffect(() => {
     if (selectedId) void loadDetail(selectedId);
-    else setDetail(null);
+    else {
+      setDetail(null);
+      setDetailError(null);
+    }
   }, [loadDetail, selectedId]);
 
   const cancel = async (reason: string) => {
@@ -252,8 +263,17 @@ export function PaymentsAdmin() {
 
       <section aria-labelledby="admin-payments-title">
         <h2 id="admin-payments-title">Paiements</h2>
-        {!payments ? <p role="status">Chargement des paiements…</p> : null}
-        {payments ? (
+        {!payments && !loadError ? (
+          <OpsLoadingState title="Chargement des paiements" />
+        ) : null}
+        {!payments && loadError ? (
+          <OpsErrorState
+            title="Impossible de charger les paiements"
+            message={loadError}
+            onRetry={() => void load()}
+          />
+        ) : null}
+        {payments && payments.length > 0 ? (
           <div className="et-table-wrap">
             <table className="et-table">
               <caption>Tentatives de paiement</caption>
@@ -308,7 +328,19 @@ export function PaymentsAdmin() {
             </table>
           </div>
         ) : null}
-        {payments?.length === 0 ? <p>Aucun paiement.</p> : null}
+        {payments?.length === 0 ? (
+          <OpsEmptyState
+            title="Aucun paiement"
+            description="Aucune tentative ne correspond aux filtres actuellement appliqués."
+          />
+        ) : null}
+        {payments && loadError ? (
+          <OpsErrorState
+            title="Impossible d’actualiser les paiements"
+            message={loadError}
+            onRetry={() => void load(nextCursor ?? undefined)}
+          />
+        ) : null}
         {nextCursor ? (
           <button
             type="button"
@@ -320,7 +352,16 @@ export function PaymentsAdmin() {
         ) : null}
       </section>
 
-      {selectedId && !detail ? <p role="status">Chargement du paiement…</p> : null}
+      {selectedId && !detail && !detailError ? (
+        <OpsLoadingState title="Chargement du paiement" />
+      ) : null}
+      {selectedId && detailError ? (
+        <OpsErrorState
+          title="Impossible d’ouvrir ce paiement"
+          message={detailError}
+          onRetry={() => void loadDetail(selectedId)}
+        />
+      ) : null}
       {detail ? (
         <OpsDetailRegion
           id="payment-detail-panel"
