@@ -22,6 +22,7 @@ import {
 } from '../../support/passenger-document-helpers.js';
 import { paymentApi, settle } from '../../support/payment-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
+import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -213,8 +214,8 @@ describe('upgrade from a PR-11 database (isolated database)', () => {
     expect(afterCompliance.counts).toEqual(COMPLIANCE_TABLES.map(() => 0));
     // Still true once the later migrations are applied.
     const migrations = await applied();
-    expect(migrations).toHaveLength(23);
-    expect(migrations.at(-1)).toBe(REPORTING_MIGRATION);
+    expect(migrations).toEqual(CURRENT_MIGRATIONS);
+    expect(migrations).toContain(REPORTING_MIGRATION);
     const rows = (value: string | null) =>
       JSON.parse(value ?? '[]') as Array<Record<string, unknown>>;
     expect(rows(before.passenger!)).toHaveLength(1);
@@ -258,6 +259,6 @@ describe('upgrade from a PR-11 database (isolated database)', () => {
       encoding: 'utf8',
     });
     expect(status).toContain('Database schema is up to date');
-    expect(await applied()).toHaveLength(23);
+    expect(await applied()).toEqual(CURRENT_MIGRATIONS);
   });
 });

@@ -150,6 +150,7 @@ export class FleetService {
         const vehicle = await tx.vehicle.create({
           data: {
             code: input.code,
+            name: input.name ?? null,
             vin: input.vin ?? null,
             registrationPlate: plate,
             registrationCountryId: countryId,
@@ -199,6 +200,7 @@ export class FleetService {
           where: { id },
           data: {
             ...(input.code !== undefined ? { code: input.code } : {}),
+            ...(input.name !== undefined ? { name: input.name } : {}),
             ...(input.vin !== undefined ? { vin: input.vin } : {}),
             ...(input.registrationPlate !== undefined
               ? { registrationPlate: input.registrationPlate }

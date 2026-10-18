@@ -523,6 +523,14 @@
   font-weight: 700;
 }
 
+.ops-app .ops-vehicle-name {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--et-color-ink-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 .ops-app .et-alert {
   border-width: 1px;
   border-radius: 0.75rem;

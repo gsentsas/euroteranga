@@ -1,5 +1,19 @@
 import { PublicApiError } from '../auth/http/public-api-error.js';
 
+/** The vehicle already serves another trip whose planned window overlaps. */
+export class TripVehicleOverlapError extends PublicApiError {
+  override readonly publicDetails: Readonly<Record<string, unknown>>;
+
+  constructor(conflictingTripReference: string) {
+    super(
+      409,
+      'TRIP_VEHICLE_OVERLAP',
+      `Ce véhicule est déjà affecté au voyage ${conflictingTripReference} sur une période qui se chevauche.`,
+    );
+    this.publicDetails = { conflictingTripReference };
+  }
+}
+
 export const TripErrors = {
   tripNotFound: () => new PublicApiError(404, 'TRIP_NOT_FOUND', 'Voyage introuvable.'),
   routeVersionNotFound: () =>
@@ -19,6 +33,8 @@ export const TripErrors = {
   referenceConflict: () =>
     new PublicApiError(409, 'TRIP_REFERENCE_CONFLICT', 'Cette référence de voyage existe déjà.'),
   vehicleNotFound: () => new PublicApiError(404, 'VEHICLE_NOT_FOUND', 'Véhicule introuvable.'),
+  vehicleOverlap: (conflictingTripReference: string) =>
+    new TripVehicleOverlapError(conflictingTripReference),
   vehicleUnavailable: () =>
     new PublicApiError(
       422,

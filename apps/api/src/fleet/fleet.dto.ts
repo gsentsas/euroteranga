@@ -44,6 +44,12 @@ const registrationPlate = z
 
 const label = z.string().trim().min(1).max(80);
 
+/** Operational name used by the teams (e.g. "Teranga 01"), unique when set. */
+const operationalName = z
+  .string()
+  .transform((value) => value.trim().replace(/\s+/g, ' '))
+  .pipe(z.string().min(1).max(80));
+
 /** Not before 1950, not later than next year (checked per request). */
 const modelYear = z
   .number()
@@ -58,6 +64,7 @@ export const vehicleListQuerySchema = z
 export const vehicleCreateSchema = z
   .object({
     code,
+    name: operationalName.nullable().optional(),
     vin: vin.nullable().optional(),
     registrationPlate: registrationPlate.nullable().optional(),
     registrationCountryId: uuid.nullable().optional(),
@@ -97,6 +104,13 @@ export class VehicleCreateBody {
   @ApiProperty({ maxLength: 32, example: 'BUS_A01' }) code!: string;
   @ApiPropertyOptional({
     nullable: true,
+    maxLength: 80,
+    example: 'Teranga 01',
+    description: 'Operational name used by the teams; unique when set.',
+  })
+  name?: string | null;
+  @ApiPropertyOptional({
+    nullable: true,
     minLength: 17,
     maxLength: 17,
     description: 'Shape check only (17 characters, no I/O/Q); no check digit validation.',
@@ -116,6 +130,7 @@ export class VehicleCreateBody {
 
 export class VehicleUpdateBody {
   @ApiPropertyOptional({ maxLength: 32 }) code?: string;
+  @ApiPropertyOptional({ nullable: true, maxLength: 80 }) name?: string | null;
   @ApiPropertyOptional({ nullable: true, minLength: 17, maxLength: 17 }) vin?: string | null;
   @ApiPropertyOptional({ nullable: true, maxLength: 16 }) registrationPlate?: string | null;
   @ApiPropertyOptional({ nullable: true, format: 'uuid' }) registrationCountryId?: string | null;

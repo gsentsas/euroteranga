@@ -931,6 +931,8 @@ model RouteWaypoint {
 model Vehicle {
   id                    String        @id @default(uuid(7)) @db.Uuid
   code                  String        @unique @db.VarChar(32)
+  /// Optional operational name used by the teams (e.g. "Teranga 01").
+  name                  String?       @unique @db.VarChar(80)
   /// Application-level shape check only (17 characters, no I/O/Q).
   vin                   String?       @unique @db.VarChar(17)
   registrationPlate     String?       @map("registration_plate") @db.VarChar(16)
