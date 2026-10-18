@@ -97,6 +97,26 @@ version. Once `SCHEDULED` (or `CANCELLED`), the timetable is **frozen**.
   again when scheduling.
 - `CANCELLED` trips accept no change. Once `SCHEDULED`, a change requires a
   reason.
+- **Availability (FLEET-1):** a vehicle never serves two trips whose
+  planned windows overlap. The window of a trip runs from its planned
+  departure to its planned arrival, half-open, so back-to-back trips are
+  allowed. The rule is checked:
+  - when a trip is scheduled;
+  - when the vehicle of a `SCHEDULED` trip changes.
+
+  The conflicting trips are the other `SCHEDULED` and `IN_PROGRESS` trips
+  of the same vehicle; `CANCELLED` and `COMPLETED` trips free it. A `DRAFT`
+  trip may carry an overlapping vehicle, because its timetable is not frozen
+  yet; it cannot be scheduled while the overlap remains. The refusal is
+  `409 TRIP_VEHICLE_OVERLAP`, with `details.conflictingTripReference`.
+
+- **Enforcement in PostgreSQL:** the API and the
+  `trip_vehicle_availability_guard` trigger take the same per-vehicle
+  advisory lock (`hashtextextended('trip-vehicle:<id>', 0)`), so concurrent
+  decisions on one vehicle are serialized. Trips already in progress are
+  never re-judged, so overlaps written before FLEET-1 do not block a
+  departure. No turnaround buffer is applied (none is specified), and a
+  delay is not projected: the planned windows are compared.
 - **Known limitation:** the fleet lifecycle is not blocked. A vehicle assigned
   to a scheduled trip may later go `OUT_OF_SERVICE` or be `RETIRED`. That
   operational conflict will be handled by Dispatch.
@@ -262,6 +282,7 @@ offset**. Errors:
 | `TRIP_HAS_CONFIRMED_BOOKINGS`                                    | 409  | cancellation with a confirmed (paid) booking      |
 | `TRIP_STATUS_CONFLICT`                                           | 409  | `expectedStatus` differs                          |
 | `TRIP_VEHICLE_CONFLICT`                                          | 409  | `expectedVehicleId` differs                       |
+| `TRIP_VEHICLE_OVERLAP`                                           | 409  | the vehicle serves an overlapping trip            |
 | `TRIP_ROUTE_VERSION_NOT_PUBLISHED`                               | 422  | route version never published                     |
 | `TRIP_ROUTE_VERSION_RETIRED`                                     | 422  | creation on a retired version                     |
 | `TRIP_TIMETABLE_INVALID`                                         | 422  | timetable rule broken (precise message)           |
