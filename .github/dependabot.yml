@@ -10,6 +10,11 @@ updates:
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
+    ignore:
+      # The runtime is pinned to Node.js 24 (`engines`, `.node-version`): its
+      # type definitions follow the runtime major, not the latest release.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     groups:
       nestjs:
         patterns: ['@nestjs/*']
