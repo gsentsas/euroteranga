@@ -247,12 +247,29 @@ jobs:
           fetch-depth: 0 # scan the full history, not only the last commit
       - name: Forbidden files and quality-gate bypass markers
         run: bash scripts/check-forbidden-files.sh
+      - name: Hygiene check also works in a release tree without .git
+        run: bash scripts/test-check-forbidden-files.sh
       - name: Validate Plesk nginx fragments
         run: |
           if grep -RFn '\\n' infrastructure/plesk/nginx --include='*.conf'; then
             echo "::error::Literal \\n sequence found in Plesk nginx fragment"
             exit 1
           fi
+      - name: Validate pilot deployment scripts and units
+        run: |
+          for script in infrastructure/plesk/*.sh infrastructure/plesk/lib/*.sh; do bash -n "$script"; done
+          bash infrastructure/plesk/test-readiness.sh
+          # Long-running frontends start Node directly: a pnpm wrapper turns a
+          # normal stop into a failed unit (OPS-DEPLOY-1).
+          for app in web booking client tracking ops crew; do
+            unit="infrastructure/plesk/systemd/euroteranga-${app}.service"
+            if grep -Eq '^ExecStart=.*pnpm' "$unit"; then
+              echo "::error file=$unit::Long-running unit must not start through pnpm"
+              exit 1
+            fi
+            grep -Eq "^WorkingDirectory=/var/www/vhosts/euroteranga.com/current/apps/${app}$" "$unit"
+            grep -Eq '^ExecStart=/opt/plesk/node/24/bin/node node_modules/next/dist/bin/next start ' "$unit"
+          done
       - name: Validate private document scanner infrastructure
         run: |
           docker compose -f infrastructure/plesk/documents/docker-compose.yml config >/dev/null

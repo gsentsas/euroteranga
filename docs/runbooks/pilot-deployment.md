@@ -23,9 +23,42 @@ Run as root from a checked-out release.
 4. Once loopback health is green, cut over Plesk:
    `bash infrastructure/plesk/configure-plesk-proxy.sh`
 
-The deployment builds before switching, backs up PostgreSQL before migration,
-applies migrations, switches current atomically, restarts all services and
-performs loopback health checks. Proxy cutover validates nginx and public HTTPS.
+The deployment:
+
+- builds before switching;
+- backs up PostgreSQL before migrating, then applies migrations;
+- switches `current` atomically and restarts all services;
+- waits for readiness (`lib/readiness.sh`).
+
+The readiness wait polls the API health and the six frontends quietly. It
+logs one line per service when that service is ready, and stops at once if a
+unit enters the failed state. It gives up after `READY_TIMEOUT_SECONDS`
+(default 90), listing what never answered. On failure the previous release
+is restored automatically and the same wait is applied to it. Proxy cutover
+validates nginx and public HTTPS.
+
+## Service units (OPS-DEPLOY-1)
+
+The six frontends start Node and Next.js directly from
+`current/apps/<app>`. They no longer go through `pnpm exec`, which turned
+every normal stop into `exit-code` failures. After a change under
+`infrastructure/plesk/systemd/`, root reinstalls the units before deploying
+the release that needs them:
+
+`bash infrastructure/plesk/install-systemd.sh`
+
+A unit listed by `systemctl --failed` is now a real failure.
+
+## HSTS
+
+Every deployed frontend sends
+`Strict-Transport-Security: max-age=31536000; includeSubDomains`, the same
+value as the Core API. The apex also receives a 6-month HSTS header from its
+Plesk SSL settings; both values include sub-domains, so the Plesk one may be
+switched off to keep a single source.
+
+`preload` is deliberately not set. Joining the browser preload lists is a
+separate, hard-to-reverse owner decision.
 
 ## Authentication retention
 
