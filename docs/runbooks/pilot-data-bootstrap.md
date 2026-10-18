@@ -42,21 +42,47 @@ Each of these stays an explicit OPS action on a pilot trip.
   OPS action. Each step is atomic.
 - **System actor:** writes are audited with `actor_identity_id = NULL` and
   `metadata.systemActor = "pilot-bootstrap"`.
-- **Idempotent:** an existing record that matches the pilot definition is
-  reused.
-- **Resumable:**
-  - a vehicle created but not yet configured is completed;
-  - an empty draft route, seat-map or fare version is filled and published.
-- **Never overwrites:** a record that differs from the definition is left
-  untouched and reported as `conflict`. Everything that depends on it is
-  `skipped`, and the command exits with code 2. Examples:
-  - a route published with other waypoints;
-  - a vehicle on another seat map, or `OUT_OF_SERVICE`;
-  - a fare table in another currency.
+- **Fail-closed reuse.** Each existing record falls into one of three cases:
+
+  | Existing record                                                           | Outcome     |
+  | ------------------------------------------------------------------------- | ----------- |
+  | Identical to the pilot definition                                         | `existing`  |
+  | Compatible, missing only a step the bootstrap performs itself (see below) | `completed` |
+  | Anything else                                                             | `conflict`  |
+
+  The steps the bootstrap performs itself are:
+  - assigning the seat map to a vehicle that has none;
+  - activating a `PLANNED` vehicle;
+  - filling an empty draft version;
+  - finishing a draft trip of one of the run's slots whose values are all
+    pilot values.
+
+- **Never overwrites:** a conflicting record is left untouched. Everything
+  that depends on it is `skipped`, and the command exits with code 2. The
+  integration tests compare the record before and after, audit included.
+- **Comparison per entity:**
+
+  | Entity     | Must match (otherwise `conflict`)                                                                                                                            | Operator values kept     |
+  | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ |
+  | Country    | ISO3; active                                                                                                                                                 | display name             |
+  | Stop       | country; time zone (it drives the local timetable); active                                                                                                   | name, locality, position |
+  | Checkpoint | country; type; time zone; active                                                                                                                             | name, locality, position |
+  | Route      | the published waypoints (order, places, boarding and alighting)                                                                                              | —                        |
+  | Seat map   | the published cells                                                                                                                                          | —                        |
+  | Vehicle    | name, manufacturer, model, year, registration plate and country, no VIN; not `OUT_OF_SERVICE` or `RETIRED`; same seat map if one is set                      | —                        |
+  | Fare table | route, currency, the published fare for the pilot route version                                                                                              | —                        |
+  | Pilot trip | route version, a pilot coach, seat map, fare table, a departure matching its reference date at 08:00 local time, and the pilot timetable from that departure | —                        |
+
 - **Trips:**
-  - when a direction already has at least `--trips-per-direction` upcoming
-    `SCHEDULED` pilot departures, nothing is added;
-  - a later run never stacks a second set;
+  - every upcoming pilot trip of a direction must match before it is
+    counted;
+  - a single divergent trip (for example moved by OPS to another coach)
+    blocks the direction: it is reported, nothing is added next to it, and
+    the trip itself is untouched;
+  - a draft pilot trip from another run is a conflict, to be completed or
+    cancelled in OPS;
+  - when a direction already has `--trips-per-direction` upcoming pilot
+    departures, nothing is added, so a later run never stacks a second set;
   - a slot whose coach already serves an overlapping trip is reported as a
     conflict before anything is written (FLEET-1 also refuses it in the API
     and in PostgreSQL).

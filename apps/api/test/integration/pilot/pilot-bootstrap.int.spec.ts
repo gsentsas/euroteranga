@@ -296,7 +296,8 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
   });
 
   it('completes data left half-way and refuses to overwrite operator data', async () => {
-    // Half-way state: a PLANNED pilot coach without seat map, made through OPS.
+    // Half-way state: the pilot coach with every pilot identity field, but
+    // still PLANNED and without seat map (the steps the bootstrap performs).
     const country = await adminApi(admin).post('/network/countries', {
       iso2: 'FR',
       iso3: 'FRA',
@@ -309,6 +310,9 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
       name: 'Teranga 01',
       manufacturer: 'Setra',
       model: 'S 516 HD',
+      modelYear: 2023,
+      registrationPlate: 'DEMO-ET-001',
+      registrationCountryId: country.body.id,
     });
     expect(coach.status).toBe(201);
     // Operator data: Dakar -> Paris already exists with another published version.
@@ -331,7 +335,7 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
         locality: code,
         latitude: 10,
         longitude: 10,
-        timezone: 'Etc/UTC',
+        timezone: code === 'PAR' ? 'Europe/Paris' : 'Africa/Dakar',
         active: true,
       });
       expect(response.status).toBe(201);
@@ -369,6 +373,11 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
     expect(report.hasConflicts).toBe(true);
     expect(line('vehicle', 'ET-COACH-001')?.outcome).toBe('completed');
     expect(line('country', 'FR')?.outcome).toBe('existing');
+    // Operator names and positions of the stops are kept, not rewritten.
+    expect(line('stop', 'PAR')).toMatchObject({
+      outcome: 'existing',
+      detail: 'operator name, locality or position kept',
+    });
     expect(line('route', 'ET-PAR-DKR')?.outcome).toBe('created');
     expect(line('route', 'ET-DKR-PAR')).toMatchObject({ outcome: 'conflict' });
     expect(line('fare-table', 'ET-FT-DKR-PAR-EUR')).toMatchObject({
@@ -394,4 +403,185 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
       }),
     ).toBe(4);
   });
+});
+
+describe('pilot data bootstrap never overwrites operator data (isolated databases)', () => {
+  let h: Harness;
+  let admin: StaffActor;
+
+  beforeAll(async () => {
+    h = await harness();
+    admin = await staffActor(h.t.app, ['SUPER_ADMIN']);
+  }, 60_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  const auditCount = (resourceId: string) =>
+    db(h.t.app).auditEvent.count({ where: { resourceId } });
+
+  it('leaves a divergent operator coach and stop untouched and skips what depends on them', async () => {
+    const france = await adminApi(admin).post('/network/countries', {
+      iso2: 'FR',
+      iso3: 'FRA',
+      name: 'France',
+      active: true,
+    });
+    // An operator coach that happens to use a pilot code, with its own identity.
+    const operatorCoach = await adminApi(admin).post('/fleet/vehicles', {
+      code: 'ET-COACH-001',
+      name: 'Car exploitant',
+      manufacturer: 'Constructeur exploitant',
+      model: 'Modèle exploitant',
+      modelYear: 2021,
+      registrationPlate: 'OP-001-ET',
+      registrationCountryId: france.body.id,
+    });
+    expect(operatorCoach.status).toBe(201);
+    const coachBefore = await db(h.t.app).vehicle.findUniqueOrThrow({
+      where: { id: operatorCoach.body.id },
+    });
+    const coachAuditBefore = await auditCount(operatorCoach.body.id);
+
+    const first = await h.run();
+    const line = (entity: string, key: string) =>
+      first.lines.find((l) => l.entity === entity && l.key === key);
+    expect(first.hasConflicts).toBe(true);
+    expect(line('vehicle', 'ET-COACH-001')).toMatchObject({
+      outcome: 'conflict',
+      detail: 'existing name differs from the pilot coach',
+    });
+    expect(line('vehicle', 'ET-COACH-002')?.outcome).toBe('created');
+    // Departures of the refused coach are skipped; the other coach still serves its own.
+    const tripLines = first.lines.filter((l) => l.entity === 'trip');
+    expect(tripLines.filter((l) => l.outcome === 'created')).toHaveLength(4);
+    expect(
+      tripLines.filter(
+        (l) => l.outcome === 'skipped' && l.detail === 'depends on vehicle:ET-COACH-001',
+      ),
+    ).toHaveLength(4);
+
+    expect(
+      await db(h.t.app).vehicle.findUniqueOrThrow({ where: { id: operatorCoach.body.id } }),
+    ).toEqual(coachBefore);
+    expect(await auditCount(operatorCoach.body.id)).toBe(coachAuditBefore);
+    expect(await db(h.t.app).trip.count({ where: { vehicleId: operatorCoach.body.id } })).toBe(0);
+
+    // A second run gives the same answer and still writes nothing on the operator coach.
+    const second = await h.run();
+    expect(second.hasConflicts).toBe(true);
+    expect(
+      await db(h.t.app).vehicle.findUniqueOrThrow({ where: { id: operatorCoach.body.id } }),
+    ).toEqual(coachBefore);
+  });
+
+  it('refuses an upcoming pilot trip changed in OPS and adds nothing next to it', async () => {
+    const client = db(h.t.app);
+    const trip = await client.trip.findFirstOrThrow({
+      where: { reference: { startsWith: 'ET-PILOT-PARDKR-' }, status: 'SCHEDULED' },
+      orderBy: { plannedDepartureAt: 'asc' },
+    });
+    // OPS moves the trip to another coach configured with the same seat map.
+    const seatMapVersionId = trip.seatMapVersionId!;
+    const replacement = await adminApi(admin).post('/fleet/vehicles', {
+      code: 'VH-EXPLOITANT',
+      manufacturer: 'Constructeur exploitant',
+      model: 'Modèle exploitant',
+    });
+    await adminApi(admin).post(`/fleet/vehicles/${replacement.body.id}/seat-map`, {
+      seatMapVersionId,
+    });
+    await adminApi(admin).post(`/fleet/vehicles/${replacement.body.id}/status`, {
+      status: 'ACTIVE',
+      reason: 'Mise en service exploitant',
+    });
+    const moved = await adminApi(admin).post(`/trips/${trip.id}/vehicle`, {
+      vehicleId: replacement.body.id,
+      reason: 'Changement de car par l’exploitation',
+    });
+    expect(moved.status, moved.text).toBe(200);
+
+    const tripBefore = await client.trip.findUniqueOrThrow({
+      where: { id: trip.id },
+      include: { timings: { orderBy: { sequence: 'asc' } } },
+    });
+    const outboundBefore = await client.trip.count({
+      where: { reference: { startsWith: 'ET-PILOT-PARDKR-' } },
+    });
+
+    const report = await h.run();
+    expect(report.hasConflicts).toBe(true);
+    expect(report.lines).toContainEqual({
+      outcome: 'conflict',
+      entity: 'trip',
+      key: trip.reference,
+      detail: 'is not served by a pilot coach',
+    });
+    expect(report.lines).toContainEqual({
+      outcome: 'skipped',
+      entity: 'trips',
+      key: 'ET-PAR-DKR',
+      detail: 'depends on the conflicting pilot trips',
+    });
+    expect(
+      await client.trip.findUniqueOrThrow({
+        where: { id: trip.id },
+        include: { timings: { orderBy: { sequence: 'asc' } } },
+      }),
+    ).toEqual(tripBefore);
+    expect(
+      await client.trip.count({ where: { reference: { startsWith: 'ET-PILOT-PARDKR-' } } }),
+    ).toBe(outboundBefore);
+  });
+
+  it('refuses a stop whose time zone differs and builds no route on it', async () => {
+    const other = await harness();
+    try {
+      const otherAdmin = await staffActor(other.t.app, ['SUPER_ADMIN']);
+      const france = await adminApi(otherAdmin).post('/network/countries', {
+        iso2: 'FR',
+        iso3: 'FRA',
+        name: 'France',
+        active: true,
+      });
+      const paris = await adminApi(otherAdmin).post('/network/stops', {
+        code: 'PAR',
+        name: 'Paris Bercy',
+        countryId: france.body.id,
+        locality: 'Paris',
+        latitude: 48.8399,
+        longitude: 2.3828,
+        timezone: 'Europe/London',
+        active: true,
+      });
+      expect(paris.status).toBe(201);
+      const stopBefore = await db(other.t.app).stop.findUniqueOrThrow({
+        where: { id: paris.body.id },
+      });
+
+      const report = await other.run();
+      const line = (entity: string, key: string) =>
+        report.lines.find((l) => l.entity === entity && l.key === key);
+      expect(line('stop', 'PAR')).toMatchObject({
+        outcome: 'conflict',
+        detail: 'time zone is Europe/London, expected Europe/Paris',
+      });
+      expect(line('route', 'ET-PAR-DKR')).toMatchObject({
+        outcome: 'skipped',
+        detail: 'depends on stop:PAR',
+      });
+      expect(line('route', 'ET-DKR-PAR')).toMatchObject({
+        outcome: 'skipped',
+        detail: 'depends on stop:PAR',
+      });
+      expect(await db(other.t.app).route.count()).toBe(0);
+      expect(await db(other.t.app).trip.count()).toBe(0);
+      expect(
+        await db(other.t.app).stop.findUniqueOrThrow({ where: { id: paris.body.id } }),
+      ).toEqual(stopBefore);
+    } finally {
+      await other.drop();
+    }
+  }, 60_000);
 });
