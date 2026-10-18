@@ -162,6 +162,11 @@ test('ops network: network.read can consult but cannot mutate', async ({ page })
     }),
   ).toHaveCount(0);
 
+  const consult = page.getByRole('button', { name: /^Consulter la route / }).first();
+  await expect(consult).toBeVisible();
+  await consult.click();
+  await expect(page.locator('#route-detail-panel')).toBeFocused();
+
   const api = directAdminApi(page.request);
   expect((await api.get('/network/countries?limit=10')).status()).toBe(200);
   const forbidden = await api.post('/network/countries', {
