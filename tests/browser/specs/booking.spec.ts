@@ -157,8 +157,26 @@ test('ops booking.read: read-only UI and direct mutation refused', async ({ page
   const errors = trackPageErrors(page);
   const seed = bookingSeed();
   await signInAndEnroll(page, FIXTURES.bookingReader.email);
+
+  let failFirstListRequest = true;
+  await page.route('**/v1/admin/bookings?**', async (route) => {
+    if (failFirstListRequest) {
+      failFirstListRequest = false;
+      await route.abort('failed');
+      return;
+    }
+    await route.continue();
+  });
+
   await mainNav(page).getByRole('link', { name: 'Réservations' }).click();
   await expect(page.getByTestId('bookings-workspace')).toBeVisible();
+  const contextualError = page.getByTestId('ops-error-state');
+  await expect(contextualError).toContainText('Impossible de charger les réservations');
+  await contextualError.getByRole('button', { name: 'Réessayer' }).click();
+  await expect(contextualError).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: `Consulter la réservation ${seed.staffBookingReference}` }),
+  ).toBeVisible();
 
   const list = await directAdminApi(page.request).get('/bookings?limit=100');
   expect(list.status()).toBe(200);
