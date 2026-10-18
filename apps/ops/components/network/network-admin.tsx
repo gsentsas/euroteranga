@@ -748,17 +748,18 @@ export function NetworkAdmin() {
         {routeDetail ? (
           <OpsDetailRegion id="route-detail-panel" focusKey={selectedRouteId}>
             <RouteEditor
-            route={routeDetail}
-            stops={data.stops}
-            checkpoints={data.checkpoints}
-            canManage={canManage}
-            busy={busy}
-            run={run}
-            onReload={async () => {
-              await loadRoute(routeDetail.id);
-              await load();
-            }}
-          />
+              route={routeDetail}
+              stops={data.stops}
+              checkpoints={data.checkpoints}
+              canManage={canManage}
+              busy={busy}
+              run={run}
+              onReload={async () => {
+                await loadRoute(routeDetail.id);
+                await load();
+              }}
+            />
+          </OpsDetailRegion>
         ) : null}
       </section>
     </div>
