@@ -23,13 +23,7 @@ export function OpsDetailRegion({
   }, [focusKey]);
 
   return (
-    <div
-      id={id}
-      ref={ref}
-      className="ops-detail-region"
-      tabIndex={-1}
-      aria-live="polite"
-    >
+    <div id={id} ref={ref} className="ops-detail-region" tabIndex={-1} aria-live="polite">
       {children}
     </div>
   );
