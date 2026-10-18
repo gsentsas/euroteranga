@@ -31,6 +31,7 @@ import {
 import { uploadDocument } from '../../support/passenger-document-helpers.js';
 import { paymentApi, settle } from '../../support/payment-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
+import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -239,8 +240,8 @@ describe('upgrade from a real PR-13 database', () => {
 
   it('applies PR-14 and PR-15, keeps every PR-13 row identical and backfills nothing', async () => {
     const migrations = await applied();
-    expect(migrations).toHaveLength(23);
-    expect(migrations.at(-1)).toBe(REPORTING_MIGRATION);
+    expect(migrations).toEqual(CURRENT_MIGRATIONS);
+    expect(migrations).toContain(REPORTING_MIGRATION);
     expect(await snapshot()).toEqual(before);
     for (const table of PR14_TABLES) expect(await count(table), table).toBe(0);
     expect(
@@ -284,6 +285,6 @@ describe('upgrade from a real PR-13 database', () => {
       encoding: 'utf8',
     });
     expect(status).toContain('Database schema is up to date');
-    expect(await applied()).toHaveLength(23);
+    expect(await applied()).toEqual(CURRENT_MIGRATIONS);
   });
 });
