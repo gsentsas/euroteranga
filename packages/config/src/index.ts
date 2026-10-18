@@ -17,5 +17,13 @@ export {
   publicEnvSchema,
   type PublicEnv,
 } from './public-env.js';
+export {
+  loadSiteSeo,
+  privateRobots,
+  publicRobots,
+  robotsDirective,
+  siteUrlOf,
+  type SiteSeo,
+} from './seo.js';
 export { buildFoundationSecurityHeaders, foundationSecurityHeaders } from './security-headers.js';
 export { createFoundationNextConfig, type FoundationNextConfig } from './next-config.js';
