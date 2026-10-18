@@ -164,7 +164,7 @@ test('ops network: network.read can consult but cannot mutate', async ({ page })
 
   const consult = page.getByRole('button', { name: /^Consulter la route / }).first();
   await expect(consult).toBeVisible();
-  const selectedRow = page.getByRole('row').filter({ has: consult });
+  const selectedRow = consult.locator('xpath=ancestor::tr');
   await consult.click();
   await expect(page.locator('#route-detail-panel')).toBeFocused();
   await expect(selectedRow).toHaveClass(/ops-table-row--selected/);
