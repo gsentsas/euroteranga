@@ -155,15 +155,17 @@ async function main(): Promise<number> {
   }
 }
 
+// exitCode, not exit(): Node then finishes writing the report to a pipe
+// before it stops (the application context is already closed).
 main()
-  .then((code) => process.exit(code))
+  .then((code) => {
+    process.exitCode = code;
+  })
   .catch((error: unknown) => {
-    if (error instanceof ConfigValidationError) {
-      err(error.message);
-      process.exit(1);
-    }
     err(
-      `Realistic seed failed: ${redactString(error instanceof Error ? error.message : String(error))}`,
+      error instanceof ConfigValidationError
+        ? error.message
+        : `Realistic seed failed: ${redactString(error instanceof Error ? error.message : String(error))}`,
     );
-    process.exit(1);
+    process.exitCode = 1;
   });
