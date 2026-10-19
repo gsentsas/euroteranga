@@ -38,6 +38,12 @@ export const RATE_LIMITS = {
     limit: 20,
     windowMs: HOUR,
   },
+  /** Public media library uploads per STAFF identity (MEDIA-1): decoding is costly. */
+  publicMediaUploadIdentity: {
+    action: 'public-media-upload:identity',
+    limit: 60,
+    windowMs: HOUR,
+  },
   /** Compliance evaluations requested per authenticated CUSTOMER identity (PR-12). */
   complianceEvaluationIdentity: {
     action: 'compliance-evaluation:identity',

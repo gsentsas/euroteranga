@@ -12,6 +12,10 @@ export interface ApiErrorDetails {
   blockers?: CheckInBlocker[];
   /** CMS-2: fields of a content document refused by the content model. */
   issues?: ContentIssue[];
+  /** MEDIA-1: the image already in the library (MEDIA_DUPLICATE). */
+  mediaId?: string;
+  /** MEDIA-1: contents still showing an image (MEDIA_IN_USE). */
+  usages?: MediaUsage[];
 }
 
 export interface ContentIssue {
@@ -1961,6 +1965,87 @@ export interface PublicContentSitemap {
   items: Array<{ path: string; updatedAt: string }>;
 }
 
+/**
+ * MEDIA-1 public media library. An image is immutable: replacing it means
+ * uploading a new one; archiving an unused image is terminal.
+ */
+export type MediaStatus = 'ACTIVE' | 'ARCHIVED';
+
+export interface MediaRendition {
+  width: number;
+  height: number;
+  /** API path of the WebP file, e.g. `/v1/media/files/<id>/960.webp`. */
+  path: string;
+}
+
+/** What the website may know about an active image. */
+export interface PublicMedia {
+  id: string;
+  altText: string;
+  caption: string | null;
+  credit: string | null;
+  width: number;
+  height: number;
+  /** Point kept visible when the image is cropped, in percent. */
+  focalX: number;
+  focalY: number;
+  renditions: MediaRendition[];
+}
+
+export interface MediaUsage {
+  kind: ContentKind;
+  key: string;
+  status: 'DRAFT' | 'PUBLISHED';
+  /** The content entry is archived (not served) but could be unarchived. */
+  entryArchived: boolean;
+}
+
+export interface MediaStaffRef {
+  id: string;
+  email: string;
+}
+
+export interface MediaAsset extends Omit<PublicMedia, 'renditions'> {
+  status: MediaStatus;
+  sourceFormat: 'jpeg' | 'png' | 'webp';
+  sourceBytes: number;
+  renditions: Array<MediaRendition & { bytes: number }>;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: MediaStaffRef | null;
+  updatedBy: MediaStaffRef | null;
+  archivedAt: string | null;
+  archivedBy: MediaStaffRef | null;
+  archiveReason: string | null;
+  /** Detail only: drafts and live pages that show the image. */
+  usages?: MediaUsage[];
+}
+
+export interface MediaListOptions {
+  status?: MediaStatus;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface MediaUploadInput {
+  file: Blob;
+  altText: string;
+  caption?: string;
+  credit?: string;
+  focalX?: number;
+  focalY?: number;
+  /** The image this upload replaces (kept as is, recorded in the audit trail). */
+  replaces?: string;
+}
+
+export interface MediaUpdateInput {
+  altText?: string;
+  caption?: string | null;
+  credit?: string | null;
+  focalX?: number;
+  focalY?: number;
+}
+
 /** PR-16 generic operational permits. PERMIT_VALID is never TRIP_READY. */
 export type RegulatoryPermitLifecycleStatus = 'DRAFT' | 'ACTIVE' | 'REVOKED';
 export type RegulatoryPermitValidityState =
@@ -2549,6 +2634,31 @@ function errorDetails(value: unknown): { details?: ApiErrorDetails } {
       .map(({ path, message }) => ({ path, message }));
     return { details: { issues: valid } };
   }
+  const mediaId = (value as { mediaId?: unknown }).mediaId;
+  if (typeof mediaId === 'string' && /^[0-9a-f-]{36}$/.test(mediaId)) {
+    return { details: { mediaId } };
+  }
+  const usages = (value as { usages?: unknown }).usages;
+  if (Array.isArray(usages)) {
+    const valid = usages
+      .filter(
+        (usage): usage is MediaUsage =>
+          typeof usage === 'object' &&
+          usage !== null &&
+          typeof (usage as MediaUsage).kind === 'string' &&
+          typeof (usage as MediaUsage).key === 'string' &&
+          ((usage as MediaUsage).status === 'DRAFT' ||
+            (usage as MediaUsage).status === 'PUBLISHED'),
+      )
+      .slice(0, 50)
+      .map(({ kind, key, status, entryArchived }) => ({
+        kind,
+        key,
+        status,
+        entryArchived: entryArchived === true,
+      }));
+    return { details: { usages: valid } };
+  }
   return {};
 }
 
@@ -2940,6 +3050,13 @@ export function createAuthClient(baseUrl: string) {
         call<PublicContentPage>('GET', `/v1/content/pages?${query({ path })}`),
       site: () => call<PublicContentSite>('GET', '/v1/content/site'),
       sitemap: () => call<PublicContentSitemap>('GET', '/v1/content/sitemap'),
+    },
+    /** MEDIA-1: active images only; unknown or archived ids are absent. */
+    media: {
+      many: (ids: readonly string[]) =>
+        call<{ items: PublicMedia[] }>('GET', `/v1/media?${query({ ids: ids.join(',') })}`),
+      /** Absolute URL of a rendition path returned by the API. */
+      url: (path: string) => `${root}${path}`,
     },
     crew: {
       trips: () => call<CrewTripList>('GET', '/v1/crew/trips'),
@@ -3677,6 +3794,38 @@ export function createAuthClient(baseUrl: string) {
             'staff',
             `/v1/admin/content/entries/${encodeURIComponent(id)}/unarchive`,
           ),
+      },
+      /** MEDIA-1: media.read to browse, media.manage to upload, describe, archive. */
+      media: {
+        list: (options: MediaListOptions = {}) =>
+          call<{ storageEnabled: boolean; items: MediaAsset[]; nextCursor: string | null }>(
+            'GET',
+            `/v1/admin/media?${query({
+              status: options.status,
+              cursor: options.cursor,
+              limit: options.limit,
+            })}`,
+          ),
+        detail: (id: string) =>
+          call<MediaAsset>('GET', `/v1/admin/media/${encodeURIComponent(id)}`),
+        upload: (input: MediaUploadInput) => {
+          const form = new FormData();
+          form.append('altText', input.altText);
+          if (input.caption) form.append('caption', input.caption);
+          if (input.credit) form.append('credit', input.credit);
+          if (input.focalX !== undefined) form.append('focalX', String(input.focalX));
+          if (input.focalY !== undefined) form.append('focalY', String(input.focalY));
+          if (input.replaces) form.append('replaces', input.replaces);
+          // The file comes last: the describing fields are read first.
+          form.append('file', input.file);
+          return withCsrfMultipart<MediaAsset>('staff', '/v1/admin/media', form);
+        },
+        update: (id: string, input: MediaUpdateInput) =>
+          withCsrf<MediaAsset>('staff', `/v1/admin/media/${encodeURIComponent(id)}`, input),
+        archive: (id: string, reason: string) =>
+          withCsrf<MediaAsset>('staff', `/v1/admin/media/${encodeURIComponent(id)}/archive`, {
+            reason,
+          }),
       },
       regulatoryPermits: {
         list: (options: RegulatoryPermitListOptions = {}) =>

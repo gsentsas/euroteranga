@@ -727,6 +727,15 @@ describe('server-side RBAC', () => {
           })
         ).status,
       ).toBe(allowed('content.read') && allowed('content.manage') ? 404 : 403);
+      // MEDIA-1: the public media library is its own grant too.
+      expect((await api.get('/media')).status).toBe(allowed('media.read') ? 200 : 403);
+      expect(
+        (
+          await api.post('/media/01900000-0000-7000-8000-000000000000/archive', {
+            reason: 'Contrôle RBAC',
+          })
+        ).status,
+      ).toBe(allowed('media.read') && allowed('media.manage') ? 404 : 403);
     },
   );
 
