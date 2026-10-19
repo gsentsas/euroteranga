@@ -9,11 +9,14 @@ import { stopLabel } from './format';
 export function StopPicker({
   label,
   value,
+  known = null,
   onChange,
 }: {
   label: string;
   value: string;
-  onChange: (stopId: string) => void;
+  /** The selected stop when it came from elsewhere (a pre-filled link). */
+  known?: BookingSearchStop | null;
+  onChange: (stopId: string, stop: BookingSearchStop | null) => void;
 }) {
   const filterId = useId();
   const selectId = useId();
@@ -31,6 +34,8 @@ export function StopPicker({
       current = false;
     };
   }, [filter]);
+  // A pre-filled stop stays listed even when the current filter hides it.
+  const options = known && !stops.some((stop) => stop.id === known.id) ? [known, ...stops] : stops;
   return (
     <fieldset className="et-booking-stop">
       <legend>{label}</legend>
@@ -53,10 +58,15 @@ export function StopPicker({
           className="et-select"
           required
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) =>
+            onChange(
+              event.target.value,
+              options.find((stop) => stop.id === event.target.value) ?? null,
+            )
+          }
         >
           <option value="">Choisir un arrêt</option>
-          {stops.map((stop) => (
+          {options.map((stop) => (
             <option key={stop.id} value={stop.id}>
               {stopLabel(stop)}
             </option>
