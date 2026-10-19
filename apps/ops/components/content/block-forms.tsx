@@ -13,7 +13,9 @@ import {
   type ContentBlockType,
   type DocumentPath,
 } from '@euroteranga/content';
+import type { BookingSearchStop } from '@euroteranga/auth-client';
 import { useEffect, useId, useState } from 'react';
+import { auth } from '../../lib/auth';
 import { useEditor } from './editor-context';
 import {
   CheckboxField,
@@ -55,6 +57,85 @@ const DIRECTION_LABELS: Record<(typeof ROUTE_DIRECTIONS)[number], string> = {
 const entries = <K extends string>(labels: Record<K, string>) =>
   Object.entries(labels) as Array<[K, string]>;
 
+/** Active stops of the network, read once per editor (public stops API). */
+let stopsRequest: Promise<BookingSearchStop[]> | null = null;
+function useStops(): BookingSearchStop[] | null {
+  const [stops, setStops] = useState<BookingSearchStop[] | null>(null);
+  useEffect(() => {
+    stopsRequest ??= auth.booking.public
+      .stops({ limit: 50 })
+      .then((result) => (result.ok ? result.data.items : []));
+    let current = true;
+    void stopsRequest.then((items) => {
+      if (current) setStops(items);
+    });
+    return () => {
+      current = false;
+    };
+  }, []);
+  return stops;
+}
+
+/**
+ * A stop of the network, by code (UI-PUBLIC-1): chosen among the active
+ * stops, so the website can always find its departures.
+ */
+function StopCodeField({ path, label }: { path: DocumentPath; label: string }) {
+  const editor = useEditor();
+  const stops = useStops();
+  const current = editor.get(path);
+  const value = typeof current === 'string' ? current : '';
+  const options: Array<[string, string]> = (stops ?? [])
+    .map((stop): [string, string] => [stop.code, `${stop.code} — ${stop.name} (${stop.locality})`])
+    .sort((a, b) => a[1].localeCompare(b[1], 'fr'));
+  if (value && !options.some(([code]) => code === value)) {
+    options.unshift([value, `${value} — arrêt inactif ou inconnu`]);
+  }
+  return (
+    <SelectField
+      path={path}
+      label={label}
+      options={options}
+      hint={stops === null ? 'Chargement des arrêts…' : 'Arrêts actifs du réseau.'}
+    />
+  );
+}
+
+/** The optional trip search of the hero, pre-filled with a direction. */
+function HeroSearchFields({ path }: { path: DocumentPath }) {
+  const editor = useEditor();
+  const search = editor.get(path);
+  const id = useId();
+  return (
+    <fieldset className="ops-content-link">
+      <legend>Recherche de voyage</legend>
+      <div className="ops-content-check">
+        <input
+          id={id}
+          type="checkbox"
+          checked={search !== undefined}
+          disabled={editor.readOnly}
+          onChange={(event) =>
+            editor.set(path, event.target.checked ? { fromCode: 'PAR', toCode: 'DKR' } : undefined)
+          }
+        />
+        <label htmlFor={id}>
+          Afficher la recherche (départ, arrivée, date, voyageurs)
+          <span className="et-hint">
+            Elle ouvre la réservation préremplie. Elle remplace la carte du trajet.
+          </span>
+        </label>
+      </div>
+      {search !== undefined ? (
+        <div className="ops-content-grid">
+          <StopCodeField path={[...path, 'fromCode']} label="Départ proposé" />
+          <StopCodeField path={[...path, 'toCode']} label="Arrivée proposée" />
+        </div>
+      ) : null}
+    </fieldset>
+  );
+}
+
 /** Anchor and kicker, shared by every section. */
 function SectionHeadFields({ path }: { path: DocumentPath }) {
   return (
@@ -76,20 +157,28 @@ function SectionHeadFields({ path }: { path: DocumentPath }) {
 }
 
 function BlockFields({ block, path }: { block: ContentBlock; path: DocumentPath }) {
+  const editor = useEditor();
   switch (block.type) {
     case 'hero':
       return (
         <>
           <TextField path={[...path, 'eyebrow']} label="Accroche" max={80} />
           <TextField path={[...path, 'title']} label="Titre principal (H1)" max={140} required />
+          <TextField
+            path={[...path, 'titleAccent']}
+            label="Suite du titre, en couleur"
+            max={80}
+            hint="Deuxième ligne du titre, mise en valeur (par exemple « en toute confiance »)."
+          />
           <TextField path={[...path, 'lead']} label="Introduction" max={400} multiline />
+          <MediaField path={[...path, 'mediaId']} label="Photo de fond" />
+          <HeroSearchFields path={[...path, 'search']} />
           <LinkFields path={[...path, 'primaryCta']} legend="Bouton principal" optional />
           <LinkFields path={[...path, 'secondaryCta']} legend="Bouton secondaire" optional />
-          <TextField path={[...path, 'note']} label="Note sous les boutons" max={240} />
-          <MediaField path={[...path, 'mediaId']} label="Image de fond" />
+          <TextField path={[...path, 'note']} label="Note" max={240} />
           <CheckboxField
             path={[...path, 'journeyCard']}
-            label="Afficher la carte du trajet Paris ↔ Dakar"
+            label="Afficher la carte du trajet Paris ↔ Dakar (sans recherche)"
             hint="Le prix « à partir de » de la carte vient de la tarification."
           />
         </>
@@ -119,6 +208,14 @@ function BlockFields({ block, path }: { block: ContentBlock; path: DocumentPath 
               options={[
                 ['start', 'À gauche'],
                 ['end', 'À droite'],
+              ]}
+            />
+            <SelectField
+              path={[...path, 'tone']}
+              label="Fond"
+              options={[
+                ['light', 'Clair'],
+                ['navy', 'Bleu marine (carte mise en avant)'],
               ]}
             />
           </div>
@@ -176,6 +273,7 @@ function BlockFields({ block, path }: { block: ContentBlock; path: DocumentPath 
               ['services', 'Services'],
               ['steps', 'Étapes numérotées'],
               ['trust', 'Garanties'],
+              ['highlights', 'Rangée d’atouts (sous le bandeau d’accueil)'],
             ]}
           />
           <ListField
@@ -202,10 +300,48 @@ function BlockFields({ block, path }: { block: ContentBlock; path: DocumentPath 
                   required
                   multiline
                 />
+                <MediaField path={[...itemPath, 'mediaId']} label="Photo" />
                 <LinkFields path={[...itemPath, 'link']} legend="Lien" optional />
               </>
             )}
           />
+        </>
+      );
+    case 'departures':
+      return (
+        <>
+          <p className="et-hint">
+            Dates, places restantes et prix sont lus sur la réservation et la tarification au moment
+            de l’affichage : ils ne se saisissent jamais ici. Sans départ ouvert, la section
+            l’indique et renvoie vers la réservation.
+          </p>
+          <TextField path={[...path, 'title']} label="Titre (H2)" max={160} required />
+          <TextField path={[...path, 'intro']} label="Introduction" max={400} multiline />
+          <SelectField
+            path={[...path, 'limit']}
+            label="Départs affichés"
+            options={['1', '2', '3', '4', '5', '6'].map((count) => [count, count] as const)}
+            onSelect={(value) => editor.set([...path, 'limit'], Number(value))}
+          />
+          <ListField
+            path={[...path, 'routes']}
+            legend="Sens de circulation"
+            itemLabel={(index) => `Sens ${index + 1}`}
+            min={1}
+            max={4}
+            addLabel="Ajouter un sens"
+            create={() => ({ fromCode: 'PAR', toCode: 'DKR' })}
+            render={(itemPath) => (
+              <>
+                <div className="ops-content-grid">
+                  <StopCodeField path={[...itemPath, 'fromCode']} label="Départ" />
+                  <StopCodeField path={[...itemPath, 'toCode']} label="Arrivée" />
+                </div>
+                <MediaField path={[...itemPath, 'mediaId']} label="Photo de la destination" />
+              </>
+            )}
+          />
+          <LinkFields path={[...path, 'cta']} legend="Lien « tous les voyages »" optional />
         </>
       );
     case 'faq':

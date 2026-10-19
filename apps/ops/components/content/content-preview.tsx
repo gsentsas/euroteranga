@@ -13,12 +13,17 @@ import {
   type PageDocument,
   type SiteSettings,
 } from '@euroteranga/content';
+import type { BookingSearchStop } from '@euroteranga/auth-client';
 import {
   createMediaCache,
+  directionKey,
+  localDate,
   SitePage,
   siteMediaOf,
   type SiteContext,
+  type SiteDeparture,
   type SiteMedia,
+  type SiteStop,
 } from '@euroteranga/site';
 import { useEffect, useRef, useState } from 'react';
 import { auth } from '../../lib/auth';
@@ -113,6 +118,122 @@ function useMediaCache() {
   return { cache, version };
 }
 
+const siteStopOf = (stop: BookingSearchStop): SiteStop => ({
+  code: stop.code,
+  name: stop.name,
+  locality: stop.locality,
+  countryName: stop.country.name,
+  timezone: stop.timezone,
+});
+
+/**
+ * UI-PUBLIC-1: the stops of the hero search and the departures of the page,
+ * read from the same public API as the website (never typed in the CMS).
+ */
+function usePreviewTrips(page: PageDocument | null) {
+  const routes = (page?.blocks ?? []).flatMap((block) =>
+    block.type === 'departures' ? block.routes : [],
+  );
+  const hero = (page?.blocks ?? []).find((block) => block.type === 'hero');
+  const search = hero?.search !== undefined;
+  const searchCodes = hero?.search ? [hero.search.fromCode, hero.search.toCode] : [];
+  const wanted = `${search ? `search:${searchCodes.join('>')};` : ''}${routes
+    .map((route) => directionKey(route.fromCode, route.toCode))
+    .join(',')}`;
+  const [loaded, setLoaded] = useState<{
+    key: string;
+    stops: SiteStop[] | undefined;
+    departures: Map<string, SiteDeparture[] | null>;
+  } | null>(null);
+  useEffect(() => {
+    if (wanted === '') return;
+    let current = true;
+    void (async () => {
+      // The stops a block names are resolved exactly, even beyond the first page.
+      const codes = [
+        ...new Set(
+          wanted
+            .replace(/^search:[^;]*;/, '')
+            .split(/[,>]/)
+            .filter(Boolean)
+            .concat(search ? searchCodes : []),
+        ),
+      ];
+      const [listed, ...named] = await Promise.all([
+        auth.booking.public.stops({ limit: 50 }),
+        ...codes.map((code) => auth.booking.public.stops({ query: code, limit: 50 })),
+      ]);
+      const byCode = new Map(listed.ok ? listed.data.items.map((stop) => [stop.code, stop]) : []);
+      codes.forEach((code, index) => {
+        const result = named[index];
+        const exact = result?.ok ? result.data.items.find((stop) => stop.code === code) : undefined;
+        if (exact) byCode.set(exact.code, exact);
+      });
+      const stops = listed.ok ? [...byCode.values()] : null;
+      const departures = new Map<string, SiteDeparture[] | null>();
+      await Promise.all(
+        wanted
+          .replace(/^search:[^;]*;/, '')
+          .split(',')
+          .filter(Boolean)
+          .map(async (key) => {
+            const [fromCode, toCode] = key.split('>');
+            const origin = stops?.find((stop) => stop.code === fromCode);
+            const destination = stops?.find((stop) => stop.code === toCode);
+            if (!origin || !destination) {
+              departures.set(key, stops ? [] : null);
+              return;
+            }
+            const result = await auth.booking.public.searchTrips({
+              originStopId: origin.id,
+              destinationStopId: destination.id,
+              limit: 12,
+            });
+            departures.set(
+              key,
+              result.ok
+                ? result.data.items.flatMap((item) =>
+                    item.origin.plannedDepartureAt
+                      ? [
+                          {
+                            tripId: item.tripId,
+                            from: siteStopOf(item.origin.stop ?? origin),
+                            to: siteStopOf(item.destination.stop ?? destination),
+                            departureAt: item.origin.plannedDepartureAt,
+                            availableSeats: item.availableSeatCount,
+                            fare: item.fare,
+                          },
+                        ]
+                      : [],
+                  )
+                : null,
+            );
+          }),
+      );
+      if (current) {
+        setLoaded({ key: wanted, stops: stops?.map(siteStopOf), departures });
+      }
+    })();
+    return () => {
+      current = false;
+    };
+  }, [wanted]);
+  if (!loaded || loaded.key !== wanted) return { version: '', extra: {} };
+  return {
+    version: loaded.key,
+    extra: {
+      ...(search && loaded.stops ? { stops: loaded.stops } : {}),
+      ...(routes.length > 0
+        ? {
+            departures: (fromCode: string, toCode: string) =>
+              loaded.departures.get(directionKey(fromCode, toCode)) ?? null,
+          }
+        : {}),
+      today: localDate(new Date().toISOString(), 'Europe/Paris'),
+    } satisfies Partial<SiteContext>,
+  };
+}
+
 /**
  * Exact rendering of the website (same components, same stylesheets) in a
  * sandboxed frame without scripts nor origin: nothing in the preview can
@@ -134,6 +255,9 @@ export function ContentPreview({
   const boxRef = useRef<HTMLDivElement>(null);
   const [boxWidth, setBoxWidth] = useState(0);
   const media = useMediaCache();
+  const pageForTrips =
+    kind === 'PAGE' ? (pageDocumentSchema.safeParse(document).data ?? null) : null;
+  const trips = usePreviewTrips(pageForTrips);
 
   useEffect(() => {
     const box = boxRef.current;
@@ -150,7 +274,11 @@ export function ContentPreview({
       return;
     }
     media.cache.request(mediaIdsOf(model.page));
-    const ctx: SiteContext = { ...model.ctx, media: (id) => media.cache.get(id) ?? null };
+    const ctx: SiteContext = {
+      ...model.ctx,
+      ...trips.extra,
+      media: (id) => media.cache.get(id) ?? null,
+    };
     let cancelled = false;
     const timer = window.setTimeout(() => {
       void Promise.all([import('react-dom/server'), import('@euroteranga/site/css-text')]).then(
@@ -180,7 +308,8 @@ export function ContentPreview({
       window.clearTimeout(timer);
     };
     // `media.version` re-renders once newly referenced images are resolved.
-  }, [kind, document, site, media.version]);
+    // `trips.version` re-renders once the stops and departures are read.
+  }, [kind, document, site, media.version, trips.version]);
 
   const width = VIEWPORTS.find((item) => item.key === viewport)!.width;
   const scale = boxWidth > 0 && boxWidth < width ? boxWidth / width : 1;
