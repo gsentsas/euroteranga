@@ -272,3 +272,71 @@ export const REALISTIC_NATIONALITIES: ReadonlyArray<[iso2: string, weight: numbe
   ['MA', 5],
   ['ES', 3],
 ];
+
+// -- operations (local and CI only, with the commerce layer) ----------------
+
+/** The seed's own STAFF identity: author of the operational facts it records. */
+export const REALISTIC_OPERATOR_EMAIL = 'etr-v1-operations@example.test';
+
+/** Synthetic crew members (CREW realm, no password: the Crew app cannot be opened with them). */
+export const realisticCrewEmail = (key: string) => `etr-v1-${key}@example.test`;
+
+/**
+ * Crew pairs of the upcoming departures by position. A pair that drives
+ * Paris → Dakar at J+14 drives Dakar → Paris at J+28, and the other way
+ * round, like the coaches.
+ */
+export const REALISTIC_CREW_PLAN: Readonly<
+  Record<'outbound' | 'inbound', readonly (readonly string[])[]>
+> = {
+  outbound: [
+    ['crew-01', 'crew-02'],
+    ['crew-03', 'crew-04'],
+  ],
+  inbound: [
+    ['crew-03', 'crew-04'],
+    ['crew-01', 'crew-02'],
+  ],
+};
+
+/** Bags declared online per traveller of the soonest departures, by weight. */
+export const REALISTIC_BAGS_PER_TRAVELLER: ReadonlyArray<[bags: number, weight: number]> = [
+  [0, 25],
+  [1, 50],
+  [2, 25],
+];
+
+export const REALISTIC_BAGGAGE_TYPES: ReadonlyArray<
+  [type: 'SUITCASE' | 'TRAVEL_BAG' | 'BOX' | 'OTHER', weight: number]
+> = [
+  ['SUITCASE', 55],
+  ['TRAVEL_BAG', 25],
+  ['BOX', 15],
+  ['OTHER', 5],
+];
+
+/**
+ * Benign operational notes on the soonest departures, clearly marked as
+ * demonstration: no accident, no security or health event, no breakdown.
+ */
+export const REALISTIC_INCIDENTS: ReadonlyArray<{
+  direction: 'outbound' | 'inbound';
+  key: string;
+  type: 'DELAY' | 'OTHER';
+  description: string;
+}> = [
+  {
+    direction: 'outbound',
+    key: 'delay',
+    type: 'DELAY',
+    description:
+      'Embarquement prévu avec 30 minutes de décalage : travaux d’accès au terminal de départ (donnée de démonstration).',
+  },
+  {
+    direction: 'inbound',
+    key: 'check',
+    type: 'OTHER',
+    description:
+      'Contrôle préventif de l’autocar programmé la veille du départ (donnée de démonstration).',
+  },
+];

@@ -20,6 +20,7 @@ import {
 import { seatMapCellsSchema, seatMapCreateSchema } from '../../seat-maps/seat-map.dto.js';
 import type { SeatMapService } from '../../seat-maps/seat-map.service.js';
 import { RealisticCommerce, type RealisticCommerceServices } from './realistic-commerce.js';
+import { RealisticOperations, type RealisticOperationsServices } from './realistic-operations.js';
 import {
   REALISTIC_AMENITIES,
   REALISTIC_PAGE_TEMPLATES,
@@ -55,6 +56,8 @@ export interface RealisticSeedServices extends PilotBootstrapServices {
    * (local and CI). Absent elsewhere, and the layer is reported as skipped.
    */
   commerce?: RealisticCommerceServices | undefined;
+  /** Crew, bags, tracking, incidents and manifests: with the commerce layer only. */
+  operations?: RealisticOperationsServices | undefined;
 }
 
 export interface RealisticSeedOptions {
@@ -138,12 +141,19 @@ export class RealisticSeed {
     }
     await this.guarded('navigation', 'site', [], () => this.ensureNavigation(published, dry));
 
-    const commerce = this.services.commerce;
+    const { commerce, operations } = this.services;
     if (commerce && !options.commerceUnavailable) {
+      const now = options.now ?? new Date();
       await new RealisticCommerce(this.services.db, commerce, this.reporter).run({
         dryRun: dry,
-        now: options.now ?? new Date(),
+        now,
       });
+      if (operations) {
+        await new RealisticOperations(this.services.db, operations, this.reporter).run({
+          dryRun: dry,
+          now,
+        });
+      }
     } else {
       this.reporter.report({
         layer: 'commerce',

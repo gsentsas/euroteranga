@@ -17,12 +17,15 @@ import { createLogger, redactString } from '@euroteranga/logger';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module.js';
 import { AuditService } from '../authorization/audit.service.js';
+import { BaggageService } from '../baggage/baggage.service.js';
 import { BookingService } from '../bookings/booking.service.js';
 import { PublicBookingService } from '../bookings/public-booking.service.js';
 import { NestJsonLogger } from '../common/logging.js';
 import { ContentService } from '../content/content.service.js';
+import { CrewService } from '../crew/crew.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { FleetService } from '../fleet/fleet.service.js';
+import { IncidentService } from '../incidents/incident.service.js';
 import { NetworkService } from '../network/network.service.js';
 import { PassengerDocumentService } from '../passenger-documents/passenger-document.service.js';
 import { PaymentService } from '../payments/payment.service.js';
@@ -40,6 +43,7 @@ import {
 import { REALISTIC_NAMESPACE } from '../seed/realistic/realistic-dataset.js';
 import { summarize } from '../seed/realistic/realistic-report.js';
 import { RealisticSeed } from '../seed/realistic/realistic-seed.js';
+import { TrackingService } from '../tracking/tracking.service.js';
 import { TripService } from '../trips/trip.service.js';
 
 const out = (line: string) => process.stdout.write(`${line}\n`);
@@ -117,6 +121,15 @@ async function main(): Promise<number> {
             passengers: app.get(PassengerDocumentService, { strict: false }),
             payments: app.get(PaymentService, { strict: false }),
             webhooks: app.get(PaymentWebhookService, { strict: false }),
+          },
+      operations: unavailable
+        ? undefined
+        : {
+            audit: app.get(AuditService),
+            baggage: app.get(BaggageService, { strict: false }),
+            crew: app.get(CrewService, { strict: false }),
+            incidents: app.get(IncidentService, { strict: false }),
+            tracking: app.get(TrackingService, { strict: false }),
           },
     });
     const report = await seed.run({

@@ -1,10 +1,13 @@
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AuditService } from '../../../src/authorization/audit.service.js';
+import { BaggageService } from '../../../src/baggage/baggage.service.js';
 import { BookingService } from '../../../src/bookings/booking.service.js';
 import { PublicBookingService } from '../../../src/bookings/public-booking.service.js';
 import { ContentService } from '../../../src/content/content.service.js';
+import { CrewService } from '../../../src/crew/crew.service.js';
 import { FleetService } from '../../../src/fleet/fleet.service.js';
+import { IncidentService } from '../../../src/incidents/incident.service.js';
 import { NetworkService } from '../../../src/network/network.service.js';
 import { PassengerDocumentService } from '../../../src/passenger-documents/passenger-document.service.js';
 import { PaymentService } from '../../../src/payments/payment.service.js';
@@ -16,6 +19,7 @@ import {
   type RealisticSeedOptions,
   type RealisticSeedReport,
 } from '../../../src/seed/realistic/realistic-seed.js';
+import { TrackingService } from '../../../src/tracking/tracking.service.js';
 import { TripService } from '../../../src/trips/trip.service.js';
 import {
   adminApi,
@@ -54,6 +58,13 @@ async function harness(): Promise<Harness> {
         payments: t.app.get(PaymentService),
         webhooks: t.app.get(PaymentWebhookService),
       },
+      operations: {
+        audit: t.app.get(AuditService),
+        baggage: t.app.get(BaggageService),
+        crew: t.app.get(CrewService),
+        incidents: t.app.get(IncidentService),
+        tracking: t.app.get(TrackingService),
+      },
     }).run({ anchorDate: today(), tripsPerDirection: 6, dryRun: false, ...overrides });
   return {
     t,
@@ -85,6 +96,11 @@ async function snapshot(h: Harness) {
     seats: await client.bookingSeat.count(),
     payments: await client.payment.count(),
     passengers: await client.passenger.count(),
+    crewAssignments: await client.crewTripAssignment.count(),
+    baggage: await client.baggage.count(),
+    trackingConfigs: await client.tripTrackingConfig.count(),
+    incidents: await client.incident.count(),
+    manifests: await client.passengerManifest.count(),
     audit: await client.auditEvent.count(),
   };
 }
@@ -99,7 +115,12 @@ describe('realistic seed: catalogue layer (isolated database)', () => {
   beforeAll(async () => {
     h = await harness();
     const dry = await h.run({ dryRun: true });
-    expect(dry.lines.every((line) => line.outcome === 'planned')).toBe(true);
+    // Everything is planned, except what the seed never does (check-in, manifests).
+    const explained = (line: { entity: string; outcome: string }) =>
+      line.outcome === 'skipped' && ['check-in', 'manifest'].includes(line.entity);
+    expect(
+      dry.lines.filter((line) => !explained(line)).every((line) => line.outcome === 'planned'),
+    ).toBe(true);
     // A dry run writes nothing, audit included.
     expect(Object.values(await snapshot(h)).every((count) => count === 0)).toBe(true);
     first = await h.run();
@@ -112,8 +133,11 @@ describe('realistic seed: catalogue layer (isolated database)', () => {
   it('creates the pilot corridor, the demo fleet additions and the public pages', async () => {
     expect(first.hasConflicts).toBe(false);
     expect(new Set(first.lines.map((line) => line.outcome))).toEqual(
-      new Set(['created', 'updated']),
+      new Set(['created', 'updated', 'skipped']),
     );
+    expect(
+      first.lines.filter((line) => line.outcome === 'skipped').map((line) => line.entity),
+    ).toEqual(['check-in', 'manifest']);
     const client = db(h.t.app);
     const vehicles = await client.vehicle.findMany({ orderBy: { code: 'asc' } });
     expect(vehicles.map((vehicle) => [vehicle.code, vehicle.name, vehicle.status])).toEqual([
@@ -289,11 +313,65 @@ describe('realistic seed: catalogue layer (isolated database)', () => {
     expect(soonest.availableSeatCount).toBe(53 - 45);
   });
 
+  it('prepares the soonest departures under the seed operator, never as a person', async () => {
+    const client = db(h.t.app);
+    const operator = await client.authIdentity.findUniqueOrThrow({
+      where: {
+        realm_normalizedEmail: {
+          realm: 'STAFF',
+          normalizedEmail: 'etr-v1-operations@example.test',
+        },
+      },
+      include: { passwordCredential: true, roleAssignments: true },
+    });
+    // A dedicated synthetic account: no password, no role, no permission.
+    expect(operator.passwordCredential).toBeNull();
+    expect(operator.roleAssignments).toHaveLength(0);
+
+    const assignments = await client.crewTripAssignment.findMany({
+      include: { trip: true, crew: true },
+    });
+    expect(assignments).toHaveLength(8);
+    expect(assignments.every((row) => row.assignedByIdentityId === operator.id)).toBe(true);
+    expect(assignments.every((row) => row.crew.realm === 'CREW')).toBe(true);
+    expect(new Set(assignments.map((row) => row.crewIdentityId)).size).toBe(4);
+
+    // Bags declared by travellers of confirmed bookings of the soonest departures only.
+    const bags = await client.baggage.findMany({
+      include: { bookingPassenger: { include: { booking: true } }, events: true },
+    });
+    expect(bags.length).toBeGreaterThan(30);
+    expect(bags.every((bag) => bag.bookingPassenger.booking.confirmedAt !== null)).toBe(true);
+    expect(new Set(bags.map((bag) => bag.bookingPassenger.booking.tripId)).size).toBe(2);
+    expect(bags.every((bag) => bag.events.map((event) => event.type).join() === 'REGISTERED')).toBe(
+      true,
+    );
+
+    const trackings = await client.tripTrackingConfig.findMany();
+    expect(trackings).toHaveLength(2);
+    expect(trackings.every((row) => row.enabled && row.visibility === 'CHECKPOINT_ONLY')).toBe(
+      true,
+    );
+
+    const incidents = await client.incident.findMany();
+    expect(incidents.map((row) => [row.type, row.severity, row.source]).sort()).toEqual([
+      ['DELAY', 'LOW', 'STAFF'],
+      ['OTHER', 'LOW', 'STAFF'],
+    ]);
+    expect(incidents.every((row) => row.openedByIdentityId === operator.id)).toBe(true);
+    expect(incidents.every((row) => row.description.includes('démonstration'))).toBe(true);
+    // Check-in and manifests need verified documents: never fabricated.
+    expect(await client.passengerCheckIn.count()).toBe(0);
+    expect(await client.passengerManifest.count()).toBe(0);
+  });
+
   it('is idempotent: a second run reuses everything and writes nothing', async () => {
     const before = await snapshot(h);
     const second = await h.run();
     expect(second.hasConflicts).toBe(false);
-    expect(new Set(second.lines.map((line) => line.outcome))).toEqual(new Set(['existing']));
+    expect(new Set(second.lines.map((line) => line.outcome))).toEqual(
+      new Set(['existing', 'skipped']),
+    );
     expect(await snapshot(h)).toEqual(before);
   });
 });

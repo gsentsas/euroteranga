@@ -1,6 +1,10 @@
 import { Prisma } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import {
+  customerIdentityOf,
+  type AuthPrincipal,
+  type CustomerActor,
+} from '../auth/session/auth-principal.js';
 import { RATE_LIMITS } from '../auth/rate-limit/rate-limit.rules.js';
 import { RateLimitService } from '../auth/rate-limit/rate-limit.service.js';
 import { AuditService } from '../authorization/audit.service.js';
@@ -83,28 +87,37 @@ export class BaggageService {
   ) {}
 
   async customerRegister(
-    actor: AuthPrincipal,
+    actor: CustomerActor,
     rawBookingReference: string,
     rawPassengerReference: string,
     input: BaggageRegistration,
   ) {
-    await this.rateLimits.consume(RATE_LIMITS.baggageRegistrationIdentity, actor.identityId);
-    return this.register(
+    const customerIdentityId = customerIdentityOf(actor);
+    await this.rateLimits.consume(RATE_LIMITS.baggageRegistrationIdentity, customerIdentityId);
+    const reference = await this.register(
       actor,
       rawBookingReference,
       rawPassengerReference,
       input.type,
-      actor.identityId,
+      customerIdentityId,
     );
+    return this.customerBaggage(actor, reference);
   }
 
   async adminRegister(actor: AuthPrincipal, input: AdminBaggageRegistration) {
     await this.rateLimits.consume(RATE_LIMITS.baggageOperationIdentity, actor.identityId);
-    return this.register(actor, input.bookingReference, input.passengerReference, input.type);
+    const reference = await this.register(
+      actor,
+      input.bookingReference,
+      input.passengerReference,
+      input.type,
+    );
+    return this.adminBaggage(actor, reference, 'REGISTER');
   }
 
+  /** Registers one bag and returns its reference; the caller returns its own view. */
   private async register(
-    actor: AuthPrincipal,
+    actor: CustomerActor,
     rawBookingReference: string,
     rawPassengerReference: string,
     type: BaggageRegistration['type'],
@@ -162,7 +175,8 @@ export class BaggageService {
                 type: 'REGISTERED',
                 lifecycleStatus: 'REGISTERED',
                 occurredAt,
-                actorIdentityId: actor.identityId,
+                // The customer (or the STAFF caller) who registered the bag.
+                actorIdentityId: customerIdentityOf(actor),
                 payloadFingerprint: baggageEventFingerprint({
                   type: 'REGISTERED',
                   occurredAt,
@@ -194,9 +208,7 @@ export class BaggageService {
     } catch (error) {
       return databaseDomainError(error);
     }
-    return ownerIdentityId
-      ? this.customerBaggage(actor, reference)
-      : this.adminBaggage(actor, reference, 'REGISTER');
+    return reference;
   }
 
   async customerBookingBaggage(actor: AuthPrincipal, rawBookingReference: string) {
@@ -215,13 +227,13 @@ export class BaggageService {
     return { items: rows.map(baggageSummaryView) };
   }
 
-  async customerBaggage(actor: AuthPrincipal, rawReference: string) {
+  async customerBaggage(actor: CustomerActor, rawReference: string) {
     const reference = normalizeBaggageReference(rawReference);
     if (!reference) throw BaggageErrors.notFound();
     const row = await this.database.client.baggage.findFirst({
       where: {
         reference,
-        bookingPassenger: { booking: { customerIdentityId: actor.identityId } },
+        bookingPassenger: { booking: { customerIdentityId: customerIdentityOf(actor) } },
       },
       include: baggageDetailInclude,
     });

@@ -18,6 +18,7 @@ import {
   realisticCustomerEmail,
   type RealisticBookingGroup,
 } from './realistic-dataset.js';
+import { ensureSyntheticIdentity } from './realistic-identities.js';
 import { RealisticConflict, type RealisticReporter } from './realistic-report.js';
 
 export interface RealisticCommerceServices {
@@ -29,7 +30,7 @@ export interface RealisticCommerceServices {
   webhooks: PaymentWebhookService;
 }
 
-const DIRECTIONS = [
+export const DIRECTIONS = [
   { name: 'outbound', short: 'out', routeCode: 'ET-PAR-DKR' },
   { name: 'inbound', short: 'in', routeCode: 'ET-DKR-PAR' },
 ] as const;
@@ -38,7 +39,7 @@ const DIRECTIONS = [
 const SEED_EMAIL_PREFIX = 'etr-v1-';
 const SEED_EMAIL_SUFFIX = '@example.test';
 
-interface UpcomingTrip {
+export interface UpcomingTrip {
   id: string;
   reference: string;
   plannedDepartureAt: Date;
@@ -147,6 +148,53 @@ export function travellerOf(key: string, index: number, partySize: number) {
   };
 }
 
+/** Upcoming SCHEDULED pilot departures of a route, soonest first, with their journey ends. */
+export async function upcomingPilotTrips(
+  db: PrismaClient,
+  routeCode: string,
+  now: Date,
+): Promise<UpcomingTrip[]> {
+  const trips = await db.trip.findMany({
+    where: {
+      status: 'SCHEDULED',
+      plannedDepartureAt: { gt: now },
+      reference: { startsWith: 'ET-PILOT-' },
+      routeVersion: { route: { code: routeCode } },
+    },
+    orderBy: { plannedDepartureAt: 'asc' },
+    select: {
+      id: true,
+      reference: true,
+      plannedDepartureAt: true,
+      routeVersion: {
+        select: {
+          waypoints: {
+            orderBy: { sequence: 'asc' },
+            select: { id: true, boardingAllowed: true, alightingAllowed: true },
+          },
+        },
+      },
+    },
+  });
+  return trips.flatMap((trip) => {
+    const origin = trip.routeVersion.waypoints.find((waypoint) => waypoint.boardingAllowed);
+    const destination = trip.routeVersion.waypoints.findLast(
+      (waypoint) => waypoint.alightingAllowed,
+    );
+    return origin && destination && trip.plannedDepartureAt
+      ? [
+          {
+            id: trip.id,
+            reference: trip.reference,
+            plannedDepartureAt: trip.plannedDepartureAt,
+            originRouteWaypointId: origin.id,
+            destinationRouteWaypointId: destination.id,
+          },
+        ]
+      : [];
+  });
+}
+
 /**
  * SEED-REALISTIC-1 commerce layer (local and CI only): synthetic customers
  * book the upcoming pilot departures through the booking service, pay
@@ -169,7 +217,7 @@ export class RealisticCommerce {
       ]),
     );
     for (const direction of DIRECTIONS) {
-      const trips = await this.upcomingTrips(direction.routeCode, options.now);
+      const trips = await upcomingPilotTrips(this.db, direction.routeCode, options.now);
       const plan = REALISTIC_BOOKING_PLAN[direction.name];
       for (const [position, groups] of plan.entries()) {
         const trip = trips[position];
@@ -192,48 +240,6 @@ export class RealisticCommerce {
         );
       }
     }
-  }
-
-  private async upcomingTrips(routeCode: string, now: Date): Promise<UpcomingTrip[]> {
-    const trips = await this.db.trip.findMany({
-      where: {
-        status: 'SCHEDULED',
-        plannedDepartureAt: { gt: now },
-        reference: { startsWith: 'ET-PILOT-' },
-        routeVersion: { route: { code: routeCode } },
-      },
-      orderBy: { plannedDepartureAt: 'asc' },
-      select: {
-        id: true,
-        reference: true,
-        plannedDepartureAt: true,
-        routeVersion: {
-          select: {
-            waypoints: {
-              orderBy: { sequence: 'asc' },
-              select: { id: true, boardingAllowed: true, alightingAllowed: true },
-            },
-          },
-        },
-      },
-    });
-    return trips.flatMap((trip) => {
-      const origin = trip.routeVersion.waypoints.find((waypoint) => waypoint.boardingAllowed);
-      const destination = trip.routeVersion.waypoints.findLast(
-        (waypoint) => waypoint.alightingAllowed,
-      );
-      return origin && destination && trip.plannedDepartureAt
-        ? [
-            {
-              id: trip.id,
-              reference: trip.reference,
-              plannedDepartureAt: trip.plannedDepartureAt,
-              originRouteWaypointId: origin.id,
-              destinationRouteWaypointId: destination.id,
-            },
-          ]
-        : [];
-    });
   }
 
   private async ensureTripBookings(
@@ -409,45 +415,13 @@ export class RealisticCommerce {
   }
 
   /** The synthetic customer of one booking, created once (no password, reserved address). */
-  private async ensureCustomer(key: string): Promise<string> {
-    const email = realisticCustomerEmail(key);
-    const existing = await this.db.authIdentity.findUnique({
-      where: { realm_normalizedEmail: { realm: 'CUSTOMER', normalizedEmail: email } },
-      select: { id: true, status: true },
+  private ensureCustomer(key: string): Promise<string> {
+    return ensureSyntheticIdentity(this.db, this.services.audit, this.reporter, {
+      layer: 'commerce',
+      entity: 'customer',
+      key,
+      realm: 'CUSTOMER',
+      email: realisticCustomerEmail(key),
     });
-    if (existing) {
-      if (existing.status !== 'ACTIVE') {
-        throw new RealisticConflict(`seed customer ${email} is ${existing.status}`);
-      }
-      this.reporter.report({ layer: 'commerce', outcome: 'existing', entity: 'customer', key });
-      return existing.id;
-    }
-    const id = await this.db.$transaction(async (tx) => {
-      const identity = await tx.authIdentity.create({
-        data: {
-          realm: 'CUSTOMER',
-          email,
-          normalizedEmail: email,
-          status: 'ACTIVE',
-          // Required for an ACTIVE customer; the reserved address receives no mail.
-          emailVerifiedAt: new Date(),
-        },
-        select: { id: true },
-      });
-      await this.services.audit.record(
-        {
-          actor: { kind: 'system', source: REALISTIC_SOURCE },
-          action: 'CUSTOMER_IDENTITY_SEEDED',
-          resourceType: 'auth_identity',
-          resourceId: identity.id,
-          after: { realm: 'CUSTOMER', status: 'ACTIVE' },
-          metadata: { synthetic: true, credential: 'none' },
-        },
-        tx,
-      );
-      return identity.id;
-    });
-    this.reporter.report({ layer: 'commerce', outcome: 'created', entity: 'customer', key });
-    return id;
   }
 }

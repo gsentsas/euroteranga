@@ -50,3 +50,22 @@ export type CustomerActor = AuthPrincipal | SystemCustomerActor;
 export function customerIdentityOf(actor: CustomerActor): string {
   return isSystemActor(actor) ? actor.customerIdentityId : actor.identityId;
 }
+
+/**
+ * An operator command that records operational facts (crew assignments,
+ * incidents, manifests, tracking settings) under its own dedicated STAFF
+ * identity: a synthetic account with no password and no role, never a real
+ * person. Columns that require an author name that identity; the audit
+ * records the system actor. It is never built from an HTTP request.
+ */
+export interface SystemOperatorActor extends SystemActor {
+  readonly operatorIdentityId: string;
+}
+
+/** Who records an operational fact: a STAFF caller or the seed's own operator identity. */
+export type OperatorActor = AuthPrincipal | SystemOperatorActor;
+
+/** The identity recorded as author of an operational fact. */
+export function operatorIdentityOf(actor: OperatorActor): string {
+  return isSystemActor(actor) ? actor.operatorIdentityId : actor.identityId;
+}

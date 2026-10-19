@@ -4,7 +4,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { Request } from 'express';
 import type { z } from 'zod';
 import { PublicApiError } from '../auth/http/public-api-error.js';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import {
+  operatorIdentityOf,
+  type AuthPrincipal,
+  type OperatorActor,
+} from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import {
@@ -231,7 +235,7 @@ export class IncidentService {
   }
 
   private async persist(
-    actor: AuthPrincipal,
+    actor: OperatorActor,
     input: {
       tripId: string;
       vehicleId: string | null;
@@ -287,7 +291,7 @@ export class IncidentService {
               description: input.description,
               ...(input.locationLabel ? { locationLabel: input.locationLabel } : {}),
               openedAt: input.openedAt,
-              openedByIdentityId: actor.identityId,
+              openedByIdentityId: operatorIdentityOf(actor),
               ...(input.ownerIdentityId ? { ownerIdentityId: input.ownerIdentityId } : {}),
               clientEventId: input.clientEventId,
               payloadFingerprint,
@@ -332,7 +336,7 @@ export class IncidentService {
     throw IncidentErrors.idempotencyConflict();
   }
 
-  async openStaff(actor: AuthPrincipal, input: StaffOpen) {
+  async openStaff(actor: OperatorActor, input: StaffOpen) {
     const trip = await this.tripContext(input.tripReference);
     await this.assertWaypoint(trip.id, input.routeWaypointId);
     const baggageId = await this.baggageId(trip.id, input.baggageReference);

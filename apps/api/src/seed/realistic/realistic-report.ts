@@ -1,6 +1,6 @@
 import { PublicApiError } from '../../auth/http/public-api-error.js';
 
-export type RealisticLayer = 'catalogue' | 'commerce';
+export type RealisticLayer = 'catalogue' | 'commerce' | 'operations';
 
 export type RealisticOutcome =
   'created' | 'updated' | 'existing' | 'planned' | 'skipped' | 'conflict';
@@ -98,6 +98,14 @@ const ENTITY_LABELS: ReadonlyArray<[entity: string, label: string]> = [
   ['booking', 'Bookings'],
   ['payment', 'Payments'],
   ['passenger', 'Passengers'],
+  ['operator', 'Operator'],
+  ['crew-member', 'Crew members'],
+  ['crew', 'Crew duties'],
+  ['baggage', 'Baggage'],
+  ['tracking', 'Tracking'],
+  ['incident', 'Incidents'],
+  ['manifest', 'Manifests'],
+  ['check-in', 'Check-ins'],
 ];
 
 const COLUMNS: readonly RealisticOutcome[] = [
