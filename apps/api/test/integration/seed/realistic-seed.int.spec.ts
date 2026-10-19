@@ -14,6 +14,7 @@ import { PaymentService } from '../../../src/payments/payment.service.js';
 import { PaymentWebhookService } from '../../../src/payments/payment-webhook.service.js';
 import { PricingService } from '../../../src/pricing/pricing.service.js';
 import { SeatMapService } from '../../../src/seat-maps/seat-map.service.js';
+import { plannedBaggage } from '../../../src/seed/realistic/realistic-operations.js';
 import {
   RealisticSeed,
   type RealisticSeedOptions,
@@ -730,5 +731,57 @@ describe('realistic seed: a real customer is never touched (isolated database)',
     expect(
       await client.baggage.count({ where: { bookingPassenger: { booking: { tripId: trip.id } } } }),
     ).toBeGreaterThan(0);
+  });
+});
+
+describe('realistic seed: interrupted bag declarations resume (isolated database)', () => {
+  let h: Harness;
+
+  beforeAll(async () => {
+    h = await harness();
+    await h.run({}, { operations: false });
+  }, 180_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  it('declares only the bags each traveller is still missing', async () => {
+    const client = db(h.t.app);
+    const trip = await client.trip.findFirstOrThrow({
+      where: { reference: { startsWith: 'ET-PILOT-PARDKR-' } },
+      orderBy: { plannedDepartureAt: 'asc' },
+    });
+    const travellers = await client.bookingPassenger.findMany({
+      where: { booking: { tripId: trip.id, confirmedAt: { not: null }, cancelledAt: null } },
+      include: { booking: true, passenger: true },
+    });
+    // An earlier run stopped after the first bag of a traveller who plans two.
+    const interrupted = travellers.find(
+      (link) => plannedBaggage(trip.reference, link.passenger.reference).length === 2,
+    )!;
+    const [firstType] = plannedBaggage(trip.reference, interrupted.passenger.reference);
+    await h.t.app
+      .get(BaggageService)
+      .customerRegister(
+        {
+          kind: 'system',
+          source: 'test',
+          customerIdentityId: interrupted.booking.customerIdentityId,
+        },
+        interrupted.booking.reference,
+        interrupted.passenger.reference,
+        { type: firstType! },
+      );
+
+    await h.run();
+    for (const link of travellers) {
+      const bags = await client.baggage.count({
+        where: { bookingId: link.bookingId, passengerId: link.passengerId },
+      });
+      expect(bags, link.passenger.reference).toBe(
+        plannedBaggage(trip.reference, link.passenger.reference).length,
+      );
+    }
   });
 });

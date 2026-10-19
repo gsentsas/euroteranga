@@ -49,6 +49,16 @@ function weighted<T>(items: ReadonlyArray<[T, number]>, random: () => number): T
 }
 
 /**
+ * The bags one traveller declares online: 0 to 2, of weighted types,
+ * deterministic for a departure and a passenger.
+ */
+export function plannedBaggage(tripReference: string, passengerReference: string) {
+  const random = seededRandom(`${tripReference}#bags#${passengerReference}`);
+  const count = weighted(REALISTIC_BAGS_PER_TRAVELLER, random);
+  return Array.from({ length: count }, () => weighted(REALISTIC_BAGGAGE_TYPES, random));
+}
+
+/**
  * SEED-REALISTIC-1 operations layer (local and CI only, after the commerce
  * layer): what an operations team prepares before a departure. Crew pairs
  * are assigned, travellers declare their bags online, tracking is set to
@@ -236,47 +246,48 @@ export class RealisticOperations {
         _count: { select: { baggage: true } },
       },
     });
-    if (links.some((link) => link._count.baggage > 0)) {
-      const existing = await this.db.baggage.count({
-        where: { bookingPassenger: { booking: { tripId: trip.id } } },
-      });
-      this.reporter.report({
-        layer: 'operations',
-        outcome: 'existing',
-        entity: 'baggage',
-        key: trip.reference,
-        detail: 'bags already declared on this departure',
-        count: existing,
-      });
-      return trip.id;
-    }
+    // Per traveller: only the planned bags still missing (an interrupted run
+    // resumes; bags added by a person are never removed).
     let declared = 0;
+    let present = 0;
     for (const link of links) {
-      const random = seededRandom(`${trip.reference}#bags#${link.passenger.reference}`);
-      const bags = weighted(REALISTIC_BAGS_PER_TRAVELLER, random);
+      const planned = plannedBaggage(trip.reference, link.passenger.reference);
+      present += Math.min(link._count.baggage, planned.length);
       const customer: SystemCustomerActor = {
         kind: 'system',
         source: REALISTIC_SOURCE,
         customerIdentityId: link.booking.customerIdentityId,
       };
-      for (let bag = 0; bag < bags; bag += 1) {
+      for (const type of planned.slice(link._count.baggage)) {
         await this.services.baggage.customerRegister(
           customer,
           link.booking.reference,
           link.passenger.reference,
-          baggageRegistrationSchema.parse({ type: weighted(REALISTIC_BAGGAGE_TYPES, random) }),
+          baggageRegistrationSchema.parse({ type }),
         );
         declared += 1;
       }
     }
-    this.reporter.report({
-      layer: 'operations',
-      outcome: 'created',
-      entity: 'baggage',
-      key: trip.reference,
-      detail: `${declared} bags declared by ${links.length} travellers`,
-      count: declared,
-    });
+    if (present > 0) {
+      this.reporter.report({
+        layer: 'operations',
+        outcome: 'existing',
+        entity: 'baggage',
+        key: trip.reference,
+        detail: 'bags already declared',
+        count: present,
+      });
+    }
+    if (declared > 0 || present === 0) {
+      this.reporter.report({
+        layer: 'operations',
+        outcome: 'created',
+        entity: 'baggage',
+        key: trip.reference,
+        detail: `${declared} bags declared by ${links.length} travellers`,
+        count: declared,
+      });
+    }
     return trip.id;
   }
 
