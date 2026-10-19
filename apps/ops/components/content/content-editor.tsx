@@ -231,7 +231,10 @@ export function ContentEditor({ entryId }: { entryId: string }) {
       const href = anchor.getAttribute('href');
       if (!href || href.startsWith('#')) return;
       const destination = new URL(anchor.href, window.location.href);
-      if (destination.origin !== window.location.origin || destination.href === window.location.href)
+      if (
+        destination.origin !== window.location.origin ||
+        destination.href === window.location.href
+      )
         return;
       if (!window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?')) {
         event.preventDefault();
