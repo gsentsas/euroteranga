@@ -60,12 +60,17 @@ test('web: public homepage exposes booking, account and tracking journeys', asyn
     'href',
     'https://client.euroteranga.com/',
   );
-  await expect(page.getByRole('link', { name: /Suivre un trajet/i }).first()).toHaveAttribute(
+  await expect(page.getByRole('link', { name: /Ouvrir le suivi/i }).first()).toHaveAttribute(
     'href',
     'https://tracking.euroteranga.com/',
   );
   await expect(page.getByRole('heading', { name: 'Choisissez, réservez, voyagez.' })).toBeVisible();
-  // Prices come from Pricing only: without a bookable Paris ↔ Dakar trip, none is shown.
-  await expect(page.getByText('Tarif affiché à la réservation').first()).toBeVisible();
-  await expect(page.locator('main')).not.toContainText('249');
+  // Departures and prices come from Booking and Pricing only: without a bookable
+  // Paris ↔ Dakar trip, the section says so and no price is shown.
+  await expect(
+    page.getByText(
+      'Les prochains départs seront affichés ici dès leur ouverture à la réservation.',
+    ),
+  ).toBeVisible();
+  await expect(page.locator('main')).not.toContainText('€');
 });
