@@ -13,6 +13,8 @@
   "dependencies": {
     "@euroteranga/auth-client": "workspace:*",
     "@euroteranga/config": "workspace:*",
+    "@euroteranga/content": "workspace:*",
+    "@euroteranga/site": "workspace:*",
     "@euroteranga/ui": "workspace:*",
     "@next/env": "catalog:",
     "@refinedev/core": "catalog:",

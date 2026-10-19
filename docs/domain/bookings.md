@@ -200,6 +200,20 @@ Public, unauthenticated reads under `/v1/booking`:
 | GET    | `/stops?query&cursor&limit`                                                                      | Active stops of active countries.                                          |
 | GET    | `/trips?originStopId&destinationStopId&departureFrom&departureTo&minAvailableSeats&cursor&limit` | Scheduled future trips with exact waypoint pair, fare and available count. |
 | GET    | `/trips/:tripId/availability?originRouteWaypointId&destinationRouteWaypointId`                   | Historical layout and segment-aware availability.                          |
+| GET    | `/trips/:tripId/itinerary`                                                                       | Planned itinerary of a bookable trip (UI-PUBLIC-2).                        |
+| GET    | `/fleet`                                                                                         | Active vehicles, public facts only (UI-PUBLIC-2, `docs/domain/fleet.md`).  |
+
+**Itinerary (UI-PUBLIC-2).** Only for a trip the search would show
+(`SCHEDULED`, future departure, historical seat map); otherwise
+`404 BOOKING_TRIP_NOT_BOOKABLE`. Cached 60 s (`public`). It returns the
+trip reference, the route, and the waypoints in route order: kind (`STOP`
+or `CHECKPOINT`), stop code, name, locality, timezone, country, boarding
+and alighting flags and planned UTC times. **Technical checkpoints (fuel,
+rest, crew change) are never returned**; borders, ports and ferry
+terminals are. The assigned vehicle is included (code, name, model, year,
+equipment) only while it is `ACTIVE`, else `null`; never its VIN or
+registration. The website cuts the itinerary between the waypoints of the
+journey it found in the search.
 
 Authenticated CUSTOMER endpoints under `/v1/booking/bookings`:
 
@@ -278,6 +292,25 @@ reason, never an email, password, session, token or cookie.
 Sessions stay in the existing HttpOnly CUSTOMER/STAFF cookies. Tokens, CSRF
 values and selections are not persisted to localStorage, sessionStorage or
 URLs.
+
+### Pre-filled search (UI-PUBLIC-1)
+
+The public website's search form and departure cards open Booking with
+search criteria only: `?from=PAR&to=DKR&date=YYYY-MM-DD&passengers=2`.
+
+- `from` and `to` are stop codes, resolved to the exact active stop through
+  the public stops API.
+- `date` is a calendar day. The search covers that day in the **origin
+  stop's timezone** (the date the website showed), for the form too. A stop
+  without a known timezone falls back to UTC.
+- `passengers` (1 to 8) only adds a reminder to choose that many seats; the
+  server still decides the seat limit.
+- With both stops and a valid date, the search runs at once.
+- Invalid values are ignored without error: an unknown code, an impossible
+  day (2030-02-31), a party size out of range or a missing stop. The search
+  then simply stays to be completed.
+
+No token, identity or seat selection travels in these links.
 
 ## Database migration and validation
 

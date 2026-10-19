@@ -46,20 +46,30 @@ test('ops fleet: SUPER_ADMIN registers, edits and moves a synthetic vehicle thro
   await create.getByLabel('Modèle du nouveau véhicule', { exact: true }).fill('Autocar test');
   await create.getByLabel('Année modèle du nouveau véhicule (facultatif)').fill('2022');
   await create.getByLabel('VIN du nouveau véhicule (facultatif)').fill(vin);
+  const equipment = create.getByRole('group', { name: 'Équipements à bord du nouveau véhicule' });
+  await equipment.getByLabel('Wi-Fi').check();
+  await equipment.getByLabel('Climatisation').check();
   await create.getByRole('button', { name: 'Enregistrer le véhicule' }).click();
   await expect(notice(page, `Véhicule ${code} enregistré (planifié).`)).toBeVisible();
 
   const detail = page.getByRole('region', { name: `Véhicule ${code}` });
   await expect(detail.getByTestId('vehicle-status')).toHaveText('Planifié');
   await expect(detail.getByTestId('vehicle-name')).toHaveText(`Teranga E2E ${runId}`);
+  // Stored in the canonical order, whatever the order of the clicks.
+  await expect(detail.getByTestId('vehicle-amenities')).toHaveText('Climatisation, Wi-Fi');
   await expect(page.getByRole('row').filter({ hasText: code })).toContainText('Planifié');
 
   // Administrative edit (never the status).
   const edit = detail.getByRole('form', { name: `Modifier le véhicule ${code}` });
   await edit.getByLabel('Modèle du véhicule', { exact: true }).fill('Autocar test révisé');
+  const editEquipment = edit.getByRole('group', { name: 'Équipements à bord du véhicule' });
+  await expect(editEquipment.getByLabel('Wi-Fi')).toBeChecked();
+  await editEquipment.getByLabel('Wi-Fi').uncheck();
+  await editEquipment.getByLabel('Toilettes').check();
   await edit.getByRole('button', { name: 'Enregistrer les modifications' }).click();
   await expect(notice(page, `Véhicule ${code} modifié.`)).toBeVisible();
   await expect(detail.getByTestId('vehicle-detail')).toContainText('Autocar test révisé');
+  await expect(detail.getByTestId('vehicle-amenities')).toHaveText('Climatisation, Toilettes');
 
   const changeStatus = async (label: string, reason: string) => {
     const form = detail.getByRole('form', { name: `Changer le statut du véhicule ${code}` });

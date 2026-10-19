@@ -36,6 +36,34 @@
   background: var(--et-color-surface-raised);
 }
 
+/* On-board equipment of a vehicle (UI-PUBLIC-2): wrapped checkboxes. */
+.et-vehicle-amenities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--et-space-2) var(--et-space-4);
+  margin: 0;
+  padding: var(--et-space-2) var(--et-space-3);
+  border: 1px solid var(--et-color-border);
+  border-radius: var(--et-radius);
+}
+
+.et-vehicle-amenities legend {
+  padding: 0 var(--et-space-1);
+  font-weight: 600;
+}
+
+.et-vehicle-amenities .et-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.et-vehicle-amenities label {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: var(--et-space-1);
+}
+
 /* Seat-map preview (PR-07): a visual aid next to the accessible table. */
 .et-seatmap-deck {
   display: grid;

@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { createDatabaseClient } from '@euroteranga/database';
 import { hash } from '@node-rs/argon2';
+import { contentSeed, homeSeed, pagesSeed } from './content-seed.js';
 import {
   bookingReaderRole,
   bookingSeed,
@@ -39,6 +40,9 @@ const PREAUTHENTICATED_SESSIONS = {
   permitManager: 'E2E_PERMIT_MANAGER_SESSION',
   permitReader: 'E2E_PERMIT_READER_SESSION',
   permitDenied: 'E2E_PERMIT_DENIED_SESSION',
+  contentEditor: 'E2E_CONTENT_EDITOR_SESSION',
+  contentDenied: 'E2E_CONTENT_DENIED_SESSION',
+  mediaEditor: 'E2E_MEDIA_EDITOR_SESSION',
 } as const;
 
 /**
@@ -146,6 +150,8 @@ export default async function globalSetup(): Promise<void> {
     await seedComplianceData(db);
     await seedBaggageData(db);
     await seedCheckInData(db);
+    await seedContentData(db);
+    await seedPublicPagesData(db);
   } finally {
     await db.$disconnect();
   }
@@ -196,6 +202,9 @@ function preauthenticatedSessionEnvironment(fixture: Fixture): string | undefine
     'permitManager',
     'permitReader',
     'permitDenied',
+    'contentEditor',
+    'contentDenied',
+    'mediaEditor',
   ] as const) {
     if (fixture.email === FIXTURES[name].email) return PREAUTHENTICATED_SESSIONS[name];
   }
@@ -1066,5 +1075,409 @@ async function seedPricingData(
   await db.trip.update({
     where: { id: trip.id },
     data: { plannedDepartureAt: departure, plannedArrivalAt: arrival },
+  });
+}
+
+/**
+ * WEB-1: one published CMS page per run (written under every PostgreSQL
+ * guard: created as DRAFT, then published), so the public website renders
+ * CMS content. The home page is left unpublished: it shows the default
+ * content fallback.
+ */
+async function seedContentData(db: ReturnType<typeof createDatabaseClient>): Promise<void> {
+  const { path, title } = contentSeed();
+  const entry = await db.contentEntry.create({ data: { kind: 'PAGE', key: path } });
+  const revision = await db.contentRevision.create({
+    data: {
+      entryId: entry.id,
+      revision: 1,
+      document: {
+        title,
+        seo: {
+          description: 'Page de démonstration publiée pour les tests navigateur.',
+          indexable: true,
+        },
+        blocks: [
+          {
+            type: 'richText',
+            title: 'Contenu publié',
+            body: [
+              {
+                kind: 'paragraph',
+                spans: [
+                  { text: 'Ce paragraphe vient du CMS. ' },
+                  { text: '<b>Le balisage reste du texte.</b>', bold: true },
+                ],
+              },
+            ],
+          },
+          {
+            type: 'cta',
+            title: 'Prêt à partir ?',
+            button: { label: 'Rechercher un voyage', target: { kind: 'app', app: 'booking' } },
+          },
+        ],
+      },
+    },
+  });
+  await db.contentRevision.update({ where: { id: revision.id }, data: { status: 'PUBLISHED' } });
+
+  // UI-PUBLIC-1: the home page layout on the booking seed's stops.
+  const home = homeSeed();
+  const seed = bookingSeed();
+  const homeEntry = await db.contentEntry.create({ data: { kind: 'PAGE', key: home.path } });
+  const homeRevision = await db.contentRevision.create({
+    data: {
+      entryId: homeEntry.id,
+      revision: 1,
+      document: {
+        title: home.title,
+        seo: {
+          description: 'Accueil de démonstration pour les tests navigateur.',
+          indexable: false,
+        },
+        blocks: [
+          {
+            type: 'hero',
+            title: 'Voyagez entre l’Europe et l’Afrique',
+            titleAccent: 'en toute confiance',
+            journeyCard: false,
+            search: { fromCode: seed.originCode, toCode: seed.destinationCode },
+          },
+          {
+            type: 'departures',
+            anchor: 'trajets',
+            title: 'Nos prochains départs',
+            routes: [{ fromCode: seed.originCode, toCode: seed.destinationCode }],
+            limit: 3,
+          },
+        ],
+      },
+    },
+  });
+  await db.contentRevision.update({
+    where: { id: homeRevision.id },
+    data: { status: 'PUBLISHED' },
+  });
+}
+
+/** Free synthetic country codes (iso3 `..Y`), never the network spec's own ones. */
+async function freeCountries(
+  db: ReturnType<typeof createDatabaseClient>,
+  names: readonly string[],
+): Promise<Array<{ id: string; iso2: string; name: string }>> {
+  const reserved = networkSpecCountryCodes();
+  const raw = process.env.E2E_RUN_ID ?? '00';
+  const start = (Number.parseInt(raw.slice(0, 2), 16) * 7) % (26 * 26);
+  const created: Array<{ id: string; iso2: string; name: string }> = [];
+  for (let offset = 0; offset < 26 * 26 && created.length < names.length; offset += 1) {
+    const value = (start + offset) % (26 * 26);
+    const iso2 = `${String.fromCharCode(65 + Math.floor(value / 26))}${String.fromCharCode(65 + (value % 26))}`;
+    const iso3 = `${iso2}Y`;
+    // XA is created at run time by the network spec.
+    if (iso2 === reserved.iso2 || iso3 === reserved.iso3 || iso2 === 'XA') continue;
+    const existing = await db.country.findFirst({
+      where: { OR: [{ iso2 }, { iso3 }] },
+      select: { id: true },
+    });
+    if (existing) continue;
+    const name = names[created.length]!;
+    const country = await db.country.create({ data: { iso2, iso3, name } });
+    created.push({ id: country.id, iso2, name });
+  }
+  if (created.length < names.length) throw new Error('No synthetic country codes left');
+  return created;
+}
+
+/**
+ * UI-PUBLIC-2: the trip, coaches and services pages on their own synthetic
+ * network. Stops use the Paris and Dakar timezones (local times and the
+ * "+1 j" arrival), the route crosses a border and a technical checkpoint
+ * (which must stay internal), two trips are scheduled with Pricing fares, and
+ * two active coaches carry real equipment lists. Pages are published through
+ * the same guards as the editors' (DRAFT, then PUBLISHED), and never indexed.
+ */
+async function seedPublicPagesData(db: ReturnType<typeof createDatabaseClient>): Promise<void> {
+  const seed = pagesSeed();
+  const run = seed.originCode.slice('UIP_A_'.length);
+  const [origin, via, destination] = await freeCountries(db, [
+    `Pays départ ${run}`,
+    `Pays étape ${run}`,
+    `Pays arrivée ${run}`,
+  ]);
+  const stop = (code: string, countryId: string, locality: string, timezone: string) =>
+    db.stop.create({
+      data: {
+        code,
+        name: `Gare routière ${locality}`,
+        countryId,
+        locality,
+        latitude: 1,
+        longitude: 1,
+        timezone,
+      },
+    });
+  const [start, middle, end] = await Promise.all([
+    stop(seed.originCode, origin!.id, `Départ ${run}`, 'Europe/Paris'),
+    stop(seed.viaCode, via!.id, `Étape ${run}`, 'Europe/Madrid'),
+    stop(seed.destinationCode, destination!.id, `Arrivée ${run}`, 'Africa/Dakar'),
+  ]);
+  const checkpoint = (code: string, name: string, type: 'BORDER' | 'TECHNICAL') =>
+    db.checkpoint.create({
+      data: {
+        code,
+        name,
+        countryId: via!.id,
+        type,
+        locality: `Frontière ${run}`,
+        latitude: 1,
+        longitude: 1,
+        timezone: 'Etc/UTC',
+      },
+    });
+  const [border, technical] = await Promise.all([
+    checkpoint(seed.borderCode, `Poste frontière ${run}`, 'BORDER'),
+    checkpoint(seed.technicalCode, `Aire technique interne ${run}`, 'TECHNICAL'),
+  ]);
+
+  const route = await db.route.create({
+    data: { code: seed.routeCode, name: `Route pages ${run}` },
+  });
+  const routeVersion = await db.routeVersion.create({
+    data: { routeId: route.id, version: 1 },
+  });
+  await db.routeWaypoint.createMany({
+    data: [
+      { stopId: start.id, boardingAllowed: true },
+      { stopId: middle.id, boardingAllowed: true, alightingAllowed: true },
+      { checkpointId: technical.id },
+      { checkpointId: border.id },
+      { stopId: end.id, alightingAllowed: true },
+    ].map((waypoint, index) => ({
+      routeVersionId: routeVersion.id,
+      sequence: index + 1,
+      ...waypoint,
+    })),
+  });
+  await db.routeVersion.update({
+    where: { id: routeVersion.id },
+    data: { status: 'PUBLISHED', publishedAt: new Date() },
+  });
+  const waypoints = await db.routeWaypoint.findMany({
+    where: { routeVersionId: routeVersion.id },
+    orderBy: { sequence: 'asc' },
+  });
+
+  const seatMap = await db.seatMap.create({
+    data: { code: seed.seatMapCode, name: `Plan pages ${run}` },
+  });
+  const seatMapVersion = await db.seatMapVersion.create({
+    data: { seatMapId: seatMap.id, version: 1 },
+  });
+  await db.seatMapCell.createMany({
+    data: [
+      { seatMapVersionId: seatMapVersion.id, deck: 1, row: 1, column: 1, kind: 'DRIVER' },
+      ...['1A', '1B', '2A', '2B', '3A', '3B'].map((seatLabel, index) => ({
+        seatMapVersionId: seatMapVersion.id,
+        deck: 1,
+        row: 2 + Math.floor(index / 2),
+        column: 1 + (index % 2),
+        kind: 'SEAT' as const,
+        seatLabel,
+      })),
+    ],
+  });
+  await db.seatMapVersion.update({
+    where: { id: seatMapVersion.id },
+    data: { status: 'PUBLISHED', publishedAt: new Date() },
+  });
+
+  const fareTable = await db.fareTable.create({
+    data: {
+      code: seed.fareTableCode,
+      name: `Tarif pages ${run}`,
+      routeId: route.id,
+      currencyCode: 'EUR',
+      currencyMinorUnit: 2,
+    },
+  });
+  const fareVersion = await db.fareTableVersion.create({
+    data: { fareTableId: fareTable.id, routeVersionId: routeVersion.id, version: 1 },
+  });
+  await db.fareEntry.create({
+    data: {
+      fareTableVersionId: fareVersion.id,
+      originRouteWaypointId: waypoints[0]!.id,
+      destinationRouteWaypointId: waypoints.at(-1)!.id,
+      amountMinor: seed.unitAmountMinor,
+    },
+  });
+  await db.fareTableVersion.update({
+    where: { id: fareVersion.id },
+    data: { status: 'PUBLISHED', publishedAt: new Date() },
+  });
+
+  // On a reused database, the coaches of earlier runs must not push this
+  // run's out of the public fleet read (at most 50 active vehicles).
+  const retiredAt = new Date();
+  await db.vehicle.updateMany({
+    where: {
+      status: 'ACTIVE',
+      OR: [{ code: { startsWith: 'UIP_C1_' } }, { code: { startsWith: 'UIP_C2_' } }],
+    },
+    data: { status: 'RETIRED', statusChangedAt: retiredAt, retiredAt },
+  });
+
+  // Two active coaches with the trip's seat map; only the first is assigned.
+  const [first, second] = await Promise.all(
+    seed.coaches.map((coach, index) =>
+      db.vehicle.create({
+        data: {
+          code: coach.code,
+          name: coach.name,
+          manufacturer: 'Constructeur synthétique',
+          model: index === 0 ? 'Autocar pages' : 'Autocar pages bis',
+          modelYear: index === 0 ? 2024 : null,
+          seatMapVersionId: seatMapVersion.id,
+          amenities: index === 0 ? ['AIR_CONDITIONING', 'USB_CHARGING', 'TOILET'] : ['WIFI'],
+        },
+      }),
+    ),
+  );
+  await db.vehicle.updateMany({
+    where: { id: { in: [first!.id, second!.id] } },
+    data: { status: 'ACTIVE', statusChangedAt: new Date() },
+  });
+
+  for (const [index, trip] of seed.trips.entries()) {
+    const departureAt = new Date(trip.departureAt);
+    const arrivalAt = new Date(trip.arrivalAt);
+    const created = await db.trip.create({
+      data: {
+        reference: trip.reference,
+        routeVersionId: routeVersion.id,
+        seatMapVersionId: seatMapVersion.id,
+        fareTableVersionId: fareVersion.id,
+        ...(index === 0 ? { vehicleId: first!.id } : {}),
+      },
+    });
+    // Intermediate times are spread evenly between departure and arrival.
+    const step = (arrivalAt.getTime() - departureAt.getTime()) / (waypoints.length - 1);
+    await db.tripWaypointTiming.createMany({
+      data: waypoints.map((waypoint, at) => ({
+        tripId: created.id,
+        routeWaypointId: waypoint.id,
+        sequence: waypoint.sequence,
+        plannedArrivalAt: at === 0 ? null : new Date(departureAt.getTime() + at * step),
+        plannedDepartureAt:
+          at === waypoints.length - 1
+            ? null
+            : new Date(departureAt.getTime() + at * step + (at === 0 ? 0 : 1_800_000)),
+      })),
+    });
+    await db.trip.update({
+      where: { id: created.id },
+      data: {
+        plannedDepartureAt: departureAt,
+        plannedArrivalAt: arrivalAt,
+        status: 'SCHEDULED',
+        scheduledAt: new Date(),
+      },
+    });
+  }
+
+  const publish = async (path: string, document: Record<string, unknown>) => {
+    const entry = await db.contentEntry.create({ data: { kind: 'PAGE', key: path } });
+    const revision = await db.contentRevision.create({
+      data: { entryId: entry.id, revision: 1, document: document as object },
+    });
+    await db.contentRevision.update({
+      where: { id: revision.id },
+      data: { status: 'PUBLISHED' },
+    });
+  };
+  const seo = (description: string) => ({ description, indexable: false });
+  const services = [
+    { icon: 'ticket', title: 'Réservation en ligne', text: 'Votre place réservée en ligne.' },
+    { icon: 'luggage', title: 'Bagages identifiés', text: 'Étiquetés et suivis.' },
+  ];
+  await publish(seed.trip.path, {
+    title: seed.trip.title,
+    seo: seo('Page voyage de démonstration pour les tests navigateur.'),
+    blocks: [
+      { type: 'hero', variant: 'page', title: seed.trip.title, journeyCard: false },
+      {
+        type: 'sectionNav',
+        label: 'Sur cette page',
+        items: [
+          { label: 'Départs', anchor: 'departs' },
+          { label: 'Itinéraire', anchor: 'itineraire' },
+          { label: 'Nos autocars', anchor: 'autocars' },
+          { label: 'Services', anchor: 'services' },
+        ],
+      },
+      {
+        type: 'departures',
+        layout: 'dates',
+        anchor: 'departs',
+        title: 'Choisissez votre date de départ',
+        routes: [{ fromCode: seed.originCode, toCode: seed.destinationCode }],
+        limit: 6,
+      },
+      {
+        type: 'itinerary',
+        anchor: 'itineraire',
+        title: 'Le trajet',
+        fromCode: seed.originCode,
+        toCode: seed.destinationCode,
+        includedTitle: 'Inclus dans votre voyage',
+        included: ['Service confirmé de démonstration'],
+      },
+      {
+        type: 'fleet',
+        anchor: 'autocars',
+        title: 'Les autocars en service',
+        selection: 'listed',
+        items: [{ vehicleCode: seed.coaches[0]!.code }],
+      },
+      {
+        type: 'cards',
+        variant: 'services',
+        anchor: 'services',
+        title: 'Services',
+        items: services,
+      },
+    ],
+  });
+  await publish(seed.fleet.path, {
+    title: seed.fleet.title,
+    seo: seo('Page autocars de démonstration pour les tests navigateur.'),
+    blocks: [
+      { type: 'hero', variant: 'page', title: seed.fleet.title, journeyCard: false },
+      {
+        type: 'fleet',
+        anchor: 'autocars',
+        title: 'Les autocars en service',
+        selection: 'listed',
+        items: [
+          { vehicleCode: seed.coaches[0]!.code, description: 'Description éditoriale.' },
+          { vehicleCode: seed.coaches[1]!.code },
+        ],
+      },
+    ],
+  });
+  await publish(seed.services.path, {
+    title: seed.services.title,
+    seo: seo('Page services de démonstration pour les tests navigateur.'),
+    blocks: [
+      {
+        type: 'hero',
+        variant: 'page',
+        title: seed.services.title,
+        titleAccent: 'pour un voyage serein',
+        journeyCard: false,
+      },
+      { type: 'cards', variant: 'services', title: 'Ce qui vous accompagne', items: services },
+    ],
   });
 }

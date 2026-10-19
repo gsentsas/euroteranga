@@ -5,6 +5,7 @@ import {
   multiplyAmountMinor,
   type BookingAvailability,
   type BookingSearchResult,
+  type BookingSearchStop,
   type CustomerBooking,
 } from '@euroteranga/auth-client';
 import { FormAlert, FormStatus } from '@euroteranga/ui';
@@ -17,13 +18,89 @@ import { formatAt, seatsLabel, stopLabel } from './format';
 import { SeatMapPicker } from './seat-map';
 import { StopPicker } from './stop-picker';
 
-function utcDayRange(date: string): { departureFrom: string; departureTo: string } | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
-  const departureFrom = new Date(`${date}T00:00:00.000Z`);
-  if (Number.isNaN(departureFrom.getTime())) return null;
-  const departureTo = new Date(departureFrom);
-  departureTo.setUTCDate(departureTo.getUTCDate() + 1);
-  return { departureFrom: departureFrom.toISOString(), departureTo: departureTo.toISOString() };
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Milliseconds a timezone is ahead of UTC at an instant. */
+function zoneOffset(instant: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(new Date(instant));
+  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  return (
+    Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second')) -
+    instant
+  );
+}
+
+/** The UTC instant of midnight, local time, on a calendar day. */
+function localMidnight(date: string, timeZone: string): number {
+  const [year, month, day] = date.split('-').map(Number) as [number, number, number];
+  const guess = Date.UTC(year, month - 1, day);
+  const first = guess - zoneOffset(guess, timeZone);
+  return guess - zoneOffset(first, timeZone);
+}
+
+/**
+ * The departure day, in the origin stop's own timezone (the date a traveller
+ * reads on the website), as a UTC search range; UTC when it is unknown.
+ */
+function localDayRange(
+  date: string,
+  timeZone = 'UTC',
+): { departureFrom: string; departureTo: string } | null {
+  const parsed = Date.parse(`${date}T00:00:00Z`);
+  // Date.parse shifts impossible days (2030-02-31 → 3 March): require a round trip.
+  if (!DATE.test(date) || Number.isNaN(parsed)) return null;
+  if (new Date(parsed).toISOString().slice(0, 10) !== date) return null;
+  let zone = timeZone;
+  try {
+    new Intl.DateTimeFormat('fr-FR', { timeZone: zone });
+  } catch {
+    zone = 'UTC';
+  }
+  const next = new Date(`${date}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return {
+    departureFrom: new Date(localMidnight(date, zone)).toISOString(),
+    departureTo: new Date(localMidnight(next.toISOString().slice(0, 10), zone)).toISOString(),
+  };
+}
+
+/** Largest party the website's search form offers. */
+const MAX_PASSENGERS = 8;
+
+/** The search the website's links pre-fill: ?from=PAR&to=DKR&date=YYYY-MM-DD&passengers=2. */
+function prefillFromUrl(): { from?: string; to?: string; date?: string; passengers?: number } {
+  if (typeof window === 'undefined') return {};
+  const params = new URLSearchParams(window.location.search);
+  const code = (name: string) => {
+    const value = params.get(name)?.trim().toUpperCase() ?? '';
+    return /^[A-Z0-9][A-Z0-9_-]{0,31}$/.test(value) ? value : null;
+  };
+  const from = code('from');
+  const to = code('to');
+  const date = params.get('date') ?? '';
+  const passengers = Number(params.get('passengers'));
+  return {
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
+    ...(localDayRange(date) ? { date } : {}),
+    ...(Number.isInteger(passengers) && passengers >= 1 && passengers <= MAX_PASSENGERS
+      ? { passengers }
+      : {}),
+  };
+}
+
+async function stopByCode(code: string): Promise<BookingSearchStop | null> {
+  const result = await auth.booking.public.stops({ query: code, limit: 50 });
+  return result.ok ? (result.data.items.find((stop) => stop.code === code) ?? null) : null;
 }
 
 /** A paid booking: confirmed, its seats kept. Not (yet) a ticket. */
@@ -184,8 +261,11 @@ function HoldConfirmation({
 /** Public search followed by an authenticated, provisional CUSTOMER hold. */
 export function BookingFlow() {
   const [originStopId, setOriginStopId] = useState('');
+  const [originStop, setOriginStop] = useState<BookingSearchStop | null>(null);
   const [destinationStopId, setDestinationStopId] = useState('');
+  const [destinationStop, setDestinationStop] = useState<BookingSearchStop | null>(null);
   const [departureDate, setDepartureDate] = useState('');
+  const [passengers, setPassengers] = useState<number | null>(null);
   const [results, setResults] = useState<BookingSearchResult[] | null>(null);
   const [trip, setTrip] = useState<BookingSearchResult | null>(null);
   const [availability, setAvailability] = useState<BookingAvailability | null>(null);
@@ -212,12 +292,16 @@ export function BookingFlow() {
     setBooking(null);
   };
 
-  const search = async (event: FormEvent) => {
-    event.preventDefault();
-    const range = utcDayRange(departureDate);
-    if (!range || originStopId === destinationStopId) {
+  const runSearch = async (
+    originId: string,
+    destinationId: string,
+    date: string,
+    timeZone: string | undefined,
+  ) => {
+    const range = localDayRange(date, timeZone);
+    if (!range || originId === destinationId) {
       setError(
-        originStopId === destinationStopId
+        originId === destinationId
           ? 'Choisissez deux arrêts différents.'
           : 'Choisissez une date de départ valide.',
       );
@@ -228,8 +312,8 @@ export function BookingFlow() {
     resetAfterSearch();
     try {
       const result = await auth.booking.public.searchTrips({
-        originStopId,
-        destinationStopId,
+        originStopId: originId,
+        destinationStopId: destinationId,
         ...range,
         limit: 50,
       });
@@ -239,6 +323,48 @@ export function BookingFlow() {
       setBusy(false);
     }
   };
+
+  const search = async (event: FormEvent) => {
+    event.preventDefault();
+    await runSearch(
+      originStopId,
+      destinationStopId,
+      departureDate,
+      originStop?.id === originStopId ? originStop.timezone : undefined,
+    );
+  };
+
+  // UI-PUBLIC-1: the website's search and departure cards open this page
+  // pre-filled; a complete search (both stops and a date) runs at once.
+  useEffect(() => {
+    const prefill = prefillFromUrl();
+    if (!prefill.from && !prefill.to && !prefill.date) return;
+    let current = true;
+    void (async () => {
+      const [origin, destination] = await Promise.all([
+        prefill.from ? stopByCode(prefill.from) : Promise.resolve(null),
+        prefill.to ? stopByCode(prefill.to) : Promise.resolve(null),
+      ]);
+      if (!current) return;
+      if (origin) {
+        setOriginStop(origin);
+        setOriginStopId(origin.id);
+      }
+      if (destination) {
+        setDestinationStop(destination);
+        setDestinationStopId(destination.id);
+      }
+      if (prefill.date) setDepartureDate(prefill.date);
+      if (prefill.passengers) setPassengers(prefill.passengers);
+      if (origin && destination && prefill.date && origin.id !== destination.id) {
+        await runSearch(origin.id, destination.id, prefill.date, origin.timezone);
+      }
+    })();
+    return () => {
+      current = false;
+    };
+    // Runs once, on arrival from a link.
+  }, []);
 
   const loadAvailability = async (selectedTrip: BookingSearchResult, preserveSeats = false) => {
     setBusy(true);
@@ -342,11 +468,23 @@ export function BookingFlow() {
         onSubmit={search}
       >
         <div className="et-booking-search-grid">
-          <StopPicker label="Origine" value={originStopId} onChange={setOriginStopId} />
+          <StopPicker
+            label="Origine"
+            value={originStopId}
+            known={originStop}
+            onChange={(stopId, stop) => {
+              setOriginStopId(stopId);
+              setOriginStop(stop);
+            }}
+          />
           <StopPicker
             label="Destination"
             value={destinationStopId}
-            onChange={setDestinationStopId}
+            known={destinationStop}
+            onChange={(stopId, stop) => {
+              setDestinationStopId(stopId);
+              setDestinationStop(stop);
+            }}
           />
           <div className="et-field et-booking-date">
             <label htmlFor="booking-departure-date">Date de départ</label>
@@ -425,6 +563,11 @@ export function BookingFlow() {
             {availability.availableSeatCount} sièges disponibles sur ce trajet. Vous pouvez en
             retenir au plus {availability.maxSeatsPerHold}.
           </p>
+          {passengers && passengers > 1 ? (
+            <p className="et-hint" data-testid="booking-passengers-hint">
+              Vous voyagez à {passengers} : choisissez {seatsLabel(passengers)}.
+            </p>
+          ) : null}
           <SeatMapPicker
             availability={availability}
             selected={selected}

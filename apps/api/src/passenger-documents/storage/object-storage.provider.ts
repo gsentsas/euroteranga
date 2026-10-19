@@ -5,6 +5,8 @@ export const OBJECT_STORAGE_PROVIDER = Symbol('OBJECT_STORAGE_PROVIDER');
 export const PASSENGER_DOCUMENT_OBJECT_KEY = /^passenger-documents\/[0-9a-f]{2}\/[0-9a-f]{64}$/;
 export const INCIDENT_ATTACHMENT_OBJECT_KEY = /^incident-attachments\/[0-9a-f]{2}\/[0-9a-f]{64}$/;
 export const FINANCE_RECEIPT_OBJECT_KEY = /^finance-receipts\/[0-9a-f]{2}\/[0-9a-f]{64}$/;
+/** MEDIA-1: public website images, in their own store and namespace. */
+export const PUBLIC_MEDIA_OBJECT_KEY = /^public-media\/[0-9a-f]{2}\/[0-9a-f]{64}$/;
 
 export type ObjectStorageErrorCode = 'UNAVAILABLE' | 'NOT_FOUND' | 'CONFLICT' | 'INVALID_KEY';
 
@@ -65,4 +67,8 @@ export class DisabledObjectStorageProvider implements ObjectStorageProvider {
   delete(): Promise<void> {
     return Promise.reject(this.unavailable());
   }
+}
+
+export function assertPublicMediaObjectKey(key: string): void {
+  if (!PUBLIC_MEDIA_OBJECT_KEY.test(key)) throw new ObjectStorageError('INVALID_KEY');
 }

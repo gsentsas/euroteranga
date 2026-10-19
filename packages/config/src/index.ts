@@ -12,10 +12,27 @@ export {
   PASSENGER_DOCUMENT_MAX_BYTES_BOUNDS,
 } from './passenger-document-env.js';
 export {
+  PUBLIC_MEDIA_MAX_BYTES_BOUNDS,
+  PUBLIC_MEDIA_MAX_PIXELS_BOUNDS,
+  PUBLIC_MEDIA_STORAGES,
+} from './public-media-env.js';
+export {
   assertNoSensitivePublicEnv,
   loadPublicEnv,
   publicEnvSchema,
   type PublicEnv,
 } from './public-env.js';
-export { buildFoundationSecurityHeaders, foundationSecurityHeaders } from './security-headers.js';
+export {
+  loadSiteSeo,
+  privateRobots,
+  publicRobots,
+  robotsDirective,
+  siteUrlOf,
+  type SiteSeo,
+} from './seo.js';
+export {
+  buildFoundationSecurityHeaders,
+  foundationSecurityHeaders,
+  type FoundationSecurityOptions,
+} from './security-headers.js';
 export { createFoundationNextConfig, type FoundationNextConfig } from './next-config.js';

@@ -38,6 +38,97 @@ export class PublicBookingService {
     @Inject(BOOKING_CONFIG) private readonly config: BookingConfig,
   ) {}
 
+  /**
+   * UI-PUBLIC-2: the planned itinerary of a bookable trip (same visibility
+   * as the search: scheduled, not departed, seat map set) — every stop and
+   * border post of its route version with the trip's frozen times, and the
+   * assigned vehicle's public facts while it is active.
+   */
+  async itinerary(tripId: string) {
+    const trip = await this.database.client.trip.findFirst({
+      where: {
+        id: tripId,
+        status: 'SCHEDULED',
+        plannedDepartureAt: { gt: new Date() },
+        seatMapVersionId: { not: null },
+      },
+      select: {
+        id: true,
+        reference: true,
+        routeVersion: {
+          select: {
+            route: { select: { code: true, name: true } },
+            waypoints: {
+              orderBy: { sequence: 'asc' },
+              select: {
+                id: true,
+                sequence: true,
+                boardingAllowed: true,
+                alightingAllowed: true,
+                stop: { select: publicStopSelect },
+                checkpoint: {
+                  select: {
+                    name: true,
+                    type: true,
+                    locality: true,
+                    timezone: true,
+                    country: { select: { iso2: true, name: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+        timings: {
+          select: { routeWaypointId: true, plannedArrivalAt: true, plannedDepartureAt: true },
+        },
+        vehicle: {
+          select: {
+            code: true,
+            name: true,
+            manufacturer: true,
+            model: true,
+            modelYear: true,
+            status: true,
+            amenities: true,
+          },
+        },
+      },
+    });
+    if (!trip) throw BookingErrors.tripNotBookable();
+    const timings = new Map(trip.timings.map((timing) => [timing.routeWaypointId, timing]));
+    const { status: vehicleStatus, ...vehicle } = trip.vehicle ?? { status: null };
+    return {
+      tripId: trip.id,
+      tripReference: trip.reference,
+      route: trip.routeVersion.route,
+      vehicle: trip.vehicle && vehicleStatus === 'ACTIVE' ? vehicle : null,
+      // Technical checkpoints (fuel, rest, crew change) stay internal: only
+      // stops, borders and crossings are public.
+      waypoints: trip.routeVersion.waypoints
+        .filter((waypoint) => waypoint.checkpoint?.type !== 'TECHNICAL')
+        .map((waypoint) => {
+          const timing = timings.get(waypoint.id);
+          const place = waypoint.stop ?? waypoint.checkpoint;
+          return {
+            routeWaypointId: waypoint.id,
+            sequence: waypoint.sequence,
+            kind: waypoint.stop ? ('STOP' as const) : ('CHECKPOINT' as const),
+            code: waypoint.stop?.code ?? null,
+            name: place?.name ?? null,
+            locality: place?.locality ?? null,
+            timezone: place?.timezone ?? null,
+            country: place?.country ?? null,
+            checkpointType: waypoint.checkpoint?.type ?? null,
+            boardingAllowed: waypoint.boardingAllowed,
+            alightingAllowed: waypoint.alightingAllowed,
+            plannedArrivalAt: timing?.plannedArrivalAt ?? null,
+            plannedDepartureAt: timing?.plannedDepartureAt ?? null,
+          };
+        }),
+    };
+  }
+
   /** Active stops of active countries, keyset by id, optional text search. */
   async stops(query: { query?: string | undefined; limit: number; cursor?: string | undefined }) {
     const term = query.query;

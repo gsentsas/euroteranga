@@ -20,8 +20,8 @@ export const frontendApps: readonly FrontendApp[] = [
     name: 'web',
     port: frontendPort(3000),
     path: '/',
-    title: 'EURO TERANGA',
-    heading: 'Paris ↔ Dakar, la route qui rapproche.',
+    title: 'EURO TERANGA — Autocar Paris ↔ Dakar',
+    heading: 'Voyagez entre l’Europe et l’Afrique en toute confiance',
   },
   {
     name: 'booking',

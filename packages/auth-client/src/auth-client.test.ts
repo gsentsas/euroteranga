@@ -9,6 +9,9 @@ import {
   type PaymentPage,
   type AdminFareTable,
   type BookingAvailability,
+  type BookingItinerary,
+  type PublicVehicle,
+  type VehicleAmenity,
   type CustomerBooking,
   type AssignedFareTableVersion,
   type AdminSeatMap,
@@ -1170,6 +1173,27 @@ describe('admin client', () => {
     expect(JSON.parse(String(calls[8]?.init.body))).toEqual({ reason: 'Raison' });
   });
 
+  it('reads the public itinerary and fleet without a session or CSRF token', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { waypoints: [] } },
+      { status: 200, body: { items: [] } },
+    ]);
+    const client = createAuthClient('http://api.test');
+    await client.booking.public.itinerary('trip/../id');
+    expect(calls[0]?.url).toBe('http://api.test/v1/booking/trips/trip%2F..%2Fid/itinerary');
+    await client.booking.public.fleet();
+    expect(calls[1]?.url).toBe('http://api.test/v1/booking/fleet');
+    for (const call of calls) expect(call.init.headers).toEqual({});
+    expectTypeOf(client.booking.public.itinerary).returns.resolves.toEqualTypeOf<
+      ApiResult<BookingItinerary>
+    >();
+    // Public reads never type a VIN, a plate or a status.
+    expectTypeOf<PublicVehicle>().not.toHaveProperty('vin');
+    expectTypeOf<PublicVehicle>().not.toHaveProperty('registrationPlate');
+    expectTypeOf<NonNullable<BookingItinerary['vehicle']>>().not.toHaveProperty('status');
+    expectTypeOf<AdminVehicle['amenities']>().toEqualTypeOf<VehicleAmenity[]>();
+  });
+
   it('types booking results explicitly, with exact integer amounts', () => {
     const client = createAuthClient('http://api.test');
     expectTypeOf(client.booking.public.availability).returns.resolves.toEqualTypeOf<
@@ -1304,5 +1328,179 @@ describe('admin client', () => {
     // No STAFF method can make an attempt succeed.
     expectTypeOf(client.admin.payments).not.toHaveProperty('markPaid');
     expectTypeOf(client.admin.payments).toHaveProperty('cancelPayment');
+  });
+});
+
+describe('content client (CMS-1)', () => {
+  it('reads published content publicly and encodes the page path', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { path: '/paris-dakar', revision: 2, publishedAt: 'x', document: {} } },
+      { status: 200, body: { settings: null, navigation: null, updatedAt: null } },
+      { status: 200, body: { items: [] } },
+    ]);
+    const client = createAuthClient('http://api.test');
+    const page = await client.content.page('/paris-dakar');
+    expect(page.ok).toBe(true);
+    expect(calls[0]?.url).toBe('http://api.test/v1/content/pages?path=%2Fparis-dakar');
+    expect(calls[0]?.init.method).toBe('GET');
+    await client.content.site();
+    await client.content.sitemap();
+    expect(calls.map((call) => call.url)).toEqual([
+      'http://api.test/v1/content/pages?path=%2Fparis-dakar',
+      'http://api.test/v1/content/site',
+      'http://api.test/v1/content/sitemap',
+    ]);
+  });
+
+  it('sends every STAFF content mutation with a CSRF token and the expected draft', async () => {
+    const entry = { id: '01900000-0000-7000-8000-00000000c0de' };
+    const calls = mockFetch([
+      { status: 200, body: { csrfToken: 'c1' } },
+      { status: 200, body: entry },
+      { status: 200, body: { csrfToken: 'c2' } },
+      { status: 200, body: entry },
+      { status: 200, body: { csrfToken: 'c3' } },
+      { status: 409, body: { code: 'CONTENT_DRAFT_CONFLICT', message: 'Conflit' } },
+    ]);
+    const client = createAuthClient('http://api.test');
+    await client.admin.content.saveDraft(entry.id, {
+      document: { title: 'Accueil' },
+      expectedDraftUpdatedAt: null,
+    });
+    expect(calls[1]?.url).toBe(`http://api.test/v1/admin/content/entries/${entry.id}/draft`);
+    expect((calls[1]?.init.headers as Record<string, string>)['X-CSRF-Token']).toBe('c1');
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({
+      document: { title: 'Accueil' },
+      expectedDraftUpdatedAt: null,
+    });
+    await client.admin.content.restore(entry.id, 3);
+    expect(JSON.parse(String(calls[3]?.init.body))).toEqual({ revision: 3 });
+    const conflict = await client.admin.content.publish(entry.id, '2030-01-01T00:00:00.000Z');
+    expect(conflict).toMatchObject({
+      ok: false,
+      error: { status: 409, code: 'CONTENT_DRAFT_CONFLICT' },
+    });
+    expect(JSON.parse(String(calls[5]?.init.body))).toEqual({
+      expectedDraftUpdatedAt: '2030-01-01T00:00:00.000Z',
+    });
+  });
+
+  it('keeps only well-formed validation issues of a refused document (CMS-2)', async () => {
+    mockFetch([
+      { status: 200, body: { csrfToken: 'c1' } },
+      {
+        status: 422,
+        body: {
+          code: 'CONTENT_DOCUMENT_INVALID',
+          message: 'Le contenu ne respecte pas le modèle de la page.',
+          details: {
+            issues: [
+              { path: 'blocks.0.title', message: 'Too small', extra: 'dropped' },
+              { path: 3, message: 'not a path' },
+              'not an issue',
+            ],
+          },
+        },
+      },
+    ]);
+    const client = createAuthClient('http://api.test');
+    const result = await client.admin.content.saveDraft('01900000-0000-7000-8000-00000000c0de', {
+      document: {},
+      expectedDraftUpdatedAt: null,
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        status: 422,
+        code: 'CONTENT_DOCUMENT_INVALID',
+        message: 'Le contenu ne respecte pas le modèle de la page.',
+        details: { issues: [{ path: 'blocks.0.title', message: 'Too small' }] },
+      },
+    });
+  });
+  it('uploads a media image as multipart and keeps only well-formed media details (MEDIA-1)', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { csrfToken: 'c1' } },
+      {
+        status: 409,
+        body: {
+          code: 'MEDIA_DUPLICATE',
+          message: 'Cette image est déjà dans la médiathèque.',
+          details: { mediaId: '01900000-0000-7000-8000-00000000c0de', storageKey: 'dropped' },
+        },
+      },
+      { status: 200, body: { csrfToken: 'c2' } },
+      {
+        status: 409,
+        body: {
+          code: 'MEDIA_IN_USE',
+          message: 'Cette image est utilisée.',
+          details: {
+            usages: [
+              { kind: 'PAGE', key: '/', status: 'PUBLISHED', email: 'dropped@example.test' },
+              { kind: 'PAGE', key: '/x', status: 'SUPERSEDED' },
+              'not a usage',
+            ],
+          },
+        },
+      },
+      { status: 200, body: { items: [] } },
+    ]);
+    const client = createAuthClient('http://api.test/');
+    const file = new Blob([new Uint8Array([0xff, 0xd8, 0xff])], { type: 'image/jpeg' });
+    const duplicate = await client.admin.media.upload({
+      file,
+      altText: 'Autocar',
+      caption: 'Départ',
+      focalX: 30,
+      focalY: 0,
+      replaces: '01900000-0000-7000-8000-000000000001',
+    });
+    expect(calls[1]?.url).toBe('http://api.test/v1/admin/media');
+    expect((calls[1]?.init.headers as Record<string, string>)['X-CSRF-Token']).toBe('c1');
+    const form = calls[1]?.init.body as FormData;
+    expect([...form.keys()]).toEqual([
+      'altText',
+      'caption',
+      'focalX',
+      'focalY',
+      'replaces',
+      'file',
+    ]);
+    expect(form.get('focalY')).toBe('0');
+    expect(duplicate).toEqual({
+      ok: false,
+      error: {
+        status: 409,
+        code: 'MEDIA_DUPLICATE',
+        message: 'Cette image est déjà dans la médiathèque.',
+        details: { mediaId: '01900000-0000-7000-8000-00000000c0de' },
+      },
+    });
+
+    const inUse = await client.admin.media.archive(
+      '01900000-0000-7000-8000-00000000c0de',
+      'Vieille',
+    );
+    expect(JSON.parse(String(calls[3]?.init.body))).toEqual({ reason: 'Vieille' });
+    expect(inUse).toMatchObject({
+      ok: false,
+      error: {
+        details: {
+          usages: [{ kind: 'PAGE', key: '/', status: 'PUBLISHED', entryArchived: false }],
+        },
+      },
+    });
+
+    await client.media.many([
+      '01900000-0000-7000-8000-000000000001',
+      '01900000-0000-7000-8000-000000000002',
+    ]);
+    expect(calls[4]?.url).toBe(
+      'http://api.test/v1/media?ids=01900000-0000-7000-8000-000000000001%2C01900000-0000-7000-8000-000000000002',
+    );
+    expect(client.media.url('/v1/media/files/a/480.webp')).toBe(
+      'http://api.test/v1/media/files/a/480.webp',
+    );
   });
 });

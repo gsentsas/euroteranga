@@ -57,6 +57,17 @@ export class PublicBookingController {
     return this.booking.search(query);
   }
 
+  @Get('trips/:tripId/itinerary')
+  @Header('Cache-Control', 'public, max-age=60')
+  @ApiOkResponse({
+    description:
+      'UI-PUBLIC-2: planned stops and crossings of a bookable trip (never its technical checkpoints), their planned times, and the assigned vehicle (public facts) while active.',
+  })
+  @ApiNotFoundResponse({ type: ErrorBody, description: 'BOOKING_TRIP_NOT_BOOKABLE' })
+  itinerary(@Param('tripId', new ParseUUIDPipe({ version: '7' })) tripId: string) {
+    return this.booking.itinerary(tripId);
+  }
+
   @Get('trips/:tripId/availability')
   @Header('Cache-Control', 'no-store')
   @ApiOkResponse({

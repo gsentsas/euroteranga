@@ -28,6 +28,8 @@ const EXPECTED_MATRIX: Record<
       'compliance.review',
       'compliance.rule.manage',
       'compliance.rule.read',
+      'content.manage',
+      'content.read',
       'crew.boarding.scan',
       'crew.border.report',
       'crew.device.manage',
@@ -49,6 +51,8 @@ const EXPECTED_MATRIX: Record<
       'manifest.export',
       'manifest.generate',
       'manifest.read',
+      'media.manage',
+      'media.read',
       'mfa.enrollment.authorize',
       'network.manage',
       'network.read',
@@ -68,6 +72,7 @@ const EXPECTED_MATRIX: Record<
       'role.read',
       'seatmap.manage',
       'seatmap.read',
+      'seo.manage',
       'session.revoke.any',
       'tracking.manage',
       'tracking.read',
@@ -94,6 +99,8 @@ const EXPECTED_MATRIX: Record<
       'compliance.review',
       'compliance.rule.manage',
       'compliance.rule.read',
+      'content.manage',
+      'content.read',
       'departure.authorize',
       'departure.manage',
       'departure.read',
@@ -109,6 +116,8 @@ const EXPECTED_MATRIX: Record<
       'manifest.export',
       'manifest.generate',
       'manifest.read',
+      'media.manage',
+      'media.read',
       'mfa.enrollment.authorize',
       'network.manage',
       'network.read',
@@ -127,6 +136,7 @@ const EXPECTED_MATRIX: Record<
       'role.read',
       'seatmap.manage',
       'seatmap.read',
+      'seo.manage',
       'session.revoke.any',
       'tracking.manage',
       'tracking.read',
@@ -323,6 +333,11 @@ const EXPECTED_MATRIX: Record<
       'tracking.read',
       'trip.read',
     ],
+  },
+  CONTENT_EDITOR: {
+    realm: 'STAFF',
+    privileged: false,
+    permissions: ['content.manage', 'content.read', 'media.manage', 'media.read', 'ops.access'],
   },
   DRIVER: {
     realm: 'CREW',
@@ -702,6 +717,25 @@ describe('server-side RBAC', () => {
       expect((await api.post('/departure/trips/ET-UNKNOWN/complete', {})).status).toBe(
         allowed('departure.manage') ? 404 : 403,
       );
+      // CMS-1: website content is its own grant, separate from operations;
+      // only content.manage edits it.
+      expect((await api.get('/content/entries')).status).toBe(allowed('content.read') ? 200 : 403);
+      expect(
+        (
+          await api.post('/content/entries/01900000-0000-7000-8000-000000000000/publish', {
+            expectedDraftUpdatedAt: new Date().toISOString(),
+          })
+        ).status,
+      ).toBe(allowed('content.read') && allowed('content.manage') ? 404 : 403);
+      // MEDIA-1: the public media library is its own grant too.
+      expect((await api.get('/media')).status).toBe(allowed('media.read') ? 200 : 403);
+      expect(
+        (
+          await api.post('/media/01900000-0000-7000-8000-000000000000/archive', {
+            reason: 'Contrôle RBAC',
+          })
+        ).status,
+      ).toBe(allowed('media.read') && allowed('media.manage') ? 404 : 403);
     },
   );
 

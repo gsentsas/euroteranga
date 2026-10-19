@@ -7,6 +7,23 @@ const pageLimit = z.coerce.number().int().min(1).max(100).default(50);
 const STATUSES = ['PLANNED', 'ACTIVE', 'OUT_OF_SERVICE', 'RETIRED'] as const;
 const TARGET_STATUSES = ['ACTIVE', 'OUT_OF_SERVICE', 'RETIRED'] as const;
 
+/** On-board equipment (UI-PUBLIC-2), in the order the website lists them. */
+export const VEHICLE_AMENITIES = [
+  'AIR_CONDITIONING',
+  'RECLINING_SEATS',
+  'USB_CHARGING',
+  'WIFI',
+  'TOILET',
+  'ENTERTAINMENT',
+  'WHEELCHAIR_ACCESS',
+] as const;
+
+/** Distinct values, stored in the canonical order. */
+const amenities = z
+  .array(z.enum(VEHICLE_AMENITIES))
+  .max(VEHICLE_AMENITIES.length * 2)
+  .transform((list) => VEHICLE_AMENITIES.filter((amenity) => list.includes(amenity)));
+
 const code = z
   .string()
   .trim()
@@ -71,6 +88,7 @@ export const vehicleCreateSchema = z
     manufacturer: label,
     model: label,
     modelYear: modelYear.nullable().optional(),
+    amenities: amenities.optional(),
   })
   .strict();
 
@@ -126,6 +144,12 @@ export class VehicleCreateBody {
   @ApiProperty({ maxLength: 80 }) manufacturer!: string;
   @ApiProperty({ maxLength: 80 }) model!: string;
   @ApiPropertyOptional({ nullable: true, minimum: 1950 }) modelYear?: number | null;
+  @ApiPropertyOptional({
+    enum: VEHICLE_AMENITIES,
+    isArray: true,
+    description: 'Equipment actually on board, shown on the public website.',
+  })
+  amenities?: Array<(typeof VEHICLE_AMENITIES)[number]>;
 }
 
 export class VehicleUpdateBody {
@@ -137,6 +161,8 @@ export class VehicleUpdateBody {
   @ApiPropertyOptional({ maxLength: 80 }) manufacturer?: string;
   @ApiPropertyOptional({ maxLength: 80 }) model?: string;
   @ApiPropertyOptional({ nullable: true, minimum: 1950 }) modelYear?: number | null;
+  @ApiPropertyOptional({ enum: VEHICLE_AMENITIES, isArray: true })
+  amenities?: Array<(typeof VEHICLE_AMENITIES)[number]>;
 }
 
 export class VehicleStatusBody {

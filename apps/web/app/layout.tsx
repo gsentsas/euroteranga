@@ -1,23 +1,36 @@
 import '@euroteranga/ui/tokens.css';
-import './public.css';
-import type { Metadata } from 'next';
+import '@euroteranga/site/site.css';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import {
+  DEFAULT_DESCRIPTION,
+  DEFAULT_TITLE,
+  SITE_NAME,
+  openGraphBase,
+  robotsOf,
+  siteSeo,
+  twitterBase,
+} from '../lib/seo';
 
-export const metadata: Metadata = {
-  title: 'EURO TERANGA',
-  description:
-    'EURO TERANGA — transport longue distance Paris ↔ Dakar, réservation en ligne et suivi du trajet.',
-  openGraph: {
-    title: 'EURO TERANGA — Paris ↔ Dakar',
-    description:
-      'Voyage longue distance entre Paris et Dakar avec réservation en ligne et suivi du trajet.',
-    type: 'website',
-    locale: 'fr_FR',
-    siteName: 'EURO TERANGA',
-  },
-  // The pilot remains intentionally non-indexed until commercial go-live.
-  robots: { index: false, follow: false },
-};
+// Rendered on the server for each request: the indexing decision and the
+// canonical origin follow the running environment (see lib/seo.ts).
+export const dynamic = 'force-dynamic';
+
+export function generateMetadata(): Metadata {
+  const seo = siteSeo();
+  return {
+    metadataBase: seo.siteUrl,
+    title: { default: DEFAULT_TITLE, template: `%s — ${SITE_NAME}` },
+    description: DEFAULT_DESCRIPTION,
+    applicationName: SITE_NAME,
+    openGraph: { ...openGraphBase(), title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION },
+    twitter: { ...twitterBase(), title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION },
+    robots: robotsOf(seo),
+    formatDetection: { telephone: false, address: false, email: false },
+  };
+}
+
+export const viewport: Viewport = { themeColor: '#061533' };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

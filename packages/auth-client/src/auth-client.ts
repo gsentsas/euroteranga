@@ -10,6 +10,18 @@ export interface ApiError {
 
 export interface ApiErrorDetails {
   blockers?: CheckInBlocker[];
+  /** CMS-2: fields of a content document refused by the content model. */
+  issues?: ContentIssue[];
+  /** MEDIA-1: the image already in the library (MEDIA_DUPLICATE). */
+  mediaId?: string;
+  /** MEDIA-1: contents still showing an image (MEDIA_IN_USE). */
+  usages?: MediaUsage[];
+}
+
+export interface ContentIssue {
+  /** Dotted path in the document, e.g. `blocks.2.items.0.title`. */
+  path: string;
+  message: string;
 }
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError };
@@ -287,6 +299,16 @@ export interface AssignedSeatMapVersion {
 
 export type VehicleStatus = 'PLANNED' | 'ACTIVE' | 'OUT_OF_SERVICE' | 'RETIRED';
 
+/** On-board equipment, maintained by the fleet team and shown on the website. */
+export type VehicleAmenity =
+  | 'AIR_CONDITIONING'
+  | 'RECLINING_SEATS'
+  | 'USB_CHARGING'
+  | 'WIFI'
+  | 'TOILET'
+  | 'ENTERTAINMENT'
+  | 'WHEELCHAIR_ACCESS';
+
 export interface AdminVehicle {
   id: string;
   code: string;
@@ -305,6 +327,8 @@ export interface AdminVehicle {
   manufacturer: string;
   model: string;
   modelYear: number | null;
+  /** Distinct, in the canonical order of VehicleAmenity. */
+  amenities: VehicleAmenity[];
   status: VehicleStatus;
   statusChangedAt: string | null;
   retiredAt: string | null;
@@ -342,6 +366,8 @@ export interface VehicleCreateInput {
   manufacturer: string;
   model: string;
   modelYear?: number | null;
+  /** Replaces the whole list; duplicates are ignored. */
+  amenities?: VehicleAmenity[];
 }
 
 /** Administrative data only: the status changes through changeVehicleStatus. */
@@ -738,6 +764,46 @@ export interface BookingSearchResult {
   fare: BookingFare;
   seatCount: number;
   availableSeatCount: number;
+}
+
+/** An active vehicle as shown on the website: no VIN, plate or status. */
+export interface PublicVehicle {
+  code: string;
+  name: string | null;
+  manufacturer: string;
+  model: string;
+  modelYear: number | null;
+  amenities: VehicleAmenity[];
+  /** SEAT cells of its current seat map; null without one. */
+  seatCount: number | null;
+}
+
+/** One waypoint of a bookable trip, in route order (planned UTC instants). */
+export interface BookingItineraryWaypoint {
+  routeWaypointId: string;
+  sequence: number;
+  kind: 'STOP' | 'CHECKPOINT';
+  /** Stop code; null for a checkpoint. */
+  code: string | null;
+  name: string;
+  locality: string;
+  timezone: string;
+  country: { iso2: string; name: string };
+  /** Checkpoints only: BORDER, FERRY_TERMINAL or PORT (technical ones stay internal). */
+  checkpointType: string | null;
+  boardingAllowed: boolean;
+  alightingAllowed: boolean;
+  plannedArrivalAt: string | null;
+  plannedDepartureAt: string | null;
+}
+
+/** Planned itinerary of a bookable trip; the vehicle only while it is active. */
+export interface BookingItinerary {
+  tripId: string;
+  tripReference: string;
+  route: { code: string; name: string };
+  vehicle: Omit<PublicVehicle, 'seatCount'> | null;
+  waypoints: BookingItineraryWaypoint[];
 }
 
 export interface BookingSearchOptions {
@@ -1870,6 +1936,170 @@ export interface PassengerManifestPage {
   nextCursor: number | null;
 }
 
+/** CMS-1: public website content. Documents follow @euroteranga/content. */
+export type ContentKind = 'PAGE' | 'SITE_SETTINGS' | 'NAVIGATION';
+export type ContentRevisionStatus = 'DRAFT' | 'PUBLISHED' | 'SUPERSEDED';
+export type ContentDocument = Record<string, unknown>;
+
+export interface ContentRevisionSummary {
+  id: string;
+  revision: number;
+  status: ContentRevisionStatus;
+  note: string | null;
+  basedOnRevision: number | null;
+  author: { id: string; email: string } | null;
+  publishedAt: string | null;
+  publishedBy: { id: string; email: string } | null;
+  supersededAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContentRevision extends ContentRevisionSummary {
+  document: ContentDocument;
+}
+
+export interface ContentEntrySummary {
+  id: string;
+  kind: ContentKind;
+  key: string;
+  title: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  draft: ContentRevisionSummary | null;
+  published: ContentRevisionSummary | null;
+}
+
+export interface ContentEntryDetail {
+  id: string;
+  kind: ContentKind;
+  key: string;
+  lastRevision: number;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  draft: ContentRevision | null;
+  published: ContentRevision | null;
+  history: ContentRevisionSummary[];
+}
+
+export interface ContentListOptions {
+  kind?: ContentKind;
+  cursor?: string;
+  limit?: number;
+}
+
+export type ContentCreateInput =
+  | { kind: 'PAGE'; path: string; title: string; description: string }
+  | { kind: 'SITE_SETTINGS' }
+  | { kind: 'NAVIGATION' };
+
+export interface ContentDraftInput {
+  document: ContentDocument;
+  note?: string;
+  /** updatedAt of the draft the editor started from, or null when there was none. */
+  expectedDraftUpdatedAt: string | null;
+}
+
+export interface PublicContentPage {
+  path: string;
+  revision: number;
+  publishedAt: string;
+  document: ContentDocument;
+}
+
+export interface PublicContentSite {
+  settings: ContentDocument | null;
+  navigation: ContentDocument | null;
+  updatedAt: string | null;
+}
+
+export interface PublicContentSitemap {
+  items: Array<{ path: string; updatedAt: string }>;
+}
+
+/**
+ * MEDIA-1 public media library. An image is immutable: replacing it means
+ * uploading a new one; archiving an unused image is terminal.
+ */
+export type MediaStatus = 'ACTIVE' | 'ARCHIVED';
+
+export interface MediaRendition {
+  width: number;
+  height: number;
+  /** API path of the WebP file, e.g. `/v1/media/files/<id>/960.webp`. */
+  path: string;
+}
+
+/** What the website may know about an active image. */
+export interface PublicMedia {
+  id: string;
+  altText: string;
+  caption: string | null;
+  credit: string | null;
+  width: number;
+  height: number;
+  /** Point kept visible when the image is cropped, in percent. */
+  focalX: number;
+  focalY: number;
+  renditions: MediaRendition[];
+}
+
+export interface MediaUsage {
+  kind: ContentKind;
+  key: string;
+  status: 'DRAFT' | 'PUBLISHED';
+  /** The content entry is archived (not served) but could be unarchived. */
+  entryArchived: boolean;
+}
+
+export interface MediaStaffRef {
+  id: string;
+  email: string;
+}
+
+export interface MediaAsset extends Omit<PublicMedia, 'renditions'> {
+  status: MediaStatus;
+  sourceFormat: 'jpeg' | 'png' | 'webp';
+  sourceBytes: number;
+  renditions: Array<MediaRendition & { bytes: number }>;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: MediaStaffRef | null;
+  updatedBy: MediaStaffRef | null;
+  archivedAt: string | null;
+  archivedBy: MediaStaffRef | null;
+  archiveReason: string | null;
+  /** Detail only: drafts and live pages that show the image. */
+  usages?: MediaUsage[];
+}
+
+export interface MediaListOptions {
+  status?: MediaStatus;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface MediaUploadInput {
+  file: Blob;
+  altText: string;
+  caption?: string;
+  credit?: string;
+  focalX?: number;
+  focalY?: number;
+  /** The image this upload replaces (kept as is, recorded in the audit trail). */
+  replaces?: string;
+}
+
+export interface MediaUpdateInput {
+  altText?: string;
+  caption?: string | null;
+  credit?: string | null;
+  focalX?: number;
+  focalY?: number;
+}
+
 /** PR-16 generic operational permits. PERMIT_VALID is never TRIP_READY. */
 export type RegulatoryPermitLifecycleStatus = 'DRAFT' | 'ACTIVE' | 'REVOKED';
 export type RegulatoryPermitValidityState =
@@ -2443,7 +2673,47 @@ function query(values: Record<string, string | number | undefined>): string {
 function errorDetails(value: unknown): { details?: ApiErrorDetails } {
   if (typeof value !== 'object' || value === null) return {};
   const blockers = (value as { blockers?: unknown }).blockers;
-  return Array.isArray(blockers) ? { details: { blockers: blockers as CheckInBlocker[] } } : {};
+  if (Array.isArray(blockers)) return { details: { blockers: blockers as CheckInBlocker[] } };
+  const issues = (value as { issues?: unknown }).issues;
+  if (Array.isArray(issues)) {
+    const valid = issues
+      .filter(
+        (issue): issue is ContentIssue =>
+          typeof issue === 'object' &&
+          issue !== null &&
+          typeof (issue as ContentIssue).path === 'string' &&
+          typeof (issue as ContentIssue).message === 'string',
+      )
+      .slice(0, 50)
+      .map(({ path, message }) => ({ path, message }));
+    return { details: { issues: valid } };
+  }
+  const mediaId = (value as { mediaId?: unknown }).mediaId;
+  if (typeof mediaId === 'string' && /^[0-9a-f-]{36}$/.test(mediaId)) {
+    return { details: { mediaId } };
+  }
+  const usages = (value as { usages?: unknown }).usages;
+  if (Array.isArray(usages)) {
+    const valid = usages
+      .filter(
+        (usage): usage is MediaUsage =>
+          typeof usage === 'object' &&
+          usage !== null &&
+          typeof (usage as MediaUsage).kind === 'string' &&
+          typeof (usage as MediaUsage).key === 'string' &&
+          ((usage as MediaUsage).status === 'DRAFT' ||
+            (usage as MediaUsage).status === 'PUBLISHED'),
+      )
+      .slice(0, 50)
+      .map(({ kind, key, status, entryArchived }) => ({
+        kind,
+        key,
+        status,
+        entryArchived: entryArchived === true,
+      }));
+    return { details: { usages: valid } };
+  }
+  return {};
 }
 
 const NETWORK_ERROR: ApiError = {
@@ -2685,6 +2955,13 @@ export function createAuthClient(baseUrl: string) {
               destinationRouteWaypointId,
             })}`,
           ),
+        itinerary: (tripId: string) =>
+          call<BookingItinerary>(
+            'GET',
+            `/v1/booking/trips/${encodeURIComponent(tripId)}/itinerary`,
+          ),
+        /** Active vehicles ("Nos bus"): public facts only. */
+        fleet: () => call<{ items: PublicVehicle[] }>('GET', '/v1/booking/fleet'),
       },
       customer: {
         passengerCountries: () =>
@@ -2828,6 +3105,19 @@ export function createAuthClient(baseUrl: string) {
     tracking: {
       public: (token: string) =>
         call<PublicTrackingProjection>('GET', '/v1/tracking/' + encodeURIComponent(token)),
+    },
+    content: {
+      page: (path: string) =>
+        call<PublicContentPage>('GET', `/v1/content/pages?${query({ path })}`),
+      site: () => call<PublicContentSite>('GET', '/v1/content/site'),
+      sitemap: () => call<PublicContentSitemap>('GET', '/v1/content/sitemap'),
+    },
+    /** MEDIA-1: active images only; unknown or archived ids are absent. */
+    media: {
+      many: (ids: readonly string[]) =>
+        call<{ items: PublicMedia[] }>('GET', `/v1/media?${query({ ids: ids.join(',') })}`),
+      /** Absolute URL of a rendition path returned by the API. */
+      url: (path: string) => `${root}${path}`,
     },
     crew: {
       trips: () => call<CrewTripList>('GET', '/v1/crew/trips'),
@@ -3511,6 +3801,93 @@ export function createAuthClient(baseUrl: string) {
           ),
       },
       /** PR-16: intrinsic permit validity only; PR-17 owns trip readiness. */
+      content: {
+        list: (options: ContentListOptions = {}) =>
+          call<{ items: ContentEntrySummary[]; nextCursor: string | null }>(
+            'GET',
+            `/v1/admin/content/entries?${query({
+              kind: options.kind,
+              cursor: options.cursor,
+              limit: options.limit,
+            })}`,
+          ),
+        entry: (id: string) =>
+          call<ContentEntryDetail>('GET', `/v1/admin/content/entries/${encodeURIComponent(id)}`),
+        revision: (id: string, revision: number) =>
+          call<ContentRevision>(
+            'GET',
+            `/v1/admin/content/entries/${encodeURIComponent(id)}/revisions/${revision}`,
+          ),
+        create: (input: ContentCreateInput) =>
+          withCsrf<ContentEntryDetail>('staff', '/v1/admin/content/entries', input),
+        saveDraft: (id: string, input: ContentDraftInput) =>
+          withCsrf<ContentEntryDetail>(
+            'staff',
+            `/v1/admin/content/entries/${encodeURIComponent(id)}/draft`,
+            input,
+          ),
+        publish: (id: string, expectedDraftUpdatedAt: string) =>
+          withCsrf<ContentEntryDetail>(
+            'staff',
+            `/v1/admin/content/entries/${encodeURIComponent(id)}/publish`,
+            { expectedDraftUpdatedAt },
+          ),
+        discardDraft: (id: string, expectedDraftUpdatedAt: string) =>
+          withCsrf<ContentEntryDetail>(
+            'staff',
+            `/v1/admin/content/entries/${encodeURIComponent(id)}/discard-draft`,
+            { expectedDraftUpdatedAt },
+          ),
+        restore: (id: string, revision: number, note?: string) =>
+          withCsrf<ContentEntryDetail>(
+            'staff',
+            `/v1/admin/content/entries/${encodeURIComponent(id)}/restore`,
+            { revision, ...(note ? { note } : {}) },
+          ),
+        archive: (id: string, reason: string) =>
+          withCsrf<ContentEntryDetail>(
+            'staff',
+            `/v1/admin/content/entries/${encodeURIComponent(id)}/archive`,
+            { reason },
+          ),
+        unarchive: (id: string) =>
+          withCsrf<ContentEntryDetail>(
+            'staff',
+            `/v1/admin/content/entries/${encodeURIComponent(id)}/unarchive`,
+          ),
+      },
+      /** MEDIA-1: media.read to browse, media.manage to upload, describe, archive. */
+      media: {
+        list: (options: MediaListOptions = {}) =>
+          call<{ storageEnabled: boolean; items: MediaAsset[]; nextCursor: string | null }>(
+            'GET',
+            `/v1/admin/media?${query({
+              status: options.status,
+              cursor: options.cursor,
+              limit: options.limit,
+            })}`,
+          ),
+        detail: (id: string) =>
+          call<MediaAsset>('GET', `/v1/admin/media/${encodeURIComponent(id)}`),
+        upload: (input: MediaUploadInput) => {
+          const form = new FormData();
+          form.append('altText', input.altText);
+          if (input.caption) form.append('caption', input.caption);
+          if (input.credit) form.append('credit', input.credit);
+          if (input.focalX !== undefined) form.append('focalX', String(input.focalX));
+          if (input.focalY !== undefined) form.append('focalY', String(input.focalY));
+          if (input.replaces) form.append('replaces', input.replaces);
+          // The file comes last: the describing fields are read first.
+          form.append('file', input.file);
+          return withCsrfMultipart<MediaAsset>('staff', '/v1/admin/media', form);
+        },
+        update: (id: string, input: MediaUpdateInput) =>
+          withCsrf<MediaAsset>('staff', `/v1/admin/media/${encodeURIComponent(id)}`, input),
+        archive: (id: string, reason: string) =>
+          withCsrf<MediaAsset>('staff', `/v1/admin/media/${encodeURIComponent(id)}/archive`, {
+            reason,
+          }),
+      },
       regulatoryPermits: {
         list: (options: RegulatoryPermitListOptions = {}) =>
           call<Page<RegulatoryPermitSummary>>(

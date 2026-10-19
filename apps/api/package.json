@@ -19,6 +19,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "catalog:",
     "@euroteranga/config": "workspace:*",
+    "@euroteranga/content": "workspace:*",
     "@euroteranga/database": "workspace:*",
     "@euroteranga/logger": "workspace:*",
     "@nestjs/common": "catalog:",
@@ -33,6 +34,7 @@
     "otpauth": "catalog:",
     "reflect-metadata": "catalog:",
     "rxjs": "catalog:",
+    "sharp": "catalog:",
     "uqr": "catalog:",
     "zod": "catalog:"
   },
