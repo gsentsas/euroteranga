@@ -8,7 +8,7 @@ import {
   type DocumentPath,
   type RichText,
 } from '@euroteranga/content';
-import { useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useEditor } from './editor-context';
 
 function describedBy(...ids: Array<string | false | null | undefined>): string | undefined {
@@ -408,6 +408,28 @@ export function RichTextField({
     return Array.isArray(value) && value.length > 0 ? richTextToMarkup(value as RichText) : '';
   });
   const [localError, setLocalError] = useState<string | null>(null);
+  const localErrorPath = path.map(String).join('.');
+  const localErrorRef = useRef({
+    path,
+    key: localErrorPath,
+    message: localError,
+    report: editor.reportLocal,
+  });
+  localErrorRef.current = {
+    path,
+    key: localErrorPath,
+    message: localError,
+    report: editor.reportLocal,
+  };
+
+  useEffect(() => {
+    const current = localErrorRef.current;
+    if (current.message) current.report(current.path, current.message);
+    return () => {
+      const latest = localErrorRef.current;
+      latest.report(current.path, null);
+    };
+  }, [localErrorPath]);
 
   const apply = (next: string) => {
     setText(next);
@@ -685,10 +707,12 @@ export function MediaField({
   path,
   label,
   required = false,
+  disabled = false,
 }: {
   path: DocumentPath;
   label: string;
   required?: boolean;
+  disabled?: boolean;
 }) {
   const editor = useEditor();
   const raw = editor.get(path);
@@ -712,7 +736,7 @@ export function MediaField({
         Le choix d’une image arrive avec la médiathèque (MEDIA-1). En attendant, une section sans
         image affiche son illustration ou son texte seul.
       </p>
-      {mediaId && !required && !editor.readOnly ? (
+      {mediaId && !required && !disabled && !editor.readOnly ? (
         <button
           type="button"
           className="et-button et-button--secondary"
