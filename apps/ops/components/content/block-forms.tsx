@@ -178,6 +178,9 @@ function VehicleCodeField({ path }: { path: DocumentPath }) {
   if (value && !options.some(([code]) => code === value)) {
     options.unshift([value, `${value} — véhicule inactif, inconnu ou non chargé`]);
   }
+  // A new presentation starts without a coach: say so instead of showing the
+  // first coach as if it were chosen (the document holds an empty code).
+  if (!value) options.unshift(['', 'Choisir un autocar']);
   return (
     <SelectField
       path={path}

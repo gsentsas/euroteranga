@@ -258,6 +258,15 @@ test.describe('ops website content editor', () => {
     await expect(
       preview.getByRole('heading', { level: 3, name: seed.coaches[0]!.name }),
     ).toBeVisible();
+    // A new coach presentation starts without a coach, and says so.
+    await form.locator('summary', { hasText: 'Section 5 : Nos autocars' }).click();
+    await form.getByRole('button', { name: 'Présenter un autocar' }).click();
+    const coach = form.getByRole('combobox', { name: 'Autocar', exact: true });
+    await expect(coach).toHaveValue('');
+    await expect(coach.locator('option:checked')).toHaveText('Choisir un autocar');
+    await coach.selectOption(seed.coaches[1]!.code);
+    await expect(coach).toHaveValue(seed.coaches[1]!.code);
+    await expect(coach.locator('option', { hasText: 'Choisir un autocar' })).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 
