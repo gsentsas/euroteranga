@@ -191,6 +191,11 @@
   white-space: nowrap;
 }
 
+/* Inside a button (preview widths), the count takes the button's own colour. */
+.et-button .ops-content-count {
+  color: inherit;
+}
+
 .ops-content-optional {
   color: var(--et-color-ink-muted);
   font-weight: 400;
@@ -215,9 +220,10 @@
 }
 
 .ops-content-check input {
-  width: 1.15rem;
-  height: 1.15rem;
-  margin-top: 0.2rem;
+  /* WCAG 2.2 target size: 24 px at least. */
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0;
 }
 
 .ops-content-check .et-hint {
