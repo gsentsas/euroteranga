@@ -144,15 +144,18 @@ Procedure, as the application user, from the current release, with the API
 environment file:
 
 1. Take and verify a database backup.
-2. Run the dry run and review it:
+2. Choose the anchor date (`YYYY-MM-DD`, today or later) and run the dry run
+   with it, so that the approved report names the exact departures:
 
    ```bash
-   sudo -u euroteranga.com_5p804yhows7 bash -c 'set -a; . /var/www/vhosts/euroteranga.com/.secrets/api.env; set +a; cd /var/www/vhosts/euroteranga.com/current && pnpm seed:realistic -- --dry-run'
+   sudo -u euroteranga.com_5p804yhows7 bash -c 'set -a; . /var/www/vhosts/euroteranga.com/.secrets/api.env; set +a; cd /var/www/vhosts/euroteranga.com/current && pnpm seed:realistic -- --dry-run --anchor-date YYYY-MM-DD'
    ```
 
 3. Only with the owner's written approval of that dry run, add
    `ALLOW_REALISTIC_SEED=true` for this command only and run it with
-   `--apply --confirm-production`.
+   `--apply --confirm-production --anchor-date` and **the same date**. Without
+   it, a later day would plan other departures than the approved ones. If the
+   approved date is already in the past, run and approve a new dry run.
 4. Check `/v1/booking/fleet`, `/paris-dakar`, `/dakar-paris`, `/nos-bus` and
    `/services`, and that the pages are still `noindex`.
 
