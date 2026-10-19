@@ -30,9 +30,43 @@ export async function ensureSyntheticIdentity(
 ): Promise<string> {
   const existing = await db.authIdentity.findUnique({
     where: { realm_normalizedEmail: { realm: input.realm, normalizedEmail: input.email } },
-    select: { id: true, status: true },
+    select: {
+      id: true,
+      status: true,
+      passwordCredential: { select: { identityId: true } },
+      mfaTotpCredential: { select: { identityId: true } },
+      _count: {
+        select: {
+          roleAssignments: { where: { revokedAt: null } },
+          mfaRecoveryCodes: true,
+        },
+      },
+    },
   });
   if (existing) {
+    // Reused only if the seed created it and it still cannot sign in or act:
+    // a person may have been given this address in the meantime.
+    const seeded = await db.auditEvent.count({
+      where: {
+        resourceType: 'auth_identity',
+        resourceId: existing.id,
+        action: `${input.realm}_IDENTITY_SEEDED`,
+        metadata: { path: ['systemActor'], equals: REALISTIC_SOURCE },
+      },
+    });
+    if (seeded === 0) {
+      throw new RealisticConflict(`${input.email} was not created by the seed (kept, not used)`);
+    }
+    if (
+      existing.passwordCredential ||
+      existing.mfaTotpCredential ||
+      existing._count.roleAssignments > 0 ||
+      existing._count.mfaRecoveryCodes > 0
+    ) {
+      throw new RealisticConflict(
+        `${input.email} now has a password, an MFA factor or a role (kept, not used)`,
+      );
+    }
     if (existing.status !== 'ACTIVE') {
       throw new RealisticConflict(`synthetic identity ${input.email} is ${existing.status}`);
     }

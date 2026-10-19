@@ -606,3 +606,43 @@ describe('realistic seed: the cleanup preview matches the cleanup (isolated data
     ).toBe(true);
   });
 });
+
+describe('realistic seed: never reuses an identity it did not create (isolated database)', () => {
+  let h: Harness;
+
+  beforeAll(async () => {
+    h = await harness();
+  }, 120_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  it('refuses a person holding the operator address and records no operational fact', async () => {
+    const client = db(h.t.app);
+    // Someone was given the seed operator's address (no seed provenance).
+    const person = await client.authIdentity.create({
+      data: {
+        realm: 'STAFF',
+        email: 'etr-v1-operations@example.test',
+        normalizedEmail: 'etr-v1-operations@example.test',
+        status: 'ACTIVE',
+      },
+    });
+    const report = await h.run();
+    expect(
+      report.lines.find((line) => line.entity === 'operator' && line.key === 'operations'),
+    ).toMatchObject({
+      outcome: 'conflict',
+      detail: expect.stringContaining('not created by the seed'),
+    });
+    // Nothing is recorded under that identity, and the identity is untouched.
+    expect(await client.crewTripAssignment.count()).toBe(0);
+    expect(await client.incident.count()).toBe(0);
+    expect(await client.tripTrackingConfig.count()).toBe(0);
+    expect(await client.auditEvent.count({ where: { resourceId: person.id } })).toBe(0);
+    expect(await client.authIdentity.findUniqueOrThrow({ where: { id: person.id } })).toEqual(
+      person,
+    );
+  });
+});
