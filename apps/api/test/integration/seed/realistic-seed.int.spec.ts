@@ -1,8 +1,14 @@
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { AuditService } from '../../../src/authorization/audit.service.js';
+import { BookingService } from '../../../src/bookings/booking.service.js';
+import { PublicBookingService } from '../../../src/bookings/public-booking.service.js';
 import { ContentService } from '../../../src/content/content.service.js';
 import { FleetService } from '../../../src/fleet/fleet.service.js';
 import { NetworkService } from '../../../src/network/network.service.js';
+import { PassengerDocumentService } from '../../../src/passenger-documents/passenger-document.service.js';
+import { PaymentService } from '../../../src/payments/payment.service.js';
+import { PaymentWebhookService } from '../../../src/payments/payment-webhook.service.js';
 import { PricingService } from '../../../src/pricing/pricing.service.js';
 import { SeatMapService } from '../../../src/seat-maps/seat-map.service.js';
 import {
@@ -40,6 +46,14 @@ async function harness(): Promise<Harness> {
       pricing: t.app.get(PricingService),
       trips: t.app.get(TripService),
       content: t.app.get(ContentService),
+      commerce: {
+        audit: t.app.get(AuditService),
+        bookings: t.app.get(BookingService),
+        publicBooking: t.app.get(PublicBookingService),
+        passengers: t.app.get(PassengerDocumentService),
+        payments: t.app.get(PaymentService),
+        webhooks: t.app.get(PaymentWebhookService),
+      },
     }).run({ anchorDate: today(), tripsPerDirection: 6, dryRun: false, ...overrides });
   return {
     t,
@@ -66,6 +80,11 @@ async function snapshot(h: Harness) {
     trips: await client.trip.count(),
     contentEntries: await client.contentEntry.count(),
     contentRevisions: await client.contentRevision.count(),
+    identities: await client.authIdentity.count(),
+    bookings: await client.booking.count(),
+    seats: await client.bookingSeat.count(),
+    payments: await client.payment.count(),
+    passengers: await client.passenger.count(),
     audit: await client.auditEvent.count(),
   };
 }
@@ -195,9 +214,79 @@ describe('realistic seed: catalogue layer (isolated database)', () => {
     });
     expect(events.length).toBeGreaterThan(0);
     expect(events.every((event) => event.actorIdentityId === null)).toBe(true);
-    expect(new Set(events.map((event) => event.resourceType))).toEqual(
-      new Set(['seat_map', 'seat_map_version', 'vehicle', 'content_entry']),
-    );
+    const types = new Set(events.map((event) => event.resourceType));
+    for (const type of ['vehicle', 'content_entry', 'auth_identity', 'booking', 'payment']) {
+      expect(types.has(type), type).toBe(true);
+    }
+  });
+
+  it('books the upcoming departures as synthetic customers, through SANDBOX payments', async () => {
+    const client = db(h.t.app);
+    const bookings = await client.booking.findMany({
+      include: {
+        seats: { include: { seatMapCell: true } },
+        payments: true,
+        passengers: { include: { passenger: { include: { nationalityCountry: true } } } },
+        trip: true,
+        customerIdentity: { include: { passwordCredential: true } },
+      },
+    });
+    expect(bookings).toHaveLength(40);
+    const state = (booking: (typeof bookings)[number]) =>
+      booking.cancelledAt ? 'CANCELLED' : booking.confirmedAt ? 'CONFIRMED' : 'HELD';
+    expect(bookings.filter((booking) => state(booking) === 'CONFIRMED')).toHaveLength(37);
+    expect(bookings.filter((booking) => state(booking) === 'CANCELLED')).toHaveLength(1);
+    expect(bookings.filter((booking) => state(booking) === 'HELD')).toHaveLength(2);
+    const payments = bookings.flatMap((booking) => booking.payments);
+    expect(payments.filter((payment) => payment.status === 'SUCCEEDED')).toHaveLength(37);
+    expect(payments.filter((payment) => payment.status === 'PENDING')).toHaveLength(1);
+    expect(payments.filter((payment) => payment.status === 'FAILED')).toHaveLength(1);
+
+    for (const booking of bookings) {
+      // Synthetic, never sign-in capable customers on a reserved domain.
+      expect(booking.customerIdentity.normalizedEmail).toMatch(/^etr-v1-[a-z0-9-]+@example\.test$/);
+      expect(booking.customerIdentity.passwordCredential).toBeNull();
+      // Seats of the trip's own seat map, at the pilot fare.
+      expect(
+        booking.seats.every(
+          (seat) => seat.seatMapCell.seatMapVersionId === booking.trip.seatMapVersionId,
+        ),
+      ).toBe(true);
+      expect(booking.seats.every((seat) => seat.seatMapCell.kind === 'SEAT')).toBe(true);
+      expect(booking.unitAmountMinor).toBe(24_900);
+      for (const payment of booking.payments) {
+        expect(Number(payment.amountMinor)).toBe(24_900 * booking.seats.length);
+        expect(payment.provider).toBe('SANDBOX');
+      }
+      // Confirmed bookings name one passenger per seat; families share a nationality.
+      if (state(booking) === 'CONFIRMED') {
+        expect(booking.passengers).toHaveLength(booking.seats.length);
+        const names = booking.passengers.map(({ passenger }) => passenger.givenName);
+        expect(new Set(names).size).toBe(names.length);
+        expect(
+          new Set(booking.passengers.map(({ passenger }) => passenger.nationalityCountry.iso2))
+            .size,
+        ).toBe(1);
+      } else {
+        expect(booking.passengers).toHaveLength(0);
+      }
+    }
+    // No seat is sold twice on a segment.
+    const duplicates = await client.$queryRaw<Array<{ count: bigint }>>`
+      SELECT count(*) AS "count" FROM (
+        SELECT "trip_id", "seat_map_cell_id", "segment_sequence" FROM "seat_inventory_lock"
+        GROUP BY 1, 2, 3 HAVING count(*) > 1) AS d`;
+    expect(Number(duplicates[0]!.count)).toBe(0);
+    // About 85 % of the soonest Paris -> Dakar departure is taken.
+    const stops = (await publicGet(h, '/booking/stops?limit=50')).body.items as Array<{
+      id: string;
+      code: string;
+    }>;
+    const id = (code: string) => stops.find((stop) => stop.code === code)!.id;
+    const soonest = (
+      await publicGet(h, `/booking/trips?originStopId=${id('PAR')}&destinationStopId=${id('DKR')}`)
+    ).body.items[0];
+    expect(soonest.availableSeatCount).toBe(53 - 45);
   });
 
   it('is idempotent: a second run reuses everything and writes nothing', async () => {
@@ -260,5 +349,28 @@ describe('realistic seed: operator data is never overwritten (isolated database)
     });
     expect(operatorPage).toHaveLength(1);
     expect((operatorPage[0]!.document as { title: string }).title).toBe('Notre flotte');
+  });
+});
+
+describe('realistic seed: no bookings outside local and CI (isolated database)', () => {
+  let h: Harness;
+
+  beforeAll(async () => {
+    h = await harness();
+  }, 120_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  it('reports the commerce layer as skipped and books nothing', async () => {
+    const report = await h.run({ commerceUnavailable: 'APP_ENV=staging' });
+    expect(report.lines).toContainEqual(
+      expect.objectContaining({ layer: 'commerce', outcome: 'skipped', detail: 'APP_ENV=staging' }),
+    );
+    expect(await db(h.t.app).booking.count()).toBe(0);
+    expect(await db(h.t.app).authIdentity.count()).toBe(0);
+    // The catalogue (public site) is still complete.
+    expect(await db(h.t.app).trip.count()).toBe(12);
   });
 });

@@ -6,7 +6,6 @@ import {
 } from '@euroteranga/content';
 import type { PrismaClient } from '@euroteranga/database';
 import type { SystemActor } from '../../auth/session/auth-principal.js';
-import { PublicApiError } from '../../auth/http/public-api-error.js';
 import type { ContentService } from '../../content/content.service.js';
 import {
   vehicleCreateSchema,
@@ -20,6 +19,7 @@ import {
 } from '../../pilot/pilot-bootstrap.js';
 import { seatMapCellsSchema, seatMapCreateSchema } from '../../seat-maps/seat-map.dto.js';
 import type { SeatMapService } from '../../seat-maps/seat-map.service.js';
+import { RealisticCommerce, type RealisticCommerceServices } from './realistic-commerce.js';
 import {
   REALISTIC_AMENITIES,
   REALISTIC_PAGE_TEMPLATES,
@@ -30,21 +30,17 @@ import {
   type RealisticSeatCell,
   type VehicleAmenity,
 } from './realistic-dataset.js';
+import {
+  RealisticConflict,
+  RealisticReporter,
+  type RealisticLayer,
+  type RealisticOutcome,
+  type RealisticReportLine,
+} from './realistic-report.js';
+
+export type { RealisticLayer, RealisticOutcome, RealisticReportLine };
 
 export const REALISTIC_ACTOR: SystemActor = { kind: 'system', source: REALISTIC_SOURCE };
-
-export type RealisticLayer = 'catalogue';
-
-export type RealisticOutcome =
-  'created' | 'updated' | 'existing' | 'planned' | 'skipped' | 'conflict';
-
-export interface RealisticReportLine {
-  layer: RealisticLayer;
-  outcome: RealisticOutcome;
-  entity: string;
-  key: string;
-  detail?: string;
-}
 
 export interface RealisticSeedReport {
   dryRun: boolean;
@@ -54,6 +50,11 @@ export interface RealisticSeedReport {
 
 export interface RealisticSeedServices extends PilotBootstrapServices {
   content: ContentService;
+  /**
+   * Bookings, passengers and payments: only where SANDBOX payments exist
+   * (local and CI). Absent elsewhere, and the layer is reported as skipped.
+   */
+  commerce?: RealisticCommerceServices | undefined;
 }
 
 export interface RealisticSeedOptions {
@@ -62,10 +63,9 @@ export interface RealisticSeedOptions {
   tripsPerDirection: number;
   dryRun: boolean;
   now?: Date;
+  /** Why the commerce layer cannot run here (staging, production, no SANDBOX). */
+  commerceUnavailable?: string | undefined;
 }
-
-/** An existing record differs from the seed definition: never overwritten. */
-class RealisticConflict extends Error {}
 
 const PILOT_OUTCOMES: Record<PilotOutcome, RealisticOutcome> = {
   created: 'created',
@@ -96,8 +96,7 @@ const sameList = (left: readonly string[], right: readonly string[]) =>
  * completed when a step is missing, and reported as a conflict otherwise.
  */
 export class RealisticSeed {
-  private readonly lines: RealisticReportLine[] = [];
-  private readonly blocked = new Set<string>();
+  private readonly reporter = new RealisticReporter();
 
   constructor(private readonly services: RealisticSeedServices) {}
 
@@ -112,7 +111,7 @@ export class RealisticSeed {
     for (const line of pilot.lines) {
       this.report('catalogue', PILOT_OUTCOMES[line.outcome], line.entity, line.key, line.detail);
       if (line.outcome === 'conflict' || line.outcome === 'skipped') {
-        this.blocked.add(`${line.entity}:${line.key}`);
+        this.reporter.block(line.entity, line.key);
       }
     }
 
@@ -139,10 +138,26 @@ export class RealisticSeed {
     }
     await this.guarded('navigation', 'site', [], () => this.ensureNavigation(published, dry));
 
+    const commerce = this.services.commerce;
+    if (commerce && !options.commerceUnavailable) {
+      await new RealisticCommerce(this.services.db, commerce, this.reporter).run({
+        dryRun: dry,
+        now: options.now ?? new Date(),
+      });
+    } else {
+      this.reporter.report({
+        layer: 'commerce',
+        outcome: 'skipped',
+        entity: 'booking',
+        key: 'all',
+        detail: options.commerceUnavailable ?? 'commerce services not configured',
+      });
+    }
+
     return {
       dryRun: dry,
-      lines: this.lines,
-      hasConflicts: this.lines.some((line) => line.outcome === 'conflict'),
+      lines: this.reporter.lines,
+      hasConflicts: this.reporter.hasConflicts,
     };
   }
 
@@ -155,36 +170,16 @@ export class RealisticSeed {
     key: string,
     detail?: string,
   ) {
-    this.lines.push({ layer, outcome, entity, key, ...(detail ? { detail } : {}) });
+    this.reporter.report({ layer, outcome, entity, key, ...(detail ? { detail } : {}) });
   }
 
-  /** Runs one item unless a dependency is blocked; a conflict blocks the item itself. */
-  private async guarded<R>(
+  private guarded<R>(
     entity: string,
     key: string,
     dependsOn: readonly string[],
     work: () => Promise<R | null>,
   ): Promise<R | null> {
-    const missing = dependsOn.find((dependency) => this.blocked.has(dependency));
-    if (missing) {
-      this.blocked.add(`${entity}:${key}`);
-      this.report('catalogue', 'skipped', entity, key, `depends on ${missing}`);
-      return null;
-    }
-    try {
-      return await work();
-    } catch (error) {
-      this.blocked.add(`${entity}:${key}`);
-      if (error instanceof RealisticConflict) {
-        this.report('catalogue', 'conflict', entity, key, error.message);
-        return null;
-      }
-      if (error instanceof PublicApiError) {
-        this.report('catalogue', 'conflict', entity, key, `${error.code}: ${error.publicMessage}`);
-        return null;
-      }
-      throw error;
-    }
+    return this.reporter.guarded('catalogue', entity, key, dependsOn, work);
   }
 
   // -- fleet ----------------------------------------------------------------

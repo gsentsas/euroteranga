@@ -179,3 +179,96 @@ export function realisticNavigation(publishedPaths: ReadonlySet<string>): Naviga
     ],
   };
 }
+
+// -- commerce (local and CI only: SANDBOX payments) -------------------------
+
+/**
+ * A synthetic customer: a reserved `example.test` address that can receive
+ * no mail, ACTIVE as the database requires to hold seats, and no password
+ * (no credential row), so no one can ever sign in with it.
+ */
+export function realisticCustomerEmail(key: string): string {
+  return `etr-v1-${key}@example.test`;
+}
+
+/** What happens to a booking after its hold: the states the domain supports. */
+export type RealisticBookingState = 'confirmed' | 'pending' | 'failed' | 'cancelled';
+
+export interface RealisticBookingGroup {
+  seats: number;
+  state: RealisticBookingState;
+}
+
+const confirmed = (...sizes: number[]): RealisticBookingGroup[] =>
+  sizes.map((seats) => ({ seats, state: 'confirmed' }));
+
+/**
+ * Bookings of the upcoming departures, by position in each direction (0 is
+ * the soonest), on a 53-seat coach: about 85 % and 30 % full Paris → Dakar,
+ * 60 % and 6 % Dakar → Paris, one nearly empty departure, the rest empty.
+ * Families travel together; a few holds are cancelled, abandoned with a
+ * pending payment or refused by the bank (their seats are released when the
+ * hold expires).
+ */
+export const REALISTIC_BOOKING_PLAN: Readonly<
+  Record<'outbound' | 'inbound', readonly (readonly RealisticBookingGroup[])[]>
+> = {
+  outbound: [
+    confirmed(4, 2, 5, 3, 2, 4, 1, 3, 5, 2, 4, 1, 3, 2, 4),
+    [
+      ...confirmed(2, 1, 3, 2, 4, 1, 3),
+      { seats: 2, state: 'cancelled' },
+      { seats: 1, state: 'pending' },
+    ],
+    confirmed(2),
+  ],
+  inbound: [
+    [...confirmed(3, 2, 4, 1, 2, 5, 3, 2, 1, 4, 2, 3), { seats: 2, state: 'failed' }],
+    confirmed(2, 1),
+  ],
+};
+
+/** Fictitious travellers: given names and an initial only, never a real person. */
+export const REALISTIC_GIVEN_NAMES = [
+  'Awa',
+  'Mamadou',
+  'Fatou',
+  'Ibrahima',
+  'Mariama',
+  'Ousmane',
+  'Aminata',
+  'Cheikh',
+  'Khady',
+  'Moussa',
+  'Ndeye',
+  'Abdoulaye',
+  'Coumba',
+  'Babacar',
+  'Aïssatou',
+  'Seydou',
+  'Marie',
+  'Thomas',
+  'Camille',
+  'Lucas',
+  'Yacine',
+  'Salif',
+  'Rokhaya',
+  'Modou',
+  'Astou',
+  'Pape',
+  'Sokhna',
+  'Lamine',
+  'Inès',
+  'Hugo',
+] as const;
+
+export const REALISTIC_FAMILY_INITIALS = 'BCDFGKLMNSTW'.split('');
+
+/** Nationalities of the travellers (corridor countries), by weight. */
+export const REALISTIC_NATIONALITIES: ReadonlyArray<[iso2: string, weight: number]> = [
+  ['SN', 60],
+  ['FR', 25],
+  ['MR', 7],
+  ['MA', 5],
+  ['ES', 3],
+];

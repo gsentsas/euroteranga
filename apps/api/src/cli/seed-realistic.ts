@@ -11,13 +11,23 @@
  * Exit codes: 0 done, 2 refused or conflicts, 1 error. The database target
  * is printed masked; no secret is ever printed.
  */
-import { ConfigValidationError, loadApiEnv } from '@euroteranga/config';
+import 'reflect-metadata';
+import { ConfigValidationError, loadApiEnv, type ApiEnv } from '@euroteranga/config';
 import { createLogger, redactString } from '@euroteranga/logger';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from '../app.module.js';
 import { AuditService } from '../authorization/audit.service.js';
+import { BookingService } from '../bookings/booking.service.js';
+import { PublicBookingService } from '../bookings/public-booking.service.js';
+import { NestJsonLogger } from '../common/logging.js';
 import { ContentService } from '../content/content.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { FleetService } from '../fleet/fleet.service.js';
 import { NetworkService } from '../network/network.service.js';
+import { PassengerDocumentService } from '../passenger-documents/passenger-document.service.js';
+import { PaymentService } from '../payments/payment.service.js';
+import { PaymentWebhookService } from '../payments/payment-webhook.service.js';
+import { PAYMENT_PROVIDER, type PaymentProvider } from '../payments/providers/payment-provider.js';
 import { PILOT_DATASET_VERSION } from '../pilot/pilot-dataset.js';
 import { PricingService } from '../pricing/pricing.service.js';
 import { SeatMapService } from '../seat-maps/seat-map.service.js';
@@ -33,6 +43,18 @@ import { RealisticSeed } from '../seed/realistic/realistic-seed.js';
 import { TripService } from '../trips/trip.service.js';
 
 const out = (line: string) => process.stdout.write(`${line}\n`);
+
+/**
+ * Bookings need SANDBOX payments, which the configuration allows in local and
+ * CI only: the commerce layer never runs in staging or production.
+ */
+function commerceUnavailable(env: ApiEnv, provider: PaymentProvider | null): string | undefined {
+  if (env.APP_ENV !== 'local' && env.APP_ENV !== 'ci') {
+    return `bookings need SANDBOX payments (local and CI only), APP_ENV=${env.APP_ENV}`;
+  }
+  if (!provider || provider.name !== 'SANDBOX') return 'PAYMENT_PROVIDER is not SANDBOX';
+  return undefined;
+}
 const err = (line: string) => process.stderr.write(`${line}\n`);
 
 async function main(): Promise<number> {
@@ -69,22 +91,39 @@ async function main(): Promise<number> {
   }
 
   const logger = createLogger({ service: 'realistic-seed-cli', level: 'warn' });
-  const database = new DatabaseService(env, logger);
+  // The API's own wiring (configuration, providers, audit), without HTTP.
+  const app = await NestFactory.createApplicationContext(AppModule.forRoot({ env, logger }), {
+    logger: new NestJsonLogger(logger),
+    abortOnError: false,
+  });
   try {
-    const audit = new AuditService(database);
+    const database = app.get(DatabaseService);
+    const provider = app.get<PaymentProvider | null>(PAYMENT_PROVIDER, { strict: false });
+    const unavailable = commerceUnavailable(env, provider);
     const seed = new RealisticSeed({
       db: database.client,
-      network: new NetworkService(database, audit),
-      seatMaps: new SeatMapService(database, audit),
-      fleet: new FleetService(database, audit),
-      pricing: new PricingService(database, audit),
-      trips: new TripService(database, audit),
-      content: new ContentService(database, audit),
+      network: app.get(NetworkService),
+      seatMaps: app.get(SeatMapService),
+      fleet: app.get(FleetService),
+      pricing: app.get(PricingService),
+      trips: app.get(TripService),
+      content: app.get(ContentService),
+      commerce: unavailable
+        ? undefined
+        : {
+            audit: app.get(AuditService),
+            bookings: app.get(BookingService, { strict: false }),
+            publicBooking: app.get(PublicBookingService, { strict: false }),
+            passengers: app.get(PassengerDocumentService, { strict: false }),
+            payments: app.get(PaymentService, { strict: false }),
+            webhooks: app.get(PaymentWebhookService, { strict: false }),
+          },
     });
     const report = await seed.run({
       anchorDate: args.anchorDate,
       tripsPerDirection: args.tripsPerDirection,
       dryRun: args.mode !== 'apply',
+      commerceUnavailable: unavailable,
     });
     if (args.mode !== 'summary') {
       for (const line of report.lines) {
@@ -100,7 +139,7 @@ async function main(): Promise<number> {
     }
     return 0;
   } finally {
-    await database.client.$disconnect();
+    await app.close();
   }
 }
 

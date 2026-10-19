@@ -1,7 +1,12 @@
 import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { PublicApiError } from '../auth/http/public-api-error.js';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import {
+  customerIdentityOf,
+  type Actor,
+  type AuthPrincipal,
+  type CustomerActor,
+} from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import {
@@ -74,7 +79,7 @@ export class BookingService {
    * unique index on (trip, seat, segment) is the final authority against
    * overbooking: a lost race is BOOKING_SEAT_UNAVAILABLE, with no partial state.
    */
-  async create(input: BookingCreate, actor: AuthPrincipal) {
+  async create(input: BookingCreate, actor: CustomerActor) {
     const seatIds = input.seatMapCellIds;
     if (new Set(seatIds).size !== seatIds.length) throw BookingErrors.seatInvalid();
     if (seatIds.length > this.config.maxSeatsPerHold) {
@@ -99,7 +104,7 @@ export class BookingService {
   private async createInTransaction(
     tx: DatabaseTransaction,
     input: BookingCreate,
-    actor: AuthPrincipal,
+    actor: CustomerActor,
     reference: string,
   ): Promise<string> {
     const trip = await readBookableTrip(tx, input.tripId, this.config.holdTtlSeconds, true);
@@ -138,7 +143,7 @@ export class BookingService {
     const booking = await tx.booking.create({
       data: {
         reference,
-        customerIdentityId: actor.identityId,
+        customerIdentityId: customerIdentityOf(actor),
         tripId: trip.id,
         originRouteWaypointId: input.originRouteWaypointId,
         destinationRouteWaypointId: input.destinationRouteWaypointId,
@@ -206,7 +211,7 @@ export class BookingService {
 
   /** The caller's own bookings, newest first; the cursor is a reference. */
   async customerBookings(
-    actor: AuthPrincipal,
+    actor: CustomerActor,
     query: { limit: number; cursor?: string | undefined },
   ) {
     const client = this.database.client;
@@ -215,7 +220,7 @@ export class BookingService {
       const reference = normalizeBookingReference(query.cursor);
       const anchor = reference
         ? await client.booking.findFirst({
-            where: { reference, customerIdentityId: actor.identityId },
+            where: { reference, customerIdentityId: customerIdentityOf(actor) },
             select: { id: true },
           })
         : null;
@@ -226,7 +231,7 @@ export class BookingService {
       client.booking.findMany({
         take: query.limit + 1,
         where: {
-          customerIdentityId: actor.identityId,
+          customerIdentityId: customerIdentityOf(actor),
           ...(cursorId ? { id: { lt: cursorId } } : {}),
         },
         orderBy: { id: 'desc' },
@@ -242,13 +247,13 @@ export class BookingService {
   }
 
   /** Never by reference alone: always scoped to the calling CUSTOMER. */
-  async customerBooking(actor: AuthPrincipal, rawReference: string) {
+  async customerBooking(actor: CustomerActor, rawReference: string) {
     const reference = normalizeBookingReference(rawReference);
     if (!reference) throw BookingErrors.notFound();
     const client = this.database.client;
     const [row, now] = await Promise.all([
       client.booking.findFirst({
-        where: { reference, customerIdentityId: actor.identityId },
+        where: { reference, customerIdentityId: customerIdentityOf(actor) },
         include: bookingInclude,
       }),
       databaseNow(client),
@@ -258,11 +263,11 @@ export class BookingService {
   }
 
   /** The owner cancels an active hold; unknown and foreign bookings are alike. */
-  async cancelByCustomer(actor: AuthPrincipal, rawReference: string) {
+  async cancelByCustomer(actor: CustomerActor, rawReference: string) {
     const reference = normalizeBookingReference(rawReference);
     if (!reference) throw BookingErrors.notFound();
     const target = await this.database.client.booking.findFirst({
-      where: { reference, customerIdentityId: actor.identityId },
+      where: { reference, customerIdentityId: customerIdentityOf(actor) },
       select: { id: true },
     });
     if (!target) throw BookingErrors.notFound();
@@ -271,7 +276,7 @@ export class BookingService {
       (tx) => tx.$queryRaw<LockedBooking[]>`
         SELECT "id", "reference", "trip_id", "cancelled_at", "confirmed_at", "hold_expires_at"
         FROM "booking"
-        WHERE "id" = ${target.id}::uuid AND "customer_identity_id" = ${actor.identityId}::uuid
+        WHERE "id" = ${target.id}::uuid AND "customer_identity_id" = ${customerIdentityOf(actor)}::uuid
         FOR UPDATE
       `,
       actor,
@@ -307,7 +312,7 @@ export class BookingService {
   private async cancel(
     bookingId: string,
     lock: (tx: DatabaseTransaction) => Promise<LockedBooking[]>,
-    actor: AuthPrincipal,
+    actor: Actor,
     reason: string,
     by: 'CUSTOMER' | 'STAFF',
   ) {

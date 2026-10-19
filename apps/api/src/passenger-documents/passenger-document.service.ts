@@ -4,7 +4,11 @@ import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
 import type { Logger } from '@euroteranga/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Request } from 'express';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import {
+  customerIdentityOf,
+  type AuthPrincipal,
+  type CustomerActor,
+} from '../auth/session/auth-principal.js';
 import { RATE_LIMITS } from '../auth/rate-limit/rate-limit.rules.js';
 import { RateLimitService } from '../auth/rate-limit/rate-limit.service.js';
 import { AuditService } from '../authorization/audit.service.js';
@@ -101,7 +105,7 @@ export class PassengerDocumentService {
     };
   }
 
-  async createPassenger(actor: AuthPrincipal, rawBookingReference: string, input: PassengerCreate) {
+  async createPassenger(actor: CustomerActor, rawBookingReference: string, input: PassengerCreate) {
     const bookingReference = rawBookingReference.trim().toUpperCase();
     if (!/^ETB-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{12}$/.test(bookingReference)) {
       throw PassengerDocumentErrors.bookingNotFound();
@@ -116,7 +120,7 @@ export class PassengerDocumentService {
               SELECT "id", "confirmed_at", "cancelled_at"
               FROM "booking"
               WHERE "reference" = ${bookingReference}
-                AND "customer_identity_id" = ${actor.identityId}::uuid
+                AND "customer_identity_id" = ${customerIdentityOf(actor)}::uuid
               FOR UPDATE`;
             if (!booking) throw PassengerDocumentErrors.bookingNotFound();
             if (!booking.confirmed_at || booking.cancelled_at) {
@@ -136,7 +140,7 @@ export class PassengerDocumentService {
             const passenger = await tx.passenger.create({
               data: {
                 reference,
-                ownerCustomerIdentityId: actor.identityId,
+                ownerCustomerIdentityId: customerIdentityOf(actor),
                 givenName: input.givenName,
                 familyName: input.familyName,
                 dateOfBirth: input.dateOfBirth,
@@ -178,10 +182,10 @@ export class PassengerDocumentService {
     return this.customerPassenger(actor, passengerReference);
   }
 
-  async bookingPassengers(actor: AuthPrincipal, rawBookingReference: string) {
+  async bookingPassengers(actor: CustomerActor, rawBookingReference: string) {
     const bookingReference = rawBookingReference.trim().toUpperCase();
     const booking = await this.database.client.booking.findFirst({
-      where: { reference: bookingReference, customerIdentityId: actor.identityId },
+      where: { reference: bookingReference, customerIdentityId: customerIdentityOf(actor) },
       select: { id: true },
     });
     if (!booking) throw PassengerDocumentErrors.bookingNotFound();
@@ -193,11 +197,11 @@ export class PassengerDocumentService {
     return { items: links.map(({ passenger }) => passengerView(passenger)) };
   }
 
-  async customerPassenger(actor: AuthPrincipal, rawReference: string) {
+  async customerPassenger(actor: CustomerActor, rawReference: string) {
     const reference = normalizePassengerReference(rawReference);
     if (!reference) throw PassengerDocumentErrors.passengerNotFound();
     const passenger = await this.database.client.passenger.findFirst({
-      where: { reference, ownerCustomerIdentityId: actor.identityId },
+      where: { reference, ownerCustomerIdentityId: customerIdentityOf(actor) },
       include: passengerInclude,
     });
     if (!passenger) throw PassengerDocumentErrors.passengerNotFound();

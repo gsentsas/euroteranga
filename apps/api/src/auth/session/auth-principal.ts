@@ -32,3 +32,21 @@ export function isSystemActor(actor: Actor): actor is SystemActor {
 export function actorIdentityId(actor: Actor): string | null {
   return isSystemActor(actor) ? null : actor.identityId;
 }
+
+/**
+ * An operator command acting for a customer identity it created itself (the
+ * realistic seed's synthetic customers). The resources belong to that
+ * customer; the audit records the system actor, never a session or a person.
+ * It is never built from an HTTP request.
+ */
+export interface SystemCustomerActor extends SystemActor {
+  readonly customerIdentityId: string;
+}
+
+/** Who acts on a customer's own bookings, passengers and payments. */
+export type CustomerActor = AuthPrincipal | SystemCustomerActor;
+
+/** The customer who owns what a customer actor creates or reads. */
+export function customerIdentityOf(actor: CustomerActor): string {
+  return isSystemActor(actor) ? actor.customerIdentityId : actor.identityId;
+}
