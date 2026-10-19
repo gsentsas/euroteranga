@@ -24,21 +24,21 @@ export function RouteIllustration() {
       viewBox="0 0 320 240"
       fill="none"
     >
-      <rect x="0" y="0" width="320" height="240" rx="24" fill="#e8f5ef" />
+      <rect x="0" y="0" width="320" height="240" rx="24" fill="#eaf0fb" />
       <path
         d="M226 34c-20 22-46 30-58 52-10 18 4 34-8 52-14 22-56 26-74 58"
-        stroke="#0b5d4b"
+        stroke="#1f4fd1"
         strokeWidth="4"
         strokeDasharray="10 9"
         strokeLinecap="round"
       />
-      <circle cx="226" cy="34" r="10" fill="#073b31" />
-      <circle cx="160" cy="138" r="6" fill="#e7aa2f" />
-      <circle cx="86" cy="196" r="10" fill="#e7aa2f" stroke="#073b31" strokeWidth="4" />
+      <circle cx="226" cy="34" r="10" fill="#0b2353" />
+      <circle cx="160" cy="138" r="6" fill="#f5b31c" />
+      <circle cx="86" cy="196" r="10" fill="#f5b31c" stroke="#0b2353" strokeWidth="4" />
       <text
         x="244"
         y="40"
-        fill="#073b31"
+        fill="#0b2353"
         fontFamily="system-ui, sans-serif"
         fontSize="16"
         fontWeight="700"
@@ -48,7 +48,7 @@ export function RouteIllustration() {
       <text
         x="104"
         y="216"
-        fill="#073b31"
+        fill="#0b2353"
         fontFamily="system-ui, sans-serif"
         fontSize="16"
         fontWeight="700"
@@ -69,14 +69,14 @@ export function CoachIllustration() {
       viewBox="0 0 320 200"
       fill="none"
     >
-      <rect x="0" y="0" width="320" height="200" rx="24" fill="#f8f1df" />
-      <path d="M24 156h272" stroke="#d9cfb5" strokeWidth="4" strokeLinecap="round" />
-      <rect x="40" y="62" width="236" height="80" rx="16" fill="#073b31" />
-      <rect x="52" y="74" width="168" height="30" rx="6" fill="#e8f5ef" />
-      <path d="M232 74h28a8 8 0 0 1 8 8v22h-36V74Z" fill="#e8f5ef" />
-      <path d="M40 116h236" stroke="#e7aa2f" strokeWidth="6" />
-      <circle cx="92" cy="146" r="16" fill="#17201d" stroke="#fffdf7" strokeWidth="5" />
-      <circle cx="226" cy="146" r="16" fill="#17201d" stroke="#fffdf7" strokeWidth="5" />
+      <rect x="0" y="0" width="320" height="200" rx="24" fill="#eef3fb" />
+      <path d="M24 156h272" stroke="#c9d4e8" strokeWidth="4" strokeLinecap="round" />
+      <rect x="40" y="62" width="236" height="80" rx="16" fill="#0b2353" />
+      <rect x="52" y="74" width="168" height="30" rx="6" fill="#eaf0fb" />
+      <path d="M232 74h28a8 8 0 0 1 8 8v22h-36V74Z" fill="#eaf0fb" />
+      <path d="M40 116h236" stroke="#f5b31c" strokeWidth="6" />
+      <circle cx="92" cy="146" r="16" fill="#0e1a33" stroke="#ffffff" strokeWidth="5" />
+      <circle cx="226" cy="146" r="16" fill="#0e1a33" stroke="#ffffff" strokeWidth="5" />
     </svg>
   );
 }

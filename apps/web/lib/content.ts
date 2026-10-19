@@ -8,6 +8,8 @@ import {
   type PageDocument,
 } from '@euroteranga/content';
 import {
+  directionKey,
+  localDate,
   resolveMedia,
   siteMediaOf,
   type AppLinks,
@@ -15,7 +17,9 @@ import {
   type PublicMediaRecord,
   type RouteDirection,
   type SiteContext,
+  type SiteDeparture,
   type SiteMedia,
+  type SiteStop,
 } from '@euroteranga/site';
 import { publicEnv } from './env';
 
@@ -26,6 +30,10 @@ import { publicEnv } from './env';
  */
 const CONTENT_REVALIDATE_SECONDS = 60;
 const PRICE_REVALIDATE_SECONDS = 300;
+/** Remaining seats change with every booking: departures are refreshed every minute. */
+const DEPARTURES_REVALIDATE_SECONDS = 60;
+/** Departures read per direction (the block shows at most 6 in total). */
+const DEPARTURES_PER_DIRECTION = 12;
 const TIMEOUT_MS = 3000;
 
 /** Loopback API base for server-side reads when set (avoids the public round trip). */
@@ -95,10 +103,96 @@ function appLinks(settingsApps: {
 interface PublicStop {
   id: string;
   code: string;
+  name: string;
+  locality: string;
+  timezone: string;
+  country: { iso2: string; name: string };
 }
 
 interface PublicJourney {
+  tripId: string;
+  origin: { stop: PublicStop | null; plannedDepartureAt: string };
+  destination: { stop: PublicStop | null };
+  availableSeatCount: number;
   fare: FromPrice;
+}
+
+const siteStopOf = (stop: PublicStop): SiteStop => ({
+  code: stop.code,
+  name: stop.name,
+  locality: stop.locality,
+  countryName: stop.country.name,
+  timezone: stop.timezone,
+});
+
+/**
+ * Active stops of the network (public stops API), or null when it cannot
+ * answer. The stops a page names by code are always resolved exactly (a
+ * search by code), even beyond the first page of the list.
+ */
+async function loadStops(codes: readonly string[]): Promise<PublicStop[] | null> {
+  const [listed, ...named] = await Promise.all([
+    read<{ items: PublicStop[] }>('/v1/booking/stops?limit=50', PRICE_REVALIDATE_SECONDS),
+    ...[...new Set(codes)].map((code) =>
+      read<{ items: PublicStop[] }>(
+        `/v1/booking/stops?query=${encodeURIComponent(code)}&limit=50`,
+        PRICE_REVALIDATE_SECONDS,
+      ),
+    ),
+  ]);
+  if (listed?.status !== 'ok') return null;
+  const stops = new Map(listed.data.items.map((stop) => [stop.code, stop]));
+  [...new Set(codes)].forEach((code, index) => {
+    const result = named[index];
+    const exact =
+      result?.status === 'ok' ? result.data.items.find((stop) => stop.code === code) : undefined;
+    if (exact) stops.set(exact.code, exact);
+  });
+  return [...stops.values()];
+}
+
+/**
+ * UI-PUBLIC-1: bookable departures of each direction, from the public trip
+ * search (Trips, Booking, Pricing). A direction whose search fails is null:
+ * the page says so instead of inventing dates.
+ */
+async function loadDepartures(
+  routes: ReadonlyArray<{ fromCode: string; toCode: string }>,
+  stops: PublicStop[] | null,
+): Promise<Map<string, SiteDeparture[] | null>> {
+  const found = new Map<string, SiteDeparture[] | null>();
+  await Promise.all(
+    routes.map(async ({ fromCode, toCode }) => {
+      const key = directionKey(fromCode, toCode);
+      const origin = stops?.find((stop) => stop.code === fromCode);
+      const destination = stops?.find((stop) => stop.code === toCode);
+      if (!origin || !destination) {
+        // Unknown stops are not an outage: the direction simply has no departure.
+        found.set(key, stops ? [] : null);
+        return;
+      }
+      const result = await read<{ items: PublicJourney[] }>(
+        `/v1/booking/trips?originStopId=${origin.id}&destinationStopId=${destination.id}&limit=${DEPARTURES_PER_DIRECTION}`,
+        DEPARTURES_REVALIDATE_SECONDS,
+      );
+      if (result.status !== 'ok') {
+        found.set(key, null);
+        return;
+      }
+      found.set(
+        key,
+        result.data.items.map((item) => ({
+          tripId: item.tripId,
+          from: siteStopOf(item.origin.stop ?? origin),
+          to: siteStopOf(item.destination.stop ?? destination),
+          departureAt: item.origin.plannedDepartureAt,
+          availableSeats: item.availableSeatCount,
+          fare: item.fare,
+        })),
+      );
+    }),
+  );
+  return found;
 }
 
 /** Lowest current fare of one direction, or null (no bookable trip, mixed currencies). */
@@ -115,13 +209,9 @@ async function fromPrice(origin: PublicStop | undefined, destination: PublicStop
   return fares.reduce((lowest, fare) => (fare.amountMinor < lowest.amountMinor ? fare : lowest));
 }
 
-async function fromPrices(): Promise<SiteContext['fromPrices']> {
-  const stops = await read<{ items: PublicStop[] }>(
-    '/v1/booking/stops?limit=50',
-    PRICE_REVALIDATE_SECONDS,
-  );
-  if (stops.status !== 'ok') return {};
-  const byCode = (code: string) => stops.data.items.find((stop) => stop.code === code);
+async function fromPrices(stops: PublicStop[] | null): Promise<SiteContext['fromPrices']> {
+  if (!stops) return {};
+  const byCode = (code: string) => stops.find((stop) => stop.code === code);
   const [paris, dakar] = [byCode('PAR'), byCode('DKR')];
   const entries: Array<[RouteDirection, FromPrice | null]> = [
     ['PAR-DKR', await fromPrice(paris, dakar)],
@@ -155,13 +245,29 @@ export async function loadMedia(ids: readonly string[]): Promise<Map<string, Sit
 export async function loadSiteContext(options: {
   prices: boolean;
   mediaIds?: readonly string[];
+  /** The page has a trip search: list the active stops (and its own two). */
+  search?: { fromCode: string; toCode: string };
+  /** Directions of the page's departures blocks. */
+  departureRoutes?: ReadonlyArray<{ fromCode: string; toCode: string }>;
 }): Promise<SiteContext> {
-  const [site, media] = await Promise.all([
+  const routes = options.departureRoutes ?? [];
+  const needsStops = options.prices || options.search !== undefined || routes.length > 0;
+  const named = [
+    ...(options.prices ? ['PAR', 'DKR'] : []),
+    ...(options.search ? [options.search.fromCode, options.search.toCode] : []),
+    ...routes.flatMap((route) => [route.fromCode, route.toCode]),
+  ];
+  const [site, media, stops] = await Promise.all([
     read<{ settings: unknown; navigation: unknown }>(
       '/v1/content/site',
       CONTENT_REVALIDATE_SECONDS,
     ),
     loadMedia(options.mediaIds ?? []),
+    needsStops ? loadStops(named) : Promise.resolve(null),
+  ]);
+  const [prices, departures] = await Promise.all([
+    options.prices ? fromPrices(stops) : Promise.resolve({}),
+    routes.length > 0 ? loadDepartures(routes, stops) : Promise.resolve(null),
   ]);
   const settings =
     (site.status === 'ok' && siteSettingsSchema.safeParse(site.data.settings).data) ||
@@ -173,8 +279,16 @@ export async function loadSiteContext(options: {
     settings,
     navigation,
     apps: appLinks(settings.apps),
-    fromPrices: options.prices ? await fromPrices() : {},
+    fromPrices: prices,
     media: (id) => media.get(id.toLowerCase()) ?? null,
+    ...(options.search && stops ? { stops: stops.map(siteStopOf) } : {}),
+    ...(departures
+      ? {
+          departures: (fromCode: string, toCode: string) =>
+            departures.get(directionKey(fromCode, toCode)) ?? null,
+        }
+      : {}),
+    today: localDate(new Date().toISOString(), 'Europe/Paris'),
     year: new Date().getUTCFullYear(),
   };
 }

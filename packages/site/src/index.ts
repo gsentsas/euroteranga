@@ -8,6 +8,18 @@ export {
   type SiteContext,
   type SiteMedia,
 } from './blocks.js';
+export {
+  bookingSearchHref,
+  departureLabel,
+  directionKey,
+  localDate,
+  MAX_SEARCH_PASSENGERS,
+  nextDepartures,
+  seatsLabel,
+  type DepartureLookup,
+  type SiteDeparture,
+  type SiteStop,
+} from './departures.js';
 export { CoachMark, Icon, type IconName } from './icons.js';
 export { CoachIllustration, RouteIllustration, TrackingIllustration } from './illustrations.js';
 export { resolveHref, type AppLinks } from './links.js';

@@ -20,11 +20,31 @@ export const foundationSecurityHeaders: ReadonlyArray<FoundationSecurityHeader> 
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
 ];
 
-function contentSecurityPolicy(env: PublicEnv): string {
+export interface FoundationSecurityOptions {
+  /**
+   * Exact origins a form of this frontend may be sent to, besides itself
+   * (UI-PUBLIC-1: the website's trip search opens the booking application).
+   */
+  formActionOrigins?: readonly string[];
+}
+
+/** The exact origin of an absolute URL; https only in staging and production. */
+function formOrigin(url: string, deployed: boolean): string {
+  const parsed = new URL(url);
+  if (parsed.protocol !== 'https:' && (deployed || parsed.protocol !== 'http:')) {
+    throw new Error(`form-action origin must use https: ${url}`);
+  }
+  return parsed.origin;
+}
+
+function contentSecurityPolicy(env: PublicEnv, options: FoundationSecurityOptions): string {
   const deployed =
     env.NEXT_PUBLIC_APP_ENV === 'staging' || env.NEXT_PUBLIC_APP_ENV === 'production';
   const localDevelopment = env.NEXT_PUBLIC_APP_ENV === 'local';
   const apiOrigin = new URL(env.NEXT_PUBLIC_API_BASE_URL).origin;
+  const formOrigins = [
+    ...new Set((options.formActionOrigins ?? []).map((url) => formOrigin(url, deployed))),
+  ];
 
   const directives = [
     "default-src 'self'",
@@ -39,7 +59,7 @@ function contentSecurityPolicy(env: PublicEnv): string {
     "media-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    `form-action 'self'${formOrigins.map((origin) => ` ${origin}`).join('')}`,
     "frame-src 'none'",
     "frame-ancestors 'none'",
   ];
@@ -49,9 +69,10 @@ function contentSecurityPolicy(env: PublicEnv): string {
 
 export function buildFoundationSecurityHeaders(
   env: PublicEnv,
+  options: FoundationSecurityOptions = {},
 ): ReadonlyArray<FoundationSecurityHeader> {
   return [
-    { key: 'Content-Security-Policy', value: contentSecurityPolicy(env) },
+    { key: 'Content-Security-Policy', value: contentSecurityPolicy(env, options) },
     ...foundationSecurityHeaders,
   ];
 }

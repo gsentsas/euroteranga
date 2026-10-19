@@ -26,4 +26,30 @@ describe('foundation Content-Security-Policy', () => {
     expect(csp.get('object-src')).toEqual(["'none'"]);
     expect(csp.has('upgrade-insecure-requests')).toBe(true);
   });
+
+  it('lets a form target the booking application only when asked, by exact origin (UI-PUBLIC-1)', () => {
+    const env = loadPublicEnv({
+      NEXT_PUBLIC_APP_ENV: 'production',
+      NEXT_PUBLIC_API_BASE_URL: 'https://api.euroteranga.com',
+    });
+    const formAction = (options?: Parameters<typeof buildFoundationSecurityHeaders>[1]) =>
+      buildFoundationSecurityHeaders(env, options)
+        .find((header) => header.key === 'Content-Security-Policy')!
+        .value.split('; ')
+        .find((directive) => directive.startsWith('form-action'));
+    expect(formAction()).toBe("form-action 'self'");
+    expect(
+      formAction({
+        formActionOrigins: [
+          'https://booking.euroteranga.com/reserver?x=1',
+          'https://booking.euroteranga.com/',
+        ],
+      }),
+    ).toBe("form-action 'self' https://booking.euroteranga.com");
+    expect(() => formAction({ formActionOrigins: ['http://booking.euroteranga.com/'] })).toThrow(
+      'https',
+    );
+    expect(() => formAction({ formActionOrigins: ['javascript:alert(1)'] })).toThrow();
+    expect(() => formAction({ formActionOrigins: ['*'] })).toThrow();
+  });
 });

@@ -30,7 +30,7 @@ export function generateMetadata(): Metadata {
   };
 }
 
-export const viewport: Viewport = { themeColor: '#073b31' };
+export const viewport: Viewport = { themeColor: '#061533' };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
