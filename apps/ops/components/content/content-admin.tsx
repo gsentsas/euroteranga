@@ -146,7 +146,7 @@ export function ContentAdmin() {
       const result = await auth.admin.content.create({ kind });
       if (result.ok) createdId = result.data.id;
       return result;
-    }, `${KIND_LABELS[kind]} créés à partir du contenu par défaut (brouillon).`).then((ok) => {
+    }, `${kind === 'NAVIGATION' ? 'Navigation créée' : 'Paramètres du site créés'} à partir du contenu par défaut (brouillon).`).then((ok) => {
       if (ok && createdId) open(createdId);
     });
   };
