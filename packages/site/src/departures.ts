@@ -96,6 +96,16 @@ export function departureLabel(iso: string, timeZone: string): { day: string; ti
   };
 }
 
+/** "jeu. 12 nov." (date strips, timelines): the year is in the <time> element. */
+export function shortDayLabel(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: safeTimeZone(timeZone),
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  }).format(new Date(iso));
+}
+
 /** "3 places disponibles", "Dernière place disponible". */
 export function seatsLabel(count: number): string {
   if (count === 1) return 'Dernière place disponible';

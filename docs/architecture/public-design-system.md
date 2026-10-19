@@ -1,4 +1,4 @@
-# Public website design system (UI-PUBLIC-1)
+# Public website design system (UI-PUBLIC-1, UI-PUBLIC-2)
 
 The public website (`apps/web`) and the OPS preview render the same
 components (`@euroteranga/site`) with the same stylesheet
@@ -64,17 +64,56 @@ The visual acceptance measures contrast on every page width.
   Steps are numbered in gold.
 - **Footer:** navy; gold column titles; owner contact only when provided.
 
+### Inner pages (UI-PUBLIC-2)
+
+The trip pages (Paris → Dakar, Dakar → Paris), "Nos bus" and "Services"
+follow sections 2 to 4 of the mockup.
+
+- **Page hero:** the same hero, shorter, with the breadcrumb "Accueil ›
+  page" above the title (`nav` "Fil d’Ariane", `aria-current="page"`, the
+  separator hidden from screen readers).
+- **Section tabs:** a white bar under the sticky header, links to the
+  page's anchors; it scrolls sideways on phones rather than wrapping. The
+  anchor offset (`scroll-padding-top`) includes it.
+- **Departure dates:** a grid of date tiles (date, local time, fare,
+  seats left); the soonest is royal blue, as the selected day of the
+  mockup. Without JavaScript there is no carousel: tiles wrap (2 per row
+  on phones). One gold "Réserver ce voyage" button below.
+- **Itinerary:** white panels:
+  - a vertical timeline with the departure, the stops and crossings in
+    between (count, countries, details in a `<details>`), the duration and
+    the arrival with its "+1 j" day offset;
+  - "Inclus dans votre voyage" as a check list (green check, AA as a
+    graphic) when there is something to list;
+  - a schematic of the route with one point per country, and the list of
+    countries with their ISO codes. The mockup shows a map: without real
+    coordinates or a map provider allowed by the CSP, a schematic is
+    shown instead, labelled "sans échelle".
+- **Coaches:** navy pill tabs when there are several coaches; each coach
+  is a large card: photo (or the coach illustration), name, model line,
+  description, a 2-column list of facts (seats, then equipment with its
+  icon) and an interior photo strip. The strip scrolls sideways and is
+  keyboard-focusable (`role="region"`, `tabindex="0"`).
+- **Service cards with a photo:** the icon becomes a gold disc on the
+  photo's lower edge, as in the mockup.
+
+Equipment icons (`snowflake`, `recline`, `plug`, `wifi`, `toilet`,
+`screen`, `wheelchair`, `users`, `check`) are internal to the site
+package: editors cannot pick them, so an icon can never suggest equipment
+a coach does not have.
+
 ## Breakpoints
 
 Checked at 1440, 1280, 1024, 820 (tablet), 430, 390 and 375 px:
 
 - **80rem (1280 px):** the strengths row wraps to 3 per row.
 - **64rem (1024 px):** mobile navigation; 2-column search, departures and
-  cards.
+  cards; itinerary panels and coach cards stack.
 - **48rem (768 px):** single-column sections; the photo veil covers the
   whole hero.
 - **30rem (480 px):** single-column search, strengths and footer; the menu
-  button shows its icon only (its name stays readable by screen readers).
+  button shows its icon only (its name stays readable by screen readers);
+  2 date tiles per row; one coach fact per row.
 
 ## Performance
 
@@ -100,7 +139,8 @@ Nothing on these pages is invented:
 - Content comes from the CMS, images from the media library and fares
   from Pricing.
 - Departures and seats left come from the public trip search.
-- Figures, reviews and on-board equipment appear only when the owner
-  provides them.
+- Figures and reviews appear only when the owner provides them.
+- Itineraries come from the next bookable trip; on-board equipment only
+  from the fleet record of the coach (UI-PUBLIC-2).
 - Until real photographs are uploaded, the hero uses the navy backdrop and
   departures use placeholders.

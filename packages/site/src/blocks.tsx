@@ -14,11 +14,28 @@ import {
   MAX_SEARCH_PASSENGERS,
   nextDepartures,
   seatsLabel,
+  shortDayLabel,
   stopOptionLabel,
   type DepartureLookup,
+  type SiteDeparture,
   type SiteStop,
 } from './departures.js';
+import {
+  AMENITIES,
+  fleetVehicles,
+  vehicleAnchor,
+  vehicleModelLine,
+  vehicleTitle,
+  type FleetLookup,
+} from './fleet.js';
 import { Icon } from './icons.js';
+import {
+  dayOffset,
+  durationLabel,
+  placeKindLabel,
+  type ItineraryLookup,
+  type SitePlace,
+} from './itinerary.js';
 import { CoachIllustration, RouteIllustration, TrackingIllustration } from './illustrations.js';
 import { resolveHref, type AppLinks } from './links.js';
 import { formatPrice, type FromPrice } from './money.js';
@@ -86,8 +103,12 @@ export interface SiteContext {
   stops?: readonly SiteStop[];
   /** UI-PUBLIC-1: bookable departures per direction (public trip search). */
   departures?: DepartureLookup;
-  /** Today (YYYY-MM-DD, Paris time): the earliest date the search offers. */
+  /** Today (YYYY-MM-DD) in the search origin's timezone: the earliest date offered. */
   today?: string;
+  /** UI-PUBLIC-2: itinerary of the next departure per direction (Trips, Fleet). */
+  itineraries?: ItineraryLookup;
+  /** UI-PUBLIC-2: active vehicles (public fleet read); null when it could not answer. */
+  fleet?: FleetLookup;
   year: number;
 }
 
@@ -408,11 +429,14 @@ function Hero({
   block,
   ctx,
   titleId,
+  pageTitle,
 }: {
   block: Extract<ContentBlock, { type: 'hero' }>;
   ctx: SiteContext;
   titleId: string;
+  pageTitle: string;
 }) {
+  const inner = block.variant === 'page';
   const photo = block.mediaId ? (ctx.media?.(block.mediaId) ?? null) : null;
   const focal =
     photo &&
@@ -423,7 +447,7 @@ function Hero({
       : undefined;
   return (
     <section
-      className={`public-hero${photo ? ' public-hero--photo' : ''}${block.search ? ' public-hero--search' : ''}`}
+      className={`public-hero${inner ? ' public-hero--page' : ''}${photo ? ' public-hero--photo' : ''}${block.search ? ' public-hero--search' : ''}`}
       aria-labelledby={titleId}
       {...(block.anchor ? { id: block.anchor } : {})}
     >
@@ -448,6 +472,21 @@ function Hero({
       )}
       <div className="public-container public-hero__inner">
         <div className="public-hero__content">
+          {inner ? (
+            <nav className="public-breadcrumb" aria-label="Fil d’Ariane">
+              <ol>
+                <li>
+                  <a href={resolveHref({ kind: 'page', path: '/' }, ctx.apps)}>Accueil</a>
+                </li>
+                <li aria-current="page">
+                  <span className="public-breadcrumb__separator" aria-hidden="true">
+                    ›
+                  </span>
+                  {pageTitle}
+                </li>
+              </ol>
+            </nav>
+          ) : null}
           {block.eyebrow ? (
             <div className="public-eyebrow">
               <span className="public-eyebrow__dot" aria-hidden="true" />
@@ -486,7 +525,7 @@ function Hero({
         </div>
         {block.search ? (
           <HeroSearch search={block.search} ctx={ctx} />
-        ) : block.journeyCard ? (
+        ) : block.journeyCard && !inner ? (
           <TripCard ctx={ctx} />
         ) : null}
         {block.note ? (
@@ -517,6 +556,18 @@ function Departures({
   titleId: string;
 }) {
   const { items, unavailable } = nextDepartures(block.routes, ctx.departures, block.limit);
+  if (block.layout === 'dates') {
+    return (
+      <DepartureDates
+        block={block}
+        ctx={ctx}
+        index={index}
+        titleId={titleId}
+        items={items}
+        unavailable={unavailable}
+      />
+    );
+  }
   const photoOf = (fromCode: string, toCode: string) => {
     const route = block.routes.find(
       (candidate) => candidate.fromCode === fromCode && candidate.toCode === toCode,
@@ -598,18 +649,549 @@ function Departures({
           })}
         </ul>
       ) : (
+        <NoDepartures unavailable={unavailable} ctx={ctx} />
+      )}
+    </Section>
+  );
+}
+
+function NoDepartures({ unavailable, ctx }: { unavailable: boolean; ctx: SiteContext }) {
+  return (
+    <div className="public-departures__empty" role="status">
+      <span className="public-card-icon" aria-hidden="true">
+        <Icon name="clock" />
+      </span>
+      <p>
+        {unavailable
+          ? 'Les prochains départs ne peuvent pas être affichés pour le moment : ils restent consultables dans l’espace de réservation.'
+          : 'Les prochains départs seront affichés ici dès leur ouverture à la réservation.'}
+      </p>
+      <a className="public-button" href={ctx.apps.booking}>
+        Ouvrir la réservation <Icon name="arrow" />
+      </a>
+    </div>
+  );
+}
+
+/**
+ * UI-PUBLIC-2: the departure dates of a trip page, each with its exact fare,
+ * and one "book this trip" button for the soonest one.
+ */
+function DepartureDates({
+  block,
+  ctx,
+  index,
+  titleId,
+  items,
+  unavailable,
+}: {
+  block: Extract<ContentBlock, { type: 'departures' }>;
+  ctx: SiteContext;
+  index: number;
+  titleId: string;
+  items: readonly SiteDeparture[];
+  unavailable: boolean;
+}) {
+  const soonest = items[0];
+  const several = block.routes.length > 1;
+  return (
+    <Section block={block} index={index} ctx={ctx} extraClass="public-dates-section">
+      <div className="public-departures__head">
+        <SectionHead id={titleId} kicker={block.kicker} title={block.title} intro={block.intro} />
+        {block.cta ? (
+          <ContentAnchor className="public-link-arrow" link={block.cta} ctx={ctx} />
+        ) : null}
+      </div>
+      {soonest ? (
+        <>
+          <ul className="public-dates" aria-labelledby={titleId}>
+            {items.map((departure) => {
+              const label = departureLabel(departure.departureAt, departure.from.timezone);
+              const route = `${departure.from.locality} → ${departure.to.locality}`;
+              return (
+                <li key={`${departure.tripId}:${departure.from.code}`}>
+                  <a
+                    className="public-date"
+                    href={bookingSearchHref(ctx.apps.booking, {
+                      from: departure.from.code,
+                      to: departure.to.code,
+                      date: localDate(departure.departureAt, departure.from.timezone),
+                    })}
+                  >
+                    {several ? <span className="public-date__route">{route}</span> : null}
+                    <time className="public-date__day" dateTime={departure.departureAt}>
+                      {shortDayLabel(departure.departureAt, departure.from.timezone)}
+                    </time>
+                    <span className="public-date__time">{label.time}</span>
+                    <strong className="public-date__price">{formatPrice(departure.fare)}</strong>
+                    <span className="public-date__seats">
+                      {seatsLabel(departure.availableSeats)}
+                    </span>
+                    <span className="et-visually-hidden">
+                      {' '}
+                      : réserver {route}, {label.day}
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+          <a
+            className="public-button public-button--gold public-dates__book"
+            href={bookingSearchHref(ctx.apps.booking, {
+              from: soonest.from.code,
+              to: soonest.to.code,
+              date: localDate(soonest.departureAt, soonest.from.timezone),
+            })}
+          >
+            Réserver ce voyage
+            <span className="et-visually-hidden">
+              {' '}
+              : {soonest.from.locality} → {soonest.to.locality},{' '}
+              {departureLabel(soonest.departureAt, soonest.from.timezone).day}
+            </span>{' '}
+            <Icon name="arrow" />
+          </a>
+        </>
+      ) : (
+        <NoDepartures unavailable={unavailable} ctx={ctx} />
+      )}
+    </Section>
+  );
+}
+
+/** UI-PUBLIC-2: links to the sections of the page, kept under the header. */
+function SectionNav({ block }: { block: Extract<ContentBlock, { type: 'sectionNav' }> }) {
+  return (
+    <nav
+      className="public-section-nav"
+      aria-label={block.label}
+      {...(block.anchor ? { id: block.anchor } : {})}
+    >
+      <div className="public-container">
+        <ul>
+          {block.items.map((item) => (
+            <li key={item.anchor}>
+              <a href={`#${item.anchor}`}>{item.label}</a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </nav>
+  );
+}
+
+/** Point `t` (0 to 1) of the cubic curve drawn by the route map. */
+function curvePoint(t: number): { x: number; y: number } {
+  const [p0, p1, p2, p3] = [
+    { x: 236, y: 34 },
+    { x: 96, y: 74 },
+    { x: 224, y: 168 },
+    { x: 78, y: 206 },
+  ] as const;
+  const u = 1 - t;
+  const at = (a: number, b: number, c: number, d: number) =>
+    u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d;
+  return { x: at(p0.x, p1.x, p2.x, p3.x), y: at(p0.y, p1.y, p2.y, p3.y) };
+}
+
+/**
+ * A schematic of the journey (not a map, not to scale): one point per
+ * country crossed, from the origin to the destination. Coordinates are
+ * never invented: the list next to it carries the information.
+ */
+function RouteSchematic({
+  origin,
+  destination,
+  countries,
+}: {
+  origin: string;
+  destination: string;
+  countries: number;
+}) {
+  const pointCount = Math.max(countries, 2);
+  const points = Array.from({ length: pointCount }, (_, index) =>
+    curvePoint(index / (pointCount - 1)),
+  );
+  const start = points[0]!;
+  const end = points.at(-1)!;
+  return (
+    <svg
+      className="public-route-schematic"
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 320 240"
+      fill="none"
+    >
+      <rect x="0" y="0" width="320" height="240" rx="20" fill="#eaf0fb" />
+      <path
+        d="M236 34C96 74 224 168 78 206"
+        stroke="#1f4fd1"
+        strokeWidth="4"
+        strokeDasharray="10 9"
+        strokeLinecap="round"
+      />
+      {points.slice(1, -1).map((point, index) => (
+        <circle key={index} cx={point.x} cy={point.y} r="6" fill="#f5b31c" />
+      ))}
+      <circle cx={start.x} cy={start.y} r="10" fill="#0b2353" />
+      <circle cx={end.x} cy={end.y} r="10" fill="#f5b31c" stroke="#0b2353" strokeWidth="4" />
+      <text
+        x={start.x - 18}
+        y={start.y + 5}
+        textAnchor="end"
+        fill="#0b2353"
+        fontSize="15"
+        fontWeight="700"
+      >
+        {origin}
+      </text>
+      <text x={end.x + 18} y={end.y + 5} fill="#0b2353" fontSize="15" fontWeight="700">
+        {destination}
+      </text>
+    </svg>
+  );
+}
+
+function PlaceTime({ at, place, offset }: { at: string; place: SitePlace; offset?: number }) {
+  const label = departureLabel(at, place.timezone);
+  return (
+    <p className="public-timeline__time">
+      <time dateTime={at}>{label.time}</time>
+      {offset ? (
+        <span className="public-timeline__offset">
+          {' '}
+          (+{offset} j<span className="et-visually-hidden">our{offset > 1 ? 's' : ''}</span>)
+        </span>
+      ) : null}
+      <span className="public-timeline__day">{shortDayLabel(at, place.timezone)}</span>
+    </p>
+  );
+}
+
+/**
+ * UI-PUBLIC-2: the planned itinerary of the next bookable departure, its
+ * duration, the countries crossed and what is included (the editor's list
+ * and the equipment of the assigned coach).
+ */
+function Itinerary({
+  block,
+  ctx,
+  index,
+  titleId,
+}: {
+  block: Extract<ContentBlock, { type: 'itinerary' }>;
+  ctx: SiteContext;
+  index: number;
+  titleId: string;
+}) {
+  const result = ctx.itineraries?.(block.fromCode, block.toCode) ?? { status: 'unavailable' };
+  if (result.status !== 'ok') {
+    return (
+      <Section block={block} index={index} ctx={ctx}>
+        <SectionHead id={titleId} kicker={block.kicker} title={block.title} intro={block.intro} />
         <div className="public-departures__empty" role="status">
           <span className="public-card-icon" aria-hidden="true">
-            <Icon name="clock" />
+            <Icon name="route" />
           </span>
           <p>
-            {unavailable
-              ? 'Les prochains départs ne peuvent pas être affichés pour le moment : ils restent consultables dans l’espace de réservation.'
-              : 'Les prochains départs seront affichés ici dès leur ouverture à la réservation.'}
+            {result.status === 'none'
+              ? 'Aucun départ n’est programmé pour le moment sur ce trajet : l’itinéraire détaillé sera affiché dès l’ouverture des réservations.'
+              : 'L’itinéraire ne peut pas être affiché pour le moment. Les horaires restent consultables dans l’espace de réservation.'}
           </p>
-          <a className="public-button" href={ctx.apps.booking}>
-            Ouvrir la réservation <Icon name="arrow" />
-          </a>
+        </div>
+      </Section>
+    );
+  }
+  const { origin, destination, via, countries, vehicle } = result.itinerary;
+  const departureAt = origin.departureAt;
+  const arrivalAt = destination.arrivalAt;
+  const duration = departureAt && arrivalAt ? durationLabel(departureAt, arrivalAt) : null;
+  const offset =
+    departureAt && arrivalAt
+      ? dayOffset(
+          { at: departureAt, timeZone: origin.timezone },
+          { at: arrivalAt, timeZone: destination.timezone },
+        )
+      : 0;
+  const amenities = block.showVehicleAmenities && vehicle ? vehicle.amenities : [];
+  const included = [
+    ...block.included.map((label) => ({ label, key: `cms:${label}` })),
+    ...amenities.map((amenity) => ({ label: AMENITIES[amenity].label, key: amenity })),
+  ];
+  const stops = via.filter((place) => place.kind === 'STOP').length;
+  const crossings = via.length - stops;
+  const viaLabel = [
+    stops ? `${stops} arrêt${stops > 1 ? 's' : ''}` : null,
+    crossings ? `${crossings} passage${crossings > 1 ? 's' : ''}` : null,
+  ]
+    .filter(Boolean)
+    .join(' et ');
+  return (
+    <Section block={block} index={index} ctx={ctx} extraClass="public-itinerary-section">
+      <SectionHead id={titleId} kicker={block.kicker} title={block.title} intro={block.intro} />
+      <div className={`public-itinerary${included.length > 0 ? '' : ' public-itinerary--compact'}`}>
+        <div className="public-itinerary__panel">
+          <h3>
+            Départ du{' '}
+            {departureAt ? departureLabel(departureAt, origin.timezone).day : 'prochain voyage'}
+          </h3>
+          <ol className="public-timeline">
+            <li className="public-timeline__item public-timeline__item--end">
+              <span className="public-timeline__marker" aria-hidden="true" />
+              {departureAt ? <PlaceTime at={departureAt} place={origin} /> : null}
+              <p className="public-timeline__place">
+                <span className="et-visually-hidden">Départ : </span>
+                <strong>{origin.locality}</strong> — {origin.name}
+              </p>
+            </li>
+            {via.length > 0 ? (
+              <li className="public-timeline__item">
+                <span
+                  className="public-timeline__marker public-timeline__marker--small"
+                  aria-hidden="true"
+                />
+                <p className="public-timeline__place">
+                  <strong>{viaLabel} en cours de route</strong>
+                </p>
+                <p className="public-timeline__countries">
+                  ({countries.map((country) => country.name).join(', ')})
+                </p>
+                <details className="public-timeline__details">
+                  <summary>Voir le détail</summary>
+                  <ol>
+                    {via.map((place, at) => {
+                      const time = place.arrivalAt ?? place.departureAt;
+                      return (
+                        <li key={at}>
+                          {time ? (
+                            <time dateTime={time}>
+                              {shortDayLabel(time, place.timezone)} ·{' '}
+                              {departureLabel(time, place.timezone).time}
+                            </time>
+                          ) : null}
+                          {time ? ' — ' : null}
+                          <span>
+                            {placeKindLabel(place)} : {place.locality}
+                            {place.name !== place.locality ? ` — ${place.name}` : ''} (
+                            {place.country.name})
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </details>
+              </li>
+            ) : null}
+            {duration ? (
+              <li className="public-timeline__item public-timeline__item--duration">
+                <span
+                  className="public-timeline__marker public-timeline__marker--icon"
+                  aria-hidden="true"
+                >
+                  <Icon name="clock" />
+                </span>
+                <p className="public-timeline__place">Durée prévue : {duration}</p>
+              </li>
+            ) : null}
+            <li className="public-timeline__item public-timeline__item--end">
+              <span
+                className="public-timeline__marker public-timeline__marker--gold"
+                aria-hidden="true"
+              />
+              {arrivalAt ? <PlaceTime at={arrivalAt} place={destination} offset={offset} /> : null}
+              <p className="public-timeline__place">
+                <span className="et-visually-hidden">Arrivée : </span>
+                <strong>{destination.locality}</strong> — {destination.name}
+              </p>
+            </li>
+          </ol>
+          <p className="public-itinerary__note">
+            Horaires prévus, en heure locale de chaque étape.
+          </p>
+        </div>
+        {included.length > 0 ? (
+          <div className="public-itinerary__panel">
+            <h3>{block.includedTitle ?? 'Inclus dans votre voyage'}</h3>
+            <ul className="public-checklist">
+              {included.map((item) => (
+                <li key={item.key}>
+                  <Icon name="check" />
+                  {item.label}
+                </li>
+              ))}
+            </ul>
+            {amenities.length > 0 && vehicle ? (
+              <p className="public-itinerary__note">
+                Équipements de l’autocar {vehicle.title}, prévu pour ce départ.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="public-itinerary__panel public-itinerary__map">
+          <RouteSchematic
+            origin={origin.locality}
+            destination={destination.locality}
+            countries={countries.length}
+          />
+          <div>
+            <h3>Notre trajet</h3>
+            <ol className="public-countries">
+              {countries.map((country) => (
+                <li key={country.iso2}>
+                  <span className="public-countries__code" aria-hidden="true">
+                    {country.iso2}
+                  </span>
+                  {country.name}
+                </li>
+              ))}
+            </ol>
+            <p className="public-itinerary__note">Schéma indicatif, sans échelle.</p>
+          </div>
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+/**
+ * UI-PUBLIC-2: the coaches in service. Facts come from Fleet; photographs
+ * and descriptions from the CMS. Several coaches get anchor tabs.
+ */
+function Fleet({
+  block,
+  ctx,
+  index,
+  titleId,
+}: {
+  block: Extract<ContentBlock, { type: 'fleet' }>;
+  ctx: SiteContext;
+  index: number;
+  titleId: string;
+}) {
+  const vehicles = fleetVehicles(block.selection, block.items, ctx.fleet ?? null);
+  return (
+    <Section block={block} index={index} ctx={ctx} extraClass="public-fleet-section">
+      <SectionHead id={titleId} kicker={block.kicker} title={block.title} intro={block.intro} />
+      {vehicles.length > 1 ? (
+        <nav className="public-fleet-tabs" aria-label={`${block.title} : accès direct`}>
+          <ul>
+            {vehicles.map(({ vehicle }) => (
+              <li key={vehicle.code}>
+                <a href={`#${vehicleAnchor(vehicle.code)}`}>{vehicleTitle(vehicle)}</a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ) : null}
+      {vehicles.length > 0 ? (
+        <div className="public-fleet">
+          {vehicles.map(({ vehicle, presentation }) => {
+            const anchor = vehicleAnchor(vehicle.code);
+            const title = vehicleTitle(vehicle);
+            const photo = presentation?.mediaId
+              ? (ctx.media?.(presentation.mediaId) ?? null)
+              : null;
+            const gallery = (presentation?.gallery ?? []).flatMap((id) => {
+              const media = ctx.media?.(id) ?? null;
+              return media ? [{ id, media }] : [];
+            });
+            const facts = vehicle.seatCount !== null || vehicle.amenities.length > 0;
+            return (
+              <article
+                key={vehicle.code}
+                id={anchor}
+                className="public-vehicle"
+                aria-labelledby={`${anchor}-title`}
+              >
+                <div className="public-vehicle__media">
+                  {photo ? (
+                    <img
+                      src={photo.src}
+                      {...(photo.srcSet
+                        ? { srcSet: photo.srcSet, sizes: '(max-width: 900px) 100vw, 50vw' }
+                        : {})}
+                      alt={photo.alt}
+                      width={photo.width}
+                      height={photo.height}
+                      loading="lazy"
+                      decoding="async"
+                      {...(photo.focalX !== undefined && photo.focalY !== undefined
+                        ? { style: { objectPosition: `${photo.focalX}% ${photo.focalY}%` } }
+                        : {})}
+                    />
+                  ) : (
+                    <div className="public-vehicle__art" aria-hidden="true">
+                      <CoachIllustration />
+                    </div>
+                  )}
+                </div>
+                <div className="public-vehicle__body">
+                  <h3 id={`${anchor}-title`}>{title}</h3>
+                  <p className="public-vehicle__model">{vehicleModelLine(vehicle)}</p>
+                  {presentation?.description ? <p>{presentation.description}</p> : null}
+                  {facts ? (
+                    <ul className="public-vehicle__facts" aria-label={`Équipements de ${title}`}>
+                      {vehicle.seatCount !== null ? (
+                        <li>
+                          <Icon name="users" />
+                          {vehicle.seatCount} places
+                        </li>
+                      ) : null}
+                      {vehicle.amenities.map((amenity) => (
+                        <li key={amenity}>
+                          <Icon name={AMENITIES[amenity].icon} />
+                          {AMENITIES[amenity].label}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="public-itinerary__note">
+                      Les équipements de cet autocar seront précisés prochainement.
+                    </p>
+                  )}
+                </div>
+                {gallery.length > 0 ? (
+                  <div
+                    className="public-vehicle__gallery"
+                    role="region"
+                    aria-label={`Photos de ${title}`}
+                    // A scrollable strip must be reachable with the keyboard.
+                    tabIndex={0}
+                  >
+                    <ul>
+                      {gallery.map(({ id, media }) => (
+                        <li key={id}>
+                          <img
+                            src={media.src}
+                            {...(media.srcSet
+                              ? { srcSet: media.srcSet, sizes: '(max-width: 600px) 80vw, 22rem' }
+                              : {})}
+                            alt={media.alt}
+                            width={media.width}
+                            height={media.height}
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="public-departures__empty" role="status">
+          <span className="public-card-icon" aria-hidden="true">
+            <Icon name="bus" />
+          </span>
+          <p>
+            {ctx.fleet === null || ctx.fleet === undefined
+              ? 'Les autocars ne peuvent pas être présentés pour le moment.'
+              : 'Les autocars en service seront présentés ici.'}
+          </p>
         </div>
       )}
     </Section>
@@ -705,17 +1287,26 @@ export function Block({
   block,
   index,
   ctx,
+  pageTitle = '',
 }: {
   block: ContentBlock;
   index: number;
   ctx: SiteContext;
+  /** Shown in the breadcrumb of a page hero. */
+  pageTitle?: string;
 }) {
   const titleId = `section-${index}-title`;
   switch (block.type) {
     case 'hero':
-      return <Hero block={block} ctx={ctx} titleId={titleId} />;
+      return <Hero block={block} ctx={ctx} titleId={titleId} pageTitle={pageTitle} />;
     case 'departures':
       return <Departures block={block} ctx={ctx} index={index} titleId={titleId} />;
+    case 'sectionNav':
+      return <SectionNav block={block} />;
+    case 'itinerary':
+      return <Itinerary block={block} ctx={ctx} index={index} titleId={titleId} />;
+    case 'fleet':
+      return <Fleet block={block} ctx={ctx} index={index} titleId={titleId} />;
     case 'cards':
       if (block.variant === 'highlights') {
         return <Highlights block={block} ctx={ctx} titleId={titleId} />;
@@ -967,7 +1558,7 @@ export function Blocks({
         </div>
       )}
       {blocks.map((block, index) => (
-        <Block key={index} block={block} index={index} ctx={ctx} />
+        <Block key={index} block={block} index={index} ctx={ctx} pageTitle={title} />
       ))}
     </>
   );

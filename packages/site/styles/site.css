@@ -1557,6 +1557,593 @@ body {
   font-size: 1.1rem;
 }
 
+/* ---------------------------------------------- Inner pages (UI-PUBLIC-2) */
+
+/* Page hero: a shorter banner with the breadcrumb above the title. */
+.public-hero--page .public-hero__inner {
+  padding-block: clamp(2.5rem, 5vw, 4.25rem) clamp(2.25rem, 4vw, 3.25rem);
+}
+
+.public-hero--page h1 {
+  font-size: clamp(2.2rem, 4.2vw, 3.5rem);
+}
+
+.public-breadcrumb ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.public-breadcrumb__separator {
+  margin-right: 0.35rem;
+  color: var(--public-gold-400);
+}
+
+.public-breadcrumb a {
+  display: inline-flex;
+  min-height: 1.5rem;
+  align-items: center;
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* Section tabs, kept under the sticky header. */
+html:has(.public-section-nav) {
+  scroll-padding-top: calc(var(--public-header-height) + 4.5rem);
+}
+
+.public-section-nav {
+  position: sticky;
+  top: var(--public-header-height);
+  z-index: 30;
+  border-bottom: 1px solid var(--public-line);
+  background: #fff;
+  box-shadow: 0 6px 16px rgba(6, 21, 51, 0.05);
+}
+
+.public-section-nav ul {
+  display: flex;
+  gap: 0.25rem 1.75rem;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+.public-section-nav a {
+  display: inline-flex;
+  min-height: 3.25rem;
+  align-items: center;
+  border-bottom: 3px solid transparent;
+  color: var(--public-navy-900);
+  font-weight: 750;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.public-section-nav a:hover {
+  border-bottom-color: var(--public-royal-500);
+  color: var(--public-royal-600);
+}
+
+.public-section-nav a:focus-visible {
+  outline-offset: -3px;
+}
+
+/* Departure dates of a trip page. */
+.public-dates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  list-style: none;
+}
+
+.public-date {
+  display: grid;
+  gap: 0.15rem;
+  height: 100%;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--public-line);
+  border-radius: var(--public-radius);
+  background: #fff;
+  box-shadow: var(--public-shadow-sm);
+  color: var(--public-ink);
+  text-decoration: none;
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.public-date:hover {
+  border-color: var(--public-royal-500);
+  transform: translateY(-2px);
+}
+
+.public-date__route {
+  color: var(--public-royal-600);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.public-date__day {
+  display: inline-block;
+  color: var(--public-navy-950);
+  font-weight: 800;
+}
+
+.public-date__day::first-letter {
+  text-transform: uppercase;
+}
+
+.public-date__time {
+  color: var(--public-muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.public-date__price {
+  margin-top: 0.3rem;
+  color: var(--public-navy-950);
+  font-size: 1.3rem;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+}
+
+.public-date__seats {
+  justify-self: start;
+  margin-top: 0.2rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--public-gold-100);
+  color: #5c3b00;
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+/* The soonest departure stands out, as in the booking search. */
+.public-dates li:first-child .public-date {
+  border-color: transparent;
+  background: var(--public-royal-600);
+  color: #fff;
+}
+
+.public-dates li:first-child .public-date__route,
+.public-dates li:first-child .public-date__day,
+.public-dates li:first-child .public-date__price {
+  color: #fff;
+}
+
+.public-dates li:first-child .public-date__time {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.public-dates li:first-child .public-date:focus-visible {
+  outline-color: var(--public-gold-400);
+}
+
+.public-dates__book {
+  width: 100%;
+  min-height: 3.25rem;
+  font-size: 1.05rem;
+}
+
+/* Itinerary of the next departure. */
+.public-itinerary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.public-itinerary__panel {
+  padding: 1.5rem;
+  border: 1px solid var(--public-line);
+  border-radius: var(--public-radius-lg);
+  background: #fff;
+  box-shadow: var(--public-shadow-sm);
+}
+
+.public-itinerary h3 {
+  margin: 0;
+  color: var(--public-navy-950);
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.public-itinerary__map {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 26rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.public-itinerary--compact .public-itinerary__map {
+  grid-column: auto;
+  grid-template-columns: 1fr;
+}
+
+.public-itinerary__note {
+  margin: 1rem 0 0;
+  color: var(--public-muted);
+  font-size: 0.84rem;
+}
+
+.public-timeline {
+  position: relative;
+  display: grid;
+  gap: 1.1rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.public-timeline::before {
+  content: '';
+  position: absolute;
+  top: 0.7rem;
+  bottom: 0.7rem;
+  left: 0.55rem;
+  border-left: 2px dashed #b9c6de;
+}
+
+.public-timeline__item {
+  position: relative;
+  padding-left: 2.2rem;
+}
+
+.public-timeline__marker {
+  position: absolute;
+  top: 0.3rem;
+  left: 0;
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 3px solid var(--public-royal-600);
+  border-radius: 50%;
+  background: #fff;
+}
+
+.public-timeline__marker--small {
+  top: 0.4rem;
+  left: 0.25rem;
+  width: 0.65rem;
+  height: 0.65rem;
+  border: 0;
+  background: var(--public-royal-600);
+}
+
+.public-timeline__marker--gold {
+  border-color: var(--public-navy-950);
+  background: var(--public-gold-500);
+}
+
+.public-timeline__marker--icon {
+  top: 0.05rem;
+  left: -0.1rem;
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border: 0;
+  color: var(--public-royal-600);
+}
+
+.public-timeline__marker--icon svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.public-timeline__time {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.6rem;
+  margin: 0;
+  color: var(--public-navy-950);
+  font-size: 1.35rem;
+  font-weight: 850;
+}
+
+.public-timeline__offset {
+  margin-left: -0.45rem;
+  color: var(--public-royal-600);
+  font-size: 0.95rem;
+}
+
+.public-timeline__day {
+  display: inline-block;
+  color: var(--public-muted);
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.public-timeline__day::first-letter {
+  text-transform: uppercase;
+}
+
+.public-timeline__place,
+.public-timeline__countries {
+  margin: 0.15rem 0 0;
+  color: var(--public-muted);
+}
+
+.public-timeline__place strong {
+  color: var(--public-navy-950);
+}
+
+.public-timeline__countries {
+  font-size: 0.9rem;
+}
+
+.public-timeline__details summary {
+  display: inline-flex;
+  min-height: 1.5rem;
+  align-items: center;
+  margin-top: 0.35rem;
+  color: var(--public-royal-600);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.public-timeline__details ol {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--public-muted);
+  font-size: 0.9rem;
+}
+
+.public-checklist {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.public-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--public-ink);
+  font-weight: 650;
+}
+
+.public-checklist svg {
+  width: 1.3rem;
+  height: 1.3rem;
+  flex: none;
+  color: #17803d;
+}
+
+.public-route-schematic {
+  display: block;
+  width: 100%;
+  max-width: 26rem;
+  height: auto;
+  border-radius: var(--public-radius);
+}
+
+.public-countries {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.public-countries li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--public-ink);
+  font-weight: 650;
+}
+
+.public-countries__code {
+  display: inline-grid;
+  min-width: 2.2rem;
+  height: 1.5rem;
+  place-items: center;
+  border-radius: 0.35rem;
+  background: var(--public-navy-900);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+/* Coaches ("Nos bus"). */
+.public-fleet-tabs ul {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 2rem;
+  padding: 0.35rem;
+  border-radius: 1.6rem;
+  background: var(--public-navy-900);
+  list-style: none;
+}
+
+.public-fleet-tabs a {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  padding: 0 1.4rem;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.public-fleet-tabs a:hover {
+  background: var(--public-royal-600);
+}
+
+.public-fleet-tabs :focus-visible {
+  outline-color: var(--public-gold-400);
+}
+
+.public-fleet {
+  display: grid;
+  gap: 2rem;
+}
+
+.public-vehicle {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 1.5rem 2.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--public-line);
+  border-radius: var(--public-radius-xl);
+  background: #fff;
+  box-shadow: var(--public-shadow-sm);
+}
+
+.public-vehicle__media {
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: var(--public-radius-lg);
+  background: linear-gradient(135deg, var(--public-navy-900), var(--public-royal-600));
+}
+
+.public-vehicle__media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.public-vehicle__art {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  padding: 1.25rem;
+}
+
+.public-vehicle h3 {
+  margin: 0;
+  color: var(--public-navy-950);
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: 850;
+  letter-spacing: -0.02em;
+}
+
+.public-vehicle__model {
+  margin: 0.3rem 0 0;
+  color: var(--public-royal-600);
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.public-vehicle__body > p:not(.public-vehicle__model) {
+  margin: 1rem 0 0;
+  color: var(--public-muted);
+  line-height: 1.6;
+}
+
+.public-vehicle__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem 1.5rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.public-vehicle__facts li {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--public-ink);
+  font-weight: 650;
+}
+
+.public-vehicle__facts svg {
+  width: 1.4rem;
+  height: 1.4rem;
+  flex: none;
+  color: var(--public-royal-600);
+}
+
+.public-vehicle__gallery {
+  grid-column: 1 / -1;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+}
+
+.public-vehicle__gallery ul {
+  display: grid;
+  grid-auto-columns: minmax(14rem, 22rem);
+  grid-auto-flow: column;
+  gap: 0.9rem;
+  margin: 0;
+  padding: 0 0 0.5rem;
+  list-style: none;
+}
+
+.public-vehicle__gallery li {
+  scroll-snap-align: start;
+}
+
+.public-vehicle__gallery img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--public-radius);
+  object-fit: cover;
+}
+
+/* Service cards with a photograph: the icon sits on the photo's edge, and
+   the credit is laid over the photo's lower right corner, clear of it. */
+.public-service-card.public-card--photo .public-figure {
+  position: relative;
+}
+
+.public-service-card.public-card--photo figcaption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  margin: 0;
+  padding: 0.35rem 0.75rem 0.35rem 4.25rem;
+  background: rgba(6, 21, 51, 0.92);
+  color: #fff;
+  font-size: 0.72rem;
+  text-align: right;
+}
+
+.public-service-card.public-card--photo figcaption .public-figure__credit {
+  color: #fff;
+}
+
+.public-service-card.public-card--photo .public-card-icon {
+  position: relative;
+  margin-top: -2.6rem;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: var(--public-gold-500);
+  box-shadow: var(--public-shadow-sm);
+  color: var(--public-navy-950);
+}
+
 /* --------------------------------------------------------------- Responsive */
 
 @media (max-width: 80rem) {
@@ -1613,6 +2200,15 @@ body {
 
   .public-footer__inner {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .public-itinerary,
+  .public-vehicle {
+    grid-template-columns: 1fr;
+  }
+
+  .public-itinerary__map {
+    grid-column: auto;
   }
 }
 
@@ -1672,6 +2268,19 @@ body {
   .public-footer__bottom {
     flex-direction: column;
   }
+
+  .public-itinerary__map {
+    grid-template-columns: 1fr;
+  }
+
+  .public-itinerary__panel,
+  .public-vehicle {
+    padding: 1.15rem;
+  }
+
+  .public-section-nav a {
+    min-height: 2.9rem;
+  }
 }
 
 @media (max-width: 30rem) {
@@ -1724,6 +2333,14 @@ body {
     align-items: start;
     flex-direction: column;
   }
+
+  .public-dates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .public-vehicle__facts {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1733,13 +2350,15 @@ body {
 
   .public-button,
   .public-departure,
+  .public-date,
   .public-search__field,
   .public-link-arrow::after {
     transition: none;
   }
 
   .public-button:hover,
-  .public-departure:hover {
+  .public-departure:hover,
+  .public-date:hover {
     transform: none;
   }
 }
