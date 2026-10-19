@@ -197,6 +197,23 @@ There is **no public STAFF or CREW registration** and no bootstrap endpoint.
   actor. Other service methods also accept an `Actor`, but their HTTP
   controllers only ever pass the authenticated `AuthPrincipal`: no HTTP
   request can act as a system actor.
+- The realistic demonstration seed (SEED-REALISTIC-1,
+  `docs/runbooks/realistic-seed.md`) is another system actor,
+  `metadata.systemActor = "realistic-seed"`. Two variants carry the identity
+  a column requires, without a session:
+  - `SystemCustomerActor` acts for a synthetic customer the seed created
+    (bookings, passengers, payments, bag declarations belong to that
+    customer);
+  - `SystemOperatorActor` names the seed's own STAFF identity
+    (`etr-v1-operations@example.test`, no password, no role) as author of
+    crew assignments, incidents and tracking settings.
+
+  Synthetic identities are ACTIVE (the database requires it to hold seats or
+  open an incident) but have no password credential, no role and no MFA
+  factor: no one can sign in with them or act through the API. Their
+  creation is audited (`CUSTOMER_IDENTITY_SEEDED`, `STAFF_IDENTITY_SEEDED`,
+  `CREW_IDENTITY_SEEDED`). The seed never writes a real person as author.
+
 - Booking adds `BOOKING_HELD`, `BOOKING_CANCELLED` and
   `BOOKING_CANCELLED_BY_TRIP`. Each event shares the business transaction; an
   audit failure rolls back the hold/cancellation and inventory changes.

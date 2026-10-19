@@ -12,7 +12,11 @@ import {
   isWellFormedOpaqueToken,
   secureRandomToken,
 } from '../auth/crypto/tokens.js';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import {
+  operatorIdentityOf,
+  type AuthPrincipal,
+  type OperatorActor,
+} from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import type {
@@ -355,7 +359,7 @@ export class TrackingService {
     }
   }
 
-  async configure(actor: AuthPrincipal, tripId: string, input: ConfigInput) {
+  async configure(actor: OperatorActor, tripId: string, input: ConfigInput) {
     return this.database.client.$transaction(async (tx) => {
       await this.lockTrip(tx, tripId);
       const trip = await tx.trip.findUnique({
@@ -387,7 +391,7 @@ export class TrackingService {
               enabled: input.enabled,
               visibility: input.visibility,
               trackingDeviceId: input.trackingDeviceId,
-              updatedByIdentityId: actor.identityId,
+              updatedByIdentityId: operatorIdentityOf(actor),
             },
             select: {
               tripId: true,
@@ -404,8 +408,8 @@ export class TrackingService {
               enabled: input.enabled,
               visibility: input.visibility,
               trackingDeviceId: input.trackingDeviceId,
-              createdByIdentityId: actor.identityId,
-              updatedByIdentityId: actor.identityId,
+              createdByIdentityId: operatorIdentityOf(actor),
+              updatedByIdentityId: operatorIdentityOf(actor),
             },
             select: {
               tripId: true,

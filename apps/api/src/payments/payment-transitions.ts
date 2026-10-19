@@ -1,5 +1,5 @@
 import type { DatabaseTransaction } from '@euroteranga/database';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import type { Actor } from '../auth/session/auth-principal.js';
 import type { AuditService } from '../authorization/audit.service.js';
 
 /** A PENDING attempt already locked FOR UPDATE by the caller. */
@@ -96,7 +96,7 @@ export async function cancelPendingPayments(
   tx: DatabaseTransaction,
   audit: AuditService,
   payments: readonly LockedPendingPayment[],
-  input: { actor?: AuthPrincipal; reason: string; cancelledBy: 'CUSTOMER' | 'STAFF' | 'TRIP' },
+  input: { actor?: Actor; reason: string; cancelledBy: 'CUSTOMER' | 'STAFF' | 'TRIP' },
 ): Promise<void> {
   if (payments.length === 0) return;
   // Database clock (no import of the booking inventory: it imports this file).

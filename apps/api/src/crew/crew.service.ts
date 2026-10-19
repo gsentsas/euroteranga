@@ -1,7 +1,11 @@
 import { Prisma } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
 import type { z } from 'zod';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import {
+  operatorIdentityOf,
+  type AuthPrincipal,
+  type OperatorActor,
+} from '../auth/session/auth-principal.js';
 import { PublicApiError } from '../auth/http/public-api-error.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { BorderService } from '../borders/border.service.js';
@@ -414,7 +418,7 @@ export class CrewService {
   }
 
   async assign(
-    actor: AuthPrincipal,
+    actor: OperatorActor,
     tripId: string,
     input: AssignmentCreate,
   ): Promise<{ created: boolean; assignment: ReturnType<typeof assignmentView> }> {
@@ -450,7 +454,7 @@ export class CrewService {
           data: {
             tripId,
             crewIdentityId: input.crewIdentityId,
-            assignedByIdentityId: actor.identityId,
+            assignedByIdentityId: operatorIdentityOf(actor),
             expiresAt: input.expiresAt ?? null,
           },
           select: assignmentSelect,

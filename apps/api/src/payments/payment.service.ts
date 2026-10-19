@@ -1,7 +1,12 @@
 import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { PublicApiError } from '../auth/http/public-api-error.js';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import {
+  customerIdentityOf,
+  type Actor,
+  type AuthPrincipal,
+  type CustomerActor,
+} from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { BookingErrors } from '../bookings/booking.errors.js';
 import { databaseNow } from '../bookings/booking-inventory.js';
@@ -121,7 +126,7 @@ export class PaymentService {
    * a lost provider response can be recovered by replaying Idempotency-Key.
    */
   async create(
-    actor: AuthPrincipal,
+    actor: CustomerActor,
     rawReference: string,
     rawIdempotencyKey: string | string[] | undefined,
   ): Promise<{ replayed: boolean; result: CreatePaymentResult }> {
@@ -135,7 +140,7 @@ export class PaymentService {
     // This lookup only resolves the immutable lock targets. All payable-state
     // checks and the amount derivation happen again under the Phase A locks.
     const booking = await this.database.client.booking.findFirst({
-      where: { reference, customerIdentityId: actor.identityId },
+      where: { reference, customerIdentityId: customerIdentityOf(actor) },
       select: { id: true, tripId: true },
     });
     if (!booking) throw BookingErrors.notFound();
@@ -154,7 +159,7 @@ export class PaymentService {
 
   /** Phase A: reserve the attempt and commit before any provider call. */
   private async reservePayment(input: {
-    actor: AuthPrincipal;
+    actor: CustomerActor;
     provider: PaymentProvider;
     bookingId: string;
     tripId: string;
@@ -189,7 +194,7 @@ export class PaymentService {
   private async reserveInTransaction(
     tx: DatabaseTransaction,
     input: {
-      actor: AuthPrincipal;
+      actor: CustomerActor;
       provider: PaymentProvider;
       paymentReference: string;
       bookingId: string;
@@ -209,7 +214,7 @@ export class PaymentService {
       SELECT "id", "reference", "cancelled_at", "confirmed_at", "hold_expires_at",
         "unit_amount_minor", "currency_code", "currency_minor_unit"
       FROM "booking"
-      WHERE "id" = ${input.bookingId}::uuid AND "customer_identity_id" = ${actor.identityId}::uuid
+      WHERE "id" = ${input.bookingId}::uuid AND "customer_identity_id" = ${customerIdentityOf(actor)}::uuid
       FOR UPDATE
     `;
     if (!booking) throw BookingErrors.notFound();
@@ -247,7 +252,7 @@ export class PaymentService {
       data: {
         reference: input.paymentReference,
         bookingId: booking.id,
-        customerIdentityId: actor.identityId,
+        customerIdentityId: customerIdentityOf(actor),
         provider: input.provider.name,
         providerPaymentId: null,
         amountMinor,
@@ -355,14 +360,14 @@ export class PaymentService {
    */
   private async replay(
     client: DatabaseTransaction,
-    actor: AuthPrincipal,
+    actor: CustomerActor,
     bookingReference: string,
     idempotencyKey: string,
   ): Promise<ReservedPayment | null> {
     const existing = await client.payment.findUnique({
       where: {
         customerIdentityId_idempotencyKey: {
-          customerIdentityId: actor.identityId,
+          customerIdentityId: customerIdentityOf(actor),
           idempotencyKey,
         },
       },
@@ -388,7 +393,7 @@ export class PaymentService {
   }
 
   /** The owner gives up a PENDING attempt; the booking stays HELD. */
-  async cancelByCustomer(actor: AuthPrincipal, rawReference: string) {
+  async cancelByCustomer(actor: CustomerActor, rawReference: string) {
     const reference = normalizePaymentReference(rawReference);
     if (!reference) throw PaymentErrors.notFound();
     await this.cancel(
@@ -397,7 +402,7 @@ export class PaymentService {
           b."reference" AS "booking_reference"
         FROM "payment" p JOIN "booking" b ON b."id" = p."booking_id"
         WHERE p."reference" = ${reference}
-          AND p."customer_identity_id" = ${actor.identityId}::uuid
+          AND p."customer_identity_id" = ${customerIdentityOf(actor)}::uuid
         FOR UPDATE OF p
       `,
       { actor, reason: CUSTOMER_CANCELLATION_REASON, cancelledBy: 'CUSTOMER' },
@@ -427,7 +432,7 @@ export class PaymentService {
   /** Lock order: payment only (the booking does not change). */
   private async cancel(
     lock: (tx: DatabaseTransaction) => Promise<LockedPayment[]>,
-    input: { actor: AuthPrincipal; reason: string; cancelledBy: 'CUSTOMER' | 'STAFF' },
+    input: { actor: Actor; reason: string; cancelledBy: 'CUSTOMER' | 'STAFF' },
   ) {
     await this.database.client.$transaction(async (tx) => {
       const [payment] = await lock(tx);

@@ -144,6 +144,9 @@ The pilot dataset (Paris ↔ Dakar corridor, two coaches, fares and future
 trips) is created with `pnpm data:bootstrap-pilot`. It is idempotent, and it
 refuses production without `--confirm-production`: see
 [`docs/runbooks/pilot-data-bootstrap.md`](docs/runbooks/pilot-data-bootstrap.md).
+The realistic demonstration dataset is stacked on it (`pnpm seed:realistic`,
+dry run by default): see
+[`docs/runbooks/realistic-seed.md`](docs/runbooks/realistic-seed.md).
 
 Search-engine indexing is closed by default everywhere: see
 [`docs/runbooks/seo-indexing.md`](docs/runbooks/seo-indexing.md).

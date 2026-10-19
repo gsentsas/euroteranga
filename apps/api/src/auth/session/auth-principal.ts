@@ -27,3 +27,45 @@ export type Actor = AuthPrincipal | SystemActor;
 export function isSystemActor(actor: Actor): actor is SystemActor {
   return 'kind' in actor && actor.kind === 'system';
 }
+
+/** The identity recorded as author of a change: none for an operator command. */
+export function actorIdentityId(actor: Actor): string | null {
+  return isSystemActor(actor) ? null : actor.identityId;
+}
+
+/**
+ * An operator command acting for a customer identity it created itself (the
+ * realistic seed's synthetic customers). The resources belong to that
+ * customer; the audit records the system actor, never a session or a person.
+ * It is never built from an HTTP request.
+ */
+export interface SystemCustomerActor extends SystemActor {
+  readonly customerIdentityId: string;
+}
+
+/** Who acts on a customer's own bookings, passengers and payments. */
+export type CustomerActor = AuthPrincipal | SystemCustomerActor;
+
+/** The customer who owns what a customer actor creates or reads. */
+export function customerIdentityOf(actor: CustomerActor): string {
+  return isSystemActor(actor) ? actor.customerIdentityId : actor.identityId;
+}
+
+/**
+ * An operator command that records operational facts (crew assignments,
+ * incidents, manifests, tracking settings) under its own dedicated STAFF
+ * identity: a synthetic account with no password and no role, never a real
+ * person. Columns that require an author name that identity; the audit
+ * records the system actor. It is never built from an HTTP request.
+ */
+export interface SystemOperatorActor extends SystemActor {
+  readonly operatorIdentityId: string;
+}
+
+/** Who records an operational fact: a STAFF caller or the seed's own operator identity. */
+export type OperatorActor = AuthPrincipal | SystemOperatorActor;
+
+/** The identity recorded as author of an operational fact. */
+export function operatorIdentityOf(actor: OperatorActor): string {
+  return isSystemActor(actor) ? actor.operatorIdentityId : actor.identityId;
+}
