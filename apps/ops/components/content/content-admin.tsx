@@ -142,11 +142,12 @@ export function ContentAdmin() {
 
   const createSingleton = (kind: 'SITE_SETTINGS' | 'NAVIGATION') => {
     let createdId: string | null = null;
+    const createdLabel = kind === 'NAVIGATION' ? 'Navigation créée' : 'Paramètres du site créés';
     void run(async () => {
       const result = await auth.admin.content.create({ kind });
       if (result.ok) createdId = result.data.id;
       return result;
-    }, `${KIND_LABELS[kind]} créés à partir du contenu par défaut (brouillon).`).then((ok) => {
+    }, `${createdLabel} à partir du contenu par défaut (brouillon).`).then((ok) => {
       if (ok && createdId) open(createdId);
     });
   };
