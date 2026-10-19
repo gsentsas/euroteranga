@@ -21,21 +21,25 @@ export const BLOCK_LABELS: Record<ContentBlockType, string> = {
   cards: 'Cartes',
   faq: 'Questions fréquentes',
   routes: 'Trajets',
+  departures: 'Prochains départs',
   stats: 'Chiffres clés',
   gallery: 'Galerie',
   banner: 'Bandeau d’information',
 };
 
 export const BLOCK_DESCRIPTIONS: Record<ContentBlockType, string> = {
-  hero: 'Grand titre en haut de page, avec boutons et carte du trajet. Une seule par page.',
+  hero: 'Grand titre en haut de page, sur une photo de la médiathèque, avec recherche de voyage, boutons ou carte du trajet. Une seule par page.',
   richText: 'Paragraphes, intertitres et listes.',
   textImage: 'Texte accompagné d’une image de la médiathèque ou d’une illustration.',
   image: 'Une image de la médiathèque, avec légende.',
   cta: 'Un message court et un bouton.',
-  cards: 'Jusqu’à 12 cartes : avantages, services, étapes ou garanties.',
+  cards:
+    'Jusqu’à 12 cartes : avantages, services (avec photo), étapes, garanties ou une rangée d’atouts.',
   faq: 'Questions et réponses, ouvrables une à une.',
   routes:
     'Les sens Paris → Dakar et Dakar → Paris, avec le prix « à partir de » lu sur la tarification.',
+  departures:
+    'Les prochains départs réellement ouverts, avec dates, places et prix lus sur la réservation et la tarification.',
   stats: 'Quelques chiffres vérifiables. N’indiquez jamais un chiffre non prouvé.',
   gallery: 'Jusqu’à 12 images de la médiathèque.',
   banner: 'Une information courte : travaux, rappel, nouveauté.',
@@ -51,7 +55,7 @@ export function newBlock(type: ContentBlockType): ContentBlock {
     case 'richText':
       return { type, body: [] };
     case 'textImage':
-      return { type, title: '', body: [], illustration: 'none', imageSide: 'end' };
+      return { type, title: '', body: [], illustration: 'none', imageSide: 'end', tone: 'light' };
     case 'image':
       return { type, mediaId: '', layout: 'contained' };
     case 'cta':
@@ -69,6 +73,16 @@ export function newBlock(type: ContentBlockType): ContentBlock {
           { direction: 'DKR-PAR', label: 'Dakar → Paris', title: '', text: '' },
         ],
         showFromPrices: true,
+      };
+    case 'departures':
+      return {
+        type,
+        title: '',
+        routes: [
+          { fromCode: 'PAR', toCode: 'DKR' },
+          { fromCode: 'DKR', toCode: 'PAR' },
+        ],
+        limit: 3,
       };
     case 'stats':
       return { type, items: [{ value: '', label: '' }] };
