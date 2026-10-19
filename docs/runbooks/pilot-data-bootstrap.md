@@ -6,21 +6,33 @@ typing them into OPS or writing SQL.
 
 ## What it creates
 
-| Category  | Records                                                                                                                                                                                                                                                                                                                       |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Reference | Countries FR, ES, MA, MR and SN (ISO 3166-1); stops `PAR` Paris and `DKR` Dakar (city-level coordinates, IANA time zones).                                                                                                                                                                                                    |
-| Pilot     | Five operational checkpoints:<br>• `CP-FR-ES-BIRIATOU`: border;<br>• `CP-ES-ALGECIRAS`: ferry terminal;<br>• `CP-MA-TANGER-MED`: port;<br>• `CP-MR-NORD`: border;<br>• `CP-MR-SN-ROSSO`: border.                                                                                                                              |
-| Pilot     | Routes `ET-PAR-DKR` and `ET-DKR-PAR`, one published version each: the first stop allows boarding only, the last allows alighting only, and the checkpoints sit in between.                                                                                                                                                    |
-| Pilot     | Seat map `ET-SM-COACH-53` "(pilote)": one deck with a driver, a front door and a middle door, an aisle, a toilet and 53 numbered seats (`1A` to `12D`, back bench `13A` to `13E`).                                                                                                                                            |
-| Pilot     | Coaches:<br>• `ET-COACH-001` « Teranga 01 »;<br>• `ET-COACH-002` « Teranga 02 ».<br>Both are `ACTIVE`, on the pilot seat map, with plates `DEMO-ET-001` and `DEMO-ET-002`, and no VIN. Their make and model stay neutral ("Autocar grand tourisme", "Modèle à confirmer", no year) until the owner confirms the real coaches. |
-| Pilot     | Fare tables `ET-FT-PAR-DKR-EUR` and `ET-FT-DKR-PAR-EUR`: 249,00 EUR (`24900` minor units) from the first stop to the last.                                                                                                                                                                                                    |
-| Pilot     | Future trips `ET-PILOT-<PARDKR or DKRPAR>-<YYYYMMDD>`:<br>• departures every 14 days from the anchor date (J+14, J+28…), 08:00 local time at the departure stop;<br>• both coaches alternate directions;<br>• every trip is `SCHEDULED` with its historical seat map and pricing.                                             |
+| Category  | Records                                                                                                                                                                                                                                                                                                                                     |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reference | Countries FR, ES, MA, MR and SN (ISO 3166-1); stops `PAR` Paris and `DKR` Dakar (city-level coordinates, IANA time zones).                                                                                                                                                                                                                  |
+| Pilot     | Five operational checkpoints:<br>• `CP-FR-ES-BIRIATOU`: border;<br>• `CP-ES-ALGECIRAS`: ferry terminal;<br>• `CP-MA-TANGER-MED`: port;<br>• `CP-MR-NORD`: border;<br>• `CP-MR-SN-ROSSO`: border.                                                                                                                                            |
+| Pilot     | Routes `ET-PAR-DKR` and `ET-DKR-PAR`, one published version each: the first stop allows boarding only, the last allows alighting only, and the checkpoints sit in between.                                                                                                                                                                  |
+| Pilot     | Seat map `ET-SM-COACH-53` "(pilote)": one deck with a driver, a front door and a middle door, an aisle, a toilet and 53 numbered seats (`1A` to `12D`, back bench `13A` to `13E`).                                                                                                                                                          |
+| Pilot     | Coaches:<br>• `ET-COACH-001` « Teranga Pilote 01 »;<br>• `ET-COACH-002` « Teranga Pilote 02 ».<br>Both are `ACTIVE`, on the pilot seat map, with plates `DEMO-ET-001` and `DEMO-ET-002`, and no VIN. Their make and model stay neutral ("Autocar grand tourisme", "Modèle à confirmer", no year) until the owner confirms the real coaches. |
+| Pilot     | Fare tables `ET-FT-PAR-DKR-EUR` and `ET-FT-DKR-PAR-EUR`: 249,00 EUR (`24900` minor units) from the first stop to the last.                                                                                                                                                                                                                  |
+| Pilot     | Future trips `ET-PILOT-<PARDKR or DKRPAR>-<YYYYMMDD>`:<br>• departures every 14 days from the anchor date (J+14, J+28…), 08:00 local time at the departure stop;<br>• both coaches alternate directions;<br>• every trip is `SCHEDULED` with its historical seat map and pricing.                                                           |
 
 Pilot records are fictitious and clearly marked:
 
 - codes `ET-COACH-*` and `ET-PILOT-*`;
 - plates `DEMO-*`;
+- coach names "Teranga Pilote …";
 - seat-map name "(pilote)".
+
+Dataset version: `pilot-corridor/3` (printed by the command).
+
+### Why the coaches are named "Teranga Pilote"
+
+Vehicle names are unique. The names "Teranga 01" and "Teranga 02" may
+already belong to historical operator vehicles, even retired ones: on the
+pilot server, `ET-BUS-001` and `ET-BUS-002`, created and retired in OPS, hold
+them. The bootstrap never takes over, renames, reactivates or otherwise
+changes such a vehicle. Since `pilot-corridor/3` its coaches use their own
+names, so they can be created next to the historical fleet.
 
 The dataset contains no real person, document, address or vehicle
 identifier. Positions, timetable and fare are **pilot assumptions** for
@@ -53,10 +65,23 @@ Each of these stays an explicit OPS action on a pilot trip.
   The steps the bootstrap performs itself are:
   - assigning the seat map to a vehicle that has none;
   - activating a `PLANNED` vehicle;
+  - renaming a coach still named as in `pilot-corridor/2` (see below);
   - filling an empty draft version;
   - finishing a draft trip of one of the run's slots whose values are all
     pilot values.
 
+- **Unique identifiers checked before creation, in a dry run as in a
+  write.** Before planning or creating a coach, the bootstrap checks the
+  four unique keys of a vehicle against every other vehicle: code, name,
+  VIN and registration (country and plate), normalized as OPS stores them.
+  A key already held by another vehicle is a `conflict` that names that
+  vehicle by its code, for example `vehicle name "Teranga Pilote 01" already
+belongs to OPS-NAME`. The VIN of another vehicle is never printed. The
+  check is the same code in both modes, so a dry run without conflict
+  means the write will not meet `VEHICLE_IDENTIFIER_CONFLICT` on data
+  already in the database. The fleet service stays the last barrier.
+- **Dependents follow in both modes:** a trip whose coach, route or fare is
+  in conflict is `skipped` in a dry run too, never `planned`.
 - **Never overwrites:** a conflicting record is left untouched. Everything
   that depends on it is `skipped`, and the command exits with code 2. The
   integration tests compare the record before and after, audit included.
@@ -87,23 +112,56 @@ Each of these stays an explicit OPS action on a pilot trip.
     conflict before anything is written (FLEET-1 also refuses it in the API
     and in PostgreSQL).
 
-## Upgrading a database from pilot-corridor/1
+## Upgrading a database from an earlier dataset version
 
-Version 1 described the pilot coaches as Setra S 516 HD (2023 and 2024).
-Version 2 keeps them neutral until the owner confirms the real coaches. On a
-database where version 1 already created `ET-COACH-001` and `ET-COACH-002`,
-the bootstrap (and `pnpm seed:realistic`, which runs it first) reports both
-coaches as `conflict`, skips the trips that depend on them and exits with
-code 2. Nothing is overwritten.
+| Version            | Coaches                                                                 |
+| ------------------ | ----------------------------------------------------------------------- |
+| `pilot-corridor/1` | « Teranga 01 » and « Teranga 02 », Setra S 516 HD (2023 and 2024)       |
+| `pilot-corridor/2` | « Teranga 01 » and « Teranga 02 », neutral make and model               |
+| `pilot-corridor/3` | « Teranga Pilote 01 » and « Teranga Pilote 02 », neutral make and model |
 
-To move such a database to version 2:
+On every upgrade, the codes, `DEMO-*` plates, seat map, fares and trips stay
+the same. Nothing is ever overwritten without proof that the bootstrap owns
+the record.
+
+### From pilot-corridor/2: automatic, only for the bootstrap's own coaches
+
+A coach the bootstrap created under version 2 is renamed by the next run
+(`completed`, "renamed from "Teranga 01" for pilot-corridor/3"; `planned`
+with the same text in a dry run) only if all of these hold:
+
+- it still has every other version 2 value (neutral make and model, no
+  year, no VIN, its `DEMO-*` plate in France);
+- the audit trail shows the bootstrap created it (`VEHICLE_CREATED` by the
+  `pilot-bootstrap` system actor);
+- no person changed it since: no audit event on it has an identity (system
+  actors, such as `realistic-seed` setting its equipment, do not count);
+- no other vehicle holds the new name.
+
+The rename goes through the fleet service, audited as the
+`pilot-bootstrap` system actor. The coach keeps its id, code, plate, seat
+map, equipment and trips.
+
+Otherwise the coach is a `conflict` and stays untouched, for example
+`existing name "Teranga 02" is a previous pilot name, but a person created
+or changed this coach`. A person's vehicle never becomes the bootstrap's.
+If the coach is indeed the pilot coach, rename it in OPS → **Flotte**
+(« Teranga Pilote 01 » or « Teranga Pilote 02 ») and run the dry run again:
+once every identity field matches, it is `existing`.
+
+### From pilot-corridor/1: in OPS
+
+Version 1 coaches differ in make, model and year, so they are a `conflict`
+(`existing manufacturer differs from the pilot coach`), the trips that
+depend on them are skipped and the command exits with code 2.
 
 1. In OPS → **Flotte**, open each coach and set, in its administrative data:
+   - name « Teranga Pilote 01 » or « Teranga Pilote 02 »;
    - manufacturer "Autocar grand tourisme";
    - model "Modèle à confirmer";
    - an empty model year.
 
-   The change is audited as any OPS edit. Keep the name, the `DEMO-*` plate,
+   The change is audited as any OPS edit. Keep the code, the `DEMO-*` plate,
    the status and the seat map.
 
 2. Run the dry run again: both coaches are `existing`, and the trips are
@@ -112,6 +170,13 @@ To move such a database to version 2:
 If the owner has confirmed the real make, model and year, enter those
 instead, and update `PILOT_VEHICLES` in `pilot-dataset.ts` to the same
 values in the same change, so that the bootstrap recognises the coaches.
+
+### Historical operator vehicles
+
+Vehicles with other codes, such as `ET-BUS-001` « Teranga 01 » and
+`ET-BUS-002` « Teranga 02 », are never touched: no rename, no new code, no
+status change, no seat map or equipment change. No step of an upgrade
+requires changing them.
 
 ## Usage
 
