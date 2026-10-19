@@ -206,4 +206,62 @@ test.describe('ops public media library', () => {
 
     expect(errors).toEqual([]);
   });
+  test('a late answer for the previous filter never replaces the current one', async ({ page }) => {
+    test.setTimeout(120_000);
+    const run = process.env.E2E_RUN_ID ?? `${Date.now()}`;
+    const alt = `Image active de la course ${run}`;
+    await signedIn(page.context());
+    await page.goto(appUrl(ops, '/mediatheque'));
+    await page.getByRole('button', { name: 'Importer une image' }).click();
+    const upload = page.getByTestId('media-upload-form');
+    await upload.getByLabel('Fichier image').setInputFiles({
+      name: 'course.png',
+      mimeType: 'image/png',
+      buffer: syntheticPng(480, 320, run.length + 7),
+    });
+    await upload.getByLabel('Texte alternatif').fill(alt);
+    await upload.getByRole('button', { name: 'Importer l’image' }).click();
+    await expect(notice(page, 'Image importée.')).toBeVisible();
+
+    // The answer for "Actives" is held back until "Archivées" has answered.
+    let holdActive = true;
+    let releaseActive!: () => void;
+    const activeReleased = new Promise<void>((resolve) => (releaseActive = resolve));
+    await page.route('**/v1/admin/media?*', async (route) => {
+      const status = new URL(route.request().url()).searchParams.get('status');
+      if (holdActive && status === 'ACTIVE') await activeReleased;
+      await route.continue();
+    });
+    await page.getByRole('button', { name: 'Archivées' }).click();
+    await expect(page.getByRole('button', { name: 'Archivées' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    const activeRequest = page.waitForRequest(
+      (request) => new URL(request.url()).searchParams.get('status') === 'ACTIVE',
+    );
+    await page.getByRole('button', { name: 'Actives' }).click();
+    await activeRequest;
+    const archivedAnswer = page.waitForResponse(
+      (response) => new URL(response.url()).searchParams.get('status') === 'ARCHIVED',
+    );
+    await page.getByRole('button', { name: 'Archivées' }).click();
+    await archivedAnswer;
+    holdActive = false;
+    const lateActive = page.waitForResponse(
+      (response) => new URL(response.url()).searchParams.get('status') === 'ACTIVE',
+    );
+    releaseActive();
+    await lateActive;
+    await page.waitForTimeout(300);
+
+    // Still the archived filter: the late active list was ignored.
+    await expect(page.getByRole('button', { name: 'Archivées' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(page.getByRole('button', { name: new RegExp(alt) })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Actives' }).click();
+    await expect(page.getByRole('button', { name: new RegExp(alt) })).toBeVisible();
+  });
 });

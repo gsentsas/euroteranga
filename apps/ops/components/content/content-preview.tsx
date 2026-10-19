@@ -13,7 +13,13 @@ import {
   type PageDocument,
   type SiteSettings,
 } from '@euroteranga/content';
-import { SitePage, siteMediaOf, type SiteContext, type SiteMedia } from '@euroteranga/site';
+import {
+  createMediaCache,
+  SitePage,
+  siteMediaOf,
+  type SiteContext,
+  type SiteMedia,
+} from '@euroteranga/site';
 import { useEffect, useRef, useState } from 'react';
 import { auth } from '../../lib/auth';
 
@@ -89,24 +95,22 @@ function previewModel(
  * like the website, the preview shows active images only (null = absent).
  */
 function useMediaCache() {
-  const cache = useRef(new Map<string, SiteMedia | null>());
-  const pending = useRef(new Set<string>());
   const [version, setVersion] = useState(0);
-  const request = (ids: readonly string[]) => {
-    const missing = ids.filter((id) => !cache.current.has(id) && !pending.current.has(id));
-    if (missing.length === 0) return;
-    missing.forEach((id) => pending.current.add(id));
-    void auth.media.many(missing.slice(0, 50)).then((result) => {
-      for (const id of missing) pending.current.delete(id);
-      if (!result.ok) return;
-      for (const id of missing) cache.current.set(id, null);
-      for (const item of result.data.items) {
-        cache.current.set(item.id, siteMediaOf(item, auth.media.url));
-      }
-      setVersion((value) => value + 1);
-    });
-  };
-  return { cache: cache.current, request, version };
+  // One cache per editor: a batch of 50 at a time, each answered batch
+  // re-renders the preview, which then requests the next missing ids.
+  const [cache] = useState(() =>
+    createMediaCache<SiteMedia>(
+      async (batch) => {
+        const result = await auth.media.many(batch);
+        if (!result.ok) return null;
+        return new Map(
+          result.data.items.map((item) => [item.id, siteMediaOf(item, auth.media.url)]),
+        );
+      },
+      () => setVersion((value) => value + 1),
+    ),
+  );
+  return { cache, version };
 }
 
 /**
@@ -145,7 +149,7 @@ export function ContentPreview({
       setStale(true);
       return;
     }
-    media.request(mediaIdsOf(model.page));
+    media.cache.request(mediaIdsOf(model.page));
     const ctx: SiteContext = { ...model.ctx, media: (id) => media.cache.get(id) ?? null };
     let cancelled = false;
     const timer = window.setTimeout(() => {

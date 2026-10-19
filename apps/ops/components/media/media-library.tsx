@@ -680,18 +680,24 @@ export function MediaLibrary() {
   const [upload, setUpload] = useState<{ replaces: MediaAsset | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Only the latest request may update the list: an answer for a previous
+  // filter (or a previous page) that arrives late is ignored.
+  const latest = useRef(0);
 
   const load = useCallback(
     async (cursor?: string) => {
+      const request = (latest.current += 1);
       const result = await auth.admin.media.list({
         status,
         limit: PAGE_SIZE,
         ...(cursor ? { cursor } : {}),
       });
+      if (request !== latest.current) return;
       if (!result.ok) {
         setError(result.error.message);
         return;
       }
+      setError(null);
       setStorageEnabled(result.data.storageEnabled);
       setItems((previous) =>
         cursor ? [...(previous ?? []), ...result.data.items] : result.data.items,
@@ -703,6 +709,8 @@ export function MediaLibrary() {
 
   useEffect(() => {
     setItems(null);
+    setNextCursor(null);
+    setError(null);
     void load();
   }, [load]);
 

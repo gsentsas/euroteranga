@@ -8,6 +8,7 @@ import {
   type PageDocument,
 } from '@euroteranga/content';
 import {
+  resolveMedia,
   siteMediaOf,
   type AppLinks,
   type FromPrice,
@@ -134,25 +135,20 @@ function publicApiUrl(path: string): string {
   return `${publicEnv.NEXT_PUBLIC_API_BASE_URL.replace(/\/+$/, '')}${path}`;
 }
 
-const MEDIA_BATCH = 50;
-
 /**
- * Active images among `ids` (MEDIA-1). Unknown or archived ones are absent,
- * and an unavailable API only leaves the images out: text never waits.
+ * Active images among `ids` (MEDIA-1), in batches of 50 resolved in
+ * parallel (bounded). Unknown or archived ones are absent, and a failed or
+ * slow batch only leaves its own images out: text never waits on images.
  */
 export async function loadMedia(ids: readonly string[]): Promise<Map<string, SiteMedia>> {
-  const found = new Map<string, SiteMedia>();
-  const unique = [...new Set(ids)];
-  for (let start = 0; start < unique.length; start += MEDIA_BATCH) {
-    const batch = unique.slice(start, start + MEDIA_BATCH);
+  return resolveMedia(ids, async (batch) => {
     const result = await read<{ items: Array<PublicMediaRecord & { id: string }> }>(
       `/v1/media?ids=${batch.join(',')}`,
       CONTENT_REVALIDATE_SECONDS,
     );
-    if (result.status !== 'ok') continue;
-    for (const item of result.data.items) found.set(item.id, siteMediaOf(item, publicApiUrl));
-  }
-  return found;
+    if (result.status !== 'ok') return null;
+    return new Map(result.data.items.map((item) => [item.id, siteMediaOf(item, publicApiUrl)]));
+  });
 }
 
 /** Published settings and navigation (defaults until published), links and prices. */
@@ -178,7 +174,7 @@ export async function loadSiteContext(options: {
     navigation,
     apps: appLinks(settings.apps),
     fromPrices: options.prices ? await fromPrices() : {},
-    media: (id) => media.get(id) ?? null,
+    media: (id) => media.get(id.toLowerCase()) ?? null,
     year: new Date().getUTCFullYear(),
   };
 }
