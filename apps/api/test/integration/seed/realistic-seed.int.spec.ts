@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AuditService } from '../../../src/authorization/audit.service.js';
 import { BaggageService } from '../../../src/baggage/baggage.service.js';
 import { BookingService } from '../../../src/bookings/booking.service.js';
@@ -761,18 +761,16 @@ describe('realistic seed: interrupted bag declarations resume (isolated database
       (link) => plannedBaggage(trip.reference, link.passenger.reference).length === 2,
     )!;
     const [firstType] = plannedBaggage(trip.reference, interrupted.passenger.reference);
-    await h.t.app
-      .get(BaggageService)
-      .customerRegister(
-        {
-          kind: 'system',
-          source: 'test',
-          customerIdentityId: interrupted.booking.customerIdentityId,
-        },
-        interrupted.booking.reference,
-        interrupted.passenger.reference,
-        { type: firstType! },
-      );
+    await h.t.app.get(BaggageService).customerRegister(
+      {
+        kind: 'system',
+        source: 'test',
+        customerIdentityId: interrupted.booking.customerIdentityId,
+      },
+      interrupted.booking.reference,
+      interrupted.passenger.reference,
+      { type: firstType! },
+    );
 
     await h.run();
     for (const link of travellers) {
@@ -784,4 +782,112 @@ describe('realistic seed: interrupted bag declarations resume (isolated database
       );
     }
   });
+});
+
+/** The nth call (from 1) of a service method fails, as when a run is interrupted there. */
+function interruptAt(service: object, method: string, call: number) {
+  const target = service as Record<string, (...args: unknown[]) => Promise<unknown>>;
+  const original = target[method]!.bind(service);
+  let calls = 0;
+  return vi.spyOn(target, method).mockImplementation(async (...args: unknown[]) => {
+    calls += 1;
+    if (calls === call) throw new Error('interrupted');
+    return original(...args);
+  });
+}
+
+describe('realistic seed: interrupted departures resume (isolated database)', () => {
+  let h: Harness;
+
+  beforeAll(async () => {
+    h = await harness();
+  }, 60_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  const interrupted = async (service: object, method: string, call: number) => {
+    const spy = interruptAt(service, method, call);
+    try {
+      await expect(h.run({}, { operations: false })).rejects.toThrow('interrupted');
+    } finally {
+      spy.mockRestore();
+    }
+  };
+  const bookingOf = (key: string) =>
+    db(h.t.app).booking.findMany({
+      where: { customerIdentity: { normalizedEmail: `etr-v1-${key}@example.test` } },
+      include: { payments: true, _count: { select: { passengers: true } } },
+    });
+
+  it('completes each booking where it stopped, never twice, and reports an expired hold', async () => {
+    // Out0 groups 1 and 2 are complete; group 3 stops with its payment pending,
+    // then with 1 of its 5 passengers named; group 4 stops before its payment.
+    await interrupted(h.t.app.get(PaymentWebhookService), 'process', 3);
+    const [held] = await bookingOf('out0-03');
+    expect(held!.confirmedAt).toBeNull();
+    expect(held!.payments.map((payment) => payment.status)).toEqual(['PENDING']);
+    await interrupted(h.t.app.get(PassengerDocumentService), 'createPassenger', 2);
+    const [third] = await bookingOf('out0-03');
+    expect(third!.confirmedAt).not.toBeNull();
+    expect(third).toMatchObject({ _count: { passengers: 1 } });
+    await interrupted(h.t.app.get(PaymentService), 'create', 1);
+    expect(await bookingOf('out0-03')).toMatchObject([{ _count: { passengers: 5 } }]);
+    const [fourth] = await bookingOf('out0-04');
+    expect(fourth!.payments).toHaveLength(0);
+
+    // A dry run names the missing steps and writes nothing.
+    const before = await snapshot(h);
+    const dry = await h.run({ dryRun: true }, { operations: false });
+    expect(await snapshot(h)).toEqual(before);
+    expect(
+      dry.lines.find((line) => line.entity === 'booking' && line.key === fourth!.reference),
+    ).toMatchObject({ outcome: 'planned', detail: expect.stringMatching(/resume: start the/) });
+
+    // Seen two hours later, the hold of group 4 has expired: a conflict, not a new booking.
+    const later = await h.run({ now: new Date(Date.now() + 2 * 3600_000) }, { operations: false });
+    expect(
+      later.lines.find((line) => line.entity === 'booking' && line.key === 'out0-04'),
+    ).toMatchObject({ outcome: 'conflict', detail: expect.stringMatching(/is expired/) });
+    expect(await bookingOf('out0-04')).toHaveLength(1);
+
+    // While the hold is active, the next run completes it, and everything else.
+    const resumed = await h.run({}, { operations: false });
+    expect(resumed.hasConflicts).toBe(false);
+    const client = db(h.t.app);
+    const seed = {
+      customerIdentity: { normalizedEmail: { startsWith: 'etr-v1-', endsWith: '@example.test' } },
+    };
+    const bookings = await client.booking.findMany({
+      where: seed,
+      include: {
+        customerIdentity: true,
+        payments: true,
+        _count: { select: { passengers: true } },
+      },
+    });
+    // The plan: 40 bookings, one per customer and departure; 37 confirmed for 98 seats.
+    expect(bookings).toHaveLength(40);
+    expect(new Set(bookings.map((b) => `${b.tripId} ${b.customerIdentityId}`)).size).toBe(40);
+    const confirmed = bookings.filter((b) => b.confirmedAt && !b.cancelledAt);
+    expect(confirmed).toHaveLength(37);
+    expect(confirmed.reduce((sum, b) => sum + b._count.passengers, 0)).toBe(98);
+    for (const booking of confirmed) {
+      const seats = await client.bookingSeat.count({ where: { bookingId: booking.id } });
+      expect(booking._count.passengers, booking.customerIdentity.normalizedEmail).toBe(seats);
+    }
+    expect(bookings.every((b) => b.payments.length <= 1)).toBe(true);
+    expect(bookings.reduce((sum, b) => sum + b.payments.length, 0)).toBe(39);
+
+    // Then a run has nothing left to do.
+    const settled = await snapshot(h);
+    const again = await h.run({}, { operations: false });
+    expect(await snapshot(h)).toEqual(settled);
+    expect(
+      again.lines
+        .filter((line) => line.layer === 'commerce')
+        .every((line) => ['existing', 'skipped'].includes(line.outcome)),
+    ).toBe(true);
+  }, 300_000);
 });

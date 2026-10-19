@@ -195,12 +195,118 @@ export async function upcomingPilotTrips(
   });
 }
 
+/** `etr-v1-out0-03@example.test`: the plan's direction and position (`out`, `0`) and the group (`03`). */
+const SEED_CUSTOMER = /^etr-v1-(out|in)(\d+)-(\d{2})@example\.test$/;
+
+const groupKey = (tripKey: string, index: number) =>
+  `${tripKey}-${String(index + 1).padStart(2, '0')}`;
+
+type SeedPaymentStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+
+/** Where a booking of the plan stands (the domain derives EXPIRED from the hold). */
+interface SeedBookingState {
+  reference: string;
+  customerIdentityId: string;
+  state: 'HELD' | 'EXPIRED' | 'CONFIRMED' | 'CANCELLED';
+  /** The seed's own SANDBOX attempt (`seed-pay-<booking>`), once started. */
+  payment: { reference: string; status: SeedPaymentStatus } | null;
+  passengers: number;
+}
+
+interface SeedBooking extends SeedBookingState {
+  /** Payments the seed did not start: the booking is then never touched. */
+  foreignPayments: number;
+}
+
+function seedBooking(
+  row: {
+    reference: string;
+    customerIdentityId: string;
+    cancelledAt: Date | null;
+    confirmedAt: Date | null;
+    holdExpiresAt: Date;
+    payments: ReadonlyArray<{
+      reference: string;
+      status: SeedPaymentStatus;
+      provider: string;
+      idempotencyKey: string | null;
+    }>;
+    _count: { passengers: number };
+  },
+  now: Date,
+): SeedBooking {
+  const own = row.payments.filter(
+    (payment) =>
+      payment.provider === 'SANDBOX' && payment.idempotencyKey === `seed-pay-${row.reference}`,
+  );
+  const payment = own.length === 1 ? own[0]! : null;
+  return {
+    reference: row.reference,
+    customerIdentityId: row.customerIdentityId,
+    state: row.cancelledAt
+      ? 'CANCELLED'
+      : row.confirmedAt
+        ? 'CONFIRMED'
+        : row.holdExpiresAt <= now
+          ? 'EXPIRED'
+          : 'HELD',
+    payment: payment ? { reference: payment.reference, status: payment.status } : null,
+    passengers: row._count.passengers,
+    foreignPayments: row.payments.length - (payment ? 1 : 0),
+  };
+}
+
+/** The seed's last step for this group has happened: nothing left to do. */
+function isComplete(group: RealisticBookingGroup, booking: SeedBooking): boolean {
+  if (booking.foreignPayments > 0) return false;
+  switch (group.state) {
+    case 'cancelled':
+      return booking.state === 'CANCELLED' && booking.payment === null;
+    case 'pending':
+      return booking.payment !== null;
+    case 'failed':
+      return booking.payment?.status === 'FAILED';
+    case 'confirmed':
+      return booking.state === 'CONFIRMED' && booking.passengers >= group.seats;
+  }
+}
+
+/**
+ * The steps still to run for a group, which can only follow from where the
+ * booking stopped: an active hold (with no payment or the seed's pending
+ * one), or a confirmed booking missing passengers. Anything else is a
+ * conflict.
+ */
+function missingSteps(group: RealisticBookingGroup, booking: SeedBookingState): string[] {
+  const where = `${booking.reference} is ${booking.state.toLowerCase()}${
+    booking.payment ? ` with a ${booking.payment.status.toLowerCase()} payment` : ''
+  }`;
+  const conflict = () =>
+    new RealisticConflict(`${where}: the ${group.state} booking cannot be completed`);
+  if (booking.state === 'CONFIRMED') {
+    if (group.state !== 'confirmed') throw conflict();
+    return [`name ${group.seats - booking.passengers} passengers`];
+  }
+  if (booking.state !== 'HELD') throw conflict();
+  if (group.state === 'cancelled') {
+    if (booking.payment) throw conflict();
+    return ['cancel the hold'];
+  }
+  if (booking.payment && booking.payment.status !== 'PENDING') throw conflict();
+  const steps = booking.payment ? [] : ['start the SANDBOX payment'];
+  if (group.state === 'failed') steps.push('decline the payment');
+  if (group.state === 'confirmed')
+    steps.push('settle the payment', `name ${group.seats} passengers`);
+  return steps;
+}
+
 /**
  * SEED-REALISTIC-1 commerce layer (local and CI only): synthetic customers
  * book the upcoming pilot departures through the booking service, pay
  * through the SANDBOX provider and its signed-event pipeline, and name their
- * passengers. A departure that already has seed bookings is left as it is,
- * so a second run, or a run weeks later, never piles bookings up.
+ * passengers. A departure that already has seed bookings keeps its plan:
+ * an interrupted run is completed, and a second run, or a run weeks later,
+ * never books a group twice.
  */
 export class RealisticCommerce {
   constructor(
@@ -221,13 +327,12 @@ export class RealisticCommerce {
       const plan = REALISTIC_BOOKING_PLAN[direction.name];
       for (const [position, groups] of plan.entries()) {
         const trip = trips[position];
-        const tripKey = `${direction.short}${position}`;
         if (!trip) {
           this.reporter.report({
             layer: 'commerce',
             outcome: options.dryRun ? 'planned' : 'skipped',
             entity: 'booking',
-            key: tripKey,
+            key: `${direction.short}${position}`,
             detail: options.dryRun
               ? `${groups.length} bookings once the departure exists`
               : 'no upcoming departure at this position',
@@ -236,53 +341,133 @@ export class RealisticCommerce {
           continue;
         }
         await this.reporter.guarded('commerce', 'booking', trip.reference, [], () =>
-          this.ensureTripBookings(trip, tripKey, groups, countries, options.dryRun),
+          this.ensureTripBookings(trip, direction, position, countries, options),
         );
       }
     }
   }
 
+  /**
+   * A departure without seed bookings gets the plan of its position. A
+   * departure that has some keeps the plan it was first seeded with (its
+   * customers' addresses name it), even once earlier departures have left:
+   * complete bookings are kept as they are, missing bookings and the missing
+   * steps of an interrupted one are completed, and nothing is booked twice.
+   */
   private async ensureTripBookings(
     trip: UpcomingTrip,
-    tripKey: string,
-    groups: readonly RealisticBookingGroup[],
+    direction: (typeof DIRECTIONS)[number],
+    position: number,
     countries: Map<string, string>,
-    dry: boolean,
+    options: { dryRun: boolean; now: Date },
   ): Promise<string | null> {
-    const existing = await this.db.booking.count({
+    const rows = await this.db.booking.findMany({
       where: {
         tripId: trip.id,
         customerIdentity: {
           normalizedEmail: { startsWith: SEED_EMAIL_PREFIX, endsWith: SEED_EMAIL_SUFFIX },
         },
       },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        reference: true,
+        customerIdentityId: true,
+        cancelledAt: true,
+        confirmedAt: true,
+        holdExpiresAt: true,
+        customerIdentity: { select: { normalizedEmail: true } },
+        payments: {
+          select: { reference: true, status: true, provider: true, idempotencyKey: true },
+        },
+        _count: { select: { passengers: true } },
+      },
     });
-    if (existing > 0) {
+    const plan = REALISTIC_BOOKING_PLAN[direction.name];
+    if (rows.length === 0) {
+      const groups = plan[position]!;
+      const tripKey = `${direction.short}${position}`;
+      if (options.dryRun) {
+        const seats = groups.reduce((sum, group) => sum + group.seats, 0);
+        this.reporter.report({
+          layer: 'commerce',
+          outcome: 'planned',
+          entity: 'booking',
+          key: trip.reference,
+          detail: `${groups.length} bookings, ${seats} seats`,
+          count: groups.length,
+        });
+        return null;
+      }
+      for (const [index, group] of groups.entries()) {
+        const key = groupKey(tripKey, index);
+        await this.reporter.guarded('commerce', 'booking', key, [], () =>
+          this.book(trip, key, group, countries),
+        );
+      }
+      return trip.id;
+    }
+
+    const byKey = new Map<string, SeedBooking[]>();
+    const tripKeys = new Set<string>();
+    for (const row of rows) {
+      const match = SEED_CUSTOMER.exec(row.customerIdentity.normalizedEmail);
+      if (!match || match[1] !== direction.short) {
+        throw new RealisticConflict(`a seed booking of another plan: ${row.reference}`);
+      }
+      tripKeys.add(`${match[1]}${match[2]}`);
+      const key = `${match[1]}${match[2]}-${match[3]}`;
+      byKey.set(key, [...(byKey.get(key) ?? []), seedBooking(row, options.now)]);
+    }
+    if (tripKeys.size > 1) {
+      throw new RealisticConflict(`seed bookings of several plans: ${[...tripKeys].join(', ')}`);
+    }
+    const tripKey = [...tripKeys][0]!;
+    const groups = plan[Number(tripKey.slice(direction.short.length))];
+    if (!groups) throw new RealisticConflict(`seed bookings of an unknown plan: ${tripKey}`);
+    const keys = groups.map((_, index) => groupKey(tripKey, index));
+    const strangers = [...byKey.keys()].filter((key) => !keys.includes(key));
+    if (strangers.length > 0) {
+      throw new RealisticConflict(`seed bookings outside the plan: ${strangers.join(', ')}`);
+    }
+
+    let complete = 0;
+    for (const [index, group] of groups.entries()) {
+      const key = keys[index]!;
+      const found = byKey.get(key) ?? [];
+      if (found.length === 1 && isComplete(group, found[0]!)) {
+        complete += 1;
+        continue;
+      }
+      await this.reporter.guarded('commerce', 'booking', key, [], async () => {
+        if (found.length > 1) {
+          throw new RealisticConflict(`${found.length} seed bookings for one customer`);
+        }
+        const booking = found[0];
+        if (booking) {
+          await this.resume(trip, key, group, countries, booking, options.dryRun);
+        } else if (options.dryRun) {
+          this.reporter.report({
+            layer: 'commerce',
+            outcome: 'planned',
+            entity: 'booking',
+            key,
+            detail: `${trip.reference}, ${group.state}, ${group.seats} seats`,
+          });
+        } else {
+          await this.book(trip, key, group, countries);
+        }
+        return key;
+      });
+    }
+    if (complete > 0) {
       this.reporter.report({
         layer: 'commerce',
         outcome: 'existing',
         entity: 'booking',
         key: trip.reference,
-        detail: `${existing} seed bookings kept`,
-        count: existing,
+        detail: `${complete} seed bookings complete (plan ${tripKey})`,
+        count: complete,
       });
-      return trip.id;
-    }
-    if (dry) {
-      const seats = groups.reduce((sum, group) => sum + group.seats, 0);
-      this.reporter.report({
-        layer: 'commerce',
-        outcome: 'planned',
-        entity: 'booking',
-        key: trip.reference,
-        detail: `${groups.length} bookings, ${seats} seats`,
-        count: groups.length,
-      });
-      return null;
-    }
-    for (const [index, group] of groups.entries()) {
-      const key = `${tripKey}-${String(index + 1).padStart(2, '0')}`;
-      await this.book(trip, key, group, countries);
     }
     return trip.id;
   }
@@ -292,15 +477,9 @@ export class RealisticCommerce {
     key: string,
     group: RealisticBookingGroup,
     countries: Map<string, string>,
-  ): Promise<void> {
-    const { bookings, publicBooking, passengers, payments } = this.services;
-    const customer = await this.ensureCustomer(key);
-    const actor: SystemCustomerActor = {
-      kind: 'system',
-      source: REALISTIC_SOURCE,
-      customerIdentityId: customer,
-    };
-    const availability = await publicBooking.availability(
+  ): Promise<string> {
+    const actor = this.actorFor(await this.ensureCustomer(key));
+    const availability = await this.services.publicBooking.availability(
       trip.id,
       trip.originRouteWaypointId,
       trip.destinationRouteWaypointId,
@@ -312,7 +491,7 @@ export class RealisticCommerce {
       seededRandom(`${trip.reference}#${key}`),
     );
     if (!seats) throw new RealisticConflict(`not enough free seats for ${key}`);
-    const booking = await bookings.create(
+    const booking = await this.services.bookings.create(
       bookingCreateSchema.parse({
         tripId: trip.id,
         originRouteWaypointId: trip.originRouteWaypointId,
@@ -329,36 +508,114 @@ export class RealisticCommerce {
       key: booking.reference,
       detail: `${trip.reference}, ${group.state}, seats ${labels}`,
     });
+    await this.advance(actor, key, group, countries, {
+      reference: booking.reference,
+      customerIdentityId: actor.customerIdentityId,
+      state: 'HELD',
+      payment: null,
+      passengers: 0,
+    });
+    return booking.reference;
+  }
 
+  /**
+   * An interrupted booking of the plan: its customer must still be the
+   * seed's own, and its missing steps can only follow from where it stopped.
+   * A hold that expired before it was paid, cancelled or confirmed cannot be
+   * completed: it is a conflict, left as it is (seats released, nothing
+   * rebooked over it).
+   */
+  private async resume(
+    trip: UpcomingTrip,
+    key: string,
+    group: RealisticBookingGroup,
+    countries: Map<string, string>,
+    booking: SeedBooking,
+    dry: boolean,
+  ): Promise<void> {
+    if (booking.foreignPayments > 0) {
+      throw new RealisticConflict(`${booking.reference} has a payment the seed did not start`);
+    }
+    const steps = missingSteps(group, booking);
+    if (dry) {
+      this.reporter.report({
+        layer: 'commerce',
+        outcome: 'planned',
+        entity: 'booking',
+        key: booking.reference,
+        detail: `${trip.reference}, ${group.state}, resume: ${steps.join(', ')}`,
+      });
+      return;
+    }
+    const customerIdentityId = await this.ensureCustomer(key);
+    if (customerIdentityId !== booking.customerIdentityId) {
+      throw new RealisticConflict(`${booking.reference} belongs to another customer`);
+    }
+    this.reporter.report({
+      layer: 'commerce',
+      outcome: 'updated',
+      entity: 'booking',
+      key: booking.reference,
+      detail: `${trip.reference}, ${group.state}, resumed: ${steps.join(', ')}`,
+    });
+    await this.advance(this.actorFor(customerIdentityId), key, group, countries, booking);
+  }
+
+  /** The steps of a booking of the plan, from where it is (validated by missingSteps). */
+  private async advance(
+    actor: SystemCustomerActor,
+    key: string,
+    group: RealisticBookingGroup,
+    countries: Map<string, string>,
+    booking: SeedBookingState,
+  ): Promise<void> {
+    missingSteps(group, booking);
     if (group.state === 'cancelled') {
-      await bookings.cancelByCustomer(actor, booking.reference);
+      await this.services.bookings.cancelByCustomer(actor, booking.reference);
       return;
     }
-    const created = await payments.create(
-      actor,
-      booking.reference,
-      `seed-pay-${booking.reference}`,
-    );
-    const payment = created.result.payment;
-    if (group.state === 'pending') {
-      this.reportPayment(payment.reference, 'PENDING, abandoned: the hold will expire');
-      return;
+    if (booking.state === 'HELD') {
+      let payment = booking.payment;
+      if (!payment) {
+        const created = await this.services.payments.create(
+          actor,
+          booking.reference,
+          `seed-pay-${booking.reference}`,
+        );
+        payment = { reference: created.result.payment.reference, status: 'PENDING' };
+        if (group.state === 'pending') {
+          this.reportPayment(payment.reference, 'PENDING, abandoned: the hold will expire');
+          return;
+        }
+      }
+      await this.settle(payment.reference, group.state === 'confirmed');
+      this.reportPayment(
+        payment.reference,
+        group.state === 'confirmed' ? 'SUCCEEDED (SANDBOX)' : 'FAILED, declined (SANDBOX)',
+        booking.payment ? 'updated' : 'created',
+      );
+      if (group.state !== 'confirmed') return;
     }
-    await this.settle(payment.reference, group.state === 'confirmed');
-    this.reportPayment(
-      payment.reference,
-      group.state === 'confirmed' ? 'SUCCEEDED (SANDBOX)' : 'FAILED, declined (SANDBOX)',
-    );
-    if (group.state !== 'confirmed') return;
+    await this.addPassengers(actor, key, group, countries, booking.reference, booking.passengers);
+  }
 
-    for (let index = 0; index < group.seats; index += 1) {
+  /** The travellers of a confirmed booking, in plan order, after those already named. */
+  private async addPassengers(
+    actor: SystemCustomerActor,
+    key: string,
+    group: RealisticBookingGroup,
+    countries: Map<string, string>,
+    bookingReference: string,
+    named: number,
+  ): Promise<void> {
+    for (let index = named; index < group.seats; index += 1) {
       const traveller = travellerOf(key, index, group.seats);
       const nationalityCountryId = countries.get(traveller.nationalityIso2);
       if (!nationalityCountryId)
         throw new RealisticConflict(`no ${traveller.nationalityIso2} country`);
-      await passengers.createPassenger(
+      await this.services.passengers.createPassenger(
         actor,
-        booking.reference,
+        bookingReference,
         passengerCreateSchema.parse({
           givenName: traveller.givenName,
           familyName: traveller.familyName,
@@ -371,15 +628,23 @@ export class RealisticCommerce {
       layer: 'commerce',
       outcome: 'created',
       entity: 'passenger',
-      key: booking.reference,
-      count: group.seats,
+      key: bookingReference,
+      count: group.seats - named,
     });
   }
 
-  private reportPayment(reference: string, detail: string) {
+  private actorFor(customerIdentityId: string): SystemCustomerActor {
+    return { kind: 'system', source: REALISTIC_SOURCE, customerIdentityId };
+  }
+
+  private reportPayment(
+    reference: string,
+    detail: string,
+    outcome: 'created' | 'updated' = 'created',
+  ) {
     this.reporter.report({
       layer: 'commerce',
-      outcome: 'created',
+      outcome,
       entity: 'payment',
       key: reference,
       detail,

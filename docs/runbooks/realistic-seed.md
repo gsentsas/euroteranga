@@ -100,9 +100,15 @@ ALLOW_REALISTIC_SEED=true pnpm seed:realistic -- --cleanup-seed-only
   interrupted run is completed; anything else is a `conflict`, left untouched,
   and what depends on it is skipped. Operator navigation, pages and equipment
   are never replaced.
-- A departure that already has seed bookings is left as it is: a second run,
-  or a run weeks later, never piles bookings up. New departures added by the
-  pilot later stay empty.
+- A departure that already has seed bookings keeps the plan it was first
+  seeded with (its customers' addresses name it). Its complete bookings are
+  kept as they are. A booking, or a step of one (payment, its result,
+  passengers), that an interrupted run left out is completed from where it
+  stopped, by the same synthetic customer. A hold that expired before it was
+  completed is a conflict, left as it is. No booking is ever made twice, so a
+  second run, or a run weeks later, never piles bookings up.
+- A departure without seed bookings gets the plan of its position: as earlier
+  departures leave, a later run books the next ones.
 - A second run on the same day writes nothing (no row, no audit event): the
   integration tests compare every table and the audit trail.
 
