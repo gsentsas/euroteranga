@@ -249,6 +249,24 @@ function stopOptions(stops: readonly SiteStop[] | undefined, codes: readonly str
   ];
 }
 
+const SEARCH_FIELDS = new Set(['from', 'to', 'date', 'passengers']);
+
+/**
+ * A GET form replaces the query of its action with its fields: the booking
+ * URL's own parameters (bookingSearchHref keeps them too) become hidden fields.
+ */
+function searchAction(base: string): { action: string; keep: Array<[string, string]> } {
+  try {
+    const url = new URL(base);
+    const keep = [...url.searchParams].filter(([name]) => !SEARCH_FIELDS.has(name));
+    url.search = '';
+    url.hash = '';
+    return { action: url.toString(), keep };
+  } catch {
+    return { action: base, keep: [] };
+  }
+}
+
 /**
  * The trip search of the hero: a plain GET form to the booking application
  * (no client JavaScript), which pre-fills its own search from the query.
@@ -262,14 +280,18 @@ function HeroSearch({
 }) {
   const options = stopOptions(ctx.stops, [search.fromCode, search.toCode]);
   const passengers = Array.from({ length: MAX_SEARCH_PASSENGERS }, (_, index) => index + 1);
+  const { action, keep } = searchAction(ctx.apps.booking);
   return (
     <form
       className="public-search"
       method="get"
-      action={ctx.apps.booking}
+      action={action}
       role="search"
       aria-label="Rechercher un voyage"
     >
+      {keep.map(([name, value], index) => (
+        <input key={`${name}-${index}`} type="hidden" name={name} value={value} />
+      ))}
       <div className="public-search__field">
         <label htmlFor="public-search-from">
           <Icon name="bus" /> Départ

@@ -57,23 +57,48 @@ const DIRECTION_LABELS: Record<(typeof ROUTE_DIRECTIONS)[number], string> = {
 const entries = <K extends string>(labels: Record<K, string>) =>
   Object.entries(labels) as Array<[K, string]>;
 
-/** Active stops of the network, read once per editor (public stops API). */
-let stopsRequest: Promise<BookingSearchStop[]> | null = null;
-function useStops(): BookingSearchStop[] | null {
-  const [stops, setStops] = useState<BookingSearchStop[] | null>(null);
+type StopsState =
+  { status: 'loading' } | { status: 'ready'; stops: BookingSearchStop[] } | { status: 'failed' };
+
+/**
+ * Active stops of the network, read once per editor (public stops API). A
+ * failed read is not cached: the next field that needs the list asks again.
+ */
+let stopsRequest: Promise<BookingSearchStop[] | null> | null = null;
+function useStops(): StopsState {
+  const [state, setState] = useState<StopsState>({ status: 'loading' });
   useEffect(() => {
-    stopsRequest ??= auth.booking.public
-      .stops({ limit: 50 })
-      .then((result) => (result.ok ? result.data.items : []));
+    stopsRequest ??= auth.booking.public.stops({ limit: 50 }).then((result) => {
+      if (result.ok) return result.data.items;
+      stopsRequest = null;
+      return null;
+    });
     let current = true;
     void stopsRequest.then((items) => {
-      if (current) setStops(items);
+      if (current) setState(items ? { status: 'ready', stops: items } : { status: 'failed' });
     });
     return () => {
       current = false;
     };
   }, []);
-  return stops;
+  return state;
+}
+
+/** A stop missing from the first page of the list, resolved by its exact code. */
+function useStopByCode(code: string, listed: boolean): BookingSearchStop | null | undefined {
+  const [found, setFound] = useState<{ code: string; stop: BookingSearchStop | null } | null>(null);
+  useEffect(() => {
+    if (!code || listed) return;
+    let current = true;
+    void auth.booking.public.stops({ query: code, limit: 50 }).then((result) => {
+      if (!current || !result.ok) return;
+      setFound({ code, stop: result.data.items.find((stop) => stop.code === code) ?? null });
+    });
+    return () => {
+      current = false;
+    };
+  }, [code, listed]);
+  return found?.code === code ? found.stop : undefined;
 }
 
 /**
@@ -82,23 +107,34 @@ function useStops(): BookingSearchStop[] | null {
  */
 function StopCodeField({ path, label }: { path: DocumentPath; label: string }) {
   const editor = useEditor();
-  const stops = useStops();
+  const state = useStops();
   const current = editor.get(path);
   const value = typeof current === 'string' ? current : '';
-  const options: Array<[string, string]> = (stops ?? [])
-    .map((stop): [string, string] => [stop.code, `${stop.code} — ${stop.name} (${stop.locality})`])
+  const stops = state.status === 'ready' ? state.stops : [];
+  const listed = state.status !== 'ready' || stops.some((stop) => stop.code === value);
+  const resolved = useStopByCode(value, listed);
+  const describe = (stop: BookingSearchStop): [string, string] => [
+    stop.code,
+    `${stop.code} — ${stop.name} (${stop.locality})`,
+  ];
+  const options: Array<[string, string]> = stops
+    .map(describe)
     .sort((a, b) => a[1].localeCompare(b[1], 'fr'));
   if (value && !options.some(([code]) => code === value)) {
-    options.unshift([value, `${value} — arrêt inactif ou inconnu`]);
+    // Only an answered lookup may call a stop inactive; otherwise keep the bare code.
+    options.unshift(
+      resolved
+        ? describe(resolved)
+        : [value, resolved === null ? `${value} — arrêt inactif ou inconnu` : value],
+    );
   }
-  return (
-    <SelectField
-      path={path}
-      label={label}
-      options={options}
-      hint={stops === null ? 'Chargement des arrêts…' : 'Arrêts actifs du réseau.'}
-    />
-  );
+  const hint =
+    state.status === 'loading'
+      ? 'Chargement des arrêts…'
+      : state.status === 'failed'
+        ? 'Les arrêts n’ont pas pu être chargés : le code choisi est conservé. Rouvrez la section pour réessayer.'
+        : 'Arrêts actifs du réseau.';
+  return <SelectField path={path} label={label} options={options} hint={hint} />;
 }
 
 /** The optional trip search of the hero, pre-filled with a direction. */

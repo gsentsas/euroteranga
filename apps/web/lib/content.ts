@@ -111,7 +111,7 @@ interface PublicStop {
 
 interface PublicJourney {
   tripId: string;
-  origin: { stop: PublicStop | null; plannedDepartureAt: string };
+  origin: { stop: PublicStop | null; plannedDepartureAt: string | null };
   destination: { stop: PublicStop | null };
   availableSeatCount: number;
   fare: FromPrice;
@@ -172,7 +172,8 @@ async function loadDepartures(
         return;
       }
       const result = await read<{ items: PublicJourney[] }>(
-        `/v1/booking/trips?originStopId=${origin.id}&destinationStopId=${destination.id}&limit=${DEPARTURES_PER_DIRECTION}`,
+        // Full trips are filtered before the limit: they never hide bookable ones.
+        `/v1/booking/trips?originStopId=${origin.id}&destinationStopId=${destination.id}&minAvailableSeats=1&limit=${DEPARTURES_PER_DIRECTION}`,
         DEPARTURES_REVALIDATE_SECONDS,
       );
       if (result.status !== 'ok') {
@@ -181,14 +182,21 @@ async function loadDepartures(
       }
       found.set(
         key,
-        result.data.items.map((item) => ({
-          tripId: item.tripId,
-          from: siteStopOf(item.origin.stop ?? origin),
-          to: siteStopOf(item.destination.stop ?? destination),
-          departureAt: item.origin.plannedDepartureAt,
-          availableSeats: item.availableSeatCount,
-          fare: item.fare,
-        })),
+        // The contract allows a journey without a planned time: it is not a departure to show.
+        result.data.items.flatMap((item) =>
+          item.origin.plannedDepartureAt
+            ? [
+                {
+                  tripId: item.tripId,
+                  from: siteStopOf(item.origin.stop ?? origin),
+                  to: siteStopOf(item.destination.stop ?? destination),
+                  departureAt: item.origin.plannedDepartureAt,
+                  availableSeats: item.availableSeatCount,
+                  fare: item.fare,
+                },
+              ]
+            : [],
+        ),
       );
     }),
   );

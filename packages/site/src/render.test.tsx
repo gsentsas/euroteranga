@@ -290,6 +290,22 @@ describe('homepage blocks (UI-PUBLIC-1)', () => {
     for (const label of ['Départ', 'Arrivée', 'Date aller', 'Voyageurs']) {
       expect(html).toContain(label);
     }
+    // The booking URL's own parameters survive the GET submission.
+    const withQuery = render(
+      home,
+      ctx({
+        apps: {
+          booking: 'https://booking.example/reserver?lang=fr&from=XXX',
+          client: 'https://client.example/',
+          tracking: 'https://tracking.example/',
+        },
+      }),
+    );
+    expect(withQuery).toMatch(
+      /<form class="public-search"[^>]*action="https:\/\/booking\.example\/reserver"/,
+    );
+    expect(withQuery).toContain('<input type="hidden" name="lang" value="fr"/>');
+    expect(withQuery).not.toContain('name="from" value="XXX"');
     // Without the stops API, the configured stops are still offered.
     expect(render(home, ctx())).toContain('<option value="PAR" selected="">PAR</option>');
   });

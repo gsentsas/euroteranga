@@ -184,9 +184,11 @@ function usePreviewTrips(page: PageDocument | null) {
               departures.set(key, stops ? [] : null);
               return;
             }
+            // Full trips are filtered before the limit, as on the website.
             const result = await auth.booking.public.searchTrips({
               originStopId: origin.id,
               destinationStopId: destination.id,
+              minAvailableSeats: 1,
               limit: 12,
             });
             departures.set(
