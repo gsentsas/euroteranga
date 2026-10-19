@@ -28,18 +28,19 @@ maintenance record.
 
 `Vehicle` (table `vehicle`, UUIDv7 id, `snake_case`, UTC `timestamptz`):
 
-| Field                   | Rules                                                                                         |
-| ----------------------- | --------------------------------------------------------------------------------------------- |
-| `code`                  | Internal stable identifier. Trimmed, uppercase, `[A-Z0-9][A-Z0-9_-]{0,31}`, unique.           |
-| `name`                  | Optional operational name (e.g. "Teranga 01"). Trimmed, inner spaces collapsed, 1–80, unique. |
-| `vin`                   | Optional, uppercase, unique when present. **Shape check only** (see below).                   |
-| `registrationPlate`     | Optional. Trimmed, uppercase, inner spaces collapsed, 1–16 characters, no control characters. |
-| `registrationCountryId` | Optional FK to the PR-04 `Country` (`ON DELETE RESTRICT`).                                    |
-| `manufacturer`, `model` | Required, trimmed, 1–80 characters.                                                           |
-| `modelYear`             | Optional. Database: 1950–2100. API: 1950 to next year.                                        |
-| `status`                | `PLANNED`, `ACTIVE`, `OUT_OF_SERVICE`, `RETIRED`.                                             |
-| `statusChangedAt`       | Last status change (null until the first one).                                                |
-| `retiredAt`             | Set if and only if `status = RETIRED`.                                                        |
+| Field                   | Rules                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------ |
+| `code`                  | Internal stable identifier. Trimmed, uppercase, `[A-Z0-9][A-Z0-9_-]{0,31}`, unique.              |
+| `name`                  | Optional operational name (e.g. "Teranga 01"). Trimmed, inner spaces collapsed, 1–80, unique.    |
+| `vin`                   | Optional, uppercase, unique when present. **Shape check only** (see below).                      |
+| `registrationPlate`     | Optional. Trimmed, uppercase, inner spaces collapsed, 1–16 characters, no control characters.    |
+| `registrationCountryId` | Optional FK to the PR-04 `Country` (`ON DELETE RESTRICT`).                                       |
+| `manufacturer`, `model` | Required, trimmed, 1–80 characters.                                                              |
+| `modelYear`             | Optional. Database: 1950–2100. API: 1950 to next year.                                           |
+| `status`                | `PLANNED`, `ACTIVE`, `OUT_OF_SERVICE`, `RETIRED`.                                                |
+| `statusChangedAt`       | Last status change (null until the first one).                                                   |
+| `retiredAt`             | Set if and only if `status = RETIRED`.                                                           |
+| `amenities`             | On-board equipment (UI-PUBLIC-2): a distinct list of `vehicle_amenity` values, empty by default. |
 
 **VIN.** The check is an application-level shape check: 17 characters from
 the VIN alphabet (digits and letters except I, O and Q). The check digit and
@@ -50,6 +51,15 @@ verified.
 scripts. There is no worldwide pattern. A plate is only meaningful with its
 country: both are set together or both are empty. The pair
 (country, plate) is unique, so the same plate may exist in two countries.
+
+**On-board equipment (UI-PUBLIC-2).** `AIR_CONDITIONING`,
+`RECLINING_SEATS`, `USB_CHARGING`, `WIFI`, `TOILET`, `ENTERTAINMENT`,
+`WHEELCHAIR_ACCESS`. The fleet team ticks only what the coach really has,
+in working order (OPS: "Équipements à bord"). The API stores each value
+once, in this canonical order, and audits the change with the other
+administrative data (`VEHICLE_UPDATED`). PostgreSQL refuses a null list
+and duplicates (CHECK `vehicle_amenities_check`), even outside the API.
+The website shows equipment only from this list: never from the CMS.
 
 ## Lifecycle
 
@@ -131,6 +141,33 @@ There is no delete endpoint. Errors:
 | `VEHICLE_STATUS_TRANSITION_INVALID` | 409  | transition not in the matrix                        |
 | `VEHICLE_STATUS_CONFLICT`           | 409  | `expectedStatus` differs from the current status    |
 | `VEHICLE_REGISTRATION_INCOMPLETE`   | 422  | plate without country, or country without plate     |
+
+## Public fleet read (UI-PUBLIC-2)
+
+`GET /v1/booking/fleet` (no session, `Cache-Control: public, max-age=300`)
+lists the **active** vehicles, ordered by name then code (at most 50), for
+the "Nos bus" page and the coach of a trip page:
+
+```json
+{
+  "items": [
+    {
+      "code": "…",
+      "name": "…",
+      "manufacturer": "…",
+      "model": "…",
+      "modelYear": 2024,
+      "amenities": ["AIR_CONDITIONING"],
+      "seatCount": 53
+    }
+  ]
+}
+```
+
+`seatCount` is the number of SEAT cells of the current seat map (null
+without one). The VIN, the registration, the status and the seat-map
+identifiers are never returned. A planned, out-of-service or retired
+vehicle is absent.
 
 ## Seat map (PR-07)
 

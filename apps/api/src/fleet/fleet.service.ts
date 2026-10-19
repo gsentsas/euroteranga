@@ -140,6 +140,34 @@ export class FleetService {
     return { ...vehicleView(vehicle), statusHistory };
   }
 
+  /**
+   * UI-PUBLIC-2: the active vehicles as the public website shows them —
+   * name, code, make, year, seats of the configured seat map and on-board
+   * equipment. Never the VIN, the registration or the history.
+   */
+  async publicFleet() {
+    const vehicles = await this.database.client.vehicle.findMany({
+      where: { status: 'ACTIVE' },
+      orderBy: [{ name: 'asc' }, { code: 'asc' }],
+      take: 50,
+      select: {
+        code: true,
+        name: true,
+        manufacturer: true,
+        model: true,
+        modelYear: true,
+        amenities: true,
+        seatMapVersion: { select: { _count: { select: { cells: { where: { kind: 'SEAT' } } } } } },
+      },
+    });
+    return {
+      items: vehicles.map(({ seatMapVersion, ...vehicle }) => ({
+        ...vehicle,
+        seatCount: seatMapVersion?._count.cells ?? null,
+      })),
+    };
+  }
+
   createVehicle(input: VehicleCreate, actor: AuthPrincipal) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
@@ -157,6 +185,7 @@ export class FleetService {
             manufacturer: input.manufacturer,
             model: input.model,
             modelYear: input.modelYear ?? null,
+            amenities: input.amenities ?? [],
           },
           include: vehicleInclude,
         });
@@ -211,6 +240,7 @@ export class FleetService {
             ...(input.manufacturer !== undefined ? { manufacturer: input.manufacturer } : {}),
             ...(input.model !== undefined ? { model: input.model } : {}),
             ...(input.modelYear !== undefined ? { modelYear: input.modelYear } : {}),
+            ...(input.amenities !== undefined ? { amenities: input.amenities } : {}),
           },
           include: vehicleInclude,
         });

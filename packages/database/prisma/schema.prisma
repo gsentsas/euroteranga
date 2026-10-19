@@ -107,6 +107,19 @@ enum VehicleStatus {
   @@map("vehicle_status")
 }
 
+/// On-board equipment of a vehicle (UI-PUBLIC-2), shown on the public website.
+enum VehicleAmenity {
+  AIR_CONDITIONING
+  RECLINING_SEATS
+  USB_CHARGING
+  WIFI
+  TOILET
+  ENTERTAINMENT
+  WHEELCHAIR_ACCESS
+
+  @@map("vehicle_amenity")
+}
+
 /// PR-19: the maximum tracking precision that may leave the authenticated
 /// operational boundary. GPS_RECEIVED never implies GPS_PUBLIC.
 enum TrackingVisibility {
@@ -976,6 +989,8 @@ model Vehicle {
   retiredAt             DateTime?     @map("retired_at") @db.Timestamptz(3)
   /// Physical seat map currently configured (a published version).
   seatMapVersionId      String?       @map("seat_map_version_id") @db.Uuid
+  /// Equipment actually on board, maintained by the fleet team (distinct values).
+  amenities             VehicleAmenity[] @default([])
   createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
