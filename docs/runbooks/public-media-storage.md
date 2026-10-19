@@ -53,8 +53,11 @@ makes `/tmp` unsuitable.
    needed.
 
 To disable again, set `PUBLIC_MEDIA_STORAGE=DISABLED` and restart. Stored
-files and rows stay, but published images are no longer served (404) until
-storage is enabled again with the same root.
+files and rows stay. Image **descriptions** remain available
+(`GET /v1/media?ids=` still lists active images), but their **files** answer
+`503 MEDIA_UNAVAILABLE` (never cached) until storage is enabled again with the
+same root. The website and the OPS preview then show broken images: remove
+the images from the published pages first, or keep storage enabled.
 
 ## Capacity
 

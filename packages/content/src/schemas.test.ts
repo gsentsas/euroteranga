@@ -162,6 +162,13 @@ describe('content model', () => {
       ],
     });
     expect(mediaIdsOf(parsed).sort()).toEqual([id, other].sort());
+    // Media ids are stored in their canonical lowercase form.
+    const capitals = pageDocumentSchema.parse({
+      title: 'Page',
+      seo: { description: 'Description.', socialMediaId: id.toUpperCase() },
+      blocks: [{ type: 'gallery', items: [{ mediaId: other.toUpperCase() }] }],
+    });
+    expect(mediaIdsOf(capitals).sort()).toEqual([id, other].sort());
     // MEDIA-1 reports each reference with its field path, duplicates included.
     expect(mediaReferencesOf(parsed)).toEqual([
       { path: 'seo.socialMediaId', mediaId: id },

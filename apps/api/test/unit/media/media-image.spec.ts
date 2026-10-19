@@ -85,6 +85,15 @@ describe('public media image processing (MEDIA-1)', () => {
     }
   });
 
+  it('accepts a side of exactly 20 000 px (the database limit)', async () => {
+    const processed = await processImage(
+      await solid(20_000, 200).png({ compressionLevel: 9 }).toBuffer(),
+      LIMITS,
+    );
+    expect(processed.width).toBe(20_000);
+    expect(processed.renditions.at(-1)?.width).toBe(2_400);
+  });
+
   it('keeps transparency of PNG and WebP sources', async () => {
     const png = await processImage(await solid(640, 480, 4).png().toBuffer(), LIMITS);
     expect(png.sourceFormat).toBe('png');
@@ -124,6 +133,12 @@ describe('public media image processing (MEDIA-1)', () => {
       .toBuffer();
     expect((await sharp(animated).metadata()).pages).toBe(2);
     expect(await failure(animated)).toBe('ANIMATED');
+
+    // A side longer than the database accepts, well within the pixel limit.
+    const panorama = await solid(20_001, 300).png({ compressionLevel: 9 }).toBuffer();
+    expect(await failure(panorama)).toBe('TOO_LONG_SIDE');
+    const tall = await solid(300, 20_001).png({ compressionLevel: 9 }).toBuffer();
+    expect(await failure(tall)).toBe('TOO_LONG_SIDE');
 
     // A tiny file announcing many pixels (decompression bomb).
     const bomb = await solid(5000, 5000).png({ compressionLevel: 9 }).toBuffer();

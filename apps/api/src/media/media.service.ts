@@ -52,7 +52,9 @@ function sha256(data: Buffer): string {
 
 function asPublicImageError(error: ImageProcessingError): never {
   if (error.code === 'UNSUPPORTED_FORMAT') throw MediaErrors.unsupported();
-  if (error.code === 'TOO_MANY_PIXELS') throw MediaErrors.tooManyPixels();
+  if (error.code === 'TOO_MANY_PIXELS' || error.code === 'TOO_LONG_SIDE') {
+    throw MediaErrors.tooManyPixels();
+  }
   if (error.code === 'TOO_SMALL') throw MediaErrors.tooSmall();
   if (error.code === 'ANIMATED') throw MediaErrors.animated();
   throw MediaErrors.invalidImage();
@@ -61,6 +63,8 @@ function asPublicImageError(error: ImageProcessingError): never {
 function asPublicUploadError(error: MediaUploadError, maxBytes: number): never {
   if (error.code === 'TOO_LARGE') throw MediaErrors.tooLarge(maxBytes);
   if (error.code === 'EMPTY') throw MediaErrors.empty();
+  if (error.code === 'ABORTED') throw MediaErrors.aborted();
+  if (error.code === 'TIMEOUT') throw MediaErrors.timeout();
   if (error.code === 'UNSUPPORTED_MEDIA') throw MediaErrors.unsupported();
   if (error.code === 'INVALID_FIELDS') throw AuthErrors.validation(error.fields);
   throw MediaErrors.malformed();
@@ -176,7 +180,8 @@ export class MediaService {
       include: assetInclude,
     });
     if (!asset) throw MediaErrors.notFound();
-    return this.view(asset, await mediaUsages(this.database.client, id));
+    // The stored (canonical) id: the route may spell it in capitals.
+    return this.view(asset, await mediaUsages(this.database.client, asset.id));
   }
 
   // -- mutations (STAFF) ----------------------------------------------------
@@ -361,7 +366,8 @@ export class MediaService {
     await this.database.client.$transaction(async (tx) => {
       const locked = await lockAsset(tx, id);
       if (locked.status === 'ARCHIVED') throw MediaErrors.archived();
-      const usages = await mediaUsages(tx, id);
+      // Documents hold canonical ids: look them up with the stored spelling.
+      const usages = await mediaUsages(tx, locked.id);
       if (usages.length > 0) throw MediaErrors.inUse(usages);
       await tx.publicMediaAsset.update({
         where: { id },

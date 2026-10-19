@@ -1,9 +1,18 @@
+import { pipeline } from 'node:stream';
 import Busboy from 'busboy';
 import type { Request } from 'express';
 import { mediaUploadFieldsSchema, type MediaUploadFields } from './media.dto.js';
 
 export type MediaUploadFailure =
-  'MALFORMED' | 'EMPTY' | 'TOO_LARGE' | 'UNSUPPORTED_MEDIA' | 'INVALID_FIELDS';
+  | 'MALFORMED'
+  | 'EMPTY'
+  | 'TOO_LARGE'
+  | 'UNSUPPORTED_MEDIA'
+  | 'INVALID_FIELDS'
+  /** The client went away (or the socket failed) before the end of the body. */
+  | 'ABORTED'
+  /** The body did not arrive within the read deadline. */
+  | 'TIMEOUT';
 
 export class MediaUploadError extends Error {
   constructor(
@@ -22,6 +31,9 @@ export interface ParsedMediaUpload {
 }
 
 const DECLARED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+/** Longest time to receive a whole upload (10 MiB at about 700 kbit/s). */
+export const MEDIA_UPLOAD_READ_TIMEOUT_MS = 120_000;
 const FIELD_NAMES = new Set(['altText', 'caption', 'credit', 'focalX', 'focalY', 'replaces']);
 
 /**
@@ -32,9 +44,33 @@ const FIELD_NAMES = new Set(['altText', 'caption', 'credit', 'focalX', 'focalY',
  * received. The file name is ignored and never stored. The declared type
  * only has to be an image type: the content itself is checked by magic
  * bytes and by the decoder (media-image.ts).
+ *
+ * The promise always settles, exactly once: an aborted or failed request
+ * (pipeline premature close) and a body that stalls past the read deadline
+ * are refused, so the caller's processing slot is always released.
  */
-export function parseMediaUpload(request: Request, maxBytes: number): Promise<ParsedMediaUpload> {
-  return new Promise<ParsedMediaUpload>((resolve, reject) => {
+export function parseMediaUpload(
+  request: Request,
+  maxBytes: number,
+  options: { timeoutMs?: number } = {},
+): Promise<ParsedMediaUpload> {
+  return new Promise<ParsedMediaUpload>((resolveUpload, rejectUpload) => {
+    let settled = false;
+    const settle = (finish: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      finish();
+    };
+    const resolve = (value: ParsedMediaUpload) => settle(() => resolveUpload(value));
+    const reject = (error: unknown) => settle(() => rejectUpload(error));
+    // Created before anything can settle the promise.
+    const timer = setTimeout(() => {
+      reject(new MediaUploadError('TIMEOUT'));
+      // Stop reading: the response is the refusal, the rest of the body is dropped.
+      request.destroy();
+    }, options.timeoutMs ?? MEDIA_UPLOAD_READ_TIMEOUT_MS);
+
     let parser: ReturnType<typeof Busboy>;
     try {
       parser = Busboy({
@@ -111,7 +147,9 @@ export function parseMediaUpload(request: Request, maxBytes: number): Promise<Pa
         unexpected = true;
       });
     }
-    parser.on('error', () => reject(new MediaUploadError('MALFORMED')));
+    // A request destroyed before its end is a client that went away, not a bad form.
+    const interrupted = () => request.destroyed && !request.readableEnded;
+    parser.on('error', () => reject(new MediaUploadError(interrupted() ? 'ABORTED' : 'MALFORMED')));
     parser.on('finish', () => {
       void (async () => {
         const pending = fileDone as Promise<{ data: Buffer; tooLarge: boolean }> | null;
@@ -128,6 +166,21 @@ export function parseMediaUpload(request: Request, maxBytes: number): Promise<Pa
         resolve({ fields: parsed.data, data: file.data });
       })().catch(reject);
     });
-    request.pipe(parser);
+
+    // Unlike request.pipe(), pipeline() reports a request that closes before
+    // its end (client gone, socket reset) and destroys both streams on error.
+    pipeline(request, parser, (error) => {
+      if (!error) return;
+      reject(
+        error instanceof MediaUploadError
+          ? error
+          : new MediaUploadError(
+              (error as NodeJS.ErrnoException).code === 'ERR_STREAM_PREMATURE_CLOSE' ||
+                interrupted()
+                ? 'ABORTED'
+                : 'MALFORMED',
+            ),
+      );
+    });
   });
 }

@@ -57,6 +57,14 @@ export const MediaErrors = {
       'Envoi invalide : un seul fichier « file » et les champs altText, caption, credit, focalX, focalY, replaces sont attendus.',
     ),
   empty: () => new PublicApiError(400, 'MEDIA_UPLOAD_EMPTY', 'Le fichier est vide.'),
+  aborted: () =>
+    new PublicApiError(400, 'MEDIA_UPLOAD_ABORTED', 'L’envoi a été interrompu avant la fin.'),
+  timeout: () =>
+    new PublicApiError(
+      408,
+      'MEDIA_UPLOAD_TIMEOUT',
+      'L’envoi a pris trop de temps : réessayez avec une connexion plus stable ou une image plus légère.',
+    ),
   tooLarge: (maxBytes: number) =>
     new PublicApiError(
       413,
@@ -71,7 +79,7 @@ export const MediaErrors = {
     new PublicApiError(
       422,
       'MEDIA_IMAGE_TOO_LARGE',
-      'L’image a trop de pixels : réduisez ses dimensions avant de l’envoyer.',
+      'L’image est trop grande (20 000 pixels de côté au plus, et un nombre de pixels limité) : réduisez ses dimensions avant de l’envoyer.',
     ),
   tooSmall: () =>
     new PublicApiError(

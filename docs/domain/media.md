@@ -56,7 +56,10 @@ stays exact and a restore cannot silently show another image.
      CSRF token;
    - at most 60 uploads per hour per identity;
    - at most 2 images processed at a time per API process (`MEDIA_BUSY`,
-     `Retry-After: 5`).
+     `Retry-After: 5`);
+   - the whole body must arrive within 120 s (`MEDIA_UPLOAD_TIMEOUT`); an
+     upload abandoned by the client (`MEDIA_UPLOAD_ABORTED`) always releases
+     its processing slot.
 2. **Multipart shape:**
    - exactly one `file` part, plus the fields `altText`, `caption`,
      `credit`, `focalX`, `focalY` and `replaces`;
@@ -71,7 +74,8 @@ stays exact and a restore cannot silently show another image.
    never handed to it. The decoder must then confirm the same format.
 5. **Decoding:** `sharp` (libvips) decodes the image.
    - It is bounded to `PUBLIC_MEDIA_MAX_PIXELS` (default 40 megapixels,
-     against decompression bombs).
+     against decompression bombs) and to 20 000 px on a side (the database
+     limit), checked before any rendition is encoded or stored.
    - It fails on a broken or truncated file.
    - Animated or multi-page images are refused, and so are images under
      200 px on a side.
@@ -138,6 +142,9 @@ max-age=60`.
     and `304` on `If-None-Match`.
 
   An archived image answers 404, and caches stop serving it within a day.
+  Errors (404, 503) are `Cache-Control: no-store`: a passing storage failure
+  is never kept by a browser or a proxy. With `PUBLIC_MEDIA_STORAGE=DISABLED`,
+  descriptions stay readable but files answer 503 `MEDIA_UNAVAILABLE`.
 
 ## Website and OPS
 
@@ -181,13 +188,15 @@ through the API, never by the web server. Operations are covered in
 | ----------------------------------------------- | ---- | ----------------------------------------------------- |
 | `MEDIA_STORAGE_DISABLED`                        | 503  | `PUBLIC_MEDIA_STORAGE=DISABLED`                       |
 | `MEDIA_BUSY`                                    | 503  | Two images already being processed (`Retry-After: 5`) |
-| `MEDIA_UNAVAILABLE`                             | 503  | Storage failure                                       |
+| `MEDIA_UNAVAILABLE`                             | 503  | Storage failure, or a file while storage is disabled  |
 | `MEDIA_UPLOAD_MALFORMED`, `MEDIA_UPLOAD_EMPTY`  | 400  | Form shape, empty file                                |
+| `MEDIA_UPLOAD_ABORTED`                          | 400  | The client went away before the end of the body       |
+| `MEDIA_UPLOAD_TIMEOUT`                          | 408  | The body did not arrive within 120 s                  |
 | `VALIDATION_FAILED`                             | 400  | Description fields (names in the message)             |
 | `MEDIA_UPLOAD_TOO_LARGE`                        | 413  | Over `PUBLIC_MEDIA_MAX_BYTES`                         |
 | `MEDIA_FORMAT_UNSUPPORTED`                      | 415  | Not JPEG, PNG or WebP (declared type or content)      |
 | `MEDIA_IMAGE_INVALID`                           | 422  | Broken or truncated image                             |
-| `MEDIA_IMAGE_TOO_LARGE`                         | 422  | Over `PUBLIC_MEDIA_MAX_PIXELS`                        |
+| `MEDIA_IMAGE_TOO_LARGE`                         | 422  | Over `PUBLIC_MEDIA_MAX_PIXELS` or 20 000 px on a side |
 | `MEDIA_IMAGE_TOO_SMALL`, `MEDIA_IMAGE_ANIMATED` | 422  | Under 200 px on a side; animated or multi-page        |
 | `MEDIA_DUPLICATE`                               | 409  | Same file already active (`details.mediaId`)          |
 | `MEDIA_IN_USE`                                  | 409  | Archive refused (`details.usages`)                    |

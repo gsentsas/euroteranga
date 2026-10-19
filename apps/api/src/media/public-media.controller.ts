@@ -1,7 +1,6 @@
 import {
   Controller,
   Get,
-  Header,
   Param,
   ParseUUIDPipe,
   Query,
@@ -37,7 +36,6 @@ export class PublicMediaController {
   constructor(private readonly media: MediaService) {}
 
   @Get()
-  @Header('Cache-Control', 'public, max-age=60')
   @ApiQuery({
     name: 'ids',
     required: true,
@@ -47,11 +45,15 @@ export class PublicMediaController {
   @ApiOkResponse({
     description: 'Active images among the ids (unknown or archived ones are absent).',
   })
-  many(
+  async many(
     @Query(new ZodValidationPipe(publicMediaQuerySchema))
     query: z.infer<typeof publicMediaQuerySchema>,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.media.publicMany(query.ids);
+    const result = await this.media.publicMany(query.ids);
+    // Set on success only (a @Header decorator would also mark a refused query public).
+    response.setHeader('Cache-Control', 'public, max-age=60');
+    return result;
   }
 
   @Get('files/:id/:file')
@@ -65,21 +67,28 @@ export class PublicMediaController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    // An error (404, 503) must never be kept by a browser or a proxy: only a
+    // served or revalidated file gets the public caching below.
+    response.setHeader('Cache-Control', 'no-store');
     const width = renditionFileSchema.safeParse(file);
     if (!width.success) throw MediaErrors.notFound();
     const rendition = await this.media.publicRendition(id, width.data);
     const etag = `"${rendition.sha256}"`;
-    response.setHeader('X-Content-Type-Options', 'nosniff');
-    response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    // A day of caching: an archived image stops being served within a day.
-    response.setHeader('Cache-Control', 'public, max-age=86400');
-    response.setHeader('ETag', etag);
+    const cacheable = () => {
+      response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      // A day of caching: an archived image stops being served within a day.
+      response.setHeader('Cache-Control', 'public, max-age=86400');
+      response.setHeader('ETag', etag);
+    };
     const ifNoneMatch = request.headers['if-none-match'];
     if (ifNoneMatch?.split(',').some((tag) => tag.trim() === etag)) {
+      cacheable();
       response.status(304);
       return;
     }
     const stored = await this.media.openRendition(rendition.storageKey);
+    cacheable();
     response.setHeader('Content-Type', 'image/webp');
     response.setHeader('Content-Length', String(stored.sizeBytes));
     response.setHeader('Content-Disposition', 'inline');

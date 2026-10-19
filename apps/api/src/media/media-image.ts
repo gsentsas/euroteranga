@@ -23,7 +23,13 @@ sharp.concurrency(2);
 export type SourceFormat = 'jpeg' | 'png' | 'webp';
 
 export type ImageFailure =
-  'UNSUPPORTED_FORMAT' | 'INVALID_IMAGE' | 'TOO_MANY_PIXELS' | 'TOO_SMALL' | 'ANIMATED';
+  | 'UNSUPPORTED_FORMAT'
+  | 'INVALID_IMAGE'
+  | 'TOO_MANY_PIXELS'
+  /** A side over MAX_IMAGE_SIDE, even within the pixel limit. */
+  | 'TOO_LONG_SIDE'
+  | 'TOO_SMALL'
+  | 'ANIMATED';
 
 export class ImageProcessingError extends Error {
   constructor(readonly code: ImageFailure) {
@@ -37,6 +43,9 @@ export const RENDITION_WIDTHS = [480, 960, 1600, 2400] as const;
 
 /** Smallest accepted side: below this a public image is not usable. */
 export const MIN_IMAGE_SIDE = 200;
+
+/** Largest accepted side, as the public_media_asset CHECK constraint. */
+export const MAX_IMAGE_SIDE = 20_000;
 
 const WEBP_QUALITY = 80;
 
@@ -125,6 +134,10 @@ export async function processImage(
   const rawWidth = metadata.width;
   const rawHeight = metadata.height;
   if (!rawWidth || !rawHeight) throw new ImageProcessingError('INVALID_IMAGE');
+  // Before any rendition is encoded or stored: the database refuses longer sides.
+  if (rawWidth > MAX_IMAGE_SIDE || rawHeight > MAX_IMAGE_SIDE) {
+    throw new ImageProcessingError('TOO_LONG_SIDE');
+  }
   if (rawWidth * rawHeight > limits.maxPixels) throw new ImageProcessingError('TOO_MANY_PIXELS');
   // EXIF orientations 5 to 8 swap the sides once applied.
   const swapped = (metadata.orientation ?? 1) >= 5;

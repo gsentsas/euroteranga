@@ -119,8 +119,9 @@ async function assertMediaUsable(
     SELECT "id"::text AS "id" FROM "public_media_asset"
     WHERE "id" = ANY(${ids}::uuid[]) AND "status" = 'ACTIVE'
     FOR SHARE`;
-  const active = new Set(rows.map((row) => row.id));
-  const missing = references.filter((reference) => !active.has(reference.mediaId));
+  // Documents hold canonical (lowercase) ids, as PostgreSQL prints uuid values.
+  const active = new Set(rows.map((row) => row.id.toLowerCase()));
+  const missing = references.filter((reference) => !active.has(reference.mediaId.toLowerCase()));
   if (missing.length > 0) {
     throw ContentErrors.documentInvalid(
       missing.map((reference) => ({

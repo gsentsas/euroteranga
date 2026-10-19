@@ -15,7 +15,11 @@ import { z } from 'zod';
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 const optionalText = (max: number) => text(max).optional();
-const uuid = z.uuid();
+/**
+ * A media id, stored in its canonical lowercase form: usage lookups and
+ * comparisons with PostgreSQL uuid values are exact.
+ */
+const uuid = z.uuid().transform((value) => value.toLowerCase());
 
 /** Public paths: `/`, `/paris-dakar`, `/aide/bagages`. Lowercase, digits, dashes. */
 export const CONTENT_PATH_PATTERN =

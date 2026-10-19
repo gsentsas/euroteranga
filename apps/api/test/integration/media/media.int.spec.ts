@@ -1,5 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { rm } from 'node:fs/promises';
+import { rename, rm, symlink } from 'node:fs/promises';
+import { request as httpRequest } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { dirname, join } from 'node:path';
 import { createDatabaseClient } from '@euroteranga/database';
 import sharp from 'sharp';
 import request from 'supertest';
@@ -17,7 +20,7 @@ import { integrationEnv, startTestApp, type TestApp } from '../../support/test-a
 
 const UNKNOWN_ID = '01900000-0000-7000-8000-000000000000';
 const MAX_BYTES = 256 * 1024;
-const MAX_PIXELS = 4_000_000;
+const MAX_PIXELS = 6_000_000;
 
 interface MediaView {
   id: string;
@@ -198,6 +201,11 @@ describe('public media library', () => {
         etag,
       );
       expect(cached.status).toBe(304);
+      expect(cached.headers).toMatchObject({
+        'cache-control': 'public, max-age=86400',
+        etag,
+        'cross-origin-resource-policy': 'cross-origin',
+      });
 
       const audit = await db(t.app).auditEvent.findFirst({
         where: { action: 'PUBLIC_MEDIA_UPLOADED', resourceId: media.id },
@@ -326,6 +334,74 @@ describe('public media library', () => {
       // Nothing refused was stored.
       expect(await db(t.app).publicMediaAsset.count()).toBe(rows);
       expect((await storedFiles(root)).length).toBe(files);
+    });
+  });
+
+  describe('dimensions', () => {
+    it('refuses a side over 20 000 px before storing anything', async () => {
+      const rows = await db(t.app).publicMediaAsset.count();
+      const files = (await storedFiles(root)).length;
+      // 25 001 × 200: within PUBLIC_MEDIA_MAX_PIXELS, beyond the database limit.
+      const panorama = await sharp({
+        create: { width: 25_001, height: 200, channels: 3, background: '#0b2a5b' },
+      })
+        .png({ compressionLevel: 9 })
+        .toBuffer();
+      const response = await uploadMedia(t.app, editor, {
+        bytes: panorama,
+        contentType: 'image/png',
+      });
+      expect(response.status).toBe(422);
+      expect(response.body.code).toBe('MEDIA_IMAGE_TOO_LARGE');
+      expect(await db(t.app).publicMediaAsset.count()).toBe(rows);
+      expect((await storedFiles(root)).length).toBe(files);
+    });
+  });
+
+  describe('interrupted uploads', () => {
+    /** Starts a multipart upload over a raw socket, sends part of it, then hangs up. */
+    async function abandonUpload(port: number, csrf: string): Promise<void> {
+      const boundary = 'abandoned-upload-boundary';
+      const head =
+        `--${boundary}\r\nContent-Disposition: form-data; name="altText"\r\n\r\nInterrompu\r\n` +
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.jpg"\r\n` +
+        'Content-Type: image/jpeg\r\n\r\n';
+      const client = httpRequest({
+        host: '127.0.0.1',
+        port,
+        method: 'POST',
+        path: '/v1/admin/media',
+        headers: {
+          Origin: editor.http.origin,
+          'X-Forwarded-For': editor.http.ip,
+          Cookie: editor.cookie,
+          'X-CSRF-Token': csrf,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': String(MAX_BYTES),
+        },
+      });
+      client.on('error', () => undefined);
+      client.write(head);
+      client.write(Buffer.alloc(32 * 1024, 1));
+      // Let the API accept the request and start parsing, then hang up.
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      client.destroy();
+    }
+
+    it('releases the processing slot of an upload abandoned mid-body', async () => {
+      const server = t.app.getHttpServer();
+      if (!server.listening) {
+        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+      }
+      const { port } = server.address() as AddressInfo;
+      const csrf = await editor.csrf();
+      // More abandons than processing slots (2): a leaked slot would answer MEDIA_BUSY.
+      for (let attempt = 0; attempt < 3; attempt += 1) await abandonUpload(port, csrf);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const rows = await db(t.app).publicMediaAsset.count();
+      const after = await uploadMedia(t.app, editor, { bytes: await syntheticPhoto() });
+      expect(after.status).toBe(201);
+      expect(await db(t.app).publicMediaAsset.count()).toBe(rows + 1);
     });
   });
 
@@ -501,6 +577,50 @@ describe('public media library', () => {
     });
   });
 
+  describe('file errors', () => {
+    it('never lets a browser or a proxy keep a missing or unavailable file', async () => {
+      const missing = await upload();
+      const unavailable = await upload();
+      const keyOf = async (assetId: string) =>
+        (
+          await db(t.app).publicMediaRendition.findFirstOrThrow({
+            where: { assetId, width: 480 },
+            select: { storageKey: true },
+          })
+        ).storageKey;
+
+      // The file is gone from the volume: 404, not cacheable.
+      await rm(join(root, await keyOf(missing.id)));
+      const gone = await publicGet(`/media/files/${missing.id}/480.webp`);
+      expect(gone.status).toBe(404);
+      expect(gone.headers['cache-control']).toBe('no-store');
+      // Never the file's strong ETag (Express may add a weak one to any JSON body).
+      expect(gone.headers.etag ?? '').not.toMatch(/^"[0-9a-f]{64}"$/);
+
+      // The storage refuses to read (a key directory replaced by a symlink): 503.
+      const directory = join(root, dirname(await keyOf(unavailable.id)));
+      await rename(directory, `${directory}.moved`);
+      await symlink(`${directory}.moved`, directory);
+      try {
+        const failing = await publicGet(`/media/files/${unavailable.id}/480.webp`);
+        expect(failing.status).toBe(503);
+        expect(failing.body.code).toBe('MEDIA_UNAVAILABLE');
+        expect(failing.headers['cache-control']).toBe('no-store');
+        expect(failing.headers.etag ?? '').not.toMatch(/^"[0-9a-f]{64}"$/);
+      } finally {
+        await rm(directory);
+        await rename(`${directory}.moved`, directory);
+      }
+      const served = await publicGet(`/media/files/${unavailable.id}/480.webp`);
+      expect(served.status).toBe(200);
+      expect(served.headers['cache-control']).toBe('public, max-age=86400');
+      // Bounded public reads refused by validation are not cacheable either.
+      const invalid = await publicGet('/media?ids=nope');
+      expect(invalid.status).toBe(400);
+      expect(invalid.headers['cache-control'] ?? '').not.toContain('public');
+    });
+  });
+
   describe('contents', () => {
     it('lets pages use active images only, refuses archiving a used image and keeps history', async () => {
       const media = await upload();
@@ -615,6 +735,41 @@ describe('public media library', () => {
       expect((await adminApi(editor).get(`/media?status=ARCHIVED`)).body.items[0].id).toBe(
         media.id,
       );
+    });
+
+    it('accepts media ids written in capitals and stores them canonically', async () => {
+      const media = await upload();
+      const capitals = media.id.toUpperCase();
+      const page = await createPage();
+      const saved = await saveDraft(page, pageWith([{ type: 'image', mediaId: capitals }]));
+      expect(saved.status).toBe(200);
+      const draft = await db(t.app).contentRevision.findFirstOrThrow({
+        where: { entryId: page.id, status: 'DRAFT' },
+        select: { document: true },
+      });
+      expect(JSON.stringify(draft.document)).toContain(media.id);
+      expect(JSON.stringify(draft.document)).not.toContain(capitals);
+      const live = await publish(saved.body as EntryView);
+      expect(live.status).toBe(200);
+
+      // The archive check finds the usage even when the route spells the id in capitals.
+      const inUse = await adminApi(editor).post(`/media/${capitals}/archive`, {
+        reason: 'Encore affichée',
+      });
+      expect(inUse.status).toBe(409);
+      expect(inUse.body.code).toBe('MEDIA_IN_USE');
+      expect((await adminApi(editor).get(`/media/${capitals}`)).body.usages).toHaveLength(1);
+
+      // Version 2 without the image, then version 1 restored: accepted.
+      const v2 = await saveDraft(
+        live.body as EntryView,
+        pageWith([{ type: 'banner', text: 'Sans image' }]),
+      );
+      expect((await publish(v2.body as EntryView)).status).toBe(200);
+      const restored = await adminApi(editor).post(`/content/entries/${page.id}/restore`, {
+        revision: 1,
+      });
+      expect(restored.status).toBe(200);
     });
 
     it('checks images again at publication and restoration time', async () => {
