@@ -1360,4 +1360,38 @@ describe('content client (CMS-1)', () => {
       expectedDraftUpdatedAt: '2030-01-01T00:00:00.000Z',
     });
   });
+
+  it('keeps only well-formed validation issues of a refused document (CMS-2)', async () => {
+    mockFetch([
+      { status: 200, body: { csrfToken: 'c1' } },
+      {
+        status: 422,
+        body: {
+          code: 'CONTENT_DOCUMENT_INVALID',
+          message: 'Le contenu ne respecte pas le modèle de la page.',
+          details: {
+            issues: [
+              { path: 'blocks.0.title', message: 'Too small', extra: 'dropped' },
+              { path: 3, message: 'not a path' },
+              'not an issue',
+            ],
+          },
+        },
+      },
+    ]);
+    const client = createAuthClient('http://api.test');
+    const result = await client.admin.content.saveDraft('01900000-0000-7000-8000-00000000c0de', {
+      document: {},
+      expectedDraftUpdatedAt: null,
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        status: 422,
+        code: 'CONTENT_DOCUMENT_INVALID',
+        message: 'Le contenu ne respecte pas le modèle de la page.',
+        details: { issues: [{ path: 'blocks.0.title', message: 'Too small' }] },
+      },
+    });
+  });
 });

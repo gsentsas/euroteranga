@@ -26,6 +26,11 @@ const GROUPS: ReadonlyArray<{ key: string; label: string; resources: readonly st
     resources: ['passenger-documents', 'compliance-rules', 'compliance-reviews'],
   },
   {
+    key: 'site',
+    label: 'Site public',
+    resources: ['content'],
+  },
+  {
     key: 'admin',
     label: 'Administration',
     resources: ['admin-identities', 'admin-roles', 'admin-audit'],

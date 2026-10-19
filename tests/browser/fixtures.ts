@@ -188,6 +188,14 @@ export const FIXTURES = {
   },
 
   /** PR-16: administers synthetic operational permits. */
+  /** CMS-2: content.read + content.manage, without seo.manage. */
+  get contentEditor(): Fixture {
+    return { realm: 'STAFF', email: runScoped('content-editor'), roles: ['CONTENT_EDITOR'] };
+  },
+  /** ops.access without any content permission. */
+  get contentDenied(): Fixture {
+    return { realm: 'STAFF', email: runScoped('content-denied'), roles: ['DISPATCHER'] };
+  },
   get permitManager(): Fixture {
     return { realm: 'STAFF', email: runScoped('permit-manager'), roles: ['OPS_MANAGER'] };
   },
@@ -241,7 +249,9 @@ export type PreauthenticatedFixture =
   | 'checkInDenied'
   | 'permitManager'
   | 'permitReader'
-  | 'permitDenied';
+  | 'permitDenied'
+  | 'contentEditor'
+  | 'contentDenied';
 
 const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string> = {
   crew: 'E2E_CREW_SESSION',
@@ -262,6 +272,8 @@ const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string
   permitManager: 'E2E_PERMIT_MANAGER_SESSION',
   permitReader: 'E2E_PERMIT_READER_SESSION',
   permitDenied: 'E2E_PERMIT_DENIED_SESSION',
+  contentEditor: 'E2E_CONTENT_EDITOR_SESSION',
+  contentDenied: 'E2E_CONTENT_DENIED_SESSION',
 };
 
 /**

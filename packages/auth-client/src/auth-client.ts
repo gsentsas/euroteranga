@@ -10,6 +10,14 @@ export interface ApiError {
 
 export interface ApiErrorDetails {
   blockers?: CheckInBlocker[];
+  /** CMS-2: fields of a content document refused by the content model. */
+  issues?: ContentIssue[];
+}
+
+export interface ContentIssue {
+  /** Dotted path in the document, e.g. `blocks.2.items.0.title`. */
+  path: string;
+  message: string;
 }
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError };
@@ -2526,7 +2534,22 @@ function query(values: Record<string, string | number | undefined>): string {
 function errorDetails(value: unknown): { details?: ApiErrorDetails } {
   if (typeof value !== 'object' || value === null) return {};
   const blockers = (value as { blockers?: unknown }).blockers;
-  return Array.isArray(blockers) ? { details: { blockers: blockers as CheckInBlocker[] } } : {};
+  if (Array.isArray(blockers)) return { details: { blockers: blockers as CheckInBlocker[] } };
+  const issues = (value as { issues?: unknown }).issues;
+  if (Array.isArray(issues)) {
+    const valid = issues
+      .filter(
+        (issue): issue is ContentIssue =>
+          typeof issue === 'object' &&
+          issue !== null &&
+          typeof (issue as ContentIssue).path === 'string' &&
+          typeof (issue as ContentIssue).message === 'string',
+      )
+      .slice(0, 50)
+      .map(({ path, message }) => ({ path, message }));
+    return { details: { issues: valid } };
+  }
+  return {};
 }
 
 const NETWORK_ERROR: ApiError = {

@@ -164,8 +164,8 @@ revisions table is the content history.
 ## Website rendering (WEB-1)
 
 The public website (`apps/web`) renders the published content on the server
-with `@euroteranga/site`. The same package is meant for the OPS preview
-(CMS-2), so editors preview exactly what visitors get.
+with `@euroteranga/site`. The OPS preview (CMS-2) uses the same package, so
+editors preview exactly what visitors get.
 
 - **Routing:** one catch-all route serves every published path. A path that
   is not a valid content path, or that has no published page, is a 404.
@@ -200,9 +200,58 @@ with `@euroteranga/site`. The same package is meant for the OPS preview
 - **Sitemap:** it lists the served, indexable CMS pages, and only the home
   page when the API cannot answer.
 
-## Deliberately not in CMS-1
+## OPS editor (CMS-2)
 
-- **OPS editor and preview:** CMS-2.
+OPS → **Site public → Contenus du site** (`/contenus`) lists the pages with
+their status, and the two singletons (site settings, navigation). The
+editor (`/contenus/edition?entree=<id>`) works on one entry.
+
+- **Permissions:**
+  - `content.read` opens the module, read only;
+  - `content.manage` edits, publishes, restores and archives;
+  - `seo.manage` unlocks the search metadata of a page;
+  - every call is authorized again by the Core API.
+- **Structured fields, never markup:**
+  - each section type has its own form, with French labels, bounds and
+    counters taken from the content model;
+  - a new section starts empty, so the content model refuses it until it
+    is filled in: no placeholder text can be published by mistake;
+  - owner information (contact, legal notice) left empty stays
+    "à compléter par l’exploitant" and is not displayed, never invented;
+  - prices are never typed: the `routes` section and the hero journey card
+    read them from Pricing on the website.
+- **Rich text input:** paragraphs, `##` headings, `-` lists, `**bold**`,
+  `*italic*` and `[label](/path)` links are typed in a text area and
+  converted in the browser to the typed tree (`markupToRichText`). The tree
+  is what is validated, stored and rendered; markup such as `<b>` stays
+  literal text. A malformed mark is reported with its line.
+- **Validation:** the editor validates with the same schemas as the API
+  and lists the issues in French with a link to each field. Saving is
+  disabled while an issue remains; the API validates again.
+- **Preview:**
+  - the page is rendered with `@euroteranga/site`, the website's own
+    components and stylesheets (`@euroteranga/site/css-text`);
+  - it runs in a sandboxed frame (`sandbox=""`: no script, no origin), so
+    nothing in it can act on OPS and its links lead nowhere;
+  - mobile (390 px), tablet (768 px) and desktop (1280 px) widths use the
+    real breakpoints of the website;
+  - "from" prices are not shown in the preview.
+- **Workflow:**
+  - "Enregistrer le brouillon" saves the draft with the `updatedAt` it
+    started from. If someone saved meanwhile, the API answers
+    `CONTENT_DRAFT_CONFLICT` and the editor offers to reload; it never
+    overwrites the other change;
+  - publication, discarding a draft and archiving ask for confirmation;
+  - the history lists the last 30 revisions; any of them can be previewed
+    and restored as a new draft;
+  - leaving the page with unsaved changes asks for confirmation.
+- **Home page:** while no `/` page exists, the website shows the default
+  content. "Créer la page d’accueil à partir du contenu actuel" creates it
+  as a draft from that default content, so editing starts from what
+  visitors see.
+
+## Deliberately not in CMS
+
 - **Media library:** MEDIA-1. Blocks already reference media ids
   (`mediaIds` lists them).
 - **Testimonials:** not modelled, so that no fake review can be published.
