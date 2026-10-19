@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { booleanFlag } from './schemas.js';
+import { booleanFlag, localRootProblems } from './schemas.js';
 
 export const PASSENGER_DOCUMENT_MAX_BYTES_BOUNDS = {
   min: 1_024,
@@ -79,22 +79,7 @@ export function refinePassengerDocumentEnv(
     if (!root) {
       issue('OBJECT_STORAGE_LOCAL_ROOT', 'is required when OBJECT_STORAGE_PROVIDER=LOCAL');
     } else {
-      if (!root.startsWith('/')) issue('OBJECT_STORAGE_LOCAL_ROOT', 'must be an absolute path');
-      // "/tmp/.." or "//" would otherwise resolve to the filesystem root (or
-      // hide a public segment) after these textual checks.
-      if (
-        root.split('/').some((segment) => segment === '.' || segment === '..') ||
-        /\/\//.test(root)
-      ) {
-        issue(
-          'OBJECT_STORAGE_LOCAL_ROOT',
-          'must be a normalized path without "." or ".." segments',
-        );
-      }
-      if (root === '/') issue('OBJECT_STORAGE_LOCAL_ROOT', 'must be a dedicated directory');
-      if (/(^|\/)(public|public_html|htdocs|httpdocs|static|uploads)(\/|$)/i.test(root)) {
-        issue('OBJECT_STORAGE_LOCAL_ROOT', 'must not be a public or upload directory');
-      }
+      for (const problem of localRootProblems(root)) issue('OBJECT_STORAGE_LOCAL_ROOT', problem);
     }
     if (deployed) {
       issue('OBJECT_STORAGE_PROVIDER', 'LOCAL is refused in staging and production');

@@ -39,3 +39,29 @@ export const originListSchema = z
       ),
     ),
   );
+
+/**
+ * Problems of a local storage root: it must be absolute, normalized,
+ * dedicated, and never a public or upload directory of the web server.
+ */
+export function localRootProblems(root: string): string[] {
+  const problems: string[] = [];
+  if (!root.startsWith('/')) problems.push('must be an absolute path');
+  // "/tmp/.." or "//" would otherwise resolve to the filesystem root (or
+  // hide a public segment) after these textual checks.
+  if (root.split('/').some((segment) => segment === '.' || segment === '..') || /\/\//.test(root)) {
+    problems.push('must be a normalized path without "." or ".." segments');
+  }
+  if (root === '/') problems.push('must be a dedicated directory');
+  if (/(^|\/)(public|public_html|htdocs|httpdocs|static|uploads)(\/|$)/i.test(root)) {
+    problems.push('must not be a public or upload directory');
+  }
+  return problems;
+}
+
+/** True when one directory is the other or contains it (textual, normalized paths). */
+export function pathsOverlap(a: string, b: string): boolean {
+  const left = a.replace(/\/+$/, '');
+  const right = b.replace(/\/+$/, '');
+  return left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`);
+}

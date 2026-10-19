@@ -72,6 +72,9 @@ export const PERMISSIONS = {
   // CMS-1: public website content, separate from operations.
   CONTENT_READ: 'content.read',
   CONTENT_MANAGE: 'content.manage',
+  // MEDIA-1: public website media library (never passenger documents).
+  MEDIA_READ: 'media.read',
+  MEDIA_MANAGE: 'media.manage',
   SEO_MANAGE: 'seo.manage',
 } as const;
 

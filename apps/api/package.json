@@ -33,6 +33,7 @@
     "otpauth": "catalog:",
     "reflect-metadata": "catalog:",
     "rxjs": "catalog:",
+    "sharp": "catalog:",
     "uqr": "catalog:",
     "zod": "catalog:"
   },

@@ -12,6 +12,11 @@ export {
   PASSENGER_DOCUMENT_MAX_BYTES_BOUNDS,
 } from './passenger-document-env.js';
 export {
+  PUBLIC_MEDIA_MAX_BYTES_BOUNDS,
+  PUBLIC_MEDIA_MAX_PIXELS_BOUNDS,
+  PUBLIC_MEDIA_STORAGES,
+} from './public-media-env.js';
+export {
   assertNoSensitivePublicEnv,
   loadPublicEnv,
   publicEnvSchema,

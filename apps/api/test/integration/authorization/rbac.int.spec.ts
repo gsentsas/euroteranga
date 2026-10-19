@@ -51,6 +51,8 @@ const EXPECTED_MATRIX: Record<
       'manifest.export',
       'manifest.generate',
       'manifest.read',
+      'media.manage',
+      'media.read',
       'mfa.enrollment.authorize',
       'network.manage',
       'network.read',
@@ -114,6 +116,8 @@ const EXPECTED_MATRIX: Record<
       'manifest.export',
       'manifest.generate',
       'manifest.read',
+      'media.manage',
+      'media.read',
       'mfa.enrollment.authorize',
       'network.manage',
       'network.read',
@@ -333,7 +337,7 @@ const EXPECTED_MATRIX: Record<
   CONTENT_EDITOR: {
     realm: 'STAFF',
     privileged: false,
-    permissions: ['content.manage', 'content.read', 'ops.access'],
+    permissions: ['content.manage', 'content.read', 'media.manage', 'media.read', 'ops.access'],
   },
   DRIVER: {
     realm: 'CREW',
