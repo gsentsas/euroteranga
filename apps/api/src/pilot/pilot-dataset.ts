@@ -17,7 +17,12 @@
  */
 
 export const PILOT_SOURCE = 'pilot-bootstrap';
-export const PILOT_DATASET_VERSION = 'pilot-corridor/2';
+/**
+ * /2: neutral make and model for the coaches (no Setra claim).
+ * /3: coach names "Teranga Pilote 01/02": "Teranga 01/02" can belong to
+ * historical operator vehicles (unique names, see PILOT_PREVIOUS_VEHICLE_NAMES).
+ */
+export const PILOT_DATASET_VERSION = 'pilot-corridor/3';
 
 export interface PilotCountry {
   iso2: string;
@@ -286,11 +291,15 @@ export const PILOT_SEAT_MAP = {
  * VIN is set. The make, model and year of the real coaches are owner data:
  * until confirmed they stay neutral, so that the public website never claims
  * a brand or a model EURO TERANGA does not operate.
+ *
+ * Their names say "Pilote": vehicle names are unique, and "Teranga 01" and
+ * "Teranga 02" can already belong to historical operator vehicles (even
+ * retired ones), which the bootstrap never takes over or renames.
  */
 export const PILOT_VEHICLES: readonly PilotVehicle[] = [
   {
     code: 'ET-COACH-001',
-    name: 'Teranga 01',
+    name: 'Teranga Pilote 01',
     manufacturer: 'Autocar grand tourisme',
     model: 'Modèle à confirmer',
     modelYear: null,
@@ -299,7 +308,7 @@ export const PILOT_VEHICLES: readonly PilotVehicle[] = [
   },
   {
     code: 'ET-COACH-002',
-    name: 'Teranga 02',
+    name: 'Teranga Pilote 02',
     manufacturer: 'Autocar grand tourisme',
     model: 'Modèle à confirmer',
     modelYear: null,
@@ -307,6 +316,16 @@ export const PILOT_VEHICLES: readonly PilotVehicle[] = [
     registrationCountryIso2: 'FR',
   },
 ];
+
+/**
+ * The names pilot-corridor/2 gave the coaches. A coach still carrying one is
+ * renamed by the bootstrap only if the audit trail proves the bootstrap
+ * created it and no person changed it since; otherwise it is a conflict.
+ */
+export const PILOT_PREVIOUS_VEHICLE_NAMES: Readonly<Record<string, string>> = {
+  'ET-COACH-001': 'Teranga 01',
+  'ET-COACH-002': 'Teranga 02',
+};
 
 export interface PilotTripSlot {
   reference: string;

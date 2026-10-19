@@ -5,6 +5,7 @@ import {
   vehicleCreateSchema,
   vehicleSeatMapSchema,
   vehicleStatusSchema,
+  vehicleUpdateSchema,
 } from '../fleet/fleet.dto.js';
 import type { FleetService } from '../fleet/fleet.service.js';
 import { vehicleIdentifierCollision } from '../fleet/vehicle-identifiers.js';
@@ -30,6 +31,8 @@ import type { TripService } from '../trips/trip.service.js';
 import {
   PILOT_CHECKPOINTS,
   PILOT_COUNTRIES,
+  PILOT_DATASET_VERSION,
+  PILOT_PREVIOUS_VEHICLE_NAMES,
   PILOT_ROUTES,
   PILOT_SEAT_MAP,
   PILOT_SOURCE,
@@ -520,12 +523,26 @@ export class PilotBootstrap {
       where: { code: vehicle.code },
       include: { registrationCountry: { select: { iso2: true } } },
     });
+    // A coach the bootstrap created under a previous pilot name (pilot-corridor/2)
+    // and no person changed since is renamed; anything else is a conflict.
+    let previousName: string | null = null;
     if (current) {
       // Fail-closed: an existing vehicle is the pilot coach only if every
       // identity field is the pilot one. The bootstrap writes them all at
       // creation, so a difference means operator data: never overwritten.
       const divergence = vehicleDivergence(current, vehicle);
-      if (divergence) throw new PilotConflict(divergence);
+      if (divergence) {
+        const previous = PILOT_PREVIOUS_VEHICLE_NAMES[vehicle.code];
+        if (!previous || current.name !== previous) throw new PilotConflict(divergence);
+        const otherDivergence = vehicleDivergence({ ...current, name: vehicle.name }, vehicle);
+        if (otherDivergence) throw new PilotConflict(otherDivergence);
+        if (!(await this.ownUntouchedVehicle(current.id))) {
+          throw new PilotConflict(
+            `existing name "${previous}" is a previous pilot name, but a person created or changed this coach`,
+          );
+        }
+        previousName = previous;
+      }
       if (current.status === 'RETIRED' || current.status === 'OUT_OF_SERVICE') {
         throw new PilotConflict(`vehicle is ${current.status}`);
       }
@@ -539,24 +556,31 @@ export class PilotBootstrap {
     }
     const countryId = countries.get(vehicle.registrationCountryIso2);
     const { registrationCountryIso2: _country, ...fields } = vehicle;
-    const input = vehicleCreateSchema.parse({
-      ...fields,
-      registrationCountryId: countryId ?? null,
-    });
+    const input = vehicleCreateSchema.parse({ ...fields, registrationCountryId: countryId ?? null });
     // The same unique-key check for a dry run and a write: a dry run never
     // plans a coach whose name or plate another vehicle already holds.
-    if (!current) {
-      const collision = await vehicleIdentifierCollision(db, input);
+    if (!current || previousName) {
+      const collision = await vehicleIdentifierCollision(db, input, {
+        ...(current ? { exceptVehicleId: current.id } : {}),
+      });
       if (collision) throw new PilotConflict(collision);
     }
-    const complete = current?.status === 'ACTIVE' && current.seatMapVersionId === seatMapVersionId;
+    const renamed = previousName
+      ? `renamed from "${previousName}" for ${PILOT_DATASET_VERSION}`
+      : undefined;
+    const complete =
+      !previousName &&
+      current?.status === 'ACTIVE' &&
+      current.seatMapVersionId === seatMapVersionId;
     if (current && complete) {
       this.report('existing', 'vehicle', vehicle.code);
       return current.id;
     }
     if (dry || !seatMapVersionId || !countryId) {
-      this.report('planned', 'vehicle', vehicle.code);
-      return null;
+      this.report('planned', 'vehicle', vehicle.code, renamed);
+      // A coach only waiting for its new name keeps its trips: a dry run
+      // checks them against it, as the write will.
+      return dry && previousName && current ? current.id : null;
     }
     const createdNow = !current;
     if (!current) {
@@ -565,6 +589,13 @@ export class PilotBootstrap {
         where: { code: vehicle.code },
         include: { registrationCountry: { select: { iso2: true } } },
       });
+    }
+    if (previousName) {
+      await fleet.updateVehicle(
+        current.id,
+        vehicleUpdateSchema.parse({ name: vehicle.name }),
+        PILOT_ACTOR,
+      );
     }
     if (current.seatMapVersionId !== seatMapVersionId) {
       await fleet.assignSeatMap(
@@ -584,8 +615,30 @@ export class PilotBootstrap {
         PILOT_ACTOR,
       );
     }
-    this.report(createdNow ? 'created' : 'completed', 'vehicle', vehicle.code);
+    this.report(createdNow ? 'created' : 'completed', 'vehicle', vehicle.code, renamed);
     return current.id;
+  }
+
+  /**
+   * The audit trail proves the bootstrap created the vehicle and no person
+   * (any audited identity) changed it since: a person's vehicle never
+   * becomes the bootstrap's.
+   */
+  private async ownUntouchedVehicle(vehicleId: string): Promise<boolean> {
+    const { db } = this.services;
+    const created = await db.auditEvent.count({
+      where: {
+        resourceType: 'vehicle',
+        resourceId: vehicleId,
+        action: 'VEHICLE_CREATED',
+        actorIdentityId: null,
+        metadata: { path: ['systemActor'], equals: PILOT_SOURCE },
+      },
+    });
+    const touchedByPerson = await db.auditEvent.count({
+      where: { resourceType: 'vehicle', resourceId: vehicleId, actorIdentityId: { not: null } },
+    });
+    return created > 0 && touchedByPerson === 0;
   }
 
   // -- pricing --------------------------------------------------------------

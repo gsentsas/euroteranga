@@ -3,6 +3,8 @@ import { parsePilotArgs, productionRefusal } from '../../../src/pilot/pilot-args
 import {
   addDays,
   PILOT_CHECKPOINTS,
+  PILOT_DATASET_VERSION,
+  PILOT_PREVIOUS_VEHICLE_NAMES,
   PILOT_ROUTES,
   PILOT_SEAT_MAP,
   PILOT_STOPS,
@@ -11,6 +13,7 @@ import {
   zonedTimeToUtc,
 } from '../../../src/pilot/pilot-dataset.js';
 import { checkCells, seatCountOf } from '../../../src/seat-maps/seat-map-cells.js';
+import { REALISTIC_VEHICLES } from '../../../src/seed/realistic/realistic-dataset.js';
 import { checkTimetable } from '../../../src/trips/trip-timetable.js';
 
 const HOUR = 3_600_000;
@@ -62,6 +65,28 @@ describe('pilot dataset', () => {
     }
     expect(PILOT_SEAT_MAP.name).toContain('(pilote)');
     expect(PILOT_STOPS.map((stop) => stop.code)).toEqual(['PAR', 'DKR']);
+  });
+
+  it('names its coaches "Teranga Pilote", never a name historical vehicles may hold (pilot-corridor/3)', () => {
+    expect(PILOT_DATASET_VERSION).toBe('pilot-corridor/3');
+    expect(PILOT_VEHICLES.map((vehicle) => [vehicle.code, vehicle.name])).toEqual([
+      ['ET-COACH-001', 'Teranga Pilote 01'],
+      ['ET-COACH-002', 'Teranga Pilote 02'],
+    ]);
+    expect(PILOT_PREVIOUS_VEHICLE_NAMES).toEqual({
+      'ET-COACH-001': 'Teranga 01',
+      'ET-COACH-002': 'Teranga 02',
+    });
+    // Every coach the seeds create has its own code, name and plate.
+    const coaches = [...PILOT_VEHICLES, ...REALISTIC_VEHICLES];
+    for (const field of ['code', 'name'] as const) {
+      const values = coaches.map((coach) => coach[field]);
+      expect(new Set(values).size, field).toBe(values.length);
+    }
+    const plates = PILOT_VEHICLES.map((coach) => coach.registrationPlate);
+    expect(new Set(plates).size).toBe(plates.length);
+    const previous = new Set(Object.values(PILOT_PREVIOUS_VEHICLE_NAMES));
+    expect(coaches.filter((coach) => previous.has(coach.name))).toEqual([]);
   });
 
   it('plans fortnightly departures and alternates each coach between directions', () => {
