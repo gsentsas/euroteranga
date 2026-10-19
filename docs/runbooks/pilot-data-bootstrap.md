@@ -87,6 +87,32 @@ Each of these stays an explicit OPS action on a pilot trip.
     conflict before anything is written (FLEET-1 also refuses it in the API
     and in PostgreSQL).
 
+## Upgrading a database from pilot-corridor/1
+
+Version 1 described the pilot coaches as Setra S 516 HD (2023 and 2024).
+Version 2 keeps them neutral until the owner confirms the real coaches. On a
+database where version 1 already created `ET-COACH-001` and `ET-COACH-002`,
+the bootstrap (and `pnpm seed:realistic`, which runs it first) reports both
+coaches as `conflict`, skips the trips that depend on them and exits with
+code 2. Nothing is overwritten.
+
+To move such a database to version 2:
+
+1. In OPS → **Flotte**, open each coach and set, in its administrative data:
+   - manufacturer "Autocar grand tourisme";
+   - model "Modèle à confirmer";
+   - an empty model year.
+
+   The change is audited as any OPS edit. Keep the name, the `DEMO-*` plate,
+   the status and the seat map.
+
+2. Run the dry run again: both coaches are `existing`, and the trips are
+   planned again.
+
+If the owner has confirmed the real make, model and year, enter those
+instead, and update `PILOT_VEHICLES` in `pilot-dataset.ts` to the same
+values in the same change, so that the bootstrap recognises the coaches.
+
 ## Usage
 
 The command runs the built API (`apps/api/dist`), with the API environment of
