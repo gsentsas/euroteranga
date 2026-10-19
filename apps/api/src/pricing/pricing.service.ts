@@ -2,7 +2,7 @@ import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
 import type { z } from 'zod';
 import { PublicApiError } from '../auth/http/public-api-error.js';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import type { Actor } from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { checkFares, type FareWaypoint } from './fare-entries.js';
@@ -203,7 +203,7 @@ export class PricingService {
     };
   }
 
-  async createFareTable(input: FareTableCreate, actor: AuthPrincipal) {
+  async createFareTable(input: FareTableCreate, actor: Actor) {
     const id = await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         if (!(await tx.route.findUnique({ where: { id: input.routeId }, select: { id: true } }))) {
@@ -227,7 +227,7 @@ export class PricingService {
   }
 
   /** Name and active state only: route and currency are immutable. */
-  async updateFareTable(id: string, input: FareTableUpdate, actor: AuthPrincipal) {
+  async updateFareTable(id: string, input: FareTableUpdate, actor: Actor) {
     await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         await lockFareTable(tx, id);
@@ -255,7 +255,7 @@ export class PricingService {
     return this.fareTable(id);
   }
 
-  async createVersion(fareTableId: string, routeVersionId: string, actor: AuthPrincipal) {
+  async createVersion(fareTableId: string, routeVersionId: string, actor: Actor) {
     await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const table = await lockFareTable(tx, fareTableId);
@@ -293,12 +293,7 @@ export class PricingService {
   }
 
   /** Atomic replacement of the complete (possibly partial) DRAFT matrix. */
-  async replaceFares(
-    fareTableId: string,
-    versionId: string,
-    input: FareTableFares,
-    actor: AuthPrincipal,
-  ) {
+  async replaceFares(fareTableId: string, versionId: string, input: FareTableFares, actor: Actor) {
     await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         await lockFareTable(tx, fareTableId);
@@ -343,7 +338,7 @@ export class PricingService {
    * commits first (the retired version stays historical on the trip) or is
    * refused because the version is retired.
    */
-  async publish(fareTableId: string, versionId: string, actor: AuthPrincipal) {
+  async publish(fareTableId: string, versionId: string, actor: Actor) {
     await mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const table = await lockFareTable(tx, fareTableId);

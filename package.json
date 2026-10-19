@@ -29,7 +29,8 @@
     "check:forbidden-files": "bash scripts/check-forbidden-files.sh",
     "audit:dependencies": "pnpm audit --audit-level high",
     "auth:bootstrap-super-admin": "pnpm --filter @euroteranga/api run auth:bootstrap-super-admin",
-    "auth:purge-expired": "pnpm --filter @euroteranga/api run auth:purge-expired"
+    "auth:purge-expired": "pnpm --filter @euroteranga/api run auth:purge-expired",
+    "data:bootstrap-pilot": "pnpm --filter @euroteranga/api run data:bootstrap-pilot"
   },
   "devDependencies": {
     "@eslint/js": "catalog:",

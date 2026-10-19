@@ -1,0 +1,587 @@
+import request from 'supertest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { FleetService } from '../../../src/fleet/fleet.service.js';
+import { NetworkService } from '../../../src/network/network.service.js';
+import {
+  PilotBootstrap,
+  type PilotBootstrapOptions,
+  type PilotBootstrapReport,
+} from '../../../src/pilot/pilot-bootstrap.js';
+import { PricingService } from '../../../src/pricing/pricing.service.js';
+import { SeatMapService } from '../../../src/seat-maps/seat-map.service.js';
+import { TripService } from '../../../src/trips/trip.service.js';
+import {
+  adminApi,
+  isolatedDatabase,
+  staffActor,
+  type StaffActor,
+} from '../../support/admin-helpers.js';
+import { db } from '../../support/auth-helpers.js';
+import { bookingApi, customerActor } from '../../support/booking-helpers.js';
+import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
+
+const today = () => new Date().toISOString().slice(0, 10);
+const options = (overrides: Partial<PilotBootstrapOptions> = {}): PilotBootstrapOptions => ({
+  anchorDate: today(),
+  tripsPerDirection: 4,
+  dryRun: false,
+  ...overrides,
+});
+
+interface Harness {
+  t: TestApp;
+  drop: () => Promise<void>;
+  run: (overrides?: Partial<PilotBootstrapOptions>) => Promise<PilotBootstrapReport>;
+}
+
+async function harness(): Promise<Harness> {
+  const database = await isolatedDatabase();
+  const t = await startTestApp(integrationEnv({ DATABASE_URL: database.url }));
+  const run = (overrides: Partial<PilotBootstrapOptions> = {}) =>
+    new PilotBootstrap({
+      db: db(t.app),
+      network: t.app.get(NetworkService),
+      seatMaps: t.app.get(SeatMapService),
+      fleet: t.app.get(FleetService),
+      pricing: t.app.get(PricingService),
+      trips: t.app.get(TripService),
+    }).run(options(overrides));
+  return {
+    t,
+    run,
+    drop: async () => {
+      await t.app.close();
+      await database.drop();
+    },
+  };
+}
+
+const outcomes = (report: PilotBootstrapReport) => [...new Set(report.lines.map((l) => l.outcome))];
+
+/** Row counts of every table the bootstrap may write, plus the audit trail. */
+async function snapshot(h: Harness) {
+  const client = db(h.t.app);
+  return {
+    countries: await client.country.count(),
+    stops: await client.stop.count(),
+    checkpoints: await client.checkpoint.count(),
+    routes: await client.route.count(),
+    routeVersions: await client.routeVersion.count(),
+    seatMaps: await client.seatMap.count(),
+    seatMapVersions: await client.seatMapVersion.count(),
+    vehicles: await client.vehicle.count(),
+    fareTables: await client.fareTable.count(),
+    fareTableVersions: await client.fareTableVersion.count(),
+    trips: await client.trip.count(),
+    audit: await client.auditEvent.count(),
+  };
+}
+
+describe('pilot data bootstrap: complete dataset (isolated database)', () => {
+  let h: Harness;
+  let first: PilotBootstrapReport;
+
+  beforeAll(async () => {
+    h = await harness();
+    first = await h.run();
+  }, 120_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  it('creates the corridor, two coaches, fares and future trips through the domain services', async () => {
+    expect(first.hasConflicts).toBe(false);
+    expect(outcomes(first)).toEqual(['created']);
+    const client = db(h.t.app);
+
+    expect(
+      (await client.country.findMany({ orderBy: { iso2: 'asc' } })).map((c) => c.iso2),
+    ).toEqual(['ES', 'FR', 'MA', 'MR', 'SN']);
+    expect((await client.stop.findMany({ orderBy: { code: 'asc' } })).map((s) => s.code)).toEqual([
+      'DKR',
+      'PAR',
+    ]);
+    expect(await client.checkpoint.count()).toBe(5);
+
+    for (const [code, first, last] of [
+      ['ET-PAR-DKR', 'PAR', 'DKR'],
+      ['ET-DKR-PAR', 'DKR', 'PAR'],
+    ] as const) {
+      const version = await client.routeVersion.findFirstOrThrow({
+        where: { route: { code }, status: 'PUBLISHED' },
+        include: {
+          waypoints: { orderBy: { sequence: 'asc' }, include: { stop: true, checkpoint: true } },
+        },
+      });
+      expect(version.waypoints).toHaveLength(7);
+      expect(version.waypoints[0]).toMatchObject({
+        boardingAllowed: true,
+        alightingAllowed: false,
+      });
+      expect(version.waypoints[0]!.stop?.code).toBe(first);
+      expect(version.waypoints.at(-1)).toMatchObject({
+        boardingAllowed: false,
+        alightingAllowed: true,
+      });
+      expect(version.waypoints.at(-1)!.stop?.code).toBe(last);
+      expect(version.waypoints.slice(1, -1).every((w) => w.checkpoint !== null)).toBe(true);
+    }
+
+    const seatMap = await client.seatMapVersion.findFirstOrThrow({
+      where: { seatMap: { code: 'ET-SM-COACH-53' }, status: 'PUBLISHED' },
+      include: { cells: true },
+    });
+    const kinds = (kind: string) => seatMap.cells.filter((cell) => cell.kind === kind).length;
+    expect(kinds('SEAT')).toBe(53);
+    expect(kinds('DRIVER')).toBe(1);
+    expect(kinds('DOOR')).toBe(2);
+    expect(kinds('TOILET')).toBe(1);
+
+    const vehicles = await client.vehicle.findMany({ orderBy: { code: 'asc' } });
+    expect(
+      vehicles.map((v) => [
+        v.code,
+        v.name,
+        v.status,
+        v.registrationPlate,
+        v.vin,
+        v.seatMapVersionId,
+      ]),
+    ).toEqual([
+      ['ET-COACH-001', 'Teranga 01', 'ACTIVE', 'DEMO-ET-001', null, seatMap.id],
+      ['ET-COACH-002', 'Teranga 02', 'ACTIVE', 'DEMO-ET-002', null, seatMap.id],
+    ]);
+
+    const fares = await client.fareEntry.findMany({
+      where: { fareTableVersion: { status: 'PUBLISHED' } },
+      include: { fareTableVersion: { include: { fareTable: true } } },
+    });
+    expect(fares).toHaveLength(2);
+    for (const fare of fares) {
+      expect(fare.amountMinor).toBe(24_900);
+      expect(fare.fareTableVersion.fareTable).toMatchObject({
+        currencyCode: 'EUR',
+        currencyMinorUnit: 2,
+      });
+    }
+
+    const trips = await client.trip.findMany({
+      orderBy: { plannedDepartureAt: 'asc' },
+      include: { vehicle: true, routeVersion: { include: { route: true } } },
+    });
+    expect(trips).toHaveLength(8);
+    for (const trip of trips) {
+      expect(trip.status).toBe('SCHEDULED');
+      expect(trip.reference).toMatch(/^ET-PILOT-(PARDKR|DKRPAR)-\d{8}$/);
+      expect(trip.seatMapVersionId).toBe(seatMap.id);
+      expect(trip.fareTableVersionId).not.toBeNull();
+      expect(trip.plannedDepartureAt!.getTime()).toBeGreaterThan(Date.now());
+    }
+    expect(trips.filter((trip) => trip.routeVersion.route.code === 'ET-PAR-DKR')).toHaveLength(4);
+    // Each coach alternates directions and never serves two overlapping trips.
+    for (const code of ['ET-COACH-001', 'ET-COACH-002']) {
+      const own = trips.filter((trip) => trip.vehicle?.code === code);
+      expect(own).toHaveLength(4);
+      own.slice(1).forEach((trip, index) => {
+        expect(trip.plannedDepartureAt!.getTime()).toBeGreaterThan(
+          own[index]!.plannedArrivalAt!.getTime(),
+        );
+        expect(trip.routeVersion.route.code).not.toBe(own[index]!.routeVersion.route.code);
+      });
+    }
+  });
+
+  it('audits every write with the pilot system actor and no identity', async () => {
+    const events = await db(h.t.app).auditEvent.findMany({
+      where: {
+        resourceType: {
+          in: ['country', 'stop', 'checkpoint', 'route', 'route_version', 'vehicle', 'trip'],
+        },
+      },
+    });
+    expect(events.length).toBeGreaterThan(30);
+    for (const event of events) {
+      expect(event.actorIdentityId).toBeNull();
+      expect(event.sessionId).toBeNull();
+      expect(event.metadata).toMatchObject({ systemActor: 'pilot-bootstrap' });
+    }
+    const statusChange = events.find((event) => event.action === 'VEHICLE_STATUS_CHANGED');
+    expect(statusChange?.metadata).toMatchObject({ systemActor: 'pilot-bootstrap' });
+  });
+
+  it('is idempotent: a second run reuses everything and writes nothing', async () => {
+    const before = await snapshot(h);
+    const second = await h.run();
+    expect(second.hasConflicts).toBe(false);
+    expect(outcomes(second)).toEqual(['existing']);
+    expect(await snapshot(h)).toEqual(before);
+
+    // A later run anchored on another date keeps the four upcoming departures.
+    const later = await h.run({ anchorDate: '2099-01-01' });
+    expect(later.lines.filter((line) => line.entity === 'trip')).toEqual([]);
+    expect(await snapshot(h)).toEqual(before);
+  });
+
+  it('makes the pilot trips bookable: search, Pricing fares, availability and a customer hold', async () => {
+    const http = request(h.t.app.getHttpServer());
+    const stops = await http.get('/v1/booking/stops').set('Origin', 'http://localhost:3000');
+    const id = (code: string) =>
+      (stops.body.items as Array<{ id: string; code: string }>).find((s) => s.code === code)!.id;
+
+    for (const [from, to] of [
+      ['PAR', 'DKR'],
+      ['DKR', 'PAR'],
+    ] as const) {
+      const search = await http
+        .get(`/v1/booking/trips?originStopId=${id(from)}&destinationStopId=${id(to)}`)
+        .set('Origin', 'http://localhost:3000');
+      expect(search.status).toBe(200);
+      expect(search.body.items).toHaveLength(4);
+      for (const item of search.body.items) {
+        expect(item.fare).toEqual({
+          amountMinor: 24_900,
+          currencyCode: 'EUR',
+          currencyMinorUnit: 2,
+        });
+        expect(item).toMatchObject({ seatCount: 53, availableSeatCount: 53 });
+      }
+    }
+
+    const search = await http
+      .get(`/v1/booking/trips?originStopId=${id('PAR')}&destinationStopId=${id('DKR')}`)
+      .set('Origin', 'http://localhost:3000');
+    const journey = search.body.items[0];
+    const availability = await http
+      .get(
+        `/v1/booking/trips/${journey.tripId}/availability?originRouteWaypointId=${journey.origin.routeWaypointId}&destinationRouteWaypointId=${journey.destination.routeWaypointId}`,
+      )
+      .set('Origin', 'http://localhost:3000');
+    expect(availability.status).toBe(200);
+    const seat = (availability.body.cells as Array<{ id: string; seatLabel: string | null }>).find(
+      (cell) => cell.seatLabel === '1A',
+    )!;
+
+    const customer = await customerActor(h.t.app);
+    const hold = await bookingApi(customer).post('/bookings', {
+      tripId: journey.tripId,
+      originRouteWaypointId: journey.origin.routeWaypointId,
+      destinationRouteWaypointId: journey.destination.routeWaypointId,
+      seatMapCellIds: [seat.id],
+    });
+    expect(hold.status, hold.text).toBe(201);
+  });
+});
+
+describe('pilot data bootstrap: dry run, resume and conflicts (isolated databases)', () => {
+  let h: Harness;
+  let admin: StaffActor;
+
+  beforeAll(async () => {
+    h = await harness();
+    admin = await staffActor(h.t.app, ['SUPER_ADMIN']);
+  }, 60_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  it('dry run reports the plan and writes nothing', async () => {
+    const before = await snapshot(h);
+    const report = await h.run({ dryRun: true });
+    expect(report.dryRun).toBe(true);
+    expect(outcomes(report)).toEqual(['planned']);
+    expect(report.lines.filter((line) => line.entity === 'trip')).toHaveLength(8);
+    expect(await snapshot(h)).toEqual(before);
+  });
+
+  it('completes data left half-way and refuses to overwrite operator data', async () => {
+    // Half-way state: the pilot coach with every pilot identity field, but
+    // still PLANNED and without seat map (the steps the bootstrap performs).
+    const country = await adminApi(admin).post('/network/countries', {
+      iso2: 'FR',
+      iso3: 'FRA',
+      name: 'France',
+      active: true,
+    });
+    expect(country.status).toBe(201);
+    const coach = await adminApi(admin).post('/fleet/vehicles', {
+      code: 'ET-COACH-001',
+      name: 'Teranga 01',
+      manufacturer: 'Setra',
+      model: 'S 516 HD',
+      modelYear: 2023,
+      registrationPlate: 'DEMO-ET-001',
+      registrationCountryId: country.body.id,
+    });
+    expect(coach.status).toBe(201);
+    // Operator data: Dakar -> Paris already exists with another published version.
+    const stop = async (code: string, iso2: string) => {
+      const countryId =
+        iso2 === 'FR'
+          ? country.body.id
+          : (
+              await adminApi(admin).post('/network/countries', {
+                iso2,
+                iso3: 'SEN',
+                name: 'Sénégal',
+                active: true,
+              })
+            ).body.id;
+      const response = await adminApi(admin).post('/network/stops', {
+        code,
+        name: code,
+        countryId,
+        locality: code,
+        latitude: 10,
+        longitude: 10,
+        timezone: code === 'PAR' ? 'Europe/Paris' : 'Africa/Dakar',
+        active: true,
+      });
+      expect(response.status).toBe(201);
+      return response.body.id as string;
+    };
+    const dakar = await stop('DKR', 'SN');
+    const paris = await stop('PAR', 'FR');
+    const route = await adminApi(admin).post('/network/routes', {
+      code: 'ET-DKR-PAR',
+      name: 'Dakar → Paris (opérateur)',
+      active: true,
+    });
+    const version = await adminApi(admin).post(`/network/routes/${route.body.id}/versions`, {});
+    await adminApi(admin).post(
+      `/network/routes/${route.body.id}/versions/${version.body.id}/waypoints`,
+      {
+        waypoints: [
+          { kind: 'STOP', stopId: dakar, boardingAllowed: true },
+          { kind: 'STOP', stopId: paris, alightingAllowed: true },
+        ],
+      },
+    );
+    const published = await adminApi(admin).post(
+      `/network/routes/${route.body.id}/versions/${version.body.id}/publish`,
+      {},
+    );
+    expect(published.status).toBe(200);
+    const operatorWaypoints = await db(h.t.app).routeWaypoint.count({
+      where: { routeVersionId: version.body.id },
+    });
+
+    const report = await h.run();
+    const line = (entity: string, key: string) =>
+      report.lines.find((l) => l.entity === entity && l.key === key);
+    expect(report.hasConflicts).toBe(true);
+    expect(line('vehicle', 'ET-COACH-001')?.outcome).toBe('completed');
+    expect(line('country', 'FR')?.outcome).toBe('existing');
+    // Operator names and positions of the stops are kept, not rewritten.
+    expect(line('stop', 'PAR')).toMatchObject({
+      outcome: 'existing',
+      detail: 'operator name, locality or position kept',
+    });
+    expect(line('route', 'ET-PAR-DKR')?.outcome).toBe('created');
+    expect(line('route', 'ET-DKR-PAR')).toMatchObject({ outcome: 'conflict' });
+    expect(line('fare-table', 'ET-FT-DKR-PAR-EUR')).toMatchObject({
+      outcome: 'skipped',
+      detail: 'depends on route:ET-DKR-PAR',
+    });
+
+    const client = db(h.t.app);
+    expect(
+      await client.vehicle.findUniqueOrThrow({ where: { code: 'ET-COACH-001' } }),
+    ).toMatchObject({ status: 'ACTIVE', name: 'Teranga 01' });
+    // The operator route is untouched and no Dakar -> Paris trip was created.
+    expect(await client.routeVersion.count({ where: { routeId: route.body.id } })).toBe(1);
+    expect(await client.routeWaypoint.count({ where: { routeVersionId: version.body.id } })).toBe(
+      operatorWaypoints,
+    );
+    expect(
+      await client.trip.count({ where: { reference: { startsWith: 'ET-PILOT-DKRPAR-' } } }),
+    ).toBe(0);
+    expect(
+      await client.trip.count({
+        where: { reference: { startsWith: 'ET-PILOT-PARDKR-' }, status: 'SCHEDULED' },
+      }),
+    ).toBe(4);
+  });
+});
+
+describe('pilot data bootstrap never overwrites operator data (isolated databases)', () => {
+  let h: Harness;
+  let admin: StaffActor;
+
+  beforeAll(async () => {
+    h = await harness();
+    admin = await staffActor(h.t.app, ['SUPER_ADMIN']);
+  }, 60_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  const auditCount = (resourceId: string) =>
+    db(h.t.app).auditEvent.count({ where: { resourceId } });
+
+  it('leaves a divergent operator coach and stop untouched and skips what depends on them', async () => {
+    const france = await adminApi(admin).post('/network/countries', {
+      iso2: 'FR',
+      iso3: 'FRA',
+      name: 'France',
+      active: true,
+    });
+    // An operator coach that happens to use a pilot code, with its own identity.
+    const operatorCoach = await adminApi(admin).post('/fleet/vehicles', {
+      code: 'ET-COACH-001',
+      name: 'Car exploitant',
+      manufacturer: 'Constructeur exploitant',
+      model: 'Modèle exploitant',
+      modelYear: 2021,
+      registrationPlate: 'OP-001-ET',
+      registrationCountryId: france.body.id,
+    });
+    expect(operatorCoach.status).toBe(201);
+    const coachBefore = await db(h.t.app).vehicle.findUniqueOrThrow({
+      where: { id: operatorCoach.body.id },
+    });
+    const coachAuditBefore = await auditCount(operatorCoach.body.id);
+
+    const first = await h.run();
+    const line = (entity: string, key: string) =>
+      first.lines.find((l) => l.entity === entity && l.key === key);
+    expect(first.hasConflicts).toBe(true);
+    expect(line('vehicle', 'ET-COACH-001')).toMatchObject({
+      outcome: 'conflict',
+      detail: 'existing name differs from the pilot coach',
+    });
+    expect(line('vehicle', 'ET-COACH-002')?.outcome).toBe('created');
+    // Departures of the refused coach are skipped; the other coach still serves its own.
+    const tripLines = first.lines.filter((l) => l.entity === 'trip');
+    expect(tripLines.filter((l) => l.outcome === 'created')).toHaveLength(4);
+    expect(
+      tripLines.filter(
+        (l) => l.outcome === 'skipped' && l.detail === 'depends on vehicle:ET-COACH-001',
+      ),
+    ).toHaveLength(4);
+
+    expect(
+      await db(h.t.app).vehicle.findUniqueOrThrow({ where: { id: operatorCoach.body.id } }),
+    ).toEqual(coachBefore);
+    expect(await auditCount(operatorCoach.body.id)).toBe(coachAuditBefore);
+    expect(await db(h.t.app).trip.count({ where: { vehicleId: operatorCoach.body.id } })).toBe(0);
+
+    // A second run gives the same answer and still writes nothing on the operator coach.
+    const second = await h.run();
+    expect(second.hasConflicts).toBe(true);
+    expect(
+      await db(h.t.app).vehicle.findUniqueOrThrow({ where: { id: operatorCoach.body.id } }),
+    ).toEqual(coachBefore);
+  });
+
+  it('refuses an upcoming pilot trip changed in OPS and adds nothing next to it', async () => {
+    const client = db(h.t.app);
+    const trip = await client.trip.findFirstOrThrow({
+      where: { reference: { startsWith: 'ET-PILOT-PARDKR-' }, status: 'SCHEDULED' },
+      orderBy: { plannedDepartureAt: 'asc' },
+    });
+    // OPS moves the trip to another coach configured with the same seat map.
+    const seatMapVersionId = trip.seatMapVersionId!;
+    const replacement = await adminApi(admin).post('/fleet/vehicles', {
+      code: 'VH-EXPLOITANT',
+      manufacturer: 'Constructeur exploitant',
+      model: 'Modèle exploitant',
+    });
+    await adminApi(admin).post(`/fleet/vehicles/${replacement.body.id}/seat-map`, {
+      seatMapVersionId,
+    });
+    await adminApi(admin).post(`/fleet/vehicles/${replacement.body.id}/status`, {
+      status: 'ACTIVE',
+      reason: 'Mise en service exploitant',
+    });
+    const moved = await adminApi(admin).post(`/trips/${trip.id}/vehicle`, {
+      vehicleId: replacement.body.id,
+      reason: 'Changement de car par l’exploitation',
+    });
+    expect(moved.status, moved.text).toBe(200);
+
+    const tripBefore = await client.trip.findUniqueOrThrow({
+      where: { id: trip.id },
+      include: { timings: { orderBy: { sequence: 'asc' } } },
+    });
+    const outboundBefore = await client.trip.count({
+      where: { reference: { startsWith: 'ET-PILOT-PARDKR-' } },
+    });
+
+    const report = await h.run();
+    expect(report.hasConflicts).toBe(true);
+    expect(report.lines).toContainEqual({
+      outcome: 'conflict',
+      entity: 'trip',
+      key: trip.reference,
+      detail: 'is not served by a pilot coach',
+    });
+    expect(report.lines).toContainEqual({
+      outcome: 'skipped',
+      entity: 'trips',
+      key: 'ET-PAR-DKR',
+      detail: 'depends on the conflicting pilot trips',
+    });
+    expect(
+      await client.trip.findUniqueOrThrow({
+        where: { id: trip.id },
+        include: { timings: { orderBy: { sequence: 'asc' } } },
+      }),
+    ).toEqual(tripBefore);
+    expect(
+      await client.trip.count({ where: { reference: { startsWith: 'ET-PILOT-PARDKR-' } } }),
+    ).toBe(outboundBefore);
+  });
+
+  it('refuses a stop whose time zone differs and builds no route on it', async () => {
+    const other = await harness();
+    try {
+      const otherAdmin = await staffActor(other.t.app, ['SUPER_ADMIN']);
+      const france = await adminApi(otherAdmin).post('/network/countries', {
+        iso2: 'FR',
+        iso3: 'FRA',
+        name: 'France',
+        active: true,
+      });
+      const paris = await adminApi(otherAdmin).post('/network/stops', {
+        code: 'PAR',
+        name: 'Paris Bercy',
+        countryId: france.body.id,
+        locality: 'Paris',
+        latitude: 48.8399,
+        longitude: 2.3828,
+        timezone: 'Europe/London',
+        active: true,
+      });
+      expect(paris.status).toBe(201);
+      const stopBefore = await db(other.t.app).stop.findUniqueOrThrow({
+        where: { id: paris.body.id },
+      });
+
+      const report = await other.run();
+      const line = (entity: string, key: string) =>
+        report.lines.find((l) => l.entity === entity && l.key === key);
+      expect(line('stop', 'PAR')).toMatchObject({
+        outcome: 'conflict',
+        detail: 'time zone is Europe/London, expected Europe/Paris',
+      });
+      expect(line('route', 'ET-PAR-DKR')).toMatchObject({
+        outcome: 'skipped',
+        detail: 'depends on stop:PAR',
+      });
+      expect(line('route', 'ET-DKR-PAR')).toMatchObject({
+        outcome: 'skipped',
+        detail: 'depends on stop:PAR',
+      });
+      expect(await db(other.t.app).route.count()).toBe(0);
+      expect(await db(other.t.app).trip.count()).toBe(0);
+      expect(
+        await db(other.t.app).stop.findUniqueOrThrow({ where: { id: paris.body.id } }),
+      ).toEqual(stopBefore);
+    } finally {
+      await other.drop();
+    }
+  }, 60_000);
+});

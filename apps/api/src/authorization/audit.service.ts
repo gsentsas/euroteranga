@@ -2,7 +2,7 @@ import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
 import { redact } from '@euroteranga/logger';
 import { Injectable } from '@nestjs/common';
 import { toDbRealm } from '../auth/auth.config.js';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import { isSystemActor, type Actor } from '../auth/session/auth-principal.js';
 import { currentRequestId } from '../common/request-context.js';
 import { DatabaseService } from '../database/database.service.js';
 
@@ -15,9 +15,22 @@ function safeJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(redact(value))) as Prisma.InputJsonValue;
 }
 
+/** Metadata as an object, so that a system actor's source can be added to it. */
+function metadataObject(metadata: unknown): Record<string, unknown> {
+  if (metadata === undefined) return {};
+  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+    return metadata as Record<string, unknown>;
+  }
+  return { value: metadata };
+}
+
 export interface AuditRecordInput {
-  /** Omitted for system actors (bootstrap CLI, invitation acceptance). */
-  actor?: AuthPrincipal | undefined;
+  /**
+   * Omitted for anonymous system flows (bootstrap CLI, invitation acceptance).
+   * A SystemActor is also stored without identity, with its source in the
+   * metadata.
+   */
+  actor?: Actor | undefined;
   action: string;
   resourceType: string;
   resourceId?: string;
@@ -53,13 +66,18 @@ export class AuditService {
 
   async record(input: AuditRecordInput, tx: DatabaseTransaction): Promise<string> {
     const requestId = input.requestId ?? currentRequestId();
+    const principal = input.actor && !isSystemActor(input.actor) ? input.actor : undefined;
+    const metadata =
+      input.actor && isSystemActor(input.actor)
+        ? { ...metadataObject(input.metadata), systemActor: input.actor.source }
+        : input.metadata;
     const event = await tx.auditEvent.create({
       data: {
-        ...(input.actor
+        ...(principal
           ? {
-              actorIdentityId: input.actor.identityId,
-              actorRealm: toDbRealm(input.actor.realm),
-              sessionId: input.actor.sessionId,
+              actorIdentityId: principal.identityId,
+              actorRealm: toDbRealm(principal.realm),
+              sessionId: principal.sessionId,
             }
           : {}),
         action: input.action,
@@ -68,7 +86,7 @@ export class AuditService {
         ...(requestId ? { requestId } : {}),
         ...(input.before !== undefined ? { before: safeJson(input.before) } : {}),
         ...(input.after !== undefined ? { after: safeJson(input.after) } : {}),
-        ...(input.metadata !== undefined ? { metadata: safeJson(input.metadata) } : {}),
+        ...(metadata !== undefined ? { metadata: safeJson(metadata) } : {}),
       },
       select: { id: true },
     });
