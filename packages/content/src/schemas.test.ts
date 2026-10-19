@@ -6,6 +6,7 @@ import {
   documentSchemaOf,
   linkSchema,
   mediaIdsOf,
+  mediaReferencesOf,
   missingOwnerInputs,
   navigationSchema,
   pageDocumentSchema,
@@ -161,6 +162,13 @@ describe('content model', () => {
       ],
     });
     expect(mediaIdsOf(parsed).sort()).toEqual([id, other].sort());
+    // MEDIA-1 reports each reference with its field path, duplicates included.
+    expect(mediaReferencesOf(parsed)).toEqual([
+      { path: 'seo.socialMediaId', mediaId: id },
+      { path: 'blocks.0.mediaId', mediaId: other },
+      { path: 'blocks.1.items.0.mediaId', mediaId: id },
+      { path: 'blocks.1.items.1.mediaId', mediaId: other },
+    ]);
   });
 
   it('keeps owner fields nullable and validates contact and social values', () => {

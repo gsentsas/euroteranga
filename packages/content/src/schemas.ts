@@ -456,6 +456,25 @@ export function missingOwnerInputs(settings: SiteSettings): string[] {
   return missing;
 }
 
+/** Where a page references media: the field path and the media id (MEDIA-1). */
+export function mediaReferencesOf(page: PageDocument): Array<{ path: string; mediaId: string }> {
+  const references: Array<{ path: string; mediaId: string }> = [];
+  if (page.seo.socialMediaId) {
+    references.push({ path: 'seo.socialMediaId', mediaId: page.seo.socialMediaId });
+  }
+  page.blocks.forEach((block, index) => {
+    if ('mediaId' in block && block.mediaId) {
+      references.push({ path: `blocks.${index}.mediaId`, mediaId: block.mediaId });
+    }
+    if (block.type === 'gallery') {
+      block.items.forEach((item, at) =>
+        references.push({ path: `blocks.${index}.items.${at}.mediaId`, mediaId: item.mediaId }),
+      );
+    }
+  });
+  return references;
+}
+
 /** Media referenced by a page (MEDIA-1 checks them; CMS-1 only lists them). */
 export function mediaIdsOf(page: PageDocument): string[] {
   const ids = new Set<string>();
