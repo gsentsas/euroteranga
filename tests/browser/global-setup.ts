@@ -1317,6 +1317,17 @@ async function seedPublicPagesData(db: ReturnType<typeof createDatabaseClient>):
     data: { status: 'PUBLISHED', publishedAt: new Date() },
   });
 
+  // On a reused database, the coaches of earlier runs must not push this
+  // run's out of the public fleet read (at most 50 active vehicles).
+  const retiredAt = new Date();
+  await db.vehicle.updateMany({
+    where: {
+      status: 'ACTIVE',
+      OR: [{ code: { startsWith: 'UIP_C1_' } }, { code: { startsWith: 'UIP_C2_' } }],
+    },
+    data: { status: 'RETIRED', statusChangedAt: retiredAt, retiredAt },
+  });
+
   // Two active coaches with the trip's seat map; only the first is assigned.
   const [first, second] = await Promise.all(
     seed.coaches.map((coach, index) =>
