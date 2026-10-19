@@ -25,6 +25,9 @@ export const BLOCK_LABELS: Record<ContentBlockType, string> = {
   stats: 'Chiffres clés',
   gallery: 'Galerie',
   banner: 'Bandeau d’information',
+  sectionNav: 'Sommaire de la page',
+  itinerary: 'Itinéraire',
+  fleet: 'Nos autocars',
 };
 
 export const BLOCK_DESCRIPTIONS: Record<ContentBlockType, string> = {
@@ -43,6 +46,12 @@ export const BLOCK_DESCRIPTIONS: Record<ContentBlockType, string> = {
   stats: 'Quelques chiffres vérifiables. N’indiquez jamais un chiffre non prouvé.',
   gallery: 'Jusqu’à 12 images de la médiathèque.',
   banner: 'Une information courte : travaux, rappel, nouveauté.',
+  sectionNav:
+    'Des onglets vers les sections de la page (Vue d’ensemble, Horaires, Nos autocars…), chacune repérée par son ancre.',
+  itinerary:
+    'L’itinéraire du prochain départ d’un sens : horaires, arrêts, pays traversés, durée et équipements du car, lus sur les voyages et la flotte.',
+  fleet:
+    'Les autocars en service : nom, modèle, places et équipements lus sur la flotte, avec vos photos et une description par véhicule.',
 };
 
 const emptyLink = (): ContentLink => ({ label: '', target: { kind: 'page', path: '/' } });
@@ -51,7 +60,7 @@ const emptyLink = (): ContentLink => ({ label: '', target: { kind: 'page', path:
 export function newBlock(type: ContentBlockType): ContentBlock {
   switch (type) {
     case 'hero':
-      return { type, title: '', journeyCard: true };
+      return { type, variant: 'home', title: '', journeyCard: true };
     case 'richText':
       return { type, body: [] };
     case 'textImage':
@@ -83,6 +92,7 @@ export function newBlock(type: ContentBlockType): ContentBlock {
           { fromCode: 'DKR', toCode: 'PAR' },
         ],
         limit: 3,
+        layout: 'cards',
       };
     case 'stats':
       return { type, items: [{ value: '', label: '' }] };
@@ -90,6 +100,26 @@ export function newBlock(type: ContentBlockType): ContentBlock {
       return { type, items: [] };
     case 'banner':
       return { type, tone: 'info', text: '' };
+    case 'sectionNav':
+      return {
+        type,
+        label: 'Sur cette page',
+        items: [
+          { label: '', anchor: '' },
+          { label: '', anchor: '' },
+        ],
+      };
+    case 'itinerary':
+      return {
+        type,
+        title: '',
+        fromCode: 'PAR',
+        toCode: 'DKR',
+        included: [],
+        showVehicleAmenities: true,
+      };
+    case 'fleet':
+      return { type, title: '', selection: 'all', items: [] };
   }
 }
 

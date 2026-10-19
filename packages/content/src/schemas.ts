@@ -152,10 +152,24 @@ const directionSchema = {
 const differentStops = (value: { fromCode: string; toCode: string }) =>
   value.fromCode !== value.toCode;
 
+/** A vehicle of the fleet, by its code (same rule as the vehicle table). */
+export const vehicleCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9][A-Z0-9_-]{0,31}$/, { message: 'code de véhicule invalide' });
+
+export const HERO_VARIANTS = ['home', 'page'] as const;
+
 export const heroBlockSchema = z
   .object({
     type: z.literal('hero'),
     ...sectionHead,
+    /**
+     * `page` (UI-PUBLIC-2): a shorter banner for inner pages, with the
+     * breadcrumb (Accueil › page title) above the title.
+     */
+    variant: z.enum(HERO_VARIANTS).default('home'),
     eyebrow: optionalText(80),
     title: text(140),
     /** Second line of the title, highlighted (UI-PUBLIC-1). */
@@ -314,10 +328,102 @@ export const departuresBlockSchema = z
       .min(1)
       .max(4),
     /** Departures shown, all directions together, soonest first. */
-    limit: z.number().int().min(1).max(6).default(3),
+    limit: z.number().int().min(1).max(8).default(3),
     cta: linkSchema.optional(),
+    /**
+     * `cards`: photo cards (home page). `dates` (UI-PUBLIC-2): a strip of
+     * dates with their fare and a "book this trip" button (trip pages).
+     */
+    layout: z.enum(['cards', 'dates']).default('cards'),
   })
   .strict();
+
+/**
+ * UI-PUBLIC-2: links to the sections of a long page ("Vue d'ensemble",
+ * "Horaires", "Nos autocars"…). Every target must be an anchor of the page.
+ */
+export const sectionNavBlockSchema = z
+  .object({
+    type: z.literal('sectionNav'),
+    ...sectionHead,
+    /** Accessible name of the navigation, e.g. "Sur cette page". */
+    label: text(60),
+    items: z
+      .array(z.object({ label: text(40), anchor: anchorSchema }).strict())
+      .min(2)
+      .max(8),
+  })
+  .strict();
+
+/**
+ * UI-PUBLIC-2: the planned itinerary of the next bookable departure of a
+ * direction (Trips): times, stops, countries crossed and duration are read
+ * at render time, never written in the CMS. The on-board equipment comes
+ * from the vehicle assigned to that departure (Fleet).
+ */
+export const itineraryBlockSchema = z
+  .object({
+    type: z.literal('itinerary'),
+    ...sectionHead,
+    title: text(160),
+    intro: optionalText(400),
+    ...directionSchema,
+    /** Title of the "included" list, e.g. "Inclus dans votre voyage". */
+    includedTitle: optionalText(80),
+    /** Services the company includes in every journey (editor's responsibility). */
+    included: z.array(text(80)).max(8).default([]),
+    /** Add the equipment of the vehicle assigned to the departure. */
+    showVehicleAmenities: z.boolean().default(true),
+  })
+  .strict()
+  .refine(differentStops, { message: 'deux arrêts différents', path: ['toCode'] });
+
+/**
+ * UI-PUBLIC-2: the coaches ("Nos bus"). Names, models, seats and on-board
+ * equipment come from Fleet (active vehicles only); the CMS only adds
+ * photographs and a description per vehicle.
+ */
+export const fleetBlockSchema = z
+  .object({
+    type: z.literal('fleet'),
+    ...sectionHead,
+    title: text(160),
+    intro: optionalText(400),
+    /** `all`: every active vehicle. `listed`: only the vehicles below, in this order. */
+    selection: z.enum(['all', 'listed']).default('all'),
+    items: z
+      .array(
+        z
+          .object({
+            vehicleCode: vehicleCodeSchema,
+            /** Main photograph (media library). */
+            mediaId: uuid.optional(),
+            description: optionalText(400),
+            /** Interior photographs, shown as a scrollable strip. */
+            gallery: z.array(uuid).max(6).default([]),
+          })
+          .strict(),
+      )
+      .max(12)
+      .default([]),
+  })
+  .strict()
+  .superRefine((block, ctx) => {
+    if (block.selection === 'listed' && block.items.length === 0) {
+      ctx.addIssue({ code: 'custom', path: ['items'], message: 'au moins un véhicule' });
+    }
+    const seen = new Set<string>();
+    block.items.forEach((item, index) => {
+      if (seen.has(item.vehicleCode)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['items', index, 'vehicleCode'],
+          message: 'véhicule déjà présenté',
+        });
+      }
+      seen.add(item.vehicleCode);
+    });
+  });
 
 export const statsBlockSchema = z
   .object({
@@ -366,6 +472,9 @@ export const blockSchema = z.discriminatedUnion('type', [
   statsBlockSchema,
   galleryBlockSchema,
   bannerBlockSchema,
+  sectionNavBlockSchema,
+  itineraryBlockSchema,
+  fleetBlockSchema,
 ]);
 
 export const BLOCK_TYPES = blockSchema.options.map((option) => option.shape.type.value);
@@ -400,6 +509,18 @@ export const pageDocumentSchema = z
         });
       }
       anchors.add(block.anchor);
+    });
+    page.blocks.forEach((block, index) => {
+      if (block.type !== 'sectionNav') return;
+      block.items.forEach((item, at) => {
+        if (!anchors.has(item.anchor)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['blocks', index, 'items', at, 'anchor'],
+            message: 'aucune section de la page ne porte cette ancre',
+          });
+        }
+      });
     });
     const heroes = page.blocks.filter((block) => block.type === 'hero').length;
     if (heroes > 1) {
@@ -547,6 +668,16 @@ export function mediaReferencesOf(page: PageDocument): Array<{ path: string; med
         if (route.mediaId) {
           references.push({ path: `blocks.${index}.routes.${at}.mediaId`, mediaId: route.mediaId });
         }
+      });
+    }
+    if (block.type === 'fleet') {
+      block.items.forEach((item, at) => {
+        if (item.mediaId) {
+          references.push({ path: `blocks.${index}.items.${at}.mediaId`, mediaId: item.mediaId });
+        }
+        item.gallery.forEach((mediaId, photo) => {
+          references.push({ path: `blocks.${index}.items.${at}.gallery.${photo}`, mediaId });
+        });
       });
     }
   });

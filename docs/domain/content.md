@@ -36,26 +36,41 @@ the website:
   with at most 40 blocks.
 - **Blocks:**
 
-  | Block        | Purpose                                                                  |
-  | ------------ | ------------------------------------------------------------------------ |
-  | `hero`       | Main banner (one per page at most): photo, title and accent, trip search |
-  | `richText`   | Formatted text                                                           |
-  | `textImage`  | Text next to an image; `tone: navy` for a highlighted card               |
-  | `image`      | Single image                                                             |
-  | `cta`        | Call to action                                                           |
-  | `cards`      | Cards (features, services with photos, steps, trust, `highlights` row)   |
-  | `faq`        | Questions and answers                                                    |
-  | `routes`     | The Paris → Dakar and Dakar → Paris lines                                |
-  | `departures` | Next bookable departures of chosen directions (UI-PUBLIC-1)              |
-  | `stats`      | Key figures                                                              |
-  | `gallery`    | Image gallery                                                            |
-  | `banner`     | Information banner                                                       |
+  | Block        | Purpose                                                                                                                        |
+  | ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+  | `hero`       | Main banner (one per page at most): photo, title and accent, trip search; `variant: page` for inner pages, with the breadcrumb |
+  | `richText`   | Formatted text                                                                                                                 |
+  | `textImage`  | Text next to an image; `tone: navy` for a highlighted card                                                                     |
+  | `image`      | Single image                                                                                                                   |
+  | `cta`        | Call to action                                                                                                                 |
+  | `cards`      | Cards (features, services with photos, steps, trust, `highlights` row)                                                         |
+  | `faq`        | Questions and answers                                                                                                          |
+  | `routes`     | The Paris → Dakar and Dakar → Paris lines                                                                                      |
+  | `departures` | Next bookable departures of chosen directions (UI-PUBLIC-1); `layout: dates` for a strip of dates and fares (UI-PUBLIC-2)      |
+  | `stats`      | Key figures                                                                                                                    |
+  | `gallery`    | Image gallery                                                                                                                  |
+  | `banner`     | Information banner                                                                                                             |
+  | `sectionNav` | Tabs to the sections of the page, each by its anchor (UI-PUBLIC-2)                                                             |
+  | `itinerary`  | Planned itinerary of the next bookable departure of a direction (UI-PUBLIC-2)                                                  |
+  | `fleet`      | The coaches in service, with editorial photos and texts (UI-PUBLIC-2)                                                          |
 
   Stops are named by their network code (`stopCodeSchema`, the same rule as
   the stop table: `^[A-Z0-9][A-Z0-9_-]{0,31}$`). A direction needs two
   different stops. No block holds a date, a number of seats or a price.
 
-  An anchor is unique on its page.
+  An anchor is unique on its page, and every `sectionNav` tab must point to
+  one of them.
+
+  UI-PUBLIC-2 blocks hold no schedule, stop list, seat count or equipment:
+  - `itinerary` names a direction (`fromCode`, `toCode`), an optional title
+    for the "included" list, up to 8 services the company confirms for
+    every journey (`included`, the editor's responsibility) and whether the
+    equipment of the assigned coach is added (`showVehicleAmenities`);
+  - `fleet` shows every active coach (`selection: all`) or only the listed
+    ones (`listed`, in the editor's order). Each item names a vehicle by its
+    fleet code (`vehicleCodeSchema`, same rule as the vehicle table) and adds
+    a main photo, a description and up to 6 interior photos. A code is
+    presented once.
 
 - **Rich text:** paragraphs, level-2 and level-3 headings and lists of spans,
   with bold, italic and link marks. No HTML.
@@ -201,6 +216,39 @@ editors preview exactly what visitors get.
   cannot answer, it says the departures are shown in the booking
   application. It never shows a typed date, seat count or price.
 
+- **Inner pages (UI-PUBLIC-2):**
+  - **Page hero:** `variant: page` is a shorter banner with the breadcrumb
+    "Accueil › page title". The page then carries a schema.org
+    `BreadcrumbList`, only because the breadcrumb is visible.
+  - **Section tabs:** a `sectionNav` stays under the sticky header; the
+    anchor offset includes it, so a section never starts under the tabs.
+  - **Departure dates:** `layout: dates` lists the same departures as the
+    cards (same search, same rules): local date and time of the origin,
+    exact fare, seats left. Each date opens the pre-filled booking search of
+    that day, and "Réserver ce voyage" books the soonest one.
+  - **Itinerary:** the soonest bookable journey of the direction (the same
+    search as the departures, read once per direction), then the trip's
+    public itinerary (`GET /v1/booking/trips/{tripId}/itinerary`,
+    `docs/domain/bookings.md`), cut between the journey's origin and
+    destination waypoints. It shows:
+    - departure and arrival times in each place's own timezone, the
+      calendar-day offset of the arrival ("+1 j") and the planned duration;
+    - the stops and crossings in between (borders, ports, ferry terminals),
+      the countries of the journey in order, and a schematic of the route
+      (not a map: no coordinate is shown or invented);
+    - the editor's confirmed services, then the equipment of the coach
+      assigned to that departure while it is active (Fleet). Nothing else
+      is listed, and the panel is left out when the list is empty.
+
+    Without a bookable departure it says that none is scheduled; when the
+    search or the itinerary cannot be read, it says so.
+
+  - **Coaches:** the public fleet read (`GET /v1/booking/fleet`,
+    `docs/domain/fleet.md`) gives the name, model, year, seats (from the
+    current seat map) and equipment of each active coach; several coaches
+    get anchor tabs. A listed coach that is not active is left out. Unknown
+    equipment values are ignored, never shown raw.
+  - Itineraries are cached 60 s, the fleet 300 s.
 - **Prices:** "from" prices come from the public search API (Pricing),
   never from the CMS:
   - the lowest current fare per direction among bookable trips, for the
@@ -280,6 +328,20 @@ editor (`/contenus/edition?entree=<id>`) works on one entry.
   - the history lists the last 30 revisions; any of them can be previewed
     and restored as a new draft;
   - leaving the page with unsaved changes asks for confirmation.
+- **Inner-page sections (UI-PUBLIC-2):** the hero has a "Format du
+  bandeau" (home or inner page); the departures section a "Présentation"
+  (cards or dates); the section tabs, itinerary and coaches sections have
+  their own forms. Stops are chosen among the active stops, coaches among
+  the active vehicles of the public fleet read. Times, stops, seats and
+  equipment are never typed: the preview reads them from the same public
+  API as the website (one search per direction).
+- **Page templates (UI-PUBLIC-2):** "Créer une page" offers templates
+  (`PAGE_TEMPLATES`): Voyage Paris → Dakar, Voyage Dakar → Paris, Nos bus
+  and Services. A template pre-fills the path, title and description, and
+  brings its sections. The SEO of the created draft is kept (not indexed):
+  indexing stays a `seo.manage` decision. Templates state only what the
+  platform provides; no fare, figure, luggage allowance or assistance
+  promise is written in them.
 - **Home page:** while no `/` page exists, the website shows the default
   content. "Créer la page d’accueil à partir du contenu actuel" creates it
   as a draft from that default content, so editing starts from what
