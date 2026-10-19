@@ -132,6 +132,11 @@ export function RefineProvider({ children }: { children: ReactNode }) {
             list: '/contenus',
             meta: { label: 'Contenus du site', permission: 'content.read' },
           },
+          {
+            name: 'media',
+            list: '/mediatheque',
+            meta: { label: 'Médiathèque', permission: 'media.read' },
+          },
           // `permission` only filters the navigation; the API authorizes every call.
           {
             name: 'admin-identities',

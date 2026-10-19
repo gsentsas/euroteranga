@@ -28,7 +28,7 @@ const GROUPS: ReadonlyArray<{ key: string; label: string; resources: readonly st
   {
     key: 'site',
     label: 'Site public',
-    resources: ['content'],
+    resources: ['content', 'media'],
   },
   {
     key: 'admin',

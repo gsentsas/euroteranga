@@ -4,6 +4,7 @@ import {
   DEFAULT_HOME_PAGE,
   DEFAULT_NAVIGATION,
   DEFAULT_SITE_SETTINGS,
+  mediaIdsOf,
   navigationSchema,
   pageDocumentSchema,
   siteSettingsSchema,
@@ -12,8 +13,9 @@ import {
   type PageDocument,
   type SiteSettings,
 } from '@euroteranga/content';
-import { SitePage, type SiteContext } from '@euroteranga/site';
+import { SitePage, siteMediaOf, type SiteContext, type SiteMedia } from '@euroteranga/site';
 import { useEffect, useRef, useState } from 'react';
+import { auth } from '../../lib/auth';
 
 const VIEWPORTS = [
   { key: 'mobile', label: 'Mobile', width: 390 },
@@ -83,9 +85,35 @@ function previewModel(
 }
 
 /**
+ * Images of the previewed page, read once from the public media endpoint:
+ * like the website, the preview shows active images only (null = absent).
+ */
+function useMediaCache() {
+  const cache = useRef(new Map<string, SiteMedia | null>());
+  const pending = useRef(new Set<string>());
+  const [version, setVersion] = useState(0);
+  const request = (ids: readonly string[]) => {
+    const missing = ids.filter((id) => !cache.current.has(id) && !pending.current.has(id));
+    if (missing.length === 0) return;
+    missing.forEach((id) => pending.current.add(id));
+    void auth.media.many(missing.slice(0, 50)).then((result) => {
+      for (const id of missing) pending.current.delete(id);
+      if (!result.ok) return;
+      for (const id of missing) cache.current.set(id, null);
+      for (const item of result.data.items) {
+        cache.current.set(item.id, siteMediaOf(item, auth.media.url));
+      }
+      setVersion((value) => value + 1);
+    });
+  };
+  return { cache: cache.current, request, version };
+}
+
+/**
  * Exact rendering of the website (same components, same stylesheets) in a
  * sandboxed frame without scripts nor origin: nothing in the preview can
- * act on OPS, and its links lead nowhere.
+ * act on OPS, and its links lead nowhere. Images load from the API origin
+ * (CSP img-src, Cross-Origin-Resource-Policy on the files).
  */
 export function ContentPreview({
   kind,
@@ -101,6 +129,7 @@ export function ContentPreview({
   const [stale, setStale] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
   const [boxWidth, setBoxWidth] = useState(0);
+  const media = useMediaCache();
 
   useEffect(() => {
     const box = boxRef.current;
@@ -116,6 +145,8 @@ export function ContentPreview({
       setStale(true);
       return;
     }
+    media.request(mediaIdsOf(model.page));
+    const ctx: SiteContext = { ...model.ctx, media: (id) => media.cache.get(id) ?? null };
     let cancelled = false;
     const timer = window.setTimeout(() => {
       void Promise.all([import('react-dom/server'), import('@euroteranga/site/css-text')]).then(
@@ -125,7 +156,7 @@ export function ContentPreview({
             <SitePage
               title={model.page.title}
               blocks={model.page.blocks}
-              ctx={model.ctx}
+              ctx={ctx}
               banner={
                 <p className="public-preview-notice" role="note">
                   Aperçu — version non publiée
@@ -144,7 +175,8 @@ export function ContentPreview({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [kind, document, site]);
+    // `media.version` re-renders once newly referenced images are resolved.
+  }, [kind, document, site, media.version]);
 
   const width = VIEWPORTS.find((item) => item.key === viewport)!.width;
   const scale = boxWidth > 0 && boxWidth < width ? boxWidth / width : 1;

@@ -67,7 +67,7 @@ function PageForm() {
           disabled={seoLocked}
           hint="Le site entier reste non indexé tant que la production n’ouvre pas l’indexation."
         />
-        <MediaField path={['seo', 'socialMediaId']} label="Image de partage" />
+        <MediaField path={['seo', 'socialMediaId']} label="Image de partage" disabled={seoLocked} />
       </section>
       <BlocksField path={['blocks']} />
     </>

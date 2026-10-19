@@ -1,0 +1,265 @@
+/* MEDIA-1: public media library (OPS "Médiathèque") and the content editor picker. */
+
+.ops-media-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--et-space-3);
+}
+
+.ops-media-search {
+  flex: 1 1 16rem;
+  margin: 0;
+}
+
+.ops-media-grid {
+  display: grid;
+  /* Two columns from 320 px phones upwards. */
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: var(--et-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ops-media-grid--compact {
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: var(--et-space-2);
+}
+
+.ops-media-card {
+  display: grid;
+  gap: var(--et-space-1);
+  width: 100%;
+  height: 100%;
+  padding: var(--et-space-2);
+  border: 1px solid var(--et-color-border);
+  border-radius: var(--et-radius);
+  background: var(--et-color-surface-raised);
+  color: var(--et-color-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ops-media-card:hover {
+  border-color: var(--et-color-ink);
+}
+
+.ops-media-card:focus-visible {
+  outline: 3px solid var(--et-color-focus);
+  outline-offset: 2px;
+}
+
+.ops-media-card[aria-pressed='true'] {
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 2px #1d4ed8;
+}
+
+.ops-media-card__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: calc(var(--et-radius) - 2px);
+  background: #eef1f4;
+}
+
+.ops-media-card__archived {
+  display: grid;
+  place-items: center;
+  color: var(--et-color-ink-muted);
+  font-weight: 700;
+}
+
+.ops-media-card__alt {
+  display: -webkit-box;
+  overflow: hidden;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.ops-media-card__meta {
+  color: var(--et-color-ink-muted);
+  font-size: 0.85rem;
+}
+
+.ops-media-detail h2 {
+  overflow-wrap: anywhere;
+}
+
+/* A single shrinkable column: the preview image must never widen the panel. */
+.ops-media-detail,
+.ops-media-describe,
+.ops-media-archive,
+.ops-media-upload,
+.ops-media-focal,
+.ops-media-field,
+.ops-media-picker {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ops-media-describe,
+.ops-media-archive,
+.ops-media-upload {
+  display: grid;
+  gap: var(--et-space-3);
+}
+
+/* Long labels wrap instead of overflowing on phones (secondary buttons do not wrap by default). */
+.ops-media .et-button,
+.ops-media-field .et-button,
+.ops-media-picker .et-button {
+  max-width: 100%;
+  white-space: normal;
+}
+
+/* The detail panel is narrow: its archive confirmation always stacks. */
+.ops-media-archive .ops-confirm-action {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+/* Narrow screens: the opened image or the import form comes before the grid. */
+@media (max-width: 74.99rem) {
+  .ops-media-side--active {
+    order: -1;
+  }
+}
+
+.ops-media-focal {
+  display: grid;
+  gap: var(--et-space-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--et-space-3);
+  border: 1px solid var(--et-color-border);
+  border-radius: var(--et-radius);
+}
+
+.ops-media-focal legend {
+  padding: 0 var(--et-space-1);
+  font-weight: 700;
+}
+
+.ops-media-focal__stage {
+  position: relative;
+  justify-self: start;
+  max-width: 100%;
+}
+
+.ops-media-focal__stage img {
+  display: block;
+  max-width: 100%;
+  max-height: 22rem;
+  border-radius: calc(var(--et-radius) - 2px);
+  cursor: crosshair;
+}
+
+.ops-media-focal:disabled .ops-media-focal__stage img {
+  cursor: default;
+}
+
+.ops-media-focal__marker {
+  position: absolute;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px #0b1f4d,
+    0 2px 6px rgb(0 0 0 / 0.4);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.ops-media-focal__sliders {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: var(--et-space-1) var(--et-space-3);
+}
+
+.ops-media-focal__sliders input {
+  width: 100%;
+  /* WCAG 2.2 target size: 24 px at least. */
+  height: 1.5rem;
+  margin: 0;
+}
+
+.ops-media-crops {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--et-space-2);
+}
+
+.ops-media-crops figure {
+  margin: 0;
+}
+
+.ops-media-crops img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  border-radius: calc(var(--et-radius) - 2px);
+}
+
+.ops-media-crops figcaption {
+  color: var(--et-color-ink-muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.ops-media-field {
+  display: grid;
+  gap: var(--et-space-2);
+}
+
+.ops-media-field__current {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--et-space-3);
+  margin: 0;
+}
+
+.ops-media-field__current img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: calc(var(--et-radius) - 2px);
+}
+
+.ops-media-field__current figcaption {
+  overflow-wrap: anywhere;
+}
+
+.ops-media-picker {
+  display: grid;
+  gap: var(--et-space-2);
+  padding: var(--et-space-3);
+  border: 1px solid var(--et-color-border);
+  border-radius: var(--et-radius);
+  background: var(--et-color-surface);
+}
+
+.ops-media-picker h4 {
+  margin: 0;
+}
+
+@media (max-width: 30rem) {
+  .ops-media-crops {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ops-media-field__current {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
