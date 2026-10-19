@@ -1,18 +1,23 @@
+import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { vehicleCreateSchema } from '../../../src/fleet/fleet.dto.js';
 import { FleetService } from '../../../src/fleet/fleet.service.js';
+import { vehicleIdentifierCollision } from '../../../src/fleet/vehicle-identifiers.js';
 import { NetworkService } from '../../../src/network/network.service.js';
 import {
   PilotBootstrap,
   type PilotBootstrapOptions,
   type PilotBootstrapReport,
 } from '../../../src/pilot/pilot-bootstrap.js';
+import { PILOT_VEHICLES, type PilotVehicle } from '../../../src/pilot/pilot-dataset.js';
 import { PricingService } from '../../../src/pricing/pricing.service.js';
 import { SeatMapService } from '../../../src/seat-maps/seat-map.service.js';
 import { TripService } from '../../../src/trips/trip.service.js';
 import {
   adminApi,
   isolatedDatabase,
+  operatorVehicle,
   staffActor,
   type StaffActor,
 } from '../../support/admin-helpers.js';
@@ -583,4 +588,163 @@ describe('pilot data bootstrap never overwrites operator data (isolated database
       await other.drop();
     }
   }, 60_000);
+});
+
+const france = async (admin: StaffActor) => {
+  const response = await adminApi(admin).post('/network/countries', {
+    iso2: 'FR',
+    iso3: 'FRA',
+    name: 'France',
+    active: true,
+  });
+  expect(response.status).toBe(201);
+  return response.body.id as string;
+};
+
+const vehicleLines = (report: PilotBootstrapReport) =>
+  report.lines
+    .filter((line) => line.entity === 'vehicle')
+    .map(({ key, outcome, detail }) => ({ key, outcome, detail }));
+
+describe('pilot data bootstrap: the dry run predicts vehicle identifier conflicts (isolated database)', () => {
+  let h: Harness;
+  let admin: StaffActor;
+
+  beforeAll(async () => {
+    h = await harness();
+    admin = await staffActor(h.t.app, ['SUPER_ADMIN']);
+  }, 60_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  // Another vehicle holds the name of the first pilot coach, another the
+  // plate of the second (as the historical fleet did with the names).
+  const [first, second] = PILOT_VEHICLES as [PilotVehicle, PilotVehicle];
+
+  it('reports a name or plate held by another vehicle as the same conflict in a dry run and a write', async () => {
+    const fr = await france(admin);
+    const byName = await operatorVehicle(admin, {
+      code: 'OPS-NAME',
+      name: first.name,
+      manufacturer: 'Constructeur exploitant',
+      model: 'Modèle exploitant',
+    });
+    const byPlate = await operatorVehicle(admin, {
+      code: 'OPS-PLATE',
+      manufacturer: 'Constructeur exploitant',
+      model: 'Modèle exploitant',
+      registrationPlate: second.registrationPlate,
+      registrationCountryId: fr,
+    });
+    const operators = () =>
+      db(h.t.app).vehicle.findMany({
+        where: { id: { in: [byName, byPlate] } },
+        orderBy: { code: 'asc' },
+      });
+    const before = await operators();
+    const expected = [
+      {
+        key: 'ET-COACH-001',
+        outcome: 'conflict',
+        detail: `vehicle name "${first.name}" already belongs to OPS-NAME`,
+      },
+      {
+        key: 'ET-COACH-002',
+        outcome: 'conflict',
+        detail: `registration FR/${second.registrationPlate} already belongs to OPS-PLATE`,
+      },
+    ];
+    const refusedTrips = (report: PilotBootstrapReport) =>
+      report.lines.filter((line) => line.entity === 'trip');
+
+    const snap = await snapshot(h);
+    const dry = await h.run({ dryRun: true });
+    expect(vehicleLines(dry)).toEqual(expected);
+    // Their departures are not planned either: the write would skip them.
+    expect(refusedTrips(dry)).toHaveLength(8);
+    for (const line of refusedTrips(dry)) {
+      expect(line).toMatchObject({
+        outcome: 'skipped',
+        detail: expect.stringMatching(/^depends on vehicle:ET-COACH-00[12]$/),
+      });
+    }
+    expect(await snapshot(h)).toEqual(snap);
+
+    const applied = await h.run();
+    expect(vehicleLines(applied)).toEqual(expected);
+    expect(
+      refusedTrips(applied).map(({ key, outcome, detail }) => ({ key, outcome, detail })),
+    ).toEqual(refusedTrips(dry).map(({ key, outcome, detail }) => ({ key, outcome, detail })));
+    const client = db(h.t.app);
+    expect(await client.vehicle.count({ where: { code: { startsWith: 'ET-COACH-' } } })).toBe(0);
+    expect(await client.trip.count()).toBe(0);
+    expect(await operators()).toEqual(before);
+  });
+
+  it('checks the four unique keys of a vehicle, normalized as the fleet stores them', async () => {
+    const client = db(h.t.app);
+    const fr = (await client.country.findUniqueOrThrow({ where: { iso2: 'FR' } })).id;
+    const vin = 'VF1ABCDEF12345678';
+    await operatorVehicle(admin, {
+      code: 'OPS-VIN',
+      manufacturer: 'Constructeur exploitant',
+      model: 'Modèle exploitant',
+      vin,
+    });
+    const candidate = (fields: Record<string, unknown>) =>
+      vehicleCreateSchema.parse({
+        code: 'CANDIDATE-1',
+        manufacturer: 'Autocar grand tourisme',
+        model: 'Modèle à confirmer',
+        ...fields,
+      });
+    const collision = (fields: Record<string, unknown>, exceptVehicleId?: string) =>
+      vehicleIdentifierCollision(
+        client,
+        candidate(fields),
+        exceptVehicleId ? { exceptVehicleId } : {},
+      );
+
+    expect(await collision({})).toBeNull();
+    expect(await collision({ code: 'ops-name' })).toBe(
+      'vehicle code OPS-NAME already belongs to another vehicle',
+    );
+    expect(await collision({ name: `  ${first.name.replaceAll(' ', '   ')} ` })).toBe(
+      `vehicle name "${first.name}" already belongs to OPS-NAME`,
+    );
+    const byVin = await collision({ vin: vin.toLowerCase() });
+    expect(byVin).toBe('VIN already belongs to OPS-VIN');
+    expect(byVin).not.toContain(vin);
+    expect(
+      await collision({
+        registrationPlate: ` ${second.registrationPlate.toLowerCase()} `,
+        registrationCountryId: fr,
+      }),
+    ).toBe(`registration FR/${second.registrationPlate} already belongs to OPS-PLATE`);
+    // A plate is unique per country: the same plate elsewhere, or without a
+    // known country, is not a collision.
+    expect(
+      await collision({
+        registrationPlate: second.registrationPlate,
+        registrationCountryId: randomUUID(),
+      }),
+    ).toBeNull();
+    expect(
+      await collision({ registrationPlate: second.registrationPlate, registrationCountryId: null }),
+    ).toBeNull();
+    // The vehicle itself is not a collision (a rename keeps its own code).
+    const opsName = await client.vehicle.findUniqueOrThrow({ where: { code: 'OPS-NAME' } });
+    expect(await collision({ code: 'OPS-NAME', name: first.name }, opsName.id)).toBeNull();
+    // Several collisions: the first unique key, in a fixed order.
+    expect(
+      await collision({
+        name: first.name,
+        vin,
+        registrationPlate: second.registrationPlate,
+        registrationCountryId: fr,
+      }),
+    ).toBe(`vehicle name "${first.name}" already belongs to OPS-NAME`);
+  });
 });

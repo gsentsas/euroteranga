@@ -11,6 +11,7 @@ import {
   vehicleSeatMapSchema,
   vehicleUpdateSchema,
 } from '../../fleet/fleet.dto.js';
+import { vehicleIdentifierCollision } from '../../fleet/vehicle-identifiers.js';
 import {
   PilotBootstrap,
   type PilotBootstrapServices,
@@ -269,22 +270,25 @@ export class RealisticSeed {
         return current.id;
       }
     }
+    const input = vehicleCreateSchema.parse({
+      code: vehicle.code,
+      name: vehicle.name,
+      manufacturer: vehicle.manufacturer,
+      model: vehicle.model,
+      modelYear: null,
+    });
+    // The same unique-key check for a dry run and a write (see the pilot).
+    if (!current) {
+      const collision = await vehicleIdentifierCollision(db, input);
+      if (collision) throw new RealisticConflict(collision);
+    }
     if (dry || !seatMapVersionId) {
       this.report('catalogue', 'planned', 'vehicle', vehicle.code);
       return null;
     }
     const createdNow = !current;
     if (!current) {
-      await fleet.createVehicle(
-        vehicleCreateSchema.parse({
-          code: vehicle.code,
-          name: vehicle.name,
-          manufacturer: vehicle.manufacturer,
-          model: vehicle.model,
-          modelYear: null,
-        }),
-        REALISTIC_ACTOR,
-      );
+      await fleet.createVehicle(input, REALISTIC_ACTOR);
       current = await db.vehicle.findUniqueOrThrow({ where: { code: vehicle.code } });
     }
     if (current.seatMapVersionId !== seatMapVersionId) {

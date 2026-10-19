@@ -7,6 +7,7 @@ import {
   vehicleStatusSchema,
 } from '../fleet/fleet.dto.js';
 import type { FleetService } from '../fleet/fleet.service.js';
+import { vehicleIdentifierCollision } from '../fleet/vehicle-identifiers.js';
 import {
   checkpointCreateSchema,
   countryCreateSchema,
@@ -536,23 +537,30 @@ export class PilotBootstrap {
         throw new PilotConflict('vehicle uses another seat map');
       }
     }
+    const countryId = countries.get(vehicle.registrationCountryIso2);
+    const { registrationCountryIso2: _country, ...fields } = vehicle;
+    const input = vehicleCreateSchema.parse({
+      ...fields,
+      registrationCountryId: countryId ?? null,
+    });
+    // The same unique-key check for a dry run and a write: a dry run never
+    // plans a coach whose name or plate another vehicle already holds.
+    if (!current) {
+      const collision = await vehicleIdentifierCollision(db, input);
+      if (collision) throw new PilotConflict(collision);
+    }
     const complete = current?.status === 'ACTIVE' && current.seatMapVersionId === seatMapVersionId;
     if (current && complete) {
       this.report('existing', 'vehicle', vehicle.code);
       return current.id;
     }
-    const countryId = countries.get(vehicle.registrationCountryIso2);
     if (dry || !seatMapVersionId || !countryId) {
       this.report('planned', 'vehicle', vehicle.code);
       return null;
     }
     const createdNow = !current;
     if (!current) {
-      const { registrationCountryIso2: _country, ...fields } = vehicle;
-      await fleet.createVehicle(
-        vehicleCreateSchema.parse({ ...fields, registrationCountryId: countryId }),
-        PILOT_ACTOR,
-      );
+      await fleet.createVehicle(input, PILOT_ACTOR);
       current = await db.vehicle.findUniqueOrThrow({
         where: { code: vehicle.code },
         include: { registrationCountry: { select: { iso2: true } } },
@@ -770,7 +778,13 @@ export class PilotBootstrap {
     for (const slot of slots) {
       if (remaining === 0) break;
       const vehicleId = context.vehicles.get(slot.vehicleCode);
-      const dependency = directionDependency ?? (!vehicleId ? `vehicle:${slot.vehicleCode}` : null);
+      const vehicleDependency = !vehicleId ? `vehicle:${slot.vehicleCode}` : null;
+      // A dependency in conflict skips the trip in a dry run too, as in a
+      // write: a dry run plans only what the write would create.
+      const refused = [directionDependency, vehicleDependency].find(
+        (candidate) => candidate !== null && this.blocked.has(candidate),
+      );
+      const dependency = refused ?? directionDependency ?? vehicleDependency;
       if (this.departureOf(route, slot) <= now) {
         this.report('skipped', 'trip', slot.reference, 'departure is not in the future');
         continue;
@@ -790,7 +804,7 @@ export class PilotBootstrap {
       }
       if (dependency || dry) {
         this.report(
-          dry ? 'planned' : 'skipped',
+          dry && !refused ? 'planned' : 'skipped',
           'trip',
           slot.reference,
           dependency ? `depends on ${dependency}` : undefined,

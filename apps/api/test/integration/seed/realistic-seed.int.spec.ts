@@ -25,6 +25,7 @@ import { TripService } from '../../../src/trips/trip.service.js';
 import {
   adminApi,
   isolatedDatabase,
+  operatorVehicle,
   staffActor,
   type StaffActor,
 } from '../../support/admin-helpers.js';
@@ -890,4 +891,46 @@ describe('realistic seed: interrupted departures resume (isolated database)', ()
         .every((line) => ['existing', 'skipped'].includes(line.outcome)),
     ).toBe(true);
   }, 300_000);
+});
+
+describe('realistic seed: the dry run predicts a demo coach name conflict (isolated database)', () => {
+  let h: Harness;
+  let admin: StaffActor;
+
+  beforeAll(async () => {
+    h = await harness();
+    admin = await staffActor(h.t.app, ['SUPER_ADMIN']);
+  }, 120_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  it('refuses Teranga 03 in both modes when another vehicle holds its name', async () => {
+    const holder = await operatorVehicle(admin, {
+      code: 'OPS-003',
+      name: 'Teranga 03',
+      manufacturer: 'Constructeur exploitant',
+      model: 'Modèle exploitant',
+    });
+    const before = await db(h.t.app).vehicle.findUniqueOrThrow({ where: { id: holder } });
+    const demo = (report: RealisticSeedReport) =>
+      report.lines
+        .filter((line) => line.key === 'ET-COACH-003')
+        .map(({ entity, outcome, detail }) => ({ entity, outcome, detail }));
+    const expected = [
+      {
+        entity: 'vehicle',
+        outcome: 'conflict',
+        detail: 'vehicle name "Teranga 03" already belongs to OPS-003',
+      },
+      { entity: 'amenities', outcome: 'skipped', detail: 'depends on vehicle:ET-COACH-003' },
+    ];
+    expect(demo(await h.run({ dryRun: true, commerceUnavailable: 'APP_ENV=staging' }))).toEqual(
+      expected,
+    );
+    expect(demo(await h.run({ commerceUnavailable: 'APP_ENV=staging' }))).toEqual(expected);
+    expect(await db(h.t.app).vehicle.count({ where: { code: 'ET-COACH-003' } })).toBe(0);
+    expect(await db(h.t.app).vehicle.findUniqueOrThrow({ where: { id: holder } })).toEqual(before);
+  });
 });
