@@ -56,13 +56,16 @@ export class RealisticCleanup {
     const dry = options.dryRun;
     await this.pages(dry);
     await this.navigation(dry);
+    // The coaches this run retires (or would retire): only they stop using the seat map.
+    const retiring: string[] = [];
     for (const vehicle of REALISTIC_VEHICLES) {
-      await this.reporter.guarded('catalogue', 'vehicle', vehicle.code, [], () =>
+      const id = await this.reporter.guarded('catalogue', 'vehicle', vehicle.code, [], () =>
         this.retireVehicle(vehicle.code, dry),
       );
+      if (id) retiring.push(vehicle.code);
     }
     await this.reporter.guarded('catalogue', 'seat-map', REALISTIC_SEAT_MAP.code, [], () =>
-      this.deactivateSeatMap(dry),
+      this.deactivateSeatMap(dry, retiring),
     );
     for (const [code, amenities] of Object.entries(REALISTIC_AMENITIES)) {
       await this.reporter.guarded('catalogue', 'amenities', code, [], () =>
@@ -212,7 +215,7 @@ export class RealisticCleanup {
     return vehicle.id;
   }
 
-  private async deactivateSeatMap(dry: boolean) {
+  private async deactivateSeatMap(dry: boolean, retiring: readonly string[]) {
     const { db, seatMaps } = this.services;
     const seatMap = await db.seatMap.findUnique({
       where: { code: REALISTIC_SEAT_MAP.code },
@@ -233,8 +236,8 @@ export class RealisticCleanup {
       where: {
         status: { not: 'RETIRED' },
         seatMapVersion: { seatMapId: seatMap.id },
-        // The demo coach is retired in the same run.
-        code: { notIn: dry ? REALISTIC_VEHICLES.map((vehicle) => vehicle.code) : [] },
+        // Coaches retired by this run (still ACTIVE or PLANNED in a preview).
+        code: { notIn: [...retiring] },
       },
     });
     if (users > 0) {

@@ -571,3 +571,38 @@ describe('realistic seed: cleanup retires seed data only (isolated database)', (
     expect(again.lines.some((line) => line.outcome === 'retired')).toBe(false);
   });
 });
+
+describe('realistic seed: the cleanup preview matches the cleanup (isolated database)', () => {
+  let h: Harness;
+  let admin: StaffActor;
+
+  beforeAll(async () => {
+    h = await harness();
+    admin = await staffActor(h.t.app, ['SUPER_ADMIN']);
+    await h.run();
+  }, 180_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  it('keeps the seat map when a person took over the demo coach, in both modes', async () => {
+    const coach = await db(h.t.app).vehicle.findUniqueOrThrow({ where: { code: 'ET-COACH-003' } });
+    const edited = await adminApi(admin).post(`/fleet/vehicles/${coach.id}`, {
+      name: 'Teranga 03 (exploitant)',
+    });
+    expect(edited.status).toBe(200);
+    const outcomes = (report: RealisticSeedReport) =>
+      Object.fromEntries(
+        report.lines
+          .filter((line) => ['vehicle', 'seat-map'].includes(line.entity))
+          .map((line) => [line.key, line.outcome]),
+      );
+    const preview = outcomes(await h.cleanup({ dryRun: true }));
+    expect(preview).toEqual({ 'ET-COACH-003': 'kept', 'ET-SM-COACH-49': 'kept' });
+    expect(outcomes(await h.cleanup({ dryRun: false }))).toEqual(preview);
+    expect(
+      (await db(h.t.app).seatMap.findUniqueOrThrow({ where: { code: 'ET-SM-COACH-49' } })).active,
+    ).toBe(true);
+  });
+});
