@@ -1,5 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { appByName, appUrl } from '../apps.js';
+import { pagesSeed } from '../content-seed.js';
 import { preauthenticatedSession } from '../fixtures.js';
 import { BROWSER_API_URL, directAdminApi } from '../staff.js';
 
@@ -216,6 +217,89 @@ test.describe('ops website content editor', () => {
     expect(live.status()).toBe(404);
 
     expect(errors).toEqual([]);
+  });
+
+  test('a page created from a template keeps its sections and previews real data only', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    const run = process.env.E2E_RUN_ID ?? '';
+    const path = `/e2e-modele-${run}`;
+    const seed = pagesSeed();
+
+    await signedIn(page.context(), 'contentEditor');
+    await page.goto(appUrl(ops, '/contenus'));
+    const create = page.getByRole('form', { name: 'Créer une page' });
+    await create.getByLabel('Modèle').selectOption({ label: 'Voyage Paris → Dakar' });
+    // The template pre-fills the page; the editor keeps the last word.
+    await expect(create.getByLabel('Chemin public')).toHaveValue('/paris-dakar');
+    await expect(create.getByLabel('Titre')).toHaveValue('Paris → Dakar');
+    await create.getByLabel('Chemin public').fill(path);
+    await create.getByRole('button', { name: 'Créer la page' }).click();
+    await expect(page).toHaveURL(/\/contenus\/edition\?entree=/);
+
+    const form = page.getByRole('form', { name: `Modifier : ${path}` });
+    await expect(form.locator('.ops-content-block')).toHaveCount(8);
+    const editor = page.getByTestId('content-editor');
+    // The template never decides indexing: the page stays a non-indexed draft.
+    await expect(editor.getByText('Jamais publiée')).toBeVisible();
+
+    // Dates, itinerary and coaches are read live; PAR and DKR are not stops of
+    // this test network, so the preview says that no departure is scheduled.
+    const preview = page.frameLocator('[data-testid="content-preview-frame"]');
+    await expect(preview.getByRole('heading', { level: 1 })).toHaveText('Paris → Dakar');
+    await expect(
+      preview.getByText('Aucun départ n’est programmé pour le moment sur ce trajet', {
+        exact: false,
+      }),
+    ).toBeVisible();
+    await expect(
+      preview.getByRole('heading', { level: 3, name: seed.coaches[0]!.name }),
+    ).toBeVisible();
+
+    // A new coach presentation starts without a coach, and says so.
+    await form.locator('summary', { hasText: 'Section 5 : Nos autocars' }).click();
+    await form.getByRole('button', { name: 'Présenter un autocar' }).click();
+    const coach = form.getByRole('combobox', { name: 'Autocar', exact: true });
+    await expect(coach).toHaveValue('');
+    await expect(coach.locator('option:checked')).toHaveText('Choisir un autocar');
+    await coach.selectOption(seed.coaches[1]!.code);
+    await expect(coach).toHaveValue(seed.coaches[1]!.code);
+    await expect(coach.locator('option', { hasText: 'Choisir un autocar' })).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test('a page whose template cannot be applied is still reachable', async ({ page }) => {
+    const run = process.env.E2E_RUN_ID ?? '';
+    const path = `/e2e-modele-echec-${run}`;
+    await signedIn(page.context(), 'contentEditor');
+    // The draft save of the template fails once (e.g. the network drops).
+    await page.route(`${BROWSER_API_URL}/v1/admin/content/entries/*/draft`, (route) =>
+      route.request().method() === 'POST'
+        ? route.fulfill({
+            status: 503,
+            contentType: 'application/json',
+            body: JSON.stringify({ code: 'UNAVAILABLE', message: 'Service indisponible.' }),
+          })
+        : route.fallback(),
+    );
+    await page.goto(appUrl(ops, '/contenus'));
+    const create = page.getByRole('form', { name: 'Créer une page' });
+    await create.getByLabel('Modèle').selectOption({ label: 'Nos bus' });
+    await create.getByLabel('Chemin public').fill(path);
+    await create.getByRole('button', { name: 'Créer la page' }).click();
+    await expect(create.getByRole('alert')).toContainText(
+      `La page ${path} a été créée, mais le modèle n’a pas pu être appliqué : Service indisponible.`,
+    );
+    await expect(page).toHaveURL(appUrl(ops, '/contenus'));
+    // The page exists: it is opened instead of being created a second time.
+    await create.getByRole('button', { name: 'Ouvrir la page créée' }).click();
+    await expect(page).toHaveURL(/\/contenus\/edition\?entree=/);
+    await expect(
+      page.getByTestId('content-editor').getByRole('heading', { level: 2, name: path }),
+    ).toBeVisible();
   });
 
   test('without content.read the menu is absent and the API refuses the content', async ({

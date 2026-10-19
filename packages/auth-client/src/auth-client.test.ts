@@ -9,6 +9,9 @@ import {
   type PaymentPage,
   type AdminFareTable,
   type BookingAvailability,
+  type BookingItinerary,
+  type PublicVehicle,
+  type VehicleAmenity,
   type CustomerBooking,
   type AssignedFareTableVersion,
   type AdminSeatMap,
@@ -1168,6 +1171,27 @@ describe('admin client', () => {
     expect(calls[7]?.url).toBe('http://api.test/v1/auth/staff/csrf');
     expect(calls[8]?.url).toBe('http://api.test/v1/admin/bookings/booking-id/cancel');
     expect(JSON.parse(String(calls[8]?.init.body))).toEqual({ reason: 'Raison' });
+  });
+
+  it('reads the public itinerary and fleet without a session or CSRF token', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { waypoints: [] } },
+      { status: 200, body: { items: [] } },
+    ]);
+    const client = createAuthClient('http://api.test');
+    await client.booking.public.itinerary('trip/../id');
+    expect(calls[0]?.url).toBe('http://api.test/v1/booking/trips/trip%2F..%2Fid/itinerary');
+    await client.booking.public.fleet();
+    expect(calls[1]?.url).toBe('http://api.test/v1/booking/fleet');
+    for (const call of calls) expect(call.init.headers).toEqual({});
+    expectTypeOf(client.booking.public.itinerary).returns.resolves.toEqualTypeOf<
+      ApiResult<BookingItinerary>
+    >();
+    // Public reads never type a VIN, a plate or a status.
+    expectTypeOf<PublicVehicle>().not.toHaveProperty('vin');
+    expectTypeOf<PublicVehicle>().not.toHaveProperty('registrationPlate');
+    expectTypeOf<NonNullable<BookingItinerary['vehicle']>>().not.toHaveProperty('status');
+    expectTypeOf<AdminVehicle['amenities']>().toEqualTypeOf<VehicleAmenity[]>();
   });
 
   it('types booking results explicitly, with exact integer amounts', () => {

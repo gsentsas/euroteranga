@@ -1,6 +1,6 @@
 'use client';
 
-import type { NetworkCountry, VehicleCreateInput } from '@euroteranga/auth-client';
+import type { NetworkCountry, VehicleAmenity, VehicleCreateInput } from '@euroteranga/auth-client';
 import { TextField } from '@euroteranga/ui';
 import { useId } from 'react';
 
@@ -13,7 +13,21 @@ export interface VehicleFormValues {
   vin: string;
   registrationPlate: string;
   registrationCountryId: string;
+  amenities: VehicleAmenity[];
 }
+
+/** Canonical order, as stored by the API; shown on the public website. */
+export const AMENITY_LABELS: Record<VehicleAmenity, string> = {
+  AIR_CONDITIONING: 'Climatisation',
+  RECLINING_SEATS: 'Sièges inclinables',
+  USB_CHARGING: 'Prises USB',
+  WIFI: 'Wi-Fi',
+  TOILET: 'Toilettes',
+  ENTERTAINMENT: 'Divertissement à bord',
+  WHEELCHAIR_ACCESS: 'Accès fauteuil roulant',
+};
+
+const AMENITIES = Object.keys(AMENITY_LABELS) as VehicleAmenity[];
 
 export const EMPTY_VEHICLE: VehicleFormValues = {
   code: '',
@@ -24,6 +38,7 @@ export const EMPTY_VEHICLE: VehicleFormValues = {
   vin: '',
   registrationPlate: '',
   registrationCountryId: '',
+  amenities: [],
 };
 
 /** Empty optional fields are sent as null so that they can be cleared. */
@@ -37,6 +52,7 @@ export function toVehicleInput(values: VehicleFormValues): VehicleCreateInput {
     vin: values.vin.trim() || null,
     registrationPlate: values.registrationPlate.trim() || null,
     registrationCountryId: values.registrationCountryId || null,
+    amenities: values.amenities,
   };
 }
 
@@ -58,6 +74,7 @@ export function VehicleFields({
 }) {
   const yearId = useId();
   const countryId = useId();
+  const amenitiesId = useId();
   const set = (key: keyof VehicleFormValues) => (value: string) =>
     onChange({ ...values, [key]: value });
   return (
@@ -150,6 +167,34 @@ export function VehicleFields({
           <p className="et-hint">Liste des pays indisponible (permission réseau requise).</p>
         ) : null}
       </div>
+      <fieldset className="et-field et-vehicle-amenities" aria-describedby={`${amenitiesId}-hint`}>
+        <legend>{`Équipements à bord ${context}`}</legend>
+        <p id={`${amenitiesId}-hint`} className="et-hint">
+          Affichés sur le site public pour les véhicules en service. Ne cochez que les équipements
+          réellement présents et en état de marche.
+        </p>
+        {AMENITIES.map((amenity) => (
+          <label key={amenity}>
+            <input
+              type="checkbox"
+              name="amenities"
+              value={amenity}
+              checked={values.amenities.includes(amenity)}
+              onChange={(event) =>
+                onChange({
+                  ...values,
+                  amenities: AMENITIES.filter((candidate) =>
+                    candidate === amenity
+                      ? event.target.checked
+                      : values.amenities.includes(candidate),
+                  ),
+                })
+              }
+            />{' '}
+            {AMENITY_LABELS[amenity]}
+          </label>
+        ))}
+      </fieldset>
     </>
   );
 }

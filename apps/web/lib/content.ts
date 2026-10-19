@@ -9,17 +9,22 @@ import {
 } from '@euroteranga/content';
 import {
   directionKey,
+  journeyItinerary,
+  knownAmenities,
   localDate,
   resolveMedia,
   siteMediaOf,
   type AppLinks,
   type FromPrice,
+  type ItineraryResult,
   type PublicMediaRecord,
+  type PublicItinerary,
   type RouteDirection,
   type SiteContext,
   type SiteDeparture,
   type SiteMedia,
   type SiteStop,
+  type SiteVehicle,
 } from '@euroteranga/site';
 import { publicEnv } from './env';
 
@@ -32,6 +37,7 @@ const CONTENT_REVALIDATE_SECONDS = 60;
 const PRICE_REVALIDATE_SECONDS = 300;
 /** Remaining seats change with every booking: departures are refreshed every minute. */
 const DEPARTURES_REVALIDATE_SECONDS = 60;
+const FLEET_REVALIDATE_SECONDS = 300;
 /** Departures read per direction (the block shows at most 6 in total). */
 const DEPARTURES_PER_DIRECTION = 12;
 const TIMEOUT_MS = 3000;
@@ -111,8 +117,16 @@ interface PublicStop {
 
 interface PublicJourney {
   tripId: string;
-  origin: { stop: PublicStop | null; plannedDepartureAt: string | null };
-  destination: { stop: PublicStop | null };
+  origin: {
+    routeWaypointId: string;
+    stop: PublicStop | null;
+    plannedDepartureAt: string | null;
+  };
+  destination: {
+    routeWaypointId: string;
+    stop: PublicStop | null;
+    plannedArrivalAt: string | null;
+  };
   availableSeatCount: number;
   fare: FromPrice;
 }
@@ -156,18 +170,18 @@ async function loadStops(codes: readonly string[]): Promise<PublicStop[] | null>
  * search (Trips, Booking, Pricing). A direction whose search fails is null:
  * the page says so instead of inventing dates.
  */
-async function loadDepartures(
+async function loadJourneys(
   routes: ReadonlyArray<{ fromCode: string; toCode: string }>,
   stops: PublicStop[] | null,
-): Promise<Map<string, SiteDeparture[] | null>> {
-  const found = new Map<string, SiteDeparture[] | null>();
+): Promise<Map<string, PublicJourney[] | null>> {
+  const found = new Map<string, PublicJourney[] | null>();
   await Promise.all(
     routes.map(async ({ fromCode, toCode }) => {
       const key = directionKey(fromCode, toCode);
       const origin = stops?.find((stop) => stop.code === fromCode);
       const destination = stops?.find((stop) => stop.code === toCode);
       if (!origin || !destination) {
-        // Unknown stops are not an outage: the direction simply has no departure.
+        // Unknown stops are not an outage: the direction simply has no journey.
         found.set(key, stops ? [] : null);
         return;
       }
@@ -180,27 +194,94 @@ async function loadDepartures(
         found.set(key, null);
         return;
       }
-      found.set(
-        key,
-        // The contract allows a journey without a planned time: it is not a departure to show.
-        result.data.items.flatMap((item) =>
-          item.origin.plannedDepartureAt
-            ? [
-                {
-                  tripId: item.tripId,
-                  from: siteStopOf(item.origin.stop ?? origin),
-                  to: siteStopOf(item.destination.stop ?? destination),
-                  departureAt: item.origin.plannedDepartureAt,
-                  availableSeats: item.availableSeatCount,
-                  fare: item.fare,
-                },
-              ]
-            : [],
-        ),
-      );
+      found.set(key, result.data.items);
     }),
   );
   return found;
+}
+
+/** Departures are a presentation of the shared public journey searches. */
+function departuresOf(
+  routes: ReadonlyArray<{ fromCode: string; toCode: string }>,
+  journeys: Map<string, PublicJourney[] | null>,
+  stops: PublicStop[] | null,
+): Map<string, SiteDeparture[] | null> {
+  const found = new Map<string, SiteDeparture[] | null>();
+  for (const { fromCode, toCode } of routes) {
+    const key = directionKey(fromCode, toCode);
+    const items = journeys.get(key) ?? null;
+    const origin = stops?.find((stop) => stop.code === fromCode);
+    const destination = stops?.find((stop) => stop.code === toCode);
+    found.set(
+      key,
+      items?.flatMap((item) =>
+        item.origin.plannedDepartureAt && origin && destination
+          ? [
+              {
+                tripId: item.tripId,
+                from: siteStopOf(item.origin.stop ?? origin),
+                to: siteStopOf(item.destination.stop ?? destination),
+                departureAt: item.origin.plannedDepartureAt,
+                availableSeats: item.availableSeatCount,
+                fare: item.fare,
+              },
+            ]
+          : [],
+      ) ?? null,
+    );
+  }
+  return found;
+}
+
+/** Planned itinerary of the first bookable departure of every requested direction. */
+async function loadItineraries(
+  routes: ReadonlyArray<{ fromCode: string; toCode: string }>,
+  journeys: Map<string, PublicJourney[] | null>,
+): Promise<Map<string, ItineraryResult>> {
+  const found = new Map<string, ItineraryResult>();
+  await Promise.all(
+    routes.map(async ({ fromCode, toCode }) => {
+      const key = directionKey(fromCode, toCode);
+      const searched = journeys.get(key) ?? null;
+      if (searched === null) {
+        found.set(key, { status: 'unavailable' });
+        return;
+      }
+      const journey = searched.find((item) => item.origin.plannedDepartureAt !== null);
+      if (!journey) {
+        found.set(key, { status: 'none' });
+        return;
+      }
+      const result = await read<PublicItinerary>(
+        `/v1/booking/trips/${encodeURIComponent(journey.tripId)}/itinerary`,
+        DEPARTURES_REVALIDATE_SECONDS,
+      );
+      if (result.status !== 'ok') {
+        found.set(key, { status: 'unavailable' });
+        return;
+      }
+      const itinerary = journeyItinerary(
+        result.data,
+        journey.origin.routeWaypointId,
+        journey.destination.routeWaypointId,
+      );
+      found.set(key, itinerary ? { status: 'ok', itinerary } : { status: 'unavailable' });
+    }),
+  );
+  return found;
+}
+
+/** Active public fleet facts; operational identifiers never leave the API. */
+async function loadFleet(): Promise<SiteVehicle[] | null> {
+  const result = await read<{ items: SiteVehicle[] }>(
+    '/v1/booking/fleet',
+    FLEET_REVALIDATE_SECONDS,
+  );
+  if (result.status !== 'ok') return null;
+  return result.data.items.map((vehicle) => ({
+    ...vehicle,
+    amenities: knownAmenities(vehicle.amenities),
+  }));
 }
 
 /** Lowest current fare of one direction, or null (no bookable trip, mixed currencies). */
@@ -257,26 +338,45 @@ export async function loadSiteContext(options: {
   search?: { fromCode: string; toCode: string };
   /** Directions of the page's departures blocks. */
   departureRoutes?: ReadonlyArray<{ fromCode: string; toCode: string }>;
+  /** Directions of the page's itinerary blocks. */
+  itineraryRoutes?: ReadonlyArray<{ fromCode: string; toCode: string }>;
+  /** Whether the page contains a public fleet block. */
+  fleet?: boolean;
 }): Promise<SiteContext> {
-  const routes = options.departureRoutes ?? [];
+  const departureRoutes = options.departureRoutes ?? [];
+  const itineraryRoutes = options.itineraryRoutes ?? [];
+  const routes = [
+    ...new Map(
+      [...departureRoutes, ...itineraryRoutes].map((route) => [
+        directionKey(route.fromCode, route.toCode),
+        route,
+      ]),
+    ).values(),
+  ];
   const needsStops = options.prices || options.search !== undefined || routes.length > 0;
   const named = [
     ...(options.prices ? ['PAR', 'DKR'] : []),
     ...(options.search ? [options.search.fromCode, options.search.toCode] : []),
     ...routes.flatMap((route) => [route.fromCode, route.toCode]),
   ];
-  const [site, media, stops] = await Promise.all([
+  const [site, media, stops, fleet] = await Promise.all([
     read<{ settings: unknown; navigation: unknown }>(
       '/v1/content/site',
       CONTENT_REVALIDATE_SECONDS,
     ),
     loadMedia(options.mediaIds ?? []),
     needsStops ? loadStops(named) : Promise.resolve(null),
+    options.fleet ? loadFleet() : Promise.resolve(undefined),
   ]);
-  const [prices, departures] = await Promise.all([
+  const [prices, journeys] = await Promise.all([
     options.prices ? fromPrices(stops) : Promise.resolve({}),
-    routes.length > 0 ? loadDepartures(routes, stops) : Promise.resolve(null),
+    routes.length > 0 ? loadJourneys(routes, stops) : Promise.resolve(null),
   ]);
+  const departures = journeys ? departuresOf(departureRoutes, journeys, stops) : null;
+  const itineraries =
+    journeys && itineraryRoutes.length > 0
+      ? await loadItineraries(itineraryRoutes, journeys)
+      : null;
   const settings =
     (site.status === 'ok' && siteSettingsSchema.safeParse(site.data.settings).data) ||
     DEFAULT_SITE_SETTINGS;
@@ -296,7 +396,20 @@ export async function loadSiteContext(options: {
             departures.get(directionKey(fromCode, toCode)) ?? null,
         }
       : {}),
-    today: localDate(new Date().toISOString(), 'Europe/Paris'),
+    ...(itineraries
+      ? {
+          itineraries: (fromCode: string, toCode: string) =>
+            itineraries.get(directionKey(fromCode, toCode)) ?? { status: 'unavailable' },
+        }
+      : {}),
+    ...(options.fleet ? { fleet: fleet ?? null } : {}),
+    today: localDate(
+      new Date().toISOString(),
+      options.search
+        ? (stops?.find((stop) => stop.code === options.search?.fromCode)?.timezone ??
+            'Europe/Paris')
+        : 'Europe/Paris',
+    ),
     year: new Date().getUTCFullYear(),
   };
 }

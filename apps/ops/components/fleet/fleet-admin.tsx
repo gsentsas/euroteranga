@@ -20,6 +20,7 @@ import {
 } from '../seat-maps/use-published-versions';
 import { useCan } from '../staff-access';
 import {
+  AMENITY_LABELS,
   EMPTY_VEHICLE,
   toVehicleInput,
   VehicleFields,
@@ -122,6 +123,7 @@ function EditVehicleForm({
       vin: vehicle.vin ?? '',
       registrationPlate: vehicle.registrationPlate ?? '',
       registrationCountryId: vehicle.registrationCountryId ?? '',
+      amenities: vehicle.amenities,
     });
   }, [vehicle]);
   const submit = async (event: FormEvent) => {
@@ -290,6 +292,12 @@ function VehicleDetail({
         <dd>{vehicle.vin ?? '—'}</dd>
         <dt>Immatriculation</dt>
         <dd>{registrationOf(vehicle)}</dd>
+        <dt>Équipements à bord</dt>
+        <dd data-testid="vehicle-amenities">
+          {vehicle.amenities.length
+            ? vehicle.amenities.map((amenity) => AMENITY_LABELS[amenity]).join(', ')
+            : '—'}
+        </dd>
         <dt>Plan de sièges actuel</dt>
         <dd data-testid="vehicle-seat-map">{assignedLabel(vehicle.seatMapVersion)}</dd>
         {vehicle.retiredAt ? (

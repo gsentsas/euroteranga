@@ -112,6 +112,28 @@ function StructuredData({ brandName, description }: { brandName: string; descrip
   return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(data) }} />;
 }
 
+/**
+ * UI-PUBLIC-2: the breadcrumb of an inner page (Accueil › page), only when
+ * the page hero shows it: structured data never describes hidden content.
+ */
+function BreadcrumbData({ path, title }: { path: string; title: string }) {
+  const seo = siteSeo();
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Accueil', item: seo.siteUrl.toString() },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: title,
+        item: new URL(path, seo.siteUrl).toString(),
+      },
+    ],
+  };
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(data) }} />;
+}
+
 export default async function ContentPage({ params }: Params) {
   const { path, page } = await pageOrNotFound(params);
   const document = page.document;
@@ -127,11 +149,17 @@ export default async function ContentPage({ params }: Params) {
     departureRoutes: document.blocks.flatMap((block) =>
       block.type === 'departures' ? block.routes : [],
     ),
+    itineraryRoutes: document.blocks.flatMap((block) =>
+      block.type === 'itinerary' ? [{ fromCode: block.fromCode, toCode: block.toCode }] : [],
+    ),
+    fleet: document.blocks.some((block) => block.type === 'fleet'),
   });
   return (
     <>
       {path === '/' ? (
         <StructuredData brandName={ctx.settings.brandName} description={document.seo.description} />
+      ) : hero?.variant === 'page' ? (
+        <BreadcrumbData path={path} title={document.title} />
       ) : null}
       <SitePage title={document.title} blocks={document.blocks} ctx={ctx} />
     </>

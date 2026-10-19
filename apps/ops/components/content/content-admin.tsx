@@ -1,7 +1,7 @@
 'use client';
 
 import type { ContentEntrySummary } from '@euroteranga/auth-client';
-import { contentPathSchema, DEFAULT_HOME_PAGE } from '@euroteranga/content';
+import { contentPathSchema, DEFAULT_HOME_PAGE, PAGE_TEMPLATES } from '@euroteranga/content';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
@@ -29,6 +29,10 @@ function CreatePageForm({ onCreated }: { onCreated: (id: string) => void }) {
   const [path, setPath] = useState('/');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [templateId, setTemplateId] = useState('');
+  /** A page created whose template could not be applied: it exists, open it. */
+  const [createdWithoutTemplate, setCreatedWithoutTemplate] = useState<string | null>(null);
+  const template = PAGE_TEMPLATES.find((candidate) => candidate.id === templateId);
   const pathCheck = contentPathSchema.safeParse(path);
   const pathError =
     path.length > 1 && !pathCheck.success ? pathCheck.error.issues[0]?.message : null;
@@ -36,7 +40,9 @@ function CreatePageForm({ onCreated }: { onCreated: (id: string) => void }) {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (busy || !pathCheck.success) return;
+    setCreatedWithoutTemplate(null);
     let createdId: string | null = null;
+    let templateFailed = false;
     const ok = await run(async () => {
       const result = await auth.admin.content.create({
         kind: 'PAGE',
@@ -44,16 +50,79 @@ function CreatePageForm({ onCreated }: { onCreated: (id: string) => void }) {
         title: title.trim(),
         description: description.trim(),
       });
-      if (result.ok) createdId = result.data.id;
-      return result;
+      if (!result.ok || !template) {
+        if (result.ok) createdId = result.data.id;
+        return result;
+      }
+      createdId = result.data.id;
+      // UI-PUBLIC-2: the template brings its sections only. The SEO of the
+      // created draft (non indexed) is kept: indexing stays an SEO decision.
+      const saved = await auth.admin.content.saveDraft(result.data.id, {
+        document: {
+          ...(result.data.draft?.document ?? {}),
+          title: title.trim(),
+          blocks: template.document.blocks,
+        } as Record<string, unknown>,
+        note: `Modèle « ${template.label} »`,
+        expectedDraftUpdatedAt: result.data.draft?.updatedAt ?? null,
+      });
+      if (saved.ok) return saved;
+      // The page exists with its path: creating it again would be refused.
+      templateFailed = true;
+      return {
+        ok: false as const,
+        error: {
+          ...saved.error,
+          message: `La page ${pathCheck.data} a été créée, mais le modèle n’a pas pu être appliqué : ${saved.error.message}`,
+        },
+      };
     }, `Page ${pathCheck.data} créée (brouillon, non indexée).`);
     if (ok && createdId) onCreated(createdId);
+    else if (templateFailed && createdId) setCreatedWithoutTemplate(createdId);
   };
 
   return (
     <form className="et-form et-network-form" aria-label="Créer une page" onSubmit={submit}>
       <h2>Créer une page</h2>
       {feedback}
+      {createdWithoutTemplate ? (
+        <button
+          type="button"
+          className="et-button et-button--secondary"
+          onClick={() => onCreated(createdWithoutTemplate)}
+        >
+          Ouvrir la page créée
+        </button>
+      ) : null}
+      <div className="et-field">
+        <label htmlFor="content-new-template">Modèle</label>
+        <select
+          id="content-new-template"
+          className="et-select"
+          value={templateId}
+          aria-describedby="content-new-template-hint"
+          onChange={(event) => {
+            const chosen = PAGE_TEMPLATES.find((candidate) => candidate.id === event.target.value);
+            setTemplateId(event.target.value);
+            if (!chosen) return;
+            setPath(chosen.path);
+            setTitle(chosen.document.title);
+            setDescription(chosen.document.seo.description);
+          }}
+        >
+          <option value="">Page vide</option>
+          {PAGE_TEMPLATES.map((candidate) => (
+            <option key={candidate.id} value={candidate.id}>
+              {candidate.label}
+            </option>
+          ))}
+        </select>
+        <p id="content-new-template-hint" className="et-hint">
+          {template
+            ? template.description
+            : 'Un modèle prépare les sections ; dates, prix, itinéraires et autocars restent lus en direct.'}
+        </p>
+      </div>
       <div className="et-field">
         <label htmlFor="content-new-path">Chemin public</label>
         <input

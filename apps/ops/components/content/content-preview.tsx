@@ -13,17 +13,21 @@ import {
   type PageDocument,
   type SiteSettings,
 } from '@euroteranga/content';
-import type { BookingSearchStop } from '@euroteranga/auth-client';
+import type { BookingSearchResult, BookingSearchStop } from '@euroteranga/auth-client';
 import {
   createMediaCache,
   directionKey,
+  journeyItinerary,
+  knownAmenities,
   localDate,
   SitePage,
   siteMediaOf,
+  type ItineraryResult,
   type SiteContext,
   type SiteDeparture,
   type SiteMedia,
   type SiteStop,
+  type SiteVehicle,
 } from '@euroteranga/site';
 import { useEffect, useRef, useState } from 'react';
 import { auth } from '../../lib/auth';
@@ -126,112 +130,192 @@ const siteStopOf = (stop: BookingSearchStop): SiteStop => ({
   timezone: stop.timezone,
 });
 
-/**
- * UI-PUBLIC-1: the stops of the hero search and the departures of the page,
- * read from the same public API as the website (never typed in the CMS).
- */
-function usePreviewTrips(page: PageDocument | null) {
-  const routes = (page?.blocks ?? []).flatMap((block) =>
-    block.type === 'departures' ? block.routes : [],
-  );
-  const hero = (page?.blocks ?? []).find((block) => block.type === 'hero');
-  const search = hero?.search !== undefined;
-  const searchCodes = hero?.search ? [hero.search.fromCode, hero.search.toCode] : [];
-  const wanted = `${search ? `search:${searchCodes.join('>')};` : ''}${routes
-    .map((route) => directionKey(route.fromCode, route.toCode))
-    .join(',')}`;
-  const [loaded, setLoaded] = useState<{
-    key: string;
-    stops: SiteStop[] | undefined;
-    departures: Map<string, SiteDeparture[] | null>;
-  } | null>(null);
-  useEffect(() => {
-    if (wanted === '') return;
-    let current = true;
-    void (async () => {
-      // The stops a block names are resolved exactly, even beyond the first page.
-      const codes = [
-        ...new Set(
-          wanted
-            .replace(/^search:[^;]*;/, '')
-            .split(/[,>]/)
-            .filter(Boolean)
-            .concat(search ? searchCodes : []),
-        ),
-      ];
-      const [listed, ...named] = await Promise.all([
-        auth.booking.public.stops({ limit: 50 }),
-        ...codes.map((code) => auth.booking.public.stops({ query: code, limit: 50 })),
-      ]);
-      const byCode = new Map(listed.ok ? listed.data.items.map((stop) => [stop.code, stop]) : []);
+/** The public reads a page needs, as a stable key (one request set per change). */
+function previewNeeds(page: PageDocument | null) {
+  const blocks = page?.blocks ?? [];
+  const hero = blocks.find((block) => block.type === 'hero');
+  const keys = (routes: ReadonlyArray<{ fromCode: string; toCode: string }>) => [
+    ...new Set(routes.map((route) => directionKey(route.fromCode, route.toCode))),
+  ];
+  return {
+    search: hero?.search ? [hero.search.fromCode, hero.search.toCode] : null,
+    departures: keys(blocks.flatMap((block) => (block.type === 'departures' ? block.routes : []))),
+    itineraries: keys(
+      blocks.flatMap((block) =>
+        block.type === 'itinerary' ? [{ fromCode: block.fromCode, toCode: block.toCode }] : [],
+      ),
+    ),
+    fleet: blocks.some((block) => block.type === 'fleet'),
+  };
+}
+
+type PreviewNeeds = ReturnType<typeof previewNeeds>;
+
+interface PreviewData {
+  key: string;
+  stops: SiteStop[] | null;
+  departures: Map<string, SiteDeparture[] | null>;
+  itineraries: Map<string, ItineraryResult>;
+  fleet: SiteVehicle[] | null;
+}
+
+/** The planned itinerary of the first bookable journey, as the website reads it. */
+async function previewItinerary(journeys: BookingSearchResult[] | null): Promise<ItineraryResult> {
+  if (journeys === null) return { status: 'unavailable' };
+  const journey = journeys.find((item) => item.origin.plannedDepartureAt !== null);
+  if (!journey) return { status: 'none' };
+  const result = await auth.booking.public.itinerary(journey.tripId);
+  const itinerary = result.ok
+    ? journeyItinerary(
+        result.data,
+        journey.origin.routeWaypointId,
+        journey.destination.routeWaypointId,
+      )
+    : null;
+  return itinerary ? { status: 'ok', itinerary } : { status: 'unavailable' };
+}
+
+async function loadPreviewData(key: string, needs: PreviewNeeds): Promise<PreviewData> {
+  const directions = [...new Set([...needs.departures, ...needs.itineraries])];
+  // The stops a block names are resolved exactly, even beyond the first page.
+  const codes = [
+    ...new Set([
+      ...(needs.search ?? []),
+      ...directions.flatMap((direction) => direction.split('>')),
+    ]),
+  ];
+  let stops: BookingSearchStop[] | null = null;
+  if (codes.length > 0) {
+    const [listed, ...named] = await Promise.all([
+      auth.booking.public.stops({ limit: 50 }),
+      ...codes.map((code) => auth.booking.public.stops({ query: code, limit: 50 })),
+    ]);
+    if (listed.ok) {
+      const byCode = new Map(listed.data.items.map((stop) => [stop.code, stop]));
       codes.forEach((code, index) => {
         const result = named[index];
         const exact = result?.ok ? result.data.items.find((stop) => stop.code === code) : undefined;
         if (exact) byCode.set(exact.code, exact);
       });
-      const stops = listed.ok ? [...byCode.values()] : null;
-      const departures = new Map<string, SiteDeparture[] | null>();
-      await Promise.all(
-        wanted
-          .replace(/^search:[^;]*;/, '')
-          .split(',')
-          .filter(Boolean)
-          .map(async (key) => {
-            const [fromCode, toCode] = key.split('>');
-            const origin = stops?.find((stop) => stop.code === fromCode);
-            const destination = stops?.find((stop) => stop.code === toCode);
-            if (!origin || !destination) {
-              departures.set(key, stops ? [] : null);
-              return;
-            }
-            // Full trips are filtered before the limit, as on the website.
-            const result = await auth.booking.public.searchTrips({
-              originStopId: origin.id,
-              destinationStopId: destination.id,
-              minAvailableSeats: 1,
-              limit: 12,
-            });
-            departures.set(
-              key,
-              result.ok
-                ? result.data.items.flatMap((item) =>
-                    item.origin.plannedDepartureAt
-                      ? [
-                          {
-                            tripId: item.tripId,
-                            from: siteStopOf(item.origin.stop ?? origin),
-                            to: siteStopOf(item.destination.stop ?? destination),
-                            departureAt: item.origin.plannedDepartureAt,
-                            availableSeats: item.availableSeatCount,
-                            fare: item.fare,
-                          },
-                        ]
-                      : [],
-                  )
-                : null,
-            );
-          }),
-      );
-      if (current) {
-        setLoaded({ key: wanted, stops: stops?.map(siteStopOf), departures });
+      stops = [...byCode.values()];
+    }
+  }
+  const stopOf = (code: string | undefined) => stops?.find((stop) => stop.code === code);
+  // One search per direction, shared by the departures and the itinerary.
+  const journeys = new Map<string, BookingSearchResult[] | null>();
+  await Promise.all(
+    directions.map(async (direction) => {
+      const [fromCode, toCode] = direction.split('>');
+      const origin = stopOf(fromCode);
+      const destination = stopOf(toCode);
+      if (!origin || !destination) {
+        // Unknown stops are not an outage: the direction simply has no journey.
+        journeys.set(direction, stops ? [] : null);
+        return;
       }
-    })();
+      // Full trips are filtered before the limit, as on the website.
+      const result = await auth.booking.public.searchTrips({
+        originStopId: origin.id,
+        destinationStopId: destination.id,
+        minAvailableSeats: 1,
+        limit: 12,
+      });
+      journeys.set(direction, result.ok ? result.data.items : null);
+    }),
+  );
+  const departures = new Map<string, SiteDeparture[] | null>();
+  for (const direction of needs.departures) {
+    const [fromCode, toCode] = direction.split('>');
+    const origin = stopOf(fromCode);
+    const destination = stopOf(toCode);
+    departures.set(
+      direction,
+      journeys.get(direction)?.flatMap((item) =>
+        item.origin.plannedDepartureAt && origin && destination
+          ? [
+              {
+                tripId: item.tripId,
+                from: siteStopOf(item.origin.stop ?? origin),
+                to: siteStopOf(item.destination.stop ?? destination),
+                departureAt: item.origin.plannedDepartureAt,
+                availableSeats: item.availableSeatCount,
+                fare: item.fare,
+              },
+            ]
+          : [],
+      ) ?? null,
+    );
+  }
+  const [itineraries, fleet] = await Promise.all([
+    Promise.all(
+      needs.itineraries.map(
+        async (direction) =>
+          [direction, await previewItinerary(journeys.get(direction) ?? null)] as const,
+      ),
+    ),
+    needs.fleet ? auth.booking.public.fleet() : Promise.resolve(null),
+  ]);
+  return {
+    key,
+    stops: stops?.map(siteStopOf) ?? null,
+    departures,
+    itineraries: new Map(itineraries),
+    fleet: fleet?.ok
+      ? fleet.data.items.map((vehicle) => ({
+          ...vehicle,
+          amenities: knownAmenities(vehicle.amenities),
+        }))
+      : null,
+  };
+}
+
+/**
+ * UI-PUBLIC-1/2: the stops of the hero search, the departures, itineraries
+ * and coaches of the page, read from the same public API as the website
+ * (never typed in the CMS).
+ */
+function usePreviewData(page: PageDocument | null) {
+  const needs = previewNeeds(page);
+  const wanted = JSON.stringify(needs);
+  const empty =
+    !needs.search &&
+    needs.departures.length === 0 &&
+    needs.itineraries.length === 0 &&
+    !needs.fleet;
+  const [loaded, setLoaded] = useState<PreviewData | null>(null);
+  useEffect(() => {
+    if (empty) return;
+    let current = true;
+    void loadPreviewData(wanted, JSON.parse(wanted) as PreviewNeeds).then((data) => {
+      if (current) setLoaded(data);
+    });
     return () => {
       current = false;
     };
-  }, [wanted]);
+  }, [wanted, empty]);
   if (!loaded || loaded.key !== wanted) return { version: '', extra: {} };
+  const searchZone = needs.search
+    ? loaded.stops?.find((stop) => stop.code === needs.search?.[0])?.timezone
+    : undefined;
   return {
     version: loaded.key,
     extra: {
-      ...(search && loaded.stops ? { stops: loaded.stops } : {}),
-      ...(routes.length > 0
+      ...(needs.search && loaded.stops ? { stops: loaded.stops } : {}),
+      ...(needs.departures.length > 0
         ? {
             departures: (fromCode: string, toCode: string) =>
               loaded.departures.get(directionKey(fromCode, toCode)) ?? null,
           }
         : {}),
-      today: localDate(new Date().toISOString(), 'Europe/Paris'),
+      ...(needs.itineraries.length > 0
+        ? {
+            itineraries: (fromCode: string, toCode: string): ItineraryResult =>
+              loaded.itineraries.get(directionKey(fromCode, toCode)) ?? { status: 'unavailable' },
+          }
+        : {}),
+      ...(needs.fleet ? { fleet: loaded.fleet } : {}),
+      // The first selectable date, in the origin's timezone like the booking search.
+      today: localDate(new Date().toISOString(), searchZone ?? 'Europe/Paris'),
     } satisfies Partial<SiteContext>,
   };
 }
@@ -259,7 +343,7 @@ export function ContentPreview({
   const media = useMediaCache();
   const pageForTrips =
     kind === 'PAGE' ? (pageDocumentSchema.safeParse(document).data ?? null) : null;
-  const trips = usePreviewTrips(pageForTrips);
+  const trips = usePreviewData(pageForTrips);
 
   useEffect(() => {
     const box = boxRef.current;
@@ -310,7 +394,8 @@ export function ContentPreview({
       window.clearTimeout(timer);
     };
     // `media.version` re-renders once newly referenced images are resolved.
-    // `trips.version` re-renders once the stops and departures are read.
+    // `trips.version` re-renders once the stops, departures, itineraries and
+    // coaches are read.
   }, [kind, document, site, media.version, trips.version]);
 
   const width = VIEWPORTS.find((item) => item.key === viewport)!.width;
@@ -342,6 +427,7 @@ export function ContentPreview({
       ) : null}
       <p className="et-hint">
         Les prix « à partir de » viennent de la tarification et n’apparaissent que sur le site.
+        Départs, itinéraires et autocars sont lus en direct sur la réservation et la flotte.
       </p>
       <div ref={boxRef} className="ops-content-preview__box" style={{ height: height * scale }}>
         {html ? (

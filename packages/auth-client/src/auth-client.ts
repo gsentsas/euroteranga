@@ -299,6 +299,16 @@ export interface AssignedSeatMapVersion {
 
 export type VehicleStatus = 'PLANNED' | 'ACTIVE' | 'OUT_OF_SERVICE' | 'RETIRED';
 
+/** On-board equipment, maintained by the fleet team and shown on the website. */
+export type VehicleAmenity =
+  | 'AIR_CONDITIONING'
+  | 'RECLINING_SEATS'
+  | 'USB_CHARGING'
+  | 'WIFI'
+  | 'TOILET'
+  | 'ENTERTAINMENT'
+  | 'WHEELCHAIR_ACCESS';
+
 export interface AdminVehicle {
   id: string;
   code: string;
@@ -317,6 +327,8 @@ export interface AdminVehicle {
   manufacturer: string;
   model: string;
   modelYear: number | null;
+  /** Distinct, in the canonical order of VehicleAmenity. */
+  amenities: VehicleAmenity[];
   status: VehicleStatus;
   statusChangedAt: string | null;
   retiredAt: string | null;
@@ -354,6 +366,8 @@ export interface VehicleCreateInput {
   manufacturer: string;
   model: string;
   modelYear?: number | null;
+  /** Replaces the whole list; duplicates are ignored. */
+  amenities?: VehicleAmenity[];
 }
 
 /** Administrative data only: the status changes through changeVehicleStatus. */
@@ -750,6 +764,46 @@ export interface BookingSearchResult {
   fare: BookingFare;
   seatCount: number;
   availableSeatCount: number;
+}
+
+/** An active vehicle as shown on the website: no VIN, plate or status. */
+export interface PublicVehicle {
+  code: string;
+  name: string | null;
+  manufacturer: string;
+  model: string;
+  modelYear: number | null;
+  amenities: VehicleAmenity[];
+  /** SEAT cells of its current seat map; null without one. */
+  seatCount: number | null;
+}
+
+/** One waypoint of a bookable trip, in route order (planned UTC instants). */
+export interface BookingItineraryWaypoint {
+  routeWaypointId: string;
+  sequence: number;
+  kind: 'STOP' | 'CHECKPOINT';
+  /** Stop code; null for a checkpoint. */
+  code: string | null;
+  name: string;
+  locality: string;
+  timezone: string;
+  country: { iso2: string; name: string };
+  /** Checkpoints only: BORDER, FERRY_TERMINAL or PORT (technical ones stay internal). */
+  checkpointType: string | null;
+  boardingAllowed: boolean;
+  alightingAllowed: boolean;
+  plannedArrivalAt: string | null;
+  plannedDepartureAt: string | null;
+}
+
+/** Planned itinerary of a bookable trip; the vehicle only while it is active. */
+export interface BookingItinerary {
+  tripId: string;
+  tripReference: string;
+  route: { code: string; name: string };
+  vehicle: Omit<PublicVehicle, 'seatCount'> | null;
+  waypoints: BookingItineraryWaypoint[];
 }
 
 export interface BookingSearchOptions {
@@ -2901,6 +2955,13 @@ export function createAuthClient(baseUrl: string) {
               destinationRouteWaypointId,
             })}`,
           ),
+        itinerary: (tripId: string) =>
+          call<BookingItinerary>(
+            'GET',
+            `/v1/booking/trips/${encodeURIComponent(tripId)}/itinerary`,
+          ),
+        /** Active vehicles ("Nos bus"): public facts only. */
+        fleet: () => call<{ items: PublicVehicle[] }>('GET', '/v1/booking/fleet'),
       },
       customer: {
         passengerCountries: () =>

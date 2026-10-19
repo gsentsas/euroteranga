@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_HOME_PAGE, DEFAULT_NAVIGATION, DEFAULT_SITE_SETTINGS } from './defaults.js';
+import { PAGE_TEMPLATES } from './templates.js';
 import {
   BLOCK_TYPES,
   contentPathSchema,
@@ -153,6 +154,9 @@ describe('content model', () => {
       'stats',
       'gallery',
       'banner',
+      'sectionNav',
+      'itinerary',
+      'fleet',
     ]);
   });
 
@@ -168,12 +172,14 @@ describe('content model', () => {
       title: 'Nos prochains départs',
       routes: [{ fromCode: 'PAR', toCode: 'DKR' }],
       limit: 3,
+      layout: 'cards',
     });
     for (const invalid of [
       { ...departures, routes: [{ fromCode: 'PAR', toCode: 'PAR' }] },
       { ...departures, routes: [{ fromCode: 'PA R', toCode: 'DKR' }] },
       { ...departures, routes: [] },
-      { ...departures, limit: 7 },
+      { ...departures, limit: 9 },
+      { ...departures, layout: 'carousel' },
       // Dates, seats and prices come from Booking and Pricing only.
       { ...departures, routes: [{ fromCode: 'PAR', toCode: 'DKR', price: 249 }] },
       { ...departures, departures: [{ date: '2030-01-01' }] },
@@ -248,6 +254,120 @@ describe('content model', () => {
       { path: 'blocks.1.items.0.mediaId', mediaId: id },
       { path: 'blocks.1.items.1.mediaId', mediaId: other },
     ]);
+  });
+
+  it('validates the inner-page blocks without any typed schedule, seat or equipment (UI-PUBLIC-2)', () => {
+    const itinerary = {
+      type: 'itinerary',
+      anchor: 'itineraire',
+      title: 'Itinéraire',
+      fromCode: 'par',
+      toCode: 'DKR',
+    };
+    const fleet = { type: 'fleet', anchor: 'autocars', title: 'Nos autocars' };
+    const nav = {
+      type: 'sectionNav',
+      label: 'Sur cette page',
+      items: [
+        { label: 'Itinéraire', anchor: 'itineraire' },
+        { label: 'Nos autocars', anchor: 'autocars' },
+      ],
+    };
+    const parsed = pageDocumentSchema.parse(
+      page([{ type: 'hero', variant: 'page', title: 'Paris → Dakar' }, nav, itinerary, fleet]),
+    );
+    expect(parsed.blocks[0]).toMatchObject({ variant: 'page' });
+    expect(parsed.blocks[2]).toEqual({
+      ...itinerary,
+      fromCode: 'PAR',
+      included: [],
+      showVehicleAmenities: true,
+    });
+    expect(parsed.blocks[3]).toEqual({ ...fleet, selection: 'all', items: [] });
+    // The home hero stays the default variant.
+    expect(pageDocumentSchema.parse(page([{ type: 'hero', title: 'T' }])).blocks[0]).toMatchObject({
+      variant: 'home',
+    });
+
+    for (const [blocks, path] of [
+      // Every tab points to a section of the page.
+      [
+        [nav, itinerary],
+        ['blocks', 0, 'items', 1, 'anchor'],
+      ],
+      [
+        [{ ...nav, items: [nav.items[0]] }, itinerary, fleet],
+        ['blocks', 0, 'items'],
+      ],
+      [[{ ...itinerary, toCode: 'PAR' }], ['blocks', 0, 'toCode']],
+      [[{ ...fleet, selection: 'listed' }], ['blocks', 0, 'items']],
+      [
+        [{ ...fleet, items: [{ vehicleCode: 'bus_a' }, { vehicleCode: 'BUS_A' }] }],
+        ['blocks', 0, 'items', 1, 'vehicleCode'],
+      ],
+    ] as const) {
+      const refused = pageDocumentSchema.safeParse(page([...blocks]));
+      expect(refused.success, JSON.stringify(blocks)).toBe(false);
+      expect(refused.error?.issues.map((issue) => issue.path)).toContainEqual(path);
+    }
+    // Times, stops, seats and equipment come from Trips and Fleet only.
+    for (const invalid of [
+      { ...itinerary, departureTime: '08:00' },
+      { ...itinerary, stops: ['Madrid'] },
+      { ...fleet, items: [{ vehicleCode: 'BUS_A', seats: 53 }] },
+      { ...fleet, items: [{ vehicleCode: 'BUS_A', amenities: ['WIFI'] }] },
+      { ...fleet, items: [{ vehicleCode: 'BUS A' }] },
+      { ...itinerary, included: Array.from({ length: 9 }, () => 'Service') },
+    ]) {
+      expect(pageDocumentSchema.safeParse(page([invalid])).success, JSON.stringify(invalid)).toBe(
+        false,
+      );
+    }
+  });
+
+  it('lists the photographs of the fleet block as media references', () => {
+    const [main, inside] = [
+      '01900000-0000-7000-8000-000000000003',
+      '01900000-0000-7000-8000-000000000004',
+    ];
+    const parsed = pageDocumentSchema.parse(
+      page([
+        {
+          type: 'fleet',
+          title: 'Nos autocars',
+          items: [{ vehicleCode: 'BUS_A', mediaId: main, gallery: [inside.toUpperCase(), main] }],
+        },
+      ]),
+    );
+    expect(mediaReferencesOf(parsed)).toEqual([
+      { path: 'blocks.0.items.0.mediaId', mediaId: main },
+      { path: 'blocks.0.items.0.gallery.0', mediaId: inside },
+      { path: 'blocks.0.items.0.gallery.1', mediaId: main },
+    ]);
+  });
+
+  it('offers page templates that are valid, honest and price-free', () => {
+    expect(PAGE_TEMPLATES.map((template) => template.path)).toEqual([
+      '/paris-dakar',
+      '/dakar-paris',
+      '/nos-bus',
+      '/services',
+    ]);
+    for (const template of PAGE_TEMPLATES) {
+      const parsed = pageDocumentSchema.parse(template.document);
+      const serialized = JSON.stringify(parsed);
+      // No fare, figure or unverified promise is written in a template.
+      expect(serialized, template.id).not.toMatch(
+        /€|\bEUR\b|\bXOF\b|\d+\s?kg|24\s?\/\s?7|\d+\s?places/i,
+      );
+      expect(contentPathSchema.parse(template.path)).toBe(template.path);
+    }
+    const trip = pageDocumentSchema.parse(PAGE_TEMPLATES[1]!.document);
+    expect(trip.blocks.find((block) => block.type === 'itinerary')).toMatchObject({
+      fromCode: 'DKR',
+      toCode: 'PAR',
+      included: [],
+    });
   });
 
   it('keeps owner fields nullable and validates contact and social values', () => {

@@ -1,7 +1,19 @@
 import type { ReactElement } from 'react';
 import type { CONTENT_ICONS } from '@euroteranga/content';
 
-export type IconName = (typeof CONTENT_ICONS)[number] | 'arrow' | 'menu';
+/** Icons of the on-board equipment (UI-PUBLIC-2), not offered to editors. */
+export type AmenityIconName =
+  | 'snowflake'
+  | 'recline'
+  | 'plug'
+  | 'wifi'
+  | 'toilet'
+  | 'screen'
+  | 'wheelchair'
+  | 'users'
+  | 'check';
+
+export type IconName = (typeof CONTENT_ICONS)[number] | AmenityIconName | 'arrow' | 'menu';
 
 const stroke = { stroke: 'currentColor', strokeWidth: 2, fill: 'none' } as const;
 
@@ -86,6 +98,69 @@ const PATHS: Record<IconName, ReactElement> = {
       <rect x="4" y="6" width="16" height="12" rx="2" {...stroke} />
       <path d="m5 8 7 5 7-5" {...stroke} strokeLinejoin="round" />
     </>
+  ),
+  snowflake: (
+    <path
+      d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"
+      {...stroke}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  ),
+  recline: (
+    <>
+      <path d="M6 4l3 9h7a2 2 0 0 1 2 2v1H8.5" {...stroke} strokeLinejoin="round" />
+      <path d="M8 16l-1 4M17 16v4M12 8h4" {...stroke} strokeLinecap="round" />
+    </>
+  ),
+  plug: (
+    <>
+      <path d="M9 3v4M15 3v4M7 7h10v4a5 5 0 0 1-10 0V7Z" {...stroke} strokeLinejoin="round" />
+      <path d="M12 16v5" {...stroke} strokeLinecap="round" />
+    </>
+  ),
+  wifi: (
+    <>
+      <path
+        d="M3.5 9.5a12 12 0 0 1 17 0M6.5 12.5a8 8 0 0 1 11 0M9.5 15.5a4 4 0 0 1 5 0"
+        {...stroke}
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="18.5" r="1.3" fill="currentColor" />
+    </>
+  ),
+  toilet: (
+    <>
+      <path d="M6 4h5v8H6zM4 12h15a6 6 0 0 1-6 6h-3a6 6 0 0 1-6-6Z" {...stroke} />
+      <path d="M9 18l-1 3h8l-1-3" {...stroke} strokeLinejoin="round" />
+    </>
+  ),
+  screen: (
+    <>
+      <rect x="3.5" y="5" width="17" height="11" rx="2" {...stroke} />
+      <path d="M9 20h6M12 16v4" {...stroke} strokeLinecap="round" />
+      <path d="m10.5 8.5 3.5 2-3.5 2v-4Z" fill="currentColor" />
+    </>
+  ),
+  wheelchair: (
+    <>
+      <circle cx="11" cy="4.5" r="1.5" fill="currentColor" />
+      <path d="M11 7v6h5l2 5M11 10h4" {...stroke} strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 11.5a5 5 0 1 0 6.5 6.5" {...stroke} strokeLinecap="round" />
+    </>
+  ),
+  users: (
+    <>
+      <circle cx="9" cy="8" r="3" {...stroke} />
+      <path
+        d="M3.5 19a5.5 5.5 0 0 1 11 0M15 5.5a3 3 0 0 1 0 5M17 14a5 5 0 0 1 3.5 5"
+        {...stroke}
+        strokeLinecap="round"
+      />
+    </>
+  ),
+  check: (
+    <path d="m5 12.5 4.5 4.5L19 7.5" {...stroke} strokeLinecap="round" strokeLinejoin="round" />
   ),
 };
 
