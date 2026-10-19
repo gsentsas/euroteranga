@@ -1,5 +1,8 @@
 import { assertNoSensitivePublicEnv, loadPublicEnv } from './public-env.js';
-import { buildFoundationSecurityHeaders } from './security-headers.js';
+import {
+  buildFoundationSecurityHeaders,
+  type FoundationSecurityOptions,
+} from './security-headers.js';
 
 interface HeaderRule {
   source: string;
@@ -20,15 +23,16 @@ export interface FoundationNextConfig {
  */
 export function createFoundationNextConfig(
   env: Record<string, string | undefined> = process.env,
+  security: FoundationSecurityOptions = {},
 ): FoundationNextConfig {
   assertNoSensitivePublicEnv(env);
   const publicEnv = loadPublicEnv(env);
+  // Built once: an invalid form-action origin stops `next build` at once.
+  const securityHeaders = buildFoundationSecurityHeaders(publicEnv, security);
 
   return {
     reactStrictMode: true,
     poweredByHeader: false,
-    headers: async () => [
-      { source: '/:path*', headers: [...buildFoundationSecurityHeaders(publicEnv)] },
-    ],
+    headers: async () => [{ source: '/:path*', headers: [...securityHeaders] }],
   };
 }

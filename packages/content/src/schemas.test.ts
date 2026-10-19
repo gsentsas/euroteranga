@@ -22,7 +22,12 @@ const page = (blocks: unknown[]) => ({
 describe('content model', () => {
   it('accepts the default content and fills block defaults', () => {
     const home = pageDocumentSchema.parse(DEFAULT_HOME_PAGE);
-    expect(home.blocks[0]).toMatchObject({ type: 'hero', journeyCard: true });
+    expect(home.blocks[0]).toMatchObject({
+      type: 'hero',
+      journeyCard: false,
+      search: { fromCode: 'PAR', toCode: 'DKR' },
+    });
+    expect(home.blocks.map((block) => block.type)).toContain('departures');
     expect(home.seo.indexable).toBe(true);
     expect(siteSettingsSchema.parse(DEFAULT_SITE_SETTINGS)).toEqual(DEFAULT_SITE_SETTINGS);
     expect(navigationSchema.parse(DEFAULT_NAVIGATION)).toEqual(DEFAULT_NAVIGATION);
@@ -144,10 +149,55 @@ describe('content model', () => {
       'cards',
       'faq',
       'routes',
+      'departures',
       'stats',
       'gallery',
       'banner',
     ]);
+  });
+
+  it('reads departures and the hero search from real stops, never from typed data (UI-PUBLIC-1)', () => {
+    const departures = {
+      type: 'departures',
+      title: 'Nos prochains départs',
+      routes: [{ fromCode: ' par ', toCode: 'dkr' }],
+    };
+    const parsed = pageDocumentSchema.parse(page([departures]));
+    expect(parsed.blocks[0]).toEqual({
+      type: 'departures',
+      title: 'Nos prochains départs',
+      routes: [{ fromCode: 'PAR', toCode: 'DKR' }],
+      limit: 3,
+    });
+    for (const invalid of [
+      { ...departures, routes: [{ fromCode: 'PAR', toCode: 'PAR' }] },
+      { ...departures, routes: [{ fromCode: 'PA R', toCode: 'DKR' }] },
+      { ...departures, routes: [] },
+      { ...departures, limit: 7 },
+      // Dates, seats and prices come from Booking and Pricing only.
+      { ...departures, routes: [{ fromCode: 'PAR', toCode: 'DKR', price: 249 }] },
+      { ...departures, departures: [{ date: '2030-01-01' }] },
+    ]) {
+      expect(pageDocumentSchema.safeParse(page([invalid])).success, JSON.stringify(invalid)).toBe(
+        false,
+      );
+    }
+    const hero = { type: 'hero', title: 'Voyagez', search: { fromCode: 'DKR', toCode: 'DKR' } };
+    const refused = pageDocumentSchema.safeParse(page([hero]));
+    expect(refused.success).toBe(false);
+    expect(refused.error?.issues[0]?.path).toEqual(['blocks', 0, 'search', 'toCode']);
+    expect(
+      pageDocumentSchema.safeParse(
+        page([
+          {
+            type: 'cards',
+            variant: 'highlights',
+            title: 'Atouts',
+            items: [{ title: 'A', text: 'B' }],
+          },
+        ]),
+      ).success,
+    ).toBe(true);
   });
 
   it('lists the media referenced by a page', () => {
@@ -169,6 +219,28 @@ describe('content model', () => {
       blocks: [{ type: 'gallery', items: [{ mediaId: other.toUpperCase() }] }],
     });
     expect(mediaIdsOf(capitals).sort()).toEqual([id, other].sort());
+    // Service card photos and destination photos are media references too.
+    const withCards = pageDocumentSchema.parse({
+      title: 'Page',
+      seo: { description: 'Description.' },
+      blocks: [
+        {
+          type: 'cards',
+          variant: 'services',
+          title: 'Services',
+          items: [{ title: 'A', text: 'B', mediaId: id }],
+        },
+        {
+          type: 'departures',
+          title: 'Départs',
+          routes: [{ fromCode: 'PAR', toCode: 'DKR', mediaId: other }],
+        },
+      ],
+    });
+    expect(mediaReferencesOf(withCards)).toEqual([
+      { path: 'blocks.0.items.0.mediaId', mediaId: id },
+      { path: 'blocks.1.routes.0.mediaId', mediaId: other },
+    ]);
     // MEDIA-1 reports each reference with its field path, duplicates included.
     expect(mediaReferencesOf(parsed)).toEqual([
       { path: 'seo.socialMediaId', mediaId: id },

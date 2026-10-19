@@ -279,6 +279,25 @@ Sessions stay in the existing HttpOnly CUSTOMER/STAFF cookies. Tokens, CSRF
 values and selections are not persisted to localStorage, sessionStorage or
 URLs.
 
+### Pre-filled search (UI-PUBLIC-1)
+
+The public website's search form and departure cards open Booking with
+search criteria only: `?from=PAR&to=DKR&date=YYYY-MM-DD&passengers=2`.
+
+- `from` and `to` are stop codes, resolved to the exact active stop through
+  the public stops API.
+- `date` is a calendar day. The search covers that day in the **origin
+  stop's timezone** (the date the website showed), for the form too. A stop
+  without a known timezone falls back to UTC.
+- `passengers` (1 to 8) only adds a reminder to choose that many seats; the
+  server still decides the seat limit.
+- With both stops and a valid date, the search runs at once.
+- Invalid values are ignored without error: an unknown code, an impossible
+  day (2030-02-31), a party size out of range or a missing stop. The search
+  then simply stays to be completed.
+
+No token, identity or seat selection travels in these links.
+
 ## Database migration and validation
 
 Migration `20261013210000_booking` adds the three tables, constraints,

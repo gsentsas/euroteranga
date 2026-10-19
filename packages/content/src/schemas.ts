@@ -136,19 +136,47 @@ const sectionHead = {
   kicker: optionalText(60),
 };
 
+/** A stop of the network, by its code (same rule as the stop table). */
+export const stopCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9][A-Z0-9_-]{0,31}$/, { message: 'code d’arrêt invalide' });
+
+/** Two different stops, by code: a direction of travel. */
+const directionSchema = {
+  fromCode: stopCodeSchema,
+  toCode: stopCodeSchema,
+};
+
+const differentStops = (value: { fromCode: string; toCode: string }) =>
+  value.fromCode !== value.toCode;
+
 export const heroBlockSchema = z
   .object({
     type: z.literal('hero'),
     ...sectionHead,
     eyebrow: optionalText(80),
     title: text(140),
+    /** Second line of the title, highlighted (UI-PUBLIC-1). */
+    titleAccent: optionalText(80),
     lead: optionalText(400),
     primaryCta: linkSchema.optional(),
     secondaryCta: linkSchema.optional(),
     note: optionalText(240),
+    /** Background photograph (media library); a navy backdrop without it. */
     mediaId: uuid.optional(),
     /** Show the Paris ↔ Dakar journey card next to the title. */
     journeyCard: z.boolean().default(true),
+    /**
+     * Trip search form in the hero, pre-filled with this direction. It
+     * opens the booking application with ?from=&to=&date=&passengers=.
+     */
+    search: z
+      .object(directionSchema)
+      .strict()
+      .refine(differentStops, { message: 'deux arrêts différents', path: ['toCode'] })
+      .optional(),
   })
   .strict();
 
@@ -171,6 +199,8 @@ export const textImageBlockSchema = z
     illustration: z.enum(CONTENT_ILLUSTRATIONS).default('none'),
     imageSide: z.enum(['start', 'end']).default('end'),
     cta: linkSchema.optional(),
+    /** `navy`: a dark, photographic card (e.g. the Teranga story). */
+    tone: z.enum(['light', 'navy']).default('light'),
   })
   .strict();
 
@@ -202,14 +232,19 @@ const cardSchema = z
     title: text(100),
     text: text(400),
     link: linkSchema.optional(),
+    /** A photograph of the media library above the card (services). */
+    mediaId: uuid.optional(),
   })
   .strict();
+
+export const CARD_VARIANTS = ['features', 'services', 'steps', 'trust', 'highlights'] as const;
 
 export const cardsBlockSchema = z
   .object({
     type: z.literal('cards'),
     ...sectionHead,
-    variant: z.enum(['features', 'services', 'steps', 'trust']).default('features'),
+    /** `highlights`: a compact row of icons and short texts (reassurance). */
+    variant: z.enum(CARD_VARIANTS).default('features'),
     title: text(160),
     intro: optionalText(400),
     items: z.array(cardSchema).min(1).max(12),
@@ -252,6 +287,35 @@ export const routesBlockSchema = z
       .max(6),
     /** "From" prices come from Pricing (public search API), never from the CMS. */
     showFromPrices: z.boolean().default(true),
+  })
+  .strict();
+
+/**
+ * Next departures, read from the public trip search (Trips, Booking and
+ * Pricing): dates, availability and fares are never written in the CMS.
+ */
+export const departuresBlockSchema = z
+  .object({
+    type: z.literal('departures'),
+    ...sectionHead,
+    title: text(160),
+    intro: optionalText(400),
+    routes: z
+      .array(
+        z
+          .object({
+            ...directionSchema,
+            /** Photograph of the destination (media library). */
+            mediaId: uuid.optional(),
+          })
+          .strict()
+          .refine(differentStops, { message: 'deux arrêts différents', path: ['toCode'] }),
+      )
+      .min(1)
+      .max(4),
+    /** Departures shown, all directions together, soonest first. */
+    limit: z.number().int().min(1).max(6).default(3),
+    cta: linkSchema.optional(),
   })
   .strict();
 
@@ -298,6 +362,7 @@ export const blockSchema = z.discriminatedUnion('type', [
   cardsBlockSchema,
   faqBlockSchema,
   routesBlockSchema,
+  departuresBlockSchema,
   statsBlockSchema,
   galleryBlockSchema,
   bannerBlockSchema,
@@ -470,10 +535,19 @@ export function mediaReferencesOf(page: PageDocument): Array<{ path: string; med
     if ('mediaId' in block && block.mediaId) {
       references.push({ path: `blocks.${index}.mediaId`, mediaId: block.mediaId });
     }
-    if (block.type === 'gallery') {
-      block.items.forEach((item, at) =>
-        references.push({ path: `blocks.${index}.items.${at}.mediaId`, mediaId: item.mediaId }),
-      );
+    if (block.type === 'gallery' || block.type === 'cards') {
+      block.items.forEach((item, at) => {
+        if (item.mediaId) {
+          references.push({ path: `blocks.${index}.items.${at}.mediaId`, mediaId: item.mediaId });
+        }
+      });
+    }
+    if (block.type === 'departures') {
+      block.routes.forEach((route, at) => {
+        if (route.mediaId) {
+          references.push({ path: `blocks.${index}.routes.${at}.mediaId`, mediaId: route.mediaId });
+        }
+      });
     }
   });
   return references;
@@ -481,11 +555,5 @@ export function mediaReferencesOf(page: PageDocument): Array<{ path: string; med
 
 /** Media referenced by a page (MEDIA-1 checks them; CMS-1 only lists them). */
 export function mediaIdsOf(page: PageDocument): string[] {
-  const ids = new Set<string>();
-  if (page.seo.socialMediaId) ids.add(page.seo.socialMediaId);
-  for (const block of page.blocks) {
-    if ('mediaId' in block && block.mediaId) ids.add(block.mediaId);
-    if (block.type === 'gallery') block.items.forEach((item) => ids.add(item.mediaId));
-  }
-  return [...ids];
+  return [...new Set(mediaReferencesOf(page).map((reference) => reference.mediaId))];
 }

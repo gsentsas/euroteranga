@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { createDatabaseClient } from '@euroteranga/database';
 import { hash } from '@node-rs/argon2';
-import { contentSeed } from './content-seed.js';
+import { contentSeed, homeSeed } from './content-seed.js';
 import {
   bookingReaderRole,
   bookingSeed,
@@ -1120,4 +1120,42 @@ async function seedContentData(db: ReturnType<typeof createDatabaseClient>): Pro
     },
   });
   await db.contentRevision.update({ where: { id: revision.id }, data: { status: 'PUBLISHED' } });
+
+  // UI-PUBLIC-1: the home page layout on the booking seed's stops.
+  const home = homeSeed();
+  const seed = bookingSeed();
+  const homeEntry = await db.contentEntry.create({ data: { kind: 'PAGE', key: home.path } });
+  const homeRevision = await db.contentRevision.create({
+    data: {
+      entryId: homeEntry.id,
+      revision: 1,
+      document: {
+        title: home.title,
+        seo: {
+          description: 'Accueil de démonstration pour les tests navigateur.',
+          indexable: false,
+        },
+        blocks: [
+          {
+            type: 'hero',
+            title: 'Voyagez entre l’Europe et l’Afrique',
+            titleAccent: 'en toute confiance',
+            journeyCard: false,
+            search: { fromCode: seed.originCode, toCode: seed.destinationCode },
+          },
+          {
+            type: 'departures',
+            anchor: 'trajets',
+            title: 'Nos prochains départs',
+            routes: [{ fromCode: seed.originCode, toCode: seed.destinationCode }],
+            limit: 3,
+          },
+        ],
+      },
+    },
+  });
+  await db.contentRevision.update({
+    where: { id: homeRevision.id },
+    data: { status: 'PUBLISHED' },
+  });
 }

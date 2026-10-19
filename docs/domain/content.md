@@ -36,19 +36,24 @@ the website:
   with at most 40 blocks.
 - **Blocks:**
 
-  | Block       | Purpose                                   |
-  | ----------- | ----------------------------------------- |
-  | `hero`      | Main banner (one per page at most)        |
-  | `richText`  | Formatted text                            |
-  | `textImage` | Text next to an image                     |
-  | `image`     | Single image                              |
-  | `cta`       | Call to action                            |
-  | `cards`     | Cards (features, services, steps, trust)  |
-  | `faq`       | Questions and answers                     |
-  | `routes`    | The Paris → Dakar and Dakar → Paris lines |
-  | `stats`     | Key figures                               |
-  | `gallery`   | Image gallery                             |
-  | `banner`    | Information banner                        |
+  | Block        | Purpose                                                                  |
+  | ------------ | ------------------------------------------------------------------------ |
+  | `hero`       | Main banner (one per page at most): photo, title and accent, trip search |
+  | `richText`   | Formatted text                                                           |
+  | `textImage`  | Text next to an image; `tone: navy` for a highlighted card               |
+  | `image`      | Single image                                                             |
+  | `cta`        | Call to action                                                           |
+  | `cards`      | Cards (features, services with photos, steps, trust, `highlights` row)   |
+  | `faq`        | Questions and answers                                                    |
+  | `routes`     | The Paris → Dakar and Dakar → Paris lines                                |
+  | `departures` | Next bookable departures of chosen directions (UI-PUBLIC-1)              |
+  | `stats`      | Key figures                                                              |
+  | `gallery`    | Image gallery                                                            |
+  | `banner`     | Information banner                                                       |
+
+  Stops are named by their network code (`stopCodeSchema`, the same rule as
+  the stop table: `^[A-Z0-9][A-Z0-9_-]{0,31}$`). A direction needs two
+  different stops. No block holds a date, a number of seats or a price.
 
   An anchor is unique on its page.
 
@@ -177,6 +182,25 @@ editors preview exactly what visitors get.
     API cannot be reached.
 - **Site settings and navigation:** the published versions are used, or the
   defaults until they are published.
+- **Trip search (UI-PUBLIC-1):** a hero with `search` shows a plain GET form
+  (departure, arrival, date, travellers, no client JavaScript) whose stops
+  come from the public stops API. It opens the booking application
+  pre-filled: `?from=PAR&to=DKR&date=YYYY-MM-DD&passengers=2`
+  (`docs/domain/bookings.md`).
+- **Departures (UI-PUBLIC-1):** a `departures` block reads the public trip
+  search of each direction (cached 60 s):
+  - the soonest journeys with seats left, all directions together, up to
+    its limit;
+  - date and time in the origin stop's timezone, the exact fare of the
+    journey (Pricing) and the seats left;
+  - a "Réserver" link to the pre-filled booking search of that day;
+  - the destination photo of its direction (media library), else a navy
+    placeholder.
+
+  Without an open departure the section says so; when the trip search
+  cannot answer, it says the departures are shown in the booking
+  application. It never shows a typed date, seat count or price.
+
 - **Prices:** "from" prices come from the public search API (Pricing),
   never from the CMS:
   - the lowest current fare per direction among bookable trips, for the
@@ -198,10 +222,10 @@ editors preview exactly what visitors get.
   and stops), so a publication appears within a minute.
 - **Server-side configuration** (read at runtime by `euroteranga-web`):
 
-  | Variable                                                         | Purpose                                                                                                                 |
-  | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-  | `CORE_API_INTERNAL_URL`                                          | Optional loopback API base for server-side reads (e.g. `http://127.0.0.1:3206`); defaults to `NEXT_PUBLIC_API_BASE_URL` |
-  | `PUBLIC_BOOKING_URL`, `PUBLIC_CLIENT_URL`, `PUBLIC_TRACKING_URL` | Optional overrides of the application links of the site settings (local, CI, staging)                                   |
+  | Variable                                                         | Purpose                                                                                                                                                                                                                                                                                                                               |
+  | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `CORE_API_INTERNAL_URL`                                          | Optional loopback API base for server-side reads (e.g. `http://127.0.0.1:3206`); defaults to `NEXT_PUBLIC_API_BASE_URL`                                                                                                                                                                                                               |
+  | `PUBLIC_BOOKING_URL`, `PUBLIC_CLIENT_URL`, `PUBLIC_TRACKING_URL` | Optional overrides of the application links of the site settings (local, CI, staging). `PUBLIC_BOOKING_URL`'s origin (default `https://booking.euroteranga.com`) is also the only target, besides the site, allowed for forms (CSP `form-action`, fixed at build time): the booking URL in the site settings must stay on that origin |
 
 - **Sitemap:** it lists the served, indexable CMS pages, and only the home
   page when the API cannot answer.

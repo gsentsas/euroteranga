@@ -43,7 +43,7 @@ test.describe('public website content (CMS)', () => {
   }) => {
     await page.goto(appUrl(web));
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-      'Paris ↔ Dakar, la route qui rapproche.',
+      'Voyagez entre l’Europe et l’Afrique en toute confiance',
     );
     await expect(page.getByRole('navigation', { name: 'Navigation principale' })).toContainText(
       'Trajets',

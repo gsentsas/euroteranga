@@ -30,5 +30,9 @@ export {
   siteUrlOf,
   type SiteSeo,
 } from './seo.js';
-export { buildFoundationSecurityHeaders, foundationSecurityHeaders } from './security-headers.js';
+export {
+  buildFoundationSecurityHeaders,
+  foundationSecurityHeaders,
+  type FoundationSecurityOptions,
+} from './security-headers.js';
 export { createFoundationNextConfig, type FoundationNextConfig } from './next-config.js';

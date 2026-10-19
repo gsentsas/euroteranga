@@ -19,7 +19,11 @@ The policy:
   API origin;
 - blocks plugin/object content and all frames;
 - prevents the application from being embedded with `frame-ancestors 'none'`;
-- constrains `base-uri` and `form-action` to the application origin;
+- constrains `base-uri` and `form-action` to the application origin. One
+  exception: the public website's trip search (UI-PUBLIC-1) may also be
+  sent to the exact booking origin (`PUBLIC_BOOKING_URL`, default
+  `https://booking.euroteranga.com`). It is fixed when the site is built,
+  must be https in staging and production, and wildcards are refused;
 - allows only local/data/blob font and worker resources, and images from the
   application, `data:`/`blob:` and the exact Core API origin (MEDIA-1: the
   website images are served by the API). There is never a wildcard source;

@@ -115,13 +115,18 @@ function StructuredData({ brandName, description }: { brandName: string; descrip
 export default async function ContentPage({ params }: Params) {
   const { path, page } = await pageOrNotFound(params);
   const document = page.document;
+  const hero = document.blocks.find((block) => block.type === 'hero');
   const ctx = await loadSiteContext({
     prices: document.blocks.some(
       (block) =>
         (block.type === 'routes' && block.showFromPrices) ||
-        (block.type === 'hero' && block.journeyCard),
+        (block.type === 'hero' && block.journeyCard && !block.search),
     ),
     mediaIds: mediaIdsOf(document),
+    ...(hero?.search ? { search: hero.search } : {}),
+    departureRoutes: document.blocks.flatMap((block) =>
+      block.type === 'departures' ? block.routes : [],
+    ),
   });
   return (
     <>

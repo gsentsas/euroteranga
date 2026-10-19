@@ -36,10 +36,11 @@ function NavLink({
 
 export function SiteHeader({ ctx }: { ctx: SiteContext }) {
   const { settings, navigation } = ctx;
+  const cta = navigation.headerCta;
   return (
     <header className="public-header">
       <div className="public-container public-header__inner">
-        <a href="/" aria-label={`${settings.brandName} — Accueil`}>
+        <a className="public-header__brand" href="/" aria-label={`${settings.brandName} — Accueil`}>
           <Brand name={settings.brandName} />
         </a>
         {navigation.header.length > 0 ? (
@@ -57,12 +58,42 @@ export function SiteHeader({ ctx }: { ctx: SiteContext }) {
           <a className="public-header__account" href={ctx.apps.client}>
             Mon compte
           </a>
-          {navigation.headerCta ? (
-            <a className="public-button" href={resolveHref(navigation.headerCta.target, ctx.apps)}>
-              {navigation.headerCta.label} <Icon name="arrow" />
+          {cta ? (
+            <a
+              className="public-button public-button--gold public-header__cta"
+              href={resolveHref(cta.target, ctx.apps)}
+            >
+              {cta.label}
             </a>
           ) : null}
         </div>
+        {/* Small screens: a disclosure, keyboard and screen-reader friendly, without script. */}
+        <details className="public-menu">
+          <summary className="public-menu__toggle">
+            <Icon name="menu" />
+            <span>Menu</span>
+          </summary>
+          <nav className="public-menu__panel" aria-label="Navigation principale (mobile)">
+            <ul>
+              {navigation.header.map((link, index) => (
+                <li key={index}>
+                  <NavLink link={link} ctx={ctx} />
+                </li>
+              ))}
+              <li>
+                <a href={ctx.apps.client}>Mon compte</a>
+              </li>
+            </ul>
+            {cta ? (
+              <a
+                className="public-button public-button--gold"
+                href={resolveHref(cta.target, ctx.apps)}
+              >
+                {cta.label} <Icon name="arrow" />
+              </a>
+            ) : null}
+          </nav>
+        </details>
       </div>
     </header>
   );

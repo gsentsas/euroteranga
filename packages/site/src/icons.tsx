@@ -1,11 +1,12 @@
 import type { ReactElement } from 'react';
 import type { CONTENT_ICONS } from '@euroteranga/content';
 
-export type IconName = (typeof CONTENT_ICONS)[number] | 'arrow';
+export type IconName = (typeof CONTENT_ICONS)[number] | 'arrow' | 'menu';
 
 const stroke = { stroke: 'currentColor', strokeWidth: 2, fill: 'none' } as const;
 
 const PATHS: Record<IconName, ReactElement> = {
+  menu: <path d="M4 7h16M4 12h16M4 17h16" {...stroke} strokeLinecap="round" />,
   arrow: (
     <path d="M5 12h14M14 7l5 5-5 5" {...stroke} strokeLinecap="round" strokeLinejoin="round" />
   ),
