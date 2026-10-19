@@ -27,3 +27,8 @@ export type Actor = AuthPrincipal | SystemActor;
 export function isSystemActor(actor: Actor): actor is SystemActor {
   return 'kind' in actor && actor.kind === 'system';
 }
+
+/** The identity recorded as author of a change: none for an operator command. */
+export function actorIdentityId(actor: Actor): string | null {
+  return isSystemActor(actor) ? null : actor.identityId;
+}

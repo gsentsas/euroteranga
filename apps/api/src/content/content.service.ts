@@ -13,7 +13,7 @@ import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
 import type { z } from 'zod';
 import { PublicApiError } from '../auth/http/public-api-error.js';
-import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import { actorIdentityId, type Actor, type AuthPrincipal } from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import type {
@@ -37,7 +37,8 @@ type ArchiveInput = z.infer<typeof contentArchiveSchema>;
 
 /** Who edits, and whether they may change the search metadata of a page. */
 export interface ContentCaller {
-  actor: AuthPrincipal;
+  /** STAFF caller, or an operator command such as the realistic seed (no author). */
+  actor: Actor;
   canManageSeo: boolean;
 }
 
@@ -293,7 +294,7 @@ export class ContentService {
 
   // -- mutations (STAFF) ----------------------------------------------------
 
-  create(input: CreateInput, actor: AuthPrincipal) {
+  create(input: CreateInput, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const kind: ContentKind = input.kind;
@@ -320,7 +321,7 @@ export class ContentService {
             entryId: entry.id,
             revision: 1,
             document: asJson(document),
-            authorIdentityId: actor.identityId,
+            authorIdentityId: actorIdentityId(actor),
           },
         });
         await this.audit.record(
@@ -361,7 +362,7 @@ export class ContentService {
               data: {
                 document: asJson(document),
                 note: input.note ?? draft.note,
-                authorIdentityId: caller.actor.identityId,
+                authorIdentityId: actorIdentityId(caller.actor),
               },
             })
           : await tx.contentRevision.create({
@@ -371,7 +372,7 @@ export class ContentService {
                 document: asJson(document),
                 note: input.note ?? null,
                 basedOnRevision: published?.revision ?? null,
-                authorIdentityId: caller.actor.identityId,
+                authorIdentityId: actorIdentityId(caller.actor),
               },
             });
         await tx.contentEntry.update({ where: { id }, data: { updatedAt: new Date() } });
@@ -397,7 +398,7 @@ export class ContentService {
     ).then(() => this.entry(id));
   }
 
-  publish(id: string, input: PublishInput, actor: AuthPrincipal) {
+  publish(id: string, input: PublishInput, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const entry = await lockEntry(tx, id);
@@ -414,7 +415,7 @@ export class ContentService {
         }
         const live = await tx.contentRevision.update({
           where: { id: draft.id },
-          data: { status: 'PUBLISHED', publishedByIdentityId: actor.identityId },
+          data: { status: 'PUBLISHED', publishedByIdentityId: actorIdentityId(actor) },
         });
         await tx.contentEntry.update({ where: { id }, data: { updatedAt: new Date() } });
         await this.audit.record(
@@ -486,7 +487,7 @@ export class ContentService {
             document: asJson(document),
             note: input.note ?? `Restauration de la révision ${input.revision}`,
             basedOnRevision: input.revision,
-            authorIdentityId: caller.actor.identityId,
+            authorIdentityId: actorIdentityId(caller.actor),
           },
         });
         await tx.contentEntry.update({ where: { id }, data: { updatedAt: new Date() } });
@@ -509,7 +510,7 @@ export class ContentService {
     ).then(() => this.entry(id));
   }
 
-  archive(id: string, input: ArchiveInput, actor: AuthPrincipal) {
+  archive(id: string, input: ArchiveInput, actor: Actor) {
     return mutation(() =>
       this.database.client.$transaction(async (tx) => {
         const entry = await lockEntry(tx, id);
