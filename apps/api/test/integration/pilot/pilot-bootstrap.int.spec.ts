@@ -308,9 +308,8 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
     const coach = await adminApi(admin).post('/fleet/vehicles', {
       code: 'ET-COACH-001',
       name: 'Teranga 01',
-      manufacturer: 'Setra',
-      model: 'S 516 HD',
-      modelYear: 2023,
+      manufacturer: 'Autocar grand tourisme',
+      model: 'Modèle à confirmer',
       registrationPlate: 'DEMO-ET-001',
       registrationCountryId: country.body.id,
     });

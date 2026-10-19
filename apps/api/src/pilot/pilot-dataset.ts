@@ -17,7 +17,7 @@
  */
 
 export const PILOT_SOURCE = 'pilot-bootstrap';
-export const PILOT_DATASET_VERSION = 'pilot-corridor/1';
+export const PILOT_DATASET_VERSION = 'pilot-corridor/2';
 
 export interface PilotCountry {
   iso2: string;
@@ -75,7 +75,8 @@ export interface PilotVehicle {
   name: string;
   manufacturer: string;
   model: string;
-  modelYear: number;
+  /** Unknown until the owner confirms the real coaches: never invented. */
+  modelYear: number | null;
   registrationPlate: string;
   registrationCountryIso2: string;
 }
@@ -280,23 +281,28 @@ export const PILOT_SEAT_MAP = {
   cells: coachCells(),
 } as const;
 
-/** PILOT: fictitious vehicles; `DEMO-*` plates identify no real vehicle and no VIN is set. */
+/**
+ * PILOT: fictitious vehicles; `DEMO-*` plates identify no real vehicle and no
+ * VIN is set. The make, model and year of the real coaches are owner data:
+ * until confirmed they stay neutral, so that the public website never claims
+ * a brand or a model EURO TERANGA does not operate.
+ */
 export const PILOT_VEHICLES: readonly PilotVehicle[] = [
   {
     code: 'ET-COACH-001',
     name: 'Teranga 01',
-    manufacturer: 'Setra',
-    model: 'S 516 HD',
-    modelYear: 2023,
+    manufacturer: 'Autocar grand tourisme',
+    model: 'Modèle à confirmer',
+    modelYear: null,
     registrationPlate: 'DEMO-ET-001',
     registrationCountryIso2: 'FR',
   },
   {
     code: 'ET-COACH-002',
     name: 'Teranga 02',
-    manufacturer: 'Setra',
-    model: 'S 516 HD',
-    modelYear: 2024,
+    manufacturer: 'Autocar grand tourisme',
+    model: 'Modèle à confirmer',
+    modelYear: null,
     registrationPlate: 'DEMO-ET-002',
     registrationCountryIso2: 'FR',
   },
