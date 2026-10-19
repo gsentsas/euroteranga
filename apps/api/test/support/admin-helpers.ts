@@ -71,6 +71,34 @@ export function adminApi(actor: StaffActor) {
   };
 }
 
+/**
+ * A vehicle created in OPS by a person (an authenticated staff member), then
+ * moved through `statuses` there: operator data, as the audit trail records it.
+ */
+export async function operatorVehicle(
+  actor: StaffActor,
+  body: Record<string, unknown>,
+  statuses: ReadonlyArray<'ACTIVE' | 'OUT_OF_SERVICE' | 'RETIRED'> = [],
+): Promise<string> {
+  const api = adminApi(actor);
+  const created = await api.post('/fleet/vehicles', body);
+  if (created.status !== 201) {
+    throw new Error(
+      `operator vehicle not created: ${created.status} ${JSON.stringify(created.body)}`,
+    );
+  }
+  for (const status of statuses) {
+    const changed = await api.post(`/fleet/vehicles/${created.body.id}/status`, {
+      status,
+      reason: 'Exploitation historique',
+    });
+    if (changed.status !== 200) {
+      throw new Error(`operator vehicle not ${status}: ${changed.status}`);
+    }
+  }
+  return created.body.id as string;
+}
+
 /** Creates a test-only role (realm STAFF unless stated) with the given permissions. */
 export async function createTestRole(
   app: NestExpressApplication,

@@ -14,11 +14,11 @@ invariant, disables a constraint or writes SQL.
 
 ## Layers
 
-| Layer      | Where                                      | What                                                                                                                                                                                                                                                                                                                                                                  |
-| ---------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Catalogue  | everywhere (production only when approved) | The pilot corridor (5 countries, Paris and Dakar, 5 checkpoints, 2 routes, the 53-seat map, Teranga 01 and 02, fares, 6 departures per direction), plus: a 49-seat map with a wheelchair space, Teranga 03 (PLANNED), DEMO on-board equipment, the four UI-PUBLIC-2 pages from their templates (published, never indexed) and a public navigation without dead links. |
-| Commerce   | local and CI only (SANDBOX payments)       | 40 synthetic customers, 40 bookings (about 85 % and 30 % full Paris → Dakar, 60 % and 6 % Dakar → Paris), 37 SANDBOX payments succeeded, 1 pending, 1 declined, 1 hold cancelled, 98 fictitious passengers.                                                                                                                                                           |
-| Operations | local and CI only, with commerce           | The seed's operator identity, 4 crew members and 8 crew duties, about 60 bags declared online, checkpoint tracking and two LOW notes on the soonest departures.                                                                                                                                                                                                       |
+| Layer      | Where                                      | What                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Catalogue  | everywhere (production only when approved) | The pilot corridor (5 countries, Paris and Dakar, 5 checkpoints, 2 routes, the 53-seat map, Teranga Pilote 01 and 02, fares, 6 departures per direction), plus: a 49-seat map with a wheelchair space, Teranga 03 (PLANNED), DEMO on-board equipment, the four UI-PUBLIC-2 pages from their templates (published, never indexed) and a public navigation without dead links. |
+| Commerce   | local and CI only (SANDBOX payments)       | 40 synthetic customers, 40 bookings (about 85 % and 30 % full Paris → Dakar, 60 % and 6 % Dakar → Paris), 37 SANDBOX payments succeeded, 1 pending, 1 declined, 1 hold cancelled, 98 fictitious passengers.                                                                                                                                                                  |
+| Operations | local and CI only, with commerce           | The seed's operator identity, 4 crew members and 8 crew duties, about 60 bags declared online, checkpoint tracking and two LOW notes on the soonest departures.                                                                                                                                                                                                              |
 
 SANDBOX payments are refused by configuration in staging and production, and
 passengers can only be added to a paid booking: there, the commerce and
@@ -51,9 +51,15 @@ operations layers report themselves as skipped.
 | Passengers                                            | a given name and an initial (`Awa D.`), synthetic dates of birth                         |
 | Incidents                                             | client event ids `seed-etr-v1-*`, descriptions ending with "(donnée de démonstration)"   |
 
-Namespace: `ET_REALISTIC_V1`. The make, model and year of the coaches stay
-neutral ("Autocar grand tourisme", "Modèle à confirmer") until the owner
-provides them.
+Namespace: `ET_REALISTIC_V1`, on the pilot dataset `pilot-corridor/3`. The
+make, model and year of the coaches stay neutral ("Autocar grand tourisme",
+"Modèle à confirmer") until the owner provides them.
+
+The seeded coaches are named « Teranga Pilote 01 », « Teranga Pilote 02 »
+and « Teranga 03 ». The names « Teranga 01 » and « Teranga 02 » may belong to
+historical operator vehicles (on the pilot server, `ET-BUS-001` and
+`ET-BUS-002`, retired): they are never taken over, renamed, reactivated or
+changed. See [pilot-data-bootstrap.md](pilot-data-bootstrap.md).
 
 ## Commands
 
@@ -111,6 +117,45 @@ ALLOW_REALISTIC_SEED=true pnpm seed:realistic -- --cleanup-seed-only
   departures leave, a later run books the next ones.
 - A second run on the same day writes nothing (no row, no audit event): the
   integration tests compare every table and the audit trail.
+
+### A dry run predicts the write
+
+- Before a coach is planned or created, its four unique keys (code, name,
+  VIN, registration country and plate) are checked against every other
+  vehicle, with the same code in a dry run and in a write. A key held by
+  another vehicle is a `conflict` naming that vehicle's code, for example
+  `vehicle name "Teranga 03" already belongs to OPS-003`, never `planned`.
+- What depends on a conflict (equipment, trips) is `skipped` in both modes.
+- So a dry run without conflict means the write will not meet
+  `VEHICLE_IDENTIFIER_CONFLICT` on data already in the database. The fleet
+  service stays the last barrier.
+
+### Resuming after a partial apply
+
+On 2026-10-19, the first production apply (dataset `pilot-corridor/2`)
+stopped on `VEHICLE_IDENTIFIER_CONFLICT` for `ET-COACH-001` and
+`ET-COACH-002`. Their names, « Teranga 01 » and « Teranga 02 », belonged to
+the retired operator coaches `ET-BUS-001` and `ET-BUS-002`. The dry run
+before it had planned them: it checked only codes. Everything before them
+was created (checkpoints, routes, both seat maps, fare tables, Teranga 03
+and its equipment); the coaches, their equipment and the 12 trips were not.
+
+With `pilot-corridor/3`, from a release that contains it:
+
+1. Run the dry run. Expect:
+   - `existing`: countries, stops, checkpoints, routes, both seat maps, fare
+     tables, `ET-COACH-003`, the four pages ("published (kept)") and the
+     navigation ("operator navigation kept");
+   - `planned`: `ET-COACH-001` « Teranga Pilote 01 », `ET-COACH-002`
+     « Teranga Pilote 02 », their equipment and the 12 trips;
+   - `conflict`: 0.
+2. Only with the owner's written approval of that dry run, apply with the
+   same anchor date (see [Production](#production)).
+3. A second dry run reports everything `existing`.
+
+The anchor date cannot be in the past (UTC day). If the date of the first
+attempt has passed, run and approve a dry run with a new date: no trip was
+created yet, so the new date only moves the planned departures.
 
 ## Cleanup (`--cleanup-seed-only`)
 

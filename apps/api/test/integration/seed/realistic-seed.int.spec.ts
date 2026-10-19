@@ -6,6 +6,7 @@ import { BookingService } from '../../../src/bookings/booking.service.js';
 import { PublicBookingService } from '../../../src/bookings/public-booking.service.js';
 import { ContentService } from '../../../src/content/content.service.js';
 import { CrewService } from '../../../src/crew/crew.service.js';
+import { FleetErrors } from '../../../src/fleet/fleet.errors.js';
 import { FleetService } from '../../../src/fleet/fleet.service.js';
 import { IncidentService } from '../../../src/incidents/incident.service.js';
 import { NetworkService } from '../../../src/network/network.service.js';
@@ -25,6 +26,7 @@ import { TripService } from '../../../src/trips/trip.service.js';
 import {
   adminApi,
   isolatedDatabase,
+  operatorVehicle,
   staffActor,
   type StaffActor,
 } from '../../support/admin-helpers.js';
@@ -152,8 +154,8 @@ describe('realistic seed: catalogue layer (isolated database)', () => {
     const client = db(h.t.app);
     const vehicles = await client.vehicle.findMany({ orderBy: { code: 'asc' } });
     expect(vehicles.map((vehicle) => [vehicle.code, vehicle.name, vehicle.status])).toEqual([
-      ['ET-COACH-001', 'Teranga 01', 'ACTIVE'],
-      ['ET-COACH-002', 'Teranga 02', 'ACTIVE'],
+      ['ET-COACH-001', 'Teranga Pilote 01', 'ACTIVE'],
+      ['ET-COACH-002', 'Teranga Pilote 02', 'ACTIVE'],
       ['ET-COACH-003', 'Teranga 03', 'PLANNED'],
     ]);
     // No invented make, model, year or registration for the demo coach.
@@ -185,7 +187,7 @@ describe('realistic seed: catalogue layer (isolated database)', () => {
     expect(response.body.items).toEqual([
       expect.objectContaining({
         code: 'ET-COACH-001',
-        name: 'Teranga 01',
+        name: 'Teranga Pilote 01',
         seatCount: 53,
         amenities: [
           'AIR_CONDITIONING',
@@ -890,4 +892,244 @@ describe('realistic seed: interrupted departures resume (isolated database)', ()
         .every((line) => ['existing', 'skipped'].includes(line.outcome)),
     ).toBe(true);
   }, 300_000);
+});
+
+describe('realistic seed: resumes the partial production apply (isolated database)', () => {
+  let h: Harness;
+  let admin: StaffActor;
+
+  beforeAll(async () => {
+    h = await harness();
+    admin = await staffActor(h.t.app, ['SUPER_ADMIN']);
+  }, 120_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  const staging = { commerceUnavailable: 'APP_ENV=staging' };
+  const PAGES = ['/dakar-paris', '/nos-bus', '/paris-dakar', '/services'];
+
+  it('completes the coaches and trips the first apply missed, then writes nothing', async () => {
+    const client = db(h.t.app);
+    // Production before the seed: the operator's France, retired coaches
+    // named Teranga 01 and 02, four published pages and a navigation.
+    const france = await adminApi(admin).post('/network/countries', {
+      iso2: 'FR',
+      iso3: 'FRA',
+      name: 'France',
+      active: true,
+    });
+    expect(france.status).toBe(201);
+    const historical = [
+      await operatorVehicle(
+        admin,
+        {
+          code: 'ET-BUS-001',
+          name: 'Teranga 01',
+          manufacturer: 'MAN',
+          model: 'Lion’s Coach L',
+          registrationPlate: 'XX-234-YM',
+          registrationCountryId: france.body.id,
+        },
+        ['ACTIVE', 'RETIRED'],
+      ),
+      await operatorVehicle(
+        admin,
+        {
+          code: 'ET-BUS-002',
+          name: 'Teranga 02',
+          manufacturer: 'Mercedes-Benz',
+          model: 'Tourismo M/3',
+          registrationPlate: 'YY-123-SD',
+          registrationCountryId: france.body.id,
+        },
+        ['ACTIVE', 'RETIRED'],
+      ),
+    ];
+    for (const path of PAGES) {
+      const page = await adminApi(admin).post('/content/entries', {
+        kind: 'PAGE',
+        path,
+        title: `Page exploitant ${path}`,
+        description: 'Page écrite par l’exploitant.',
+      });
+      expect(page.status).toBe(201);
+      const published = await adminApi(admin).post(`/content/entries/${page.body.id}/publish`, {
+        expectedDraftUpdatedAt: page.body.draft.updatedAt,
+      });
+      expect(published.status).toBe(200);
+    }
+    const navigation = await adminApi(admin).post('/content/entries', { kind: 'NAVIGATION' });
+    expect(navigation.status).toBe(201);
+    const fleetState = () =>
+      client.vehicle.findMany({ where: { id: { in: historical } }, orderBy: { code: 'asc' } });
+    const fleetAudit = () => client.auditEvent.count({ where: { resourceId: { in: historical } } });
+    const fleetBefore = await fleetState();
+    const fleetAuditBefore = await fleetAudit();
+    const contentBefore = await client.contentRevision.findMany({ orderBy: { id: 'asc' } });
+
+    // The first apply: the fleet service refused the two pilot coaches
+    // (VEHICLE_IDENTIFIER_CONFLICT), after the rest of the catalogue.
+    const fleet = h.t.app.get(FleetService);
+    const createVehicle = fleet.createVehicle.bind(fleet);
+    const refused = vi
+      .spyOn(fleet, 'createVehicle')
+      .mockImplementation(async (input, actor) =>
+        ['ET-COACH-001', 'ET-COACH-002'].includes(input.code)
+          ? Promise.reject(FleetErrors.identifierConflict())
+          : createVehicle(input, actor),
+      );
+    let partial: RealisticSeedReport;
+    try {
+      partial = await h.run(staging);
+    } finally {
+      refused.mockRestore();
+    }
+    const line = (report: RealisticSeedReport, entity: string, key: string) =>
+      report.lines.find((candidate) => candidate.entity === entity && candidate.key === key);
+    expect(line(partial, 'vehicle', 'ET-COACH-001')).toMatchObject({
+      outcome: 'conflict',
+      detail: expect.stringMatching(/^VEHICLE_IDENTIFIER_CONFLICT/),
+    });
+    // The production state after that apply.
+    expect(await client.checkpoint.count()).toBe(5);
+    expect((await client.route.findMany({ orderBy: { code: 'asc' } })).map((r) => r.code)).toEqual([
+      'ET-DKR-PAR',
+      'ET-PAR-DKR',
+    ]);
+    expect(
+      (await client.seatMap.findMany({ orderBy: { code: 'asc' } })).map((m) => m.code),
+    ).toEqual(['ET-SM-COACH-49', 'ET-SM-COACH-53']);
+    expect(await client.fareTable.count()).toBe(2);
+    expect(
+      (await client.vehicle.findMany({ orderBy: { code: 'asc' } })).map((v) => [v.code, v.status]),
+    ).toEqual([
+      ['ET-BUS-001', 'RETIRED'],
+      ['ET-BUS-002', 'RETIRED'],
+      ['ET-COACH-003', 'PLANNED'],
+    ]);
+    expect(await client.trip.count()).toBe(0);
+
+    // The next dry run: the catalogue exists; only the two coaches, their
+    // equipment and the twelve departures are planned, without conflict.
+    const before = await snapshot(h);
+    const dry = await h.run({ ...staging, dryRun: true });
+    expect(await snapshot(h)).toEqual(before);
+    expect(dry.hasConflicts).toBe(false);
+    const catalogue = (report: RealisticSeedReport) =>
+      report.lines.filter((candidate) => candidate.layer === 'catalogue');
+    const keysOf = (report: RealisticSeedReport, outcomes: readonly string[]) =>
+      catalogue(report)
+        .filter((candidate) => outcomes.includes(candidate.outcome))
+        .map((candidate) => `${candidate.entity} ${candidate.key}`)
+        .sort();
+    const pending = keysOf(dry, ['planned']);
+    expect(pending.filter((key) => !key.startsWith('trip '))).toEqual([
+      'amenities ET-COACH-001',
+      'amenities ET-COACH-002',
+      'vehicle ET-COACH-001',
+      'vehicle ET-COACH-002',
+    ]);
+    expect(pending.filter((key) => key.startsWith('trip '))).toHaveLength(12);
+    expect(new Set(catalogue(dry).map((candidate) => candidate.outcome))).toEqual(
+      new Set(['existing', 'planned']),
+    );
+    for (const path of PAGES) {
+      expect(line(dry, 'page', path)).toMatchObject({
+        outcome: 'existing',
+        detail: 'published (kept)',
+      });
+    }
+    expect(line(dry, 'navigation', 'site')).toMatchObject({
+      outcome: 'existing',
+      detail: 'operator navigation kept',
+    });
+
+    // The apply then creates exactly what the dry run planned, nothing else.
+    const applied = await h.run(staging);
+    expect(applied.hasConflicts).toBe(false);
+    expect(keysOf(applied, ['created', 'updated'])).toEqual(pending);
+    expect(keysOf(applied, ['existing'])).toEqual(keysOf(dry, ['existing']));
+    expect(
+      (
+        await client.vehicle.findMany({
+          where: { code: { startsWith: 'ET-COACH-' } },
+          orderBy: { code: 'asc' },
+        })
+      ).map((v) => [v.code, v.name, v.status, v.amenities.length > 0]),
+    ).toEqual([
+      ['ET-COACH-001', 'Teranga Pilote 01', 'ACTIVE', true],
+      ['ET-COACH-002', 'Teranga Pilote 02', 'ACTIVE', true],
+      ['ET-COACH-003', 'Teranga 03', 'PLANNED', true],
+    ]);
+    expect(await client.trip.count({ where: { status: 'SCHEDULED' } })).toBe(12);
+    expect(await client.vehicle.count()).toBe(5);
+
+    // A second apply: nothing created, updated or refused, not a row or an
+    // audit event more.
+    const settled = await snapshot(h);
+    const again = await h.run(staging);
+    expect(again.hasConflicts).toBe(false);
+    expect(keysOf(again, ['created', 'updated', 'conflict'])).toEqual([]);
+    expect(await snapshot(h)).toEqual(settled);
+
+    // Operator data: untouched throughout, and never claimed by the cleanup.
+    expect(await fleetState()).toEqual(fleetBefore);
+    expect(await fleetAudit()).toBe(fleetAuditBefore);
+    expect(await client.contentRevision.findMany({ orderBy: { id: 'asc' } })).toEqual(
+      contentBefore,
+    );
+    const preview = await h.cleanup({ dryRun: true });
+    expect(
+      preview.lines.filter(
+        (candidate) =>
+          ['page', 'navigation', 'vehicle'].includes(candidate.entity) &&
+          candidate.outcome !== 'kept' &&
+          candidate.key !== 'ET-COACH-003',
+      ),
+    ).toEqual([]);
+  }, 300_000);
+});
+
+describe('realistic seed: the dry run predicts a demo coach name conflict (isolated database)', () => {
+  let h: Harness;
+  let admin: StaffActor;
+
+  beforeAll(async () => {
+    h = await harness();
+    admin = await staffActor(h.t.app, ['SUPER_ADMIN']);
+  }, 120_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  it('refuses Teranga 03 in both modes when another vehicle holds its name', async () => {
+    const holder = await operatorVehicle(admin, {
+      code: 'OPS-003',
+      name: 'Teranga 03',
+      manufacturer: 'Constructeur exploitant',
+      model: 'Modèle exploitant',
+    });
+    const before = await db(h.t.app).vehicle.findUniqueOrThrow({ where: { id: holder } });
+    const demo = (report: RealisticSeedReport) =>
+      report.lines
+        .filter((line) => line.key === 'ET-COACH-003')
+        .map(({ entity, outcome, detail }) => ({ entity, outcome, detail }));
+    const expected = [
+      {
+        entity: 'vehicle',
+        outcome: 'conflict',
+        detail: 'vehicle name "Teranga 03" already belongs to OPS-003',
+      },
+      { entity: 'amenities', outcome: 'skipped', detail: 'depends on vehicle:ET-COACH-003' },
+    ];
+    expect(demo(await h.run({ dryRun: true, commerceUnavailable: 'APP_ENV=staging' }))).toEqual(
+      expected,
+    );
+    expect(demo(await h.run({ commerceUnavailable: 'APP_ENV=staging' }))).toEqual(expected);
+    expect(await db(h.t.app).vehicle.count({ where: { code: 'ET-COACH-003' } })).toBe(0);
+    expect(await db(h.t.app).vehicle.findUniqueOrThrow({ where: { id: holder } })).toEqual(before);
+  });
 });

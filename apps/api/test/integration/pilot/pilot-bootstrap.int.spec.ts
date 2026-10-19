@@ -1,18 +1,24 @@
+import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { vehicleCreateSchema, vehicleUpdateSchema } from '../../../src/fleet/fleet.dto.js';
 import { FleetService } from '../../../src/fleet/fleet.service.js';
+import { vehicleIdentifierCollision } from '../../../src/fleet/vehicle-identifiers.js';
 import { NetworkService } from '../../../src/network/network.service.js';
 import {
+  PILOT_ACTOR,
   PilotBootstrap,
   type PilotBootstrapOptions,
   type PilotBootstrapReport,
 } from '../../../src/pilot/pilot-bootstrap.js';
+import { PILOT_VEHICLES, type PilotVehicle } from '../../../src/pilot/pilot-dataset.js';
 import { PricingService } from '../../../src/pricing/pricing.service.js';
 import { SeatMapService } from '../../../src/seat-maps/seat-map.service.js';
 import { TripService } from '../../../src/trips/trip.service.js';
 import {
   adminApi,
   isolatedDatabase,
+  operatorVehicle,
   staffActor,
   type StaffActor,
 } from '../../support/admin-helpers.js';
@@ -149,8 +155,8 @@ describe('pilot data bootstrap: complete dataset (isolated database)', () => {
         v.seatMapVersionId,
       ]),
     ).toEqual([
-      ['ET-COACH-001', 'Teranga 01', 'ACTIVE', 'DEMO-ET-001', null, seatMap.id],
-      ['ET-COACH-002', 'Teranga 02', 'ACTIVE', 'DEMO-ET-002', null, seatMap.id],
+      ['ET-COACH-001', 'Teranga Pilote 01', 'ACTIVE', 'DEMO-ET-001', null, seatMap.id],
+      ['ET-COACH-002', 'Teranga Pilote 02', 'ACTIVE', 'DEMO-ET-002', null, seatMap.id],
     ]);
 
     const fares = await client.fareEntry.findMany({
@@ -307,7 +313,7 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
     expect(country.status).toBe(201);
     const coach = await adminApi(admin).post('/fleet/vehicles', {
       code: 'ET-COACH-001',
-      name: 'Teranga 01',
+      name: 'Teranga Pilote 01',
       manufacturer: 'Autocar grand tourisme',
       model: 'Modèle à confirmer',
       registrationPlate: 'DEMO-ET-001',
@@ -387,7 +393,7 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
     const client = db(h.t.app);
     expect(
       await client.vehicle.findUniqueOrThrow({ where: { code: 'ET-COACH-001' } }),
-    ).toMatchObject({ status: 'ACTIVE', name: 'Teranga 01' });
+    ).toMatchObject({ status: 'ACTIVE', name: 'Teranga Pilote 01' });
     // The operator route is untouched and no Dakar -> Paris trip was created.
     expect(await client.routeVersion.count({ where: { routeId: route.body.id } })).toBe(1);
     expect(await client.routeWaypoint.count({ where: { routeVersionId: version.body.id } })).toBe(
@@ -583,4 +589,396 @@ describe('pilot data bootstrap never overwrites operator data (isolated database
       await other.drop();
     }
   }, 60_000);
+});
+
+const france = async (admin: StaffActor) => {
+  const response = await adminApi(admin).post('/network/countries', {
+    iso2: 'FR',
+    iso3: 'FRA',
+    name: 'France',
+    active: true,
+  });
+  expect(response.status).toBe(201);
+  return response.body.id as string;
+};
+
+const vehicleLines = (report: PilotBootstrapReport) =>
+  report.lines
+    .filter((line) => line.entity === 'vehicle')
+    .map(({ key, outcome, detail }) => ({ key, outcome, detail }));
+
+describe('pilot data bootstrap keeps the historical operator fleet (isolated database)', () => {
+  let h: Harness;
+  let admin: StaffActor;
+
+  beforeAll(async () => {
+    h = await harness();
+    admin = await staffActor(h.t.app, ['SUPER_ADMIN']);
+  }, 60_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  it('creates Teranga Pilote 01 and 02 next to the retired operator Teranga 01 and 02, untouched', async () => {
+    // The production incident: two coaches created, run and retired in OPS
+    // hold the names pilot-corridor/2 gave the pilot coaches.
+    const fr = await france(admin);
+    const historical = [
+      await operatorVehicle(
+        admin,
+        {
+          code: 'ET-BUS-001',
+          name: 'Teranga 01',
+          manufacturer: 'MAN',
+          model: 'Lion’s Coach L',
+          registrationPlate: 'XX-234-YM',
+          registrationCountryId: fr,
+          amenities: ['WIFI', 'TOILET'],
+        },
+        ['ACTIVE', 'RETIRED'],
+      ),
+      await operatorVehicle(
+        admin,
+        {
+          code: 'ET-BUS-002',
+          name: 'Teranga 02',
+          manufacturer: 'Mercedes-Benz',
+          model: 'Tourismo M/3',
+          registrationPlate: 'YY-123-SD',
+          registrationCountryId: fr,
+        },
+        ['ACTIVE', 'RETIRED'],
+      ),
+    ];
+    const client = db(h.t.app);
+    const fleetState = () =>
+      client.vehicle.findMany({ where: { id: { in: historical } }, orderBy: { code: 'asc' } });
+    const fleetAudit = () =>
+      client.auditEvent.findMany({
+        where: { resourceId: { in: historical } },
+        orderBy: { id: 'asc' },
+      });
+    const before = await fleetState();
+    const auditBefore = await fleetAudit();
+    expect(before.map((vehicle) => [vehicle.code, vehicle.name, vehicle.status])).toEqual([
+      ['ET-BUS-001', 'Teranga 01', 'RETIRED'],
+      ['ET-BUS-002', 'Teranga 02', 'RETIRED'],
+    ]);
+
+    // The dry run plans exactly what the write then creates.
+    const dry = await h.run({ dryRun: true });
+    expect(dry.hasConflicts).toBe(false);
+    expect(vehicleLines(dry)).toEqual([
+      { key: 'ET-COACH-001', outcome: 'planned', detail: undefined },
+      { key: 'ET-COACH-002', outcome: 'planned', detail: undefined },
+    ]);
+    expect(
+      dry.lines.filter((line) => line.entity === 'trip' && line.outcome === 'planned'),
+    ).toHaveLength(8);
+
+    const applied = await h.run();
+    expect(applied.hasConflicts).toBe(false);
+    expect(vehicleLines(applied)).toEqual([
+      { key: 'ET-COACH-001', outcome: 'created', detail: undefined },
+      { key: 'ET-COACH-002', outcome: 'created', detail: undefined },
+    ]);
+    const coaches = await client.vehicle.findMany({
+      where: { code: { startsWith: 'ET-COACH-' } },
+      orderBy: { code: 'asc' },
+      include: { registrationCountry: true },
+    });
+    expect(
+      coaches.map((coach) => [
+        coach.code,
+        coach.name,
+        coach.manufacturer,
+        coach.model,
+        coach.modelYear,
+        coach.vin,
+        coach.registrationPlate,
+        coach.registrationCountry?.iso2,
+        coach.status,
+      ]),
+    ).toEqual([
+      [
+        'ET-COACH-001',
+        'Teranga Pilote 01',
+        'Autocar grand tourisme',
+        'Modèle à confirmer',
+        null,
+        null,
+        'DEMO-ET-001',
+        'FR',
+        'ACTIVE',
+      ],
+      [
+        'ET-COACH-002',
+        'Teranga Pilote 02',
+        'Autocar grand tourisme',
+        'Modèle à confirmer',
+        null,
+        null,
+        'DEMO-ET-002',
+        'FR',
+        'ACTIVE',
+      ],
+    ]);
+    const trips = await client.trip.findMany({ where: { reference: { startsWith: 'ET-PILOT-' } } });
+    expect(trips).toHaveLength(8);
+    expect(new Set(trips.map((trip) => trip.vehicleId))).toEqual(
+      new Set(coaches.map((coach) => coach.id)),
+    );
+
+    // The historical coaches: same row (status, name, code, make, model,
+    // plate, amenities, seat map, timestamps) and no new audit event.
+    expect(await fleetState()).toEqual(before);
+    expect(await fleetAudit()).toEqual(auditBefore);
+
+    // A second run reuses everything and writes nothing.
+    const settled = await snapshot(h);
+    const again = await h.run();
+    expect(again.hasConflicts).toBe(false);
+    expect(outcomes(again)).toEqual(['existing']);
+    expect(await snapshot(h)).toEqual(settled);
+    expect(await fleetState()).toEqual(before);
+  });
+});
+
+describe('pilot data bootstrap: the dry run predicts vehicle identifier conflicts (isolated database)', () => {
+  let h: Harness;
+  let admin: StaffActor;
+
+  beforeAll(async () => {
+    h = await harness();
+    admin = await staffActor(h.t.app, ['SUPER_ADMIN']);
+  }, 60_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  // Another vehicle holds the name of the first pilot coach, another the
+  // plate of the second (as the historical fleet did with the names).
+  const [first, second] = PILOT_VEHICLES as [PilotVehicle, PilotVehicle];
+
+  it('reports a name or plate held by another vehicle as the same conflict in a dry run and a write', async () => {
+    const fr = await france(admin);
+    const byName = await operatorVehicle(admin, {
+      code: 'OPS-NAME',
+      name: first.name,
+      manufacturer: 'Constructeur exploitant',
+      model: 'Modèle exploitant',
+    });
+    const byPlate = await operatorVehicle(admin, {
+      code: 'OPS-PLATE',
+      manufacturer: 'Constructeur exploitant',
+      model: 'Modèle exploitant',
+      registrationPlate: second.registrationPlate,
+      registrationCountryId: fr,
+    });
+    const operators = () =>
+      db(h.t.app).vehicle.findMany({
+        where: { id: { in: [byName, byPlate] } },
+        orderBy: { code: 'asc' },
+      });
+    const before = await operators();
+    const expected = [
+      {
+        key: 'ET-COACH-001',
+        outcome: 'conflict',
+        detail: `vehicle name "${first.name}" already belongs to OPS-NAME`,
+      },
+      {
+        key: 'ET-COACH-002',
+        outcome: 'conflict',
+        detail: `registration FR/${second.registrationPlate} already belongs to OPS-PLATE`,
+      },
+    ];
+    const refusedTrips = (report: PilotBootstrapReport) =>
+      report.lines.filter((line) => line.entity === 'trip');
+
+    const snap = await snapshot(h);
+    const dry = await h.run({ dryRun: true });
+    expect(vehicleLines(dry)).toEqual(expected);
+    // Their departures are not planned either: the write would skip them.
+    expect(refusedTrips(dry)).toHaveLength(8);
+    for (const line of refusedTrips(dry)) {
+      expect(line).toMatchObject({
+        outcome: 'skipped',
+        detail: expect.stringMatching(/^depends on vehicle:ET-COACH-00[12]$/),
+      });
+    }
+    expect(await snapshot(h)).toEqual(snap);
+
+    const applied = await h.run();
+    expect(vehicleLines(applied)).toEqual(expected);
+    expect(
+      refusedTrips(applied).map(({ key, outcome, detail }) => ({ key, outcome, detail })),
+    ).toEqual(refusedTrips(dry).map(({ key, outcome, detail }) => ({ key, outcome, detail })));
+    const client = db(h.t.app);
+    expect(await client.vehicle.count({ where: { code: { startsWith: 'ET-COACH-' } } })).toBe(0);
+    expect(await client.trip.count()).toBe(0);
+    expect(await operators()).toEqual(before);
+  });
+
+  it('checks the four unique keys of a vehicle, normalized as the fleet stores them', async () => {
+    const client = db(h.t.app);
+    const fr = (await client.country.findUniqueOrThrow({ where: { iso2: 'FR' } })).id;
+    const vin = 'VF1ABCDEF12345678';
+    await operatorVehicle(admin, {
+      code: 'OPS-VIN',
+      manufacturer: 'Constructeur exploitant',
+      model: 'Modèle exploitant',
+      vin,
+    });
+    const candidate = (fields: Record<string, unknown>) =>
+      vehicleCreateSchema.parse({
+        code: 'CANDIDATE-1',
+        manufacturer: 'Autocar grand tourisme',
+        model: 'Modèle à confirmer',
+        ...fields,
+      });
+    const collision = (fields: Record<string, unknown>, exceptVehicleId?: string) =>
+      vehicleIdentifierCollision(
+        client,
+        candidate(fields),
+        exceptVehicleId ? { exceptVehicleId } : {},
+      );
+
+    expect(await collision({})).toBeNull();
+    expect(await collision({ code: 'ops-name' })).toBe(
+      'vehicle code OPS-NAME already belongs to another vehicle',
+    );
+    expect(await collision({ name: `  ${first.name.replaceAll(' ', '   ')} ` })).toBe(
+      `vehicle name "${first.name}" already belongs to OPS-NAME`,
+    );
+    const byVin = await collision({ vin: vin.toLowerCase() });
+    expect(byVin).toBe('VIN already belongs to OPS-VIN');
+    expect(byVin).not.toContain(vin);
+    expect(
+      await collision({
+        registrationPlate: ` ${second.registrationPlate.toLowerCase()} `,
+        registrationCountryId: fr,
+      }),
+    ).toBe(`registration FR/${second.registrationPlate} already belongs to OPS-PLATE`);
+    // A plate is unique per country: the same plate elsewhere, or without a
+    // known country, is not a collision.
+    expect(
+      await collision({
+        registrationPlate: second.registrationPlate,
+        registrationCountryId: randomUUID(),
+      }),
+    ).toBeNull();
+    expect(
+      await collision({ registrationPlate: second.registrationPlate, registrationCountryId: null }),
+    ).toBeNull();
+    // The vehicle itself is not a collision (a rename keeps its own code).
+    const opsName = await client.vehicle.findUniqueOrThrow({ where: { code: 'OPS-NAME' } });
+    expect(await collision({ code: 'OPS-NAME', name: first.name }, opsName.id)).toBeNull();
+    // Several collisions: the first unique key, in a fixed order.
+    expect(
+      await collision({
+        name: first.name,
+        vin,
+        registrationPlate: second.registrationPlate,
+        registrationCountryId: fr,
+      }),
+    ).toBe(`vehicle name "${first.name}" already belongs to OPS-NAME`);
+  });
+});
+
+describe('pilot data bootstrap: pilot-corridor/2 coaches (isolated database)', () => {
+  let h: Harness;
+  let admin: StaffActor;
+
+  beforeAll(async () => {
+    h = await harness();
+    admin = await staffActor(h.t.app, ['SUPER_ADMIN']);
+    await h.run();
+  }, 120_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  it('renames its own untouched coaches and refuses a coach a person changed', async () => {
+    const client = db(h.t.app);
+    const fleet = h.t.app.get(FleetService);
+    const coach = (code: string) => client.vehicle.findUniqueOrThrow({ where: { code } });
+    // A database seeded under pilot-corridor/2: the bootstrap gave its
+    // coaches the names "Teranga 01" and "Teranga 02".
+    for (const [code, name] of [
+      ['ET-COACH-001', 'Teranga 01'],
+      ['ET-COACH-002', 'Teranga 02'],
+    ] as const) {
+      await fleet.updateVehicle(
+        (await coach(code)).id,
+        vehicleUpdateSchema.parse({ name }),
+        PILOT_ACTOR,
+      );
+    }
+    // A person then changed coach 002 in OPS: it is operator data now.
+    const changed = await adminApi(admin).post(
+      `/fleet/vehicles/${(await coach('ET-COACH-002')).id}`,
+      {
+        amenities: ['WIFI'],
+      },
+    );
+    expect(changed.status).toBe(200);
+    const operatorCoach = await coach('ET-COACH-002');
+    const operatorAudit = await client.auditEvent.count({
+      where: { resourceId: operatorCoach.id },
+    });
+    const expected = (outcome: 'planned' | 'completed') => [
+      {
+        key: 'ET-COACH-001',
+        outcome,
+        detail: 'renamed from "Teranga 01" for pilot-corridor/3',
+      },
+      {
+        key: 'ET-COACH-002',
+        outcome: 'conflict',
+        detail:
+          'existing name "Teranga 02" is a previous pilot name, but a person created or changed this coach',
+      },
+    ];
+
+    const snap = await snapshot(h);
+    const dry = await h.run({ dryRun: true });
+    expect(vehicleLines(dry)).toEqual(expected('planned'));
+    // Departures are judged in the dry run as in the write (counted below).
+    const trips = (report: PilotBootstrapReport, outcome: string) =>
+      report.lines.filter((line) => line.entity === 'trip' && line.outcome === outcome).length;
+    expect(await snapshot(h)).toEqual(snap);
+
+    const applied = await h.run();
+    expect(vehicleLines(applied)).toEqual(expected('completed'));
+    for (const outcome of ['existing', 'skipped', 'planned', 'created', 'conflict']) {
+      expect(trips(applied, outcome), outcome).toBe(trips(dry, outcome));
+    }
+    expect(await coach('ET-COACH-001')).toMatchObject({
+      name: 'Teranga Pilote 01',
+      status: 'ACTIVE',
+    });
+    const renamed = await client.auditEvent.findFirstOrThrow({
+      where: { resourceId: (await coach('ET-COACH-001')).id, action: 'VEHICLE_UPDATED' },
+      orderBy: { id: 'desc' },
+    });
+    expect(renamed.actorIdentityId).toBeNull();
+    expect(renamed.metadata).toMatchObject({ systemActor: 'pilot-bootstrap' });
+    expect(await coach('ET-COACH-002')).toEqual(operatorCoach);
+    expect(await client.auditEvent.count({ where: { resourceId: operatorCoach.id } })).toBe(
+      operatorAudit,
+    );
+    expect(await client.trip.count({ where: { reference: { startsWith: 'ET-PILOT-' } } })).toBe(8);
+
+    // Next run: the renamed coach is the pilot's, the operator's is still refused.
+    const again = await h.run();
+    expect(vehicleLines(again)).toEqual([
+      { key: 'ET-COACH-001', outcome: 'existing', detail: undefined },
+      expected('completed')[1],
+    ]);
+    expect(await coach('ET-COACH-002')).toEqual(operatorCoach);
+  });
 });
