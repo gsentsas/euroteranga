@@ -99,6 +99,27 @@ describe('rich text markup (CMS-2 input method)', () => {
     expect(parseLinkTarget('app:ops')).toBeNull();
   });
 
+  it('keeps balanced parentheses inside https link targets', () => {
+    const markup = '[Dakar](https://fr.wikipedia.org/wiki/Dakar_(ville))';
+    const value = parse(markup);
+    expect(value).toEqual([
+      {
+        kind: 'paragraph',
+        spans: [
+          {
+            text: 'Dakar',
+            link: { kind: 'url', url: 'https://fr.wikipedia.org/wiki/Dakar_(ville)' },
+          },
+        ],
+      },
+    ]);
+    expect(richTextToMarkup(value)).toBe(markup);
+    expect(markupToRichText('[Dakar](https://example.org/wiki/(ville)')).toEqual({
+      ok: false,
+      errors: [{ line: 1, message: 'lien incomplet : parenthèse fermante manquante' }],
+    });
+  });
+
   it('writes the canonical syntax of a tree', () => {
     expect(
       richTextToMarkup([
