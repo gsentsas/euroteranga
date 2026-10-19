@@ -36,12 +36,13 @@ interface Harness {
   t: TestApp;
   drop: () => Promise<void>;
   run: (overrides?: Partial<RealisticSeedOptions>) => Promise<RealisticSeedReport>;
+  cleanup: (options: { dryRun: boolean }) => Promise<RealisticSeedReport>;
 }
 
 async function harness(): Promise<Harness> {
   const database = await isolatedDatabase();
   const t = await startTestApp(integrationEnv({ DATABASE_URL: database.url }));
-  const run = (overrides: Partial<RealisticSeedOptions> = {}) =>
+  const seed = () =>
     new RealisticSeed({
       db: db(t.app),
       network: t.app.get(NetworkService),
@@ -65,10 +66,13 @@ async function harness(): Promise<Harness> {
         incidents: t.app.get(IncidentService),
         tracking: t.app.get(TrackingService),
       },
-    }).run({ anchorDate: today(), tripsPerDirection: 6, dryRun: false, ...overrides });
+    });
+  const run = (overrides: Partial<RealisticSeedOptions> = {}) =>
+    seed().run({ anchorDate: today(), tripsPerDirection: 6, dryRun: false, ...overrides });
   return {
     t,
     run,
+    cleanup: (options) => seed().cleanup(options),
     drop: async () => {
       await t.app.close();
       await database.drop();
@@ -450,5 +454,120 @@ describe('realistic seed: no bookings outside local and CI (isolated database)',
     expect(await db(h.t.app).authIdentity.count()).toBe(0);
     // The catalogue (public site) is still complete.
     expect(await db(h.t.app).trip.count()).toBe(12);
+  });
+});
+
+describe('realistic seed: cleanup retires seed data only (isolated database)', () => {
+  let h: Harness;
+  let admin: StaffActor;
+
+  beforeAll(async () => {
+    h = await harness();
+    admin = await staffActor(h.t.app, ['SUPER_ADMIN']);
+    await h.run();
+  }, 180_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  it('archives, retires and cancels its own records, and nothing that belongs to anyone else', async () => {
+    const client = db(h.t.app);
+    // Operator data next to the seed: a vehicle, a page, and a seed page a person edited.
+    const operatorCoach = await adminApi(admin).post('/fleet/vehicles', {
+      code: 'OPS_COACH_01',
+      manufacturer: 'Constructeur exploitant',
+      model: 'Modèle exploitant',
+      amenities: ['WIFI', 'TOILET'],
+    });
+    expect(operatorCoach.status).toBe(201);
+    const operatorPage = await adminApi(admin).post('/content/entries', {
+      kind: 'PAGE',
+      path: '/a-propos',
+      title: 'À propos',
+      description: 'Page écrite par l’exploitant.',
+    });
+    expect(operatorPage.status).toBe(201);
+    const services = await client.contentEntry.findUniqueOrThrow({
+      where: { kind_key: { kind: 'PAGE', key: '/services' } },
+      include: { revisions: { where: { status: 'PUBLISHED' } } },
+    });
+    const edited = await adminApi(admin).post(`/content/entries/${services.id}/draft`, {
+      document: { ...(services.revisions[0]!.document as object), title: 'Nos services, revus' },
+      expectedDraftUpdatedAt: null,
+    });
+    expect(edited.status).toBe(200);
+    const operatorRecords = async () => ({
+      coach: await client.vehicle.findUniqueOrThrow({ where: { code: 'OPS_COACH_01' } }),
+      page: await client.contentEntry.findUniqueOrThrow({ where: { id: operatorPage.body.id } }),
+      services: await client.contentEntry.findUniqueOrThrow({ where: { id: services.id } }),
+      pilotTrips: await client.trip.findMany({
+        orderBy: { reference: 'asc' },
+        select: { reference: true, status: true, vehicleId: true },
+      }),
+      pilotCoaches: await client.vehicle.findMany({
+        where: { code: { in: ['ET-COACH-001', 'ET-COACH-002'] } },
+        select: { code: true, status: true },
+      }),
+      operatorAudit: await client.auditEvent.count({
+        where: { resourceId: { in: [operatorCoach.body.id, operatorPage.body.id] } },
+      }),
+    });
+    const before = await operatorRecords();
+
+    // The preview writes nothing.
+    const auditBefore = await client.auditEvent.count();
+    const preview = await h.cleanup({ dryRun: true });
+    expect(preview.lines.some((line) => line.outcome === 'planned')).toBe(true);
+    expect(preview.lines.some((line) => line.outcome === 'retired')).toBe(false);
+    expect(await client.auditEvent.count()).toBe(auditBefore);
+
+    const report = await h.cleanup({ dryRun: false });
+    expect(report.hasConflicts).toBe(false);
+    const outcome = (entity: string, key: string) =>
+      report.lines.find((line) => line.entity === entity && line.key === key)?.outcome;
+    expect(outcome('page', '/paris-dakar')).toBe('retired');
+    expect(outcome('page', '/nos-bus')).toBe('retired');
+    expect(outcome('page', '/services')).toBe('kept');
+    expect(outcome('navigation', 'site')).toBe('retired');
+    expect(outcome('vehicle', 'ET-COACH-003')).toBe('retired');
+    expect(outcome('seat-map', 'ET-SM-COACH-49')).toBe('retired');
+    expect(outcome('amenities', 'ET-COACH-001')).toBe('retired');
+    expect(outcome('booking', 'confirmed')).toBe('kept');
+    // The two open holds (pending payment, declined payment) are cancelled.
+    expect(
+      report.lines.filter((line) => line.entity === 'booking' && line.outcome === 'retired'),
+    ).toHaveLength(2);
+
+    // Everything that is not the seed's is exactly as it was, audit included.
+    expect(await operatorRecords()).toEqual(before);
+    expect(
+      (
+        await client.contentEntry.findUniqueOrThrow({
+          where: { kind_key: { kind: 'PAGE', key: '/paris-dakar' } },
+        })
+      ).archivedAt,
+    ).not.toBeNull();
+    expect(
+      (await client.vehicle.findUniqueOrThrow({ where: { code: 'ET-COACH-003' } })).status,
+    ).toBe('RETIRED');
+    const fleet = (await publicGet(h, '/booking/fleet')).body.items as Array<{
+      code: string;
+      amenities: string[];
+    }>;
+    expect(fleet.find((item) => item.code === 'ET-COACH-001')!.amenities).toEqual([]);
+    expect(fleet.find((item) => item.code === 'OPS_COACH_01')).toBeUndefined(); // PLANNED
+    expect((await publicGet(h, '/content/pages?path=/paris-dakar')).status).toBe(404);
+    const site = await publicGet(h, '/content/site');
+    expect(site.body.navigation.header.map((link: { label: string }) => link.label)).toEqual([
+      'Trajets',
+      'Services',
+      'Suivi',
+      'Aide',
+    ]);
+
+    // A second cleanup finds nothing more to retire.
+    const again = await h.cleanup({ dryRun: false });
+    expect(again.lines.some((line) => line.outcome === 'retired')).toBe(false);
   });
 });

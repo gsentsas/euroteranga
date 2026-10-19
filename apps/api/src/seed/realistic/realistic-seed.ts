@@ -5,7 +5,6 @@ import {
   type Navigation,
 } from '@euroteranga/content';
 import type { PrismaClient } from '@euroteranga/database';
-import type { SystemActor } from '../../auth/session/auth-principal.js';
 import type { ContentService } from '../../content/content.service.js';
 import {
   vehicleCreateSchema,
@@ -19,13 +18,14 @@ import {
 } from '../../pilot/pilot-bootstrap.js';
 import { seatMapCellsSchema, seatMapCreateSchema } from '../../seat-maps/seat-map.dto.js';
 import type { SeatMapService } from '../../seat-maps/seat-map.service.js';
+import { RealisticCleanup } from './realistic-cleanup.js';
 import { RealisticCommerce, type RealisticCommerceServices } from './realistic-commerce.js';
 import { RealisticOperations, type RealisticOperationsServices } from './realistic-operations.js';
 import {
+  REALISTIC_ACTOR,
   REALISTIC_AMENITIES,
   REALISTIC_PAGE_TEMPLATES,
   REALISTIC_SEAT_MAP,
-  REALISTIC_SOURCE,
   REALISTIC_VEHICLES,
   realisticNavigation,
   type RealisticSeatCell,
@@ -41,7 +41,7 @@ import {
 
 export type { RealisticLayer, RealisticOutcome, RealisticReportLine };
 
-export const REALISTIC_ACTOR: SystemActor = { kind: 'system', source: REALISTIC_SOURCE };
+export { REALISTIC_ACTOR };
 
 export interface RealisticSeedReport {
   dryRun: boolean;
@@ -166,6 +166,28 @@ export class RealisticSeed {
 
     return {
       dryRun: dry,
+      lines: this.reporter.lines,
+      hasConflicts: this.reporter.hasConflicts,
+    };
+  }
+
+  /**
+   * `--cleanup-seed-only`: retires what this seed created and nobody changed
+   * since (see RealisticCleanup). The pilot corridor is never touched.
+   */
+  async cleanup(options: { dryRun: boolean }): Promise<RealisticSeedReport> {
+    await new RealisticCleanup(
+      {
+        db: this.services.db,
+        content: this.services.content,
+        fleet: this.services.fleet,
+        seatMaps: this.services.seatMaps,
+        bookings: this.services.commerce?.bookings,
+      },
+      this.reporter,
+    ).run(options);
+    return {
+      dryRun: options.dryRun,
       lines: this.reporter.lines,
       hasConflicts: this.reporter.hasConflicts,
     };

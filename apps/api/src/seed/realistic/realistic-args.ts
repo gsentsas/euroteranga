@@ -7,6 +7,8 @@ export type RealisticMode = (typeof REALISTIC_MODES)[number];
 
 export interface RealisticArgs {
   mode: RealisticMode;
+  /** With --cleanup-seed-only: list what would be retired, write nothing. */
+  preview: boolean;
   confirmProduction: boolean;
   anchorDate: string;
   tripsPerDirection: number;
@@ -18,10 +20,11 @@ export type RealisticArgsResult =
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * Parses `[--dry-run | --apply | --summary | --cleanup-seed-only]
+ * Parses `[--dry-run | --apply | --summary | --cleanup-seed-only [--dry-run]]
  * [--confirm-production] [--anchor-date YYYY-MM-DD] [--trips-per-direction N]`.
- * Without a mode, nothing is written (`--dry-run`). A single leading `--`
- * (forwarded by pnpm) is ignored; anything else unexpected is refused.
+ * Without a mode, nothing is written (`--dry-run`); `--cleanup-seed-only
+ * --dry-run` previews the cleanup. A single leading `--` (forwarded by pnpm)
+ * is ignored; anything else unexpected is refused.
  */
 export function parseRealisticArgs(argv: readonly string[], today: Date): RealisticArgsResult {
   const args = argv[0] === '--' ? argv.slice(1) : [...argv];
@@ -44,7 +47,10 @@ export function parseRealisticArgs(argv: readonly string[], today: Date): Realis
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'invalid arguments' };
   }
-  const modes = REALISTIC_MODES.filter((mode) => values[mode] === true);
+  const preview = values['cleanup-seed-only'] === true && values['dry-run'] === true;
+  const modes = REALISTIC_MODES.filter(
+    (mode) => values[mode] === true && !(preview && mode === 'dry-run'),
+  );
   if (modes.length > 1) {
     return { ok: false, message: `Choose one mode: ${modes.map((m) => `--${m}`).join(', ')}.` };
   }
@@ -81,6 +87,7 @@ export function parseRealisticArgs(argv: readonly string[], today: Date): Realis
     ok: true,
     args: {
       mode: modes[0] ?? 'dry-run',
+      preview,
       confirmProduction: values['confirm-production'] === true,
       anchorDate,
       tripsPerDirection,
@@ -88,7 +95,8 @@ export function parseRealisticArgs(argv: readonly string[], today: Date): Realis
   };
 }
 
-export const writes = (mode: RealisticMode) => mode === 'apply' || mode === 'cleanup-seed-only';
+export const writes = (args: Pick<RealisticArgs, 'mode' | 'preview'>) =>
+  args.mode === 'apply' || (args.mode === 'cleanup-seed-only' && !args.preview);
 
 /**
  * Writes need ALLOW_REALISTIC_SEED=true (set on purpose, never by default),
@@ -106,7 +114,7 @@ export function realisticRefusal(
   if (env.REALISTIC_SEED_NAMESPACE && env.REALISTIC_SEED_NAMESPACE !== REALISTIC_NAMESPACE) {
     return `REALISTIC_SEED_NAMESPACE=${env.REALISTIC_SEED_NAMESPACE} does not match this seed (${REALISTIC_NAMESPACE}).`;
   }
-  if (!writes(args.mode)) return null;
+  if (!writes(args)) return null;
   if (env.ALLOW_REALISTIC_SEED !== 'true') {
     return 'writing the realistic dataset needs ALLOW_REALISTIC_SEED=true (try --dry-run first).';
   }

@@ -3,7 +3,16 @@ import { PublicApiError } from '../../auth/http/public-api-error.js';
 export type RealisticLayer = 'catalogue' | 'commerce' | 'operations';
 
 export type RealisticOutcome =
-  'created' | 'updated' | 'existing' | 'planned' | 'skipped' | 'conflict';
+  | 'created'
+  | 'updated'
+  | 'existing'
+  | 'planned'
+  | 'skipped'
+  | 'conflict'
+  /** --cleanup-seed-only: archived, retired, deactivated or cancelled through the domain. */
+  | 'retired'
+  /** --cleanup-seed-only: left in place, with the reason. */
+  | 'kept';
 
 export interface RealisticReportLine {
   layer: RealisticLayer;
@@ -108,7 +117,7 @@ const ENTITY_LABELS: ReadonlyArray<[entity: string, label: string]> = [
   ['check-in', 'Check-ins'],
 ];
 
-const COLUMNS: readonly RealisticOutcome[] = [
+const SEED_COLUMNS: readonly RealisticOutcome[] = [
   'created',
   'updated',
   'existing',
@@ -116,13 +125,18 @@ const COLUMNS: readonly RealisticOutcome[] = [
   'skipped',
   'conflict',
 ];
+const CLEANUP_COLUMNS: readonly RealisticOutcome[] = ['retired', 'planned', 'kept', 'conflict'];
 
 /**
  * "Vehicles     created=1 updated=2 existing=0 …": one row per entity, in
  * seed order, then any entity the table does not know yet. A line counts
  * for the records it stands for.
  */
-export function summarize(lines: readonly RealisticReportLine[]): string[] {
+export function summarize(
+  lines: readonly RealisticReportLine[],
+  kind: 'seed' | 'cleanup' = 'seed',
+): string[] {
+  const columns = kind === 'cleanup' ? CLEANUP_COLUMNS : SEED_COLUMNS;
   const known = new Map(ENTITY_LABELS);
   const entities = [
     ...ENTITY_LABELS.map(([entity]) => entity),
@@ -131,7 +145,7 @@ export function summarize(lines: readonly RealisticReportLine[]): string[] {
   return entities
     .filter((entity) => lines.some((line) => line.entity === entity))
     .map((entity) => {
-      const counts = COLUMNS.map((outcome) => {
+      const counts = columns.map((outcome) => {
         const total = lines
           .filter((line) => line.entity === entity && line.outcome === outcome)
           .reduce((sum, line) => sum + (line.count ?? 1), 0);

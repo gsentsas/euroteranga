@@ -10,6 +10,7 @@ import { summarize } from '../../../src/seed/realistic/realistic-report.js';
 const now = new Date('2030-03-10T12:00:00Z');
 const args = (overrides: Partial<RealisticArgs> = {}): RealisticArgs => ({
   mode: 'dry-run',
+  preview: false,
   confirmProduction: false,
   anchorDate: '2030-03-10',
   tripsPerDirection: 6,
@@ -23,6 +24,19 @@ describe('realistic seed arguments', () => {
       ok: true,
       args: args({ mode: 'apply' }),
     });
+  });
+
+  it('previews the cleanup without writing when --dry-run accompanies it', () => {
+    expect(parseRealisticArgs(['--cleanup-seed-only', '--dry-run'], now)).toEqual({
+      ok: true,
+      args: args({ mode: 'cleanup-seed-only', preview: true }),
+    });
+    expect(
+      realisticRefusal(
+        { APP_ENV: 'production' },
+        args({ mode: 'cleanup-seed-only', preview: true }),
+      ),
+    ).toBeNull();
   });
 
   it('refuses two modes, unknown options, past or impossible dates and bad counts', () => {

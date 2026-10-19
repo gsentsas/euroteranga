@@ -83,14 +83,10 @@ async function main(): Promise<number> {
   out(
     `Realistic dataset ${REALISTIC_NAMESPACE} on pilot ${PILOT_DATASET_VERSION} — APP_ENV=${env.APP_ENV}, ` +
       `database ${maskedDatabaseTarget(process.env.DATABASE_URL)}, mode ${args.mode}` +
-      `${writes(args.mode) ? '' : ' (nothing is written)'}.`,
+      `${args.preview ? ' (preview)' : ''}${writes(args) ? '' : ' (nothing is written)'}.`,
   );
   if (refusal) {
     err(`Refused: ${refusal}`);
-    return 2;
-  }
-  if (args.mode === 'cleanup-seed-only') {
-    err('--cleanup-seed-only is not available yet in this version.');
     return 2;
   }
 
@@ -132,12 +128,15 @@ async function main(): Promise<number> {
             tracking: app.get(TrackingService, { strict: false }),
           },
     });
-    const report = await seed.run({
-      anchorDate: args.anchorDate,
-      tripsPerDirection: args.tripsPerDirection,
-      dryRun: args.mode !== 'apply',
-      commerceUnavailable: unavailable,
-    });
+    const cleanup = args.mode === 'cleanup-seed-only';
+    const report = cleanup
+      ? await seed.cleanup({ dryRun: args.preview })
+      : await seed.run({
+          anchorDate: args.anchorDate,
+          tripsPerDirection: args.tripsPerDirection,
+          dryRun: args.mode !== 'apply',
+          commerceUnavailable: unavailable,
+        });
     if (args.mode !== 'summary') {
       for (const line of report.lines) {
         out(
@@ -145,7 +144,7 @@ async function main(): Promise<number> {
         );
       }
     }
-    for (const row of summarize(report.lines)) out(row);
+    for (const row of summarize(report.lines, cleanup ? 'cleanup' : 'seed')) out(row);
     if (report.hasConflicts) {
       err('Some items conflict with existing data and were left untouched (see "conflict" lines).');
       return 2;

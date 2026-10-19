@@ -1,4 +1,5 @@
 import type { Navigation } from '@euroteranga/content';
+import type { SystemActor } from '../../auth/session/auth-principal.js';
 import type { VEHICLE_AMENITIES } from '../../fleet/fleet.dto.js';
 
 /**
@@ -16,6 +17,9 @@ import type { VEHICLE_AMENITIES } from '../../fleet/fleet.dto.js';
 
 export const REALISTIC_NAMESPACE = 'ET_REALISTIC_V1';
 export const REALISTIC_SOURCE = 'realistic-seed';
+
+/** Audited as `metadata.systemActor = "realistic-seed"`, with no identity. */
+export const REALISTIC_ACTOR: SystemActor = { kind: 'system', source: REALISTIC_SOURCE };
 
 /** Upcoming departures per direction (DATA-1 plans them every 14 days from today). */
 export const REALISTIC_TRIPS_PER_DIRECTION = 6;
