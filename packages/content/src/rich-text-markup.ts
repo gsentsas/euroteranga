@@ -92,6 +92,22 @@ export function formatLinkTarget(target: LinkTarget): string {
   }
 }
 
+/** Finds the ')' that closes a link target while allowing balanced parentheses inside it. */
+function findLinkTargetEnd(source: string, from: number): number {
+  let depth = 0;
+  for (let index = from; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '(') {
+      depth += 1;
+      continue;
+    }
+    if (char !== ')') continue;
+    if (depth === 0) return index;
+    depth -= 1;
+  }
+  return -1;
+}
+
 class InlineError extends Error {}
 
 /**
@@ -123,7 +139,7 @@ function parseInline(source: string): Span[] {
     if (index === linkEnd) {
       // End of a link label: `](target)` was validated when the label opened.
       flush();
-      const close = source.indexOf(')', index + 2);
+      const close = findLinkTargetEnd(source, index + 2);
       link = undefined;
       linkEnd = -1;
       index = close + 1;
@@ -150,7 +166,7 @@ function parseInline(source: string): Span[] {
       if (labelEnd < 0 || source[labelEnd + 1] !== '(') {
         throw new InlineError('lien incomplet : écrivez [texte](cible)');
       }
-      const close = source.indexOf(')', labelEnd + 2);
+      const close = findLinkTargetEnd(source, labelEnd + 2);
       if (close < 0) throw new InlineError('lien incomplet : parenthèse fermante manquante');
       const target = parseLinkTarget(source.slice(labelEnd + 2, close));
       if (!target) {
