@@ -13,7 +13,7 @@ import {
   type ContentBlockType,
   type DocumentPath,
 } from '@euroteranga/content';
-import type { BookingSearchStop } from '@euroteranga/auth-client';
+import type { BookingSearchStop, PublicVehicle } from '@euroteranga/auth-client';
 import { useEffect, useId, useState } from 'react';
 import { auth } from '../../lib/auth';
 import { useEditor } from './editor-context';
@@ -137,6 +137,63 @@ function StopCodeField({ path, label }: { path: DocumentPath; label: string }) {
   return <SelectField path={path} label={label} options={options} hint={hint} />;
 }
 
+type FleetState =
+  { status: 'loading' } | { status: 'ready'; vehicles: PublicVehicle[] } | { status: 'failed' };
+
+let fleetRequest: Promise<PublicVehicle[] | null> | null = null;
+function useFleet(): FleetState {
+  const [state, setState] = useState<FleetState>({ status: 'loading' });
+  useEffect(() => {
+    fleetRequest ??= auth.booking.public.fleet().then((result) => {
+      if (result.ok) return result.data.items;
+      fleetRequest = null;
+      return null;
+    });
+    let current = true;
+    void fleetRequest.then((items) => {
+      if (current) setState(items ? { status: 'ready', vehicles: items } : { status: 'failed' });
+    });
+    return () => {
+      current = false;
+    };
+  }, []);
+  return state;
+}
+
+/** An active public vehicle, by code; internal fleet fields never enter content. */
+function VehicleCodeField({ path }: { path: DocumentPath }) {
+  const editor = useEditor();
+  const state = useFleet();
+  const raw = editor.get(path);
+  const value = typeof raw === 'string' ? raw : '';
+  const options: Array<[string, string]> =
+    state.status === 'ready'
+      ? state.vehicles
+          .map((vehicle): [string, string] => [
+            vehicle.code,
+            `${vehicle.name ?? `${vehicle.manufacturer} ${vehicle.model}`} — ${vehicle.code}`,
+          ])
+          .sort((a, b) => a[1].localeCompare(b[1], 'fr'))
+      : [];
+  if (value && !options.some(([code]) => code === value)) {
+    options.unshift([value, `${value} — véhicule inactif, inconnu ou non chargé`]);
+  }
+  return (
+    <SelectField
+      path={path}
+      label="Autocar"
+      options={options}
+      hint={
+        state.status === 'loading'
+          ? 'Chargement des autocars actifs…'
+          : state.status === 'failed'
+            ? 'La flotte n’a pas pu être chargée : le code choisi est conservé. Rouvrez la section pour réessayer.'
+            : 'Autocars actifs exposés par la lecture publique de la flotte.'
+      }
+    />
+  );
+}
+
 /** The optional trip search of the hero, pre-filled with a direction. */
 function HeroSearchFields({ path }: { path: DocumentPath }) {
   const editor = useEditor();
@@ -198,6 +255,14 @@ function BlockFields({ block, path }: { block: ContentBlock; path: DocumentPath 
     case 'hero':
       return (
         <>
+          <SelectField
+            path={[...path, 'variant']}
+            label="Format du bandeau"
+            options={[
+              ['home', 'Accueil (grand bandeau)'],
+              ['page', 'Page intérieure (bandeau compact)'],
+            ]}
+          />
           <TextField path={[...path, 'eyebrow']} label="Accroche" max={80} />
           <TextField path={[...path, 'title']} label="Titre principal (H1)" max={140} required />
           <TextField
@@ -354,9 +419,19 @@ function BlockFields({ block, path }: { block: ContentBlock; path: DocumentPath 
           <TextField path={[...path, 'title']} label="Titre (H2)" max={160} required />
           <TextField path={[...path, 'intro']} label="Introduction" max={400} multiline />
           <SelectField
+            path={[...path, 'layout']}
+            label="Présentation"
+            options={[
+              ['cards', 'Cartes avec photo'],
+              ['dates', 'Dates et tarifs en bandeau'],
+            ]}
+          />
+          <SelectField
             path={[...path, 'limit']}
             label="Départs affichés"
-            options={['1', '2', '3', '4', '5', '6'].map((count) => [count, count] as const)}
+            options={['1', '2', '3', '4', '5', '6', '7', '8'].map(
+              (count) => [count, count] as const,
+            )}
             onSelect={(value) => editor.set([...path, 'limit'], Number(value))}
           />
           <ListField
@@ -378,6 +453,120 @@ function BlockFields({ block, path }: { block: ContentBlock; path: DocumentPath 
             )}
           />
           <LinkFields path={[...path, 'cta']} legend="Lien « tous les voyages »" optional />
+        </>
+      );
+    case 'sectionNav':
+      return (
+        <>
+          <TextField
+            path={[...path, 'label']}
+            label="Nom accessible du sommaire"
+            max={60}
+            required
+          />
+          <ListField
+            path={[...path, 'items']}
+            legend="Liens vers les sections"
+            itemLabel={(index) => `Lien ${index + 1}`}
+            min={2}
+            max={8}
+            addLabel="Ajouter un lien"
+            create={() => ({ label: '', anchor: '' })}
+            render={(itemPath) => (
+              <div className="ops-content-grid">
+                <TextField path={[...itemPath, 'label']} label="Libellé" max={40} required />
+                <TextField
+                  path={[...itemPath, 'anchor']}
+                  label="Ancre de la section"
+                  max={41}
+                  required
+                  hint="Sans #, par exemple itineraire."
+                />
+              </div>
+            )}
+          />
+        </>
+      );
+    case 'itinerary':
+      return (
+        <>
+          <p className="et-hint">
+            Horaires, étapes, pays, durée et équipements du car sont lus sur le prochain départ
+            réservable. Ils ne se saisissent jamais ici.
+          </p>
+          <TextField path={[...path, 'title']} label="Titre (H2)" max={160} required />
+          <TextField path={[...path, 'intro']} label="Introduction" max={400} multiline />
+          <div className="ops-content-grid">
+            <StopCodeField path={[...path, 'fromCode']} label="Départ" />
+            <StopCodeField path={[...path, 'toCode']} label="Arrivée" />
+          </div>
+          <TextField
+            path={[...path, 'includedTitle']}
+            label="Titre de la liste des services inclus"
+            max={80}
+          />
+          <ListField
+            path={[...path, 'included']}
+            legend="Services confirmés pour chaque voyage"
+            itemLabel={(index) => `Service ${index + 1}`}
+            max={8}
+            addLabel="Ajouter un service confirmé"
+            create={() => ''}
+            render={(itemPath) => <TextField path={itemPath} label="Service" max={80} required />}
+          />
+          <CheckboxField
+            path={[...path, 'showVehicleAmenities']}
+            label="Afficher les équipements de l’autocar affecté au départ"
+            hint="Ces équipements viennent de la flotte, pas du contenu."
+          />
+        </>
+      );
+    case 'fleet':
+      return (
+        <>
+          <p className="et-hint">
+            Nom, modèle, année, nombre de places et équipements viennent de la flotte. Vous ajoutez
+            uniquement les textes et images éditoriaux.
+          </p>
+          <TextField path={[...path, 'title']} label="Titre (H2)" max={160} required />
+          <TextField path={[...path, 'intro']} label="Introduction" max={400} multiline />
+          <SelectField
+            path={[...path, 'selection']}
+            label="Autocars affichés"
+            options={[
+              ['all', 'Tous les autocars actifs'],
+              ['listed', 'Uniquement les autocars présentés ci-dessous'],
+            ]}
+          />
+          <ListField
+            path={[...path, 'items']}
+            legend="Présentations éditoriales"
+            itemLabel={(index) => `Autocar ${index + 1}`}
+            max={12}
+            addLabel="Présenter un autocar"
+            create={() => ({ vehicleCode: '', gallery: [] })}
+            render={(itemPath) => (
+              <>
+                <VehicleCodeField path={[...itemPath, 'vehicleCode']} />
+                <MediaField path={[...itemPath, 'mediaId']} label="Photo principale" />
+                <TextField
+                  path={[...itemPath, 'description']}
+                  label="Description"
+                  max={400}
+                  multiline
+                />
+                <ListField
+                  path={[...itemPath, 'gallery']}
+                  legend="Galerie intérieure"
+                  itemLabel={(index) => `Photo ${index + 1}`}
+                  max={6}
+                  addLabel="Ajouter une photo"
+                  create={() => ''}
+                  render={(mediaPath) => <MediaField path={mediaPath} label="Photo" required />}
+                />
+              </>
+            )}
+          />
         </>
       );
     case 'faq':

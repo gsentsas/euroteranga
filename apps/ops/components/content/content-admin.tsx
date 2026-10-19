@@ -1,7 +1,7 @@
 'use client';
 
 import type { ContentEntrySummary } from '@euroteranga/auth-client';
-import { contentPathSchema, DEFAULT_HOME_PAGE } from '@euroteranga/content';
+import { contentPathSchema, DEFAULT_HOME_PAGE, PAGE_TEMPLATES } from '@euroteranga/content';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
@@ -29,6 +29,8 @@ function CreatePageForm({ onCreated }: { onCreated: (id: string) => void }) {
   const [path, setPath] = useState('/');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [templateId, setTemplateId] = useState('');
+  const template = PAGE_TEMPLATES.find((candidate) => candidate.id === templateId);
   const pathCheck = contentPathSchema.safeParse(path);
   const pathError =
     path.length > 1 && !pathCheck.success ? pathCheck.error.issues[0]?.message : null;
@@ -44,8 +46,22 @@ function CreatePageForm({ onCreated }: { onCreated: (id: string) => void }) {
         title: title.trim(),
         description: description.trim(),
       });
-      if (result.ok) createdId = result.data.id;
-      return result;
+      if (!result.ok || !template) {
+        if (result.ok) createdId = result.data.id;
+        return result;
+      }
+      createdId = result.data.id;
+      // UI-PUBLIC-2: the template brings its sections only. The SEO of the
+      // created draft (non indexed) is kept: indexing stays an SEO decision.
+      return auth.admin.content.saveDraft(result.data.id, {
+        document: {
+          ...(result.data.draft?.document ?? {}),
+          title: title.trim(),
+          blocks: template.document.blocks,
+        } as Record<string, unknown>,
+        note: `Modèle « ${template.label} »`,
+        expectedDraftUpdatedAt: result.data.draft?.updatedAt ?? null,
+      });
     }, `Page ${pathCheck.data} créée (brouillon, non indexée).`);
     if (ok && createdId) onCreated(createdId);
   };
@@ -54,6 +70,35 @@ function CreatePageForm({ onCreated }: { onCreated: (id: string) => void }) {
     <form className="et-form et-network-form" aria-label="Créer une page" onSubmit={submit}>
       <h2>Créer une page</h2>
       {feedback}
+      <div className="et-field">
+        <label htmlFor="content-new-template">Modèle</label>
+        <select
+          id="content-new-template"
+          className="et-select"
+          value={templateId}
+          aria-describedby="content-new-template-hint"
+          onChange={(event) => {
+            const chosen = PAGE_TEMPLATES.find((candidate) => candidate.id === event.target.value);
+            setTemplateId(event.target.value);
+            if (!chosen) return;
+            setPath(chosen.path);
+            setTitle(chosen.document.title);
+            setDescription(chosen.document.seo.description);
+          }}
+        >
+          <option value="">Page vide</option>
+          {PAGE_TEMPLATES.map((candidate) => (
+            <option key={candidate.id} value={candidate.id}>
+              {candidate.label}
+            </option>
+          ))}
+        </select>
+        <p id="content-new-template-hint" className="et-hint">
+          {template
+            ? template.description
+            : 'Un modèle prépare les sections ; dates, prix, itinéraires et autocars restent lus en direct.'}
+        </p>
+      </div>
       <div className="et-field">
         <label htmlFor="content-new-path">Chemin public</label>
         <input
