@@ -1870,6 +1870,89 @@ export interface PassengerManifestPage {
   nextCursor: number | null;
 }
 
+/** CMS-1: public website content. Documents follow @euroteranga/content. */
+export type ContentKind = 'PAGE' | 'SITE_SETTINGS' | 'NAVIGATION';
+export type ContentRevisionStatus = 'DRAFT' | 'PUBLISHED' | 'SUPERSEDED';
+export type ContentDocument = Record<string, unknown>;
+
+export interface ContentRevisionSummary {
+  id: string;
+  revision: number;
+  status: ContentRevisionStatus;
+  note: string | null;
+  basedOnRevision: number | null;
+  author: { id: string; email: string } | null;
+  publishedAt: string | null;
+  publishedBy: { id: string; email: string } | null;
+  supersededAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContentRevision extends ContentRevisionSummary {
+  document: ContentDocument;
+}
+
+export interface ContentEntrySummary {
+  id: string;
+  kind: ContentKind;
+  key: string;
+  title: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  draft: ContentRevisionSummary | null;
+  published: ContentRevisionSummary | null;
+}
+
+export interface ContentEntryDetail {
+  id: string;
+  kind: ContentKind;
+  key: string;
+  lastRevision: number;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  draft: ContentRevision | null;
+  published: ContentRevision | null;
+  history: ContentRevisionSummary[];
+}
+
+export interface ContentListOptions {
+  kind?: ContentKind;
+  cursor?: string;
+  limit?: number;
+}
+
+export type ContentCreateInput =
+  | { kind: 'PAGE'; path: string; title: string; description: string }
+  | { kind: 'SITE_SETTINGS' }
+  | { kind: 'NAVIGATION' };
+
+export interface ContentDraftInput {
+  document: ContentDocument;
+  note?: string;
+  /** updatedAt of the draft the editor started from, or null when there was none. */
+  expectedDraftUpdatedAt: string | null;
+}
+
+export interface PublicContentPage {
+  path: string;
+  revision: number;
+  publishedAt: string;
+  document: ContentDocument;
+}
+
+export interface PublicContentSite {
+  settings: ContentDocument | null;
+  navigation: ContentDocument | null;
+  updatedAt: string | null;
+}
+
+export interface PublicContentSitemap {
+  items: Array<{ path: string; updatedAt: string }>;
+}
+
 /** PR-16 generic operational permits. PERMIT_VALID is never TRIP_READY. */
 export type RegulatoryPermitLifecycleStatus = 'DRAFT' | 'ACTIVE' | 'REVOKED';
 export type RegulatoryPermitValidityState =
@@ -2829,6 +2912,12 @@ export function createAuthClient(baseUrl: string) {
       public: (token: string) =>
         call<PublicTrackingProjection>('GET', '/v1/tracking/' + encodeURIComponent(token)),
     },
+    content: {
+      page: (path: string) =>
+        call<PublicContentPage>('GET', `/v1/content/pages?${query({ path })}`),
+      site: () => call<PublicContentSite>('GET', '/v1/content/site'),
+      sitemap: () => call<PublicContentSitemap>('GET', '/v1/content/sitemap'),
+    },
     crew: {
       trips: () => call<CrewTripList>('GET', '/v1/crew/trips'),
       trip: (tripReference: string) =>
@@ -3511,6 +3600,61 @@ export function createAuthClient(baseUrl: string) {
           ),
       },
       /** PR-16: intrinsic permit validity only; PR-17 owns trip readiness. */
+      content: {
+        list: (options: ContentListOptions = {}) =>
+          call<{ items: ContentEntrySummary[]; nextCursor: string | null }>(
+            'GET',
+            `/v1/admin/content/entries?${query({
+              kind: options.kind,
+              cursor: options.cursor,
+              limit: options.limit,
+            })}`,
+          ),
+        entry: (id: string) =>
+          call<ContentEntryDetail>('GET', `/v1/admin/content/entries/${encodeURIComponent(id)}`),
+        revision: (id: string, revision: number) =>
+          call<ContentRevision>(
+            'GET',
+            `/v1/admin/content/entries/${encodeURIComponent(id)}/revisions/${revision}`,
+          ),
+        create: (input: ContentCreateInput) =>
+          withCsrf<ContentEntryDetail>('staff', '/v1/admin/content/entries', input),
+        saveDraft: (id: string, input: ContentDraftInput) =>
+          withCsrf<ContentEntryDetail>(
+            'staff',
+            `/v1/admin/content/entries/${encodeURIComponent(id)}/draft`,
+            input,
+          ),
+        publish: (id: string, expectedDraftUpdatedAt: string) =>
+          withCsrf<ContentEntryDetail>(
+            'staff',
+            `/v1/admin/content/entries/${encodeURIComponent(id)}/publish`,
+            { expectedDraftUpdatedAt },
+          ),
+        discardDraft: (id: string, expectedDraftUpdatedAt: string) =>
+          withCsrf<ContentEntryDetail>(
+            'staff',
+            `/v1/admin/content/entries/${encodeURIComponent(id)}/discard-draft`,
+            { expectedDraftUpdatedAt },
+          ),
+        restore: (id: string, revision: number, note?: string) =>
+          withCsrf<ContentEntryDetail>(
+            'staff',
+            `/v1/admin/content/entries/${encodeURIComponent(id)}/restore`,
+            { revision, ...(note ? { note } : {}) },
+          ),
+        archive: (id: string, reason: string) =>
+          withCsrf<ContentEntryDetail>(
+            'staff',
+            `/v1/admin/content/entries/${encodeURIComponent(id)}/archive`,
+            { reason },
+          ),
+        unarchive: (id: string) =>
+          withCsrf<ContentEntryDetail>(
+            'staff',
+            `/v1/admin/content/entries/${encodeURIComponent(id)}/unarchive`,
+          ),
+      },
       regulatoryPermits: {
         list: (options: RegulatoryPermitListOptions = {}) =>
           call<Page<RegulatoryPermitSummary>>(

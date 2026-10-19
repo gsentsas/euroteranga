@@ -21,12 +21,15 @@ for (const app of frontendApps.filter((candidate) => candidate.name !== 'ops')) 
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(app.heading);
     await expect(page.getByRole('banner')).toBeVisible();
     await expect(page.getByRole('main')).toBeVisible();
+    // The public website footer comes from the CMS site settings (WEB-1).
     const footerText =
       app.name === 'crew'
         ? 'Mode terrain'
-        : ['web', 'booking', 'client', 'tracking'].includes(app.name)
-          ? 'Plateforme pilote'
-          : 'Platform under development';
+        : app.name === 'web'
+          ? '© '
+          : ['booking', 'client', 'tracking'].includes(app.name)
+            ? 'Plateforme pilote'
+            : 'Platform under development';
     await expect(page.getByRole('contentinfo')).toContainText(footerText);
 
     // Let hydration and any client effects finish before asserting no errors.
@@ -62,5 +65,7 @@ test('web: public homepage exposes booking, account and tracking journeys', asyn
     'https://tracking.euroteranga.com/',
   );
   await expect(page.getByRole('heading', { name: 'Choisissez, réservez, voyagez.' })).toBeVisible();
-  await expect(page.getByText('Tarif standard pilote').first()).toBeVisible();
+  // Prices come from Pricing only: without a bookable Paris ↔ Dakar trip, none is shown.
+  await expect(page.getByText('Tarif affiché à la réservation').first()).toBeVisible();
+  await expect(page.locator('main')).not.toContainText('249');
 });

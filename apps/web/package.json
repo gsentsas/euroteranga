@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@euroteranga/config": "workspace:*",
+    "@euroteranga/content": "workspace:*",
+    "@euroteranga/site": "workspace:*",
     "@euroteranga/ui": "workspace:*",
     "@next/env": "catalog:",
     "next": "catalog:",

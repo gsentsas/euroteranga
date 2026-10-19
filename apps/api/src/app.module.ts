@@ -22,6 +22,7 @@ import { PaymentModule } from './payments/payment.module.js';
 import { PassengerDocumentModule } from './passenger-documents/passenger-document.module.js';
 import { PricingModule } from './pricing/pricing.module.js';
 import { ReportingModule } from './reporting/reporting.module.js';
+import { ContentModule } from './content/content.module.js';
 import { RegulatoryPermitModule } from './regulatory-permits/regulatory-permit.module.js';
 import { SeatMapModule } from './seat-maps/seat-map.module.js';
 import { TripModule } from './trips/trip.module.js';
@@ -54,6 +55,7 @@ export class AppModule {
         SeatMapModule,
         PricingModule,
         ReportingModule,
+        ContentModule,
         BookingModule,
         PaymentModule,
         PassengerDocumentModule,

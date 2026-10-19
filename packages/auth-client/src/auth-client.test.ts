@@ -1306,3 +1306,58 @@ describe('admin client', () => {
     expectTypeOf(client.admin.payments).toHaveProperty('cancelPayment');
   });
 });
+
+describe('content client (CMS-1)', () => {
+  it('reads published content publicly and encodes the page path', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { path: '/paris-dakar', revision: 2, publishedAt: 'x', document: {} } },
+      { status: 200, body: { settings: null, navigation: null, updatedAt: null } },
+      { status: 200, body: { items: [] } },
+    ]);
+    const client = createAuthClient('http://api.test');
+    const page = await client.content.page('/paris-dakar');
+    expect(page.ok).toBe(true);
+    expect(calls[0]?.url).toBe('http://api.test/v1/content/pages?path=%2Fparis-dakar');
+    expect(calls[0]?.init.method).toBe('GET');
+    await client.content.site();
+    await client.content.sitemap();
+    expect(calls.map((call) => call.url)).toEqual([
+      'http://api.test/v1/content/pages?path=%2Fparis-dakar',
+      'http://api.test/v1/content/site',
+      'http://api.test/v1/content/sitemap',
+    ]);
+  });
+
+  it('sends every STAFF content mutation with a CSRF token and the expected draft', async () => {
+    const entry = { id: '01900000-0000-7000-8000-00000000c0de' };
+    const calls = mockFetch([
+      { status: 200, body: { csrfToken: 'c1' } },
+      { status: 200, body: entry },
+      { status: 200, body: { csrfToken: 'c2' } },
+      { status: 200, body: entry },
+      { status: 200, body: { csrfToken: 'c3' } },
+      { status: 409, body: { code: 'CONTENT_DRAFT_CONFLICT', message: 'Conflit' } },
+    ]);
+    const client = createAuthClient('http://api.test');
+    await client.admin.content.saveDraft(entry.id, {
+      document: { title: 'Accueil' },
+      expectedDraftUpdatedAt: null,
+    });
+    expect(calls[1]?.url).toBe(`http://api.test/v1/admin/content/entries/${entry.id}/draft`);
+    expect((calls[1]?.init.headers as Record<string, string>)['X-CSRF-Token']).toBe('c1');
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({
+      document: { title: 'Accueil' },
+      expectedDraftUpdatedAt: null,
+    });
+    await client.admin.content.restore(entry.id, 3);
+    expect(JSON.parse(String(calls[3]?.init.body))).toEqual({ revision: 3 });
+    const conflict = await client.admin.content.publish(entry.id, '2030-01-01T00:00:00.000Z');
+    expect(conflict).toMatchObject({
+      ok: false,
+      error: { status: 409, code: 'CONTENT_DRAFT_CONFLICT' },
+    });
+    expect(JSON.parse(String(calls[5]?.init.body))).toEqual({
+      expectedDraftUpdatedAt: '2030-01-01T00:00:00.000Z',
+    });
+  });
+});
