@@ -1,5 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { appByName, appUrl } from '../apps.js';
+import { pagesSeed } from '../content-seed.js';
 import { preauthenticatedSession } from '../fixtures.js';
 import { BROWSER_API_URL, directAdminApi } from '../staff.js';
 
@@ -215,6 +216,48 @@ test.describe('ops website content editor', () => {
     );
     expect(live.status()).toBe(404);
 
+    expect(errors).toEqual([]);
+  });
+
+  test('a page created from a template keeps its sections and previews real data only', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    const run = process.env.E2E_RUN_ID ?? '';
+    const path = `/e2e-modele-${run}`;
+    const seed = pagesSeed();
+
+    await signedIn(page.context(), 'contentEditor');
+    await page.goto(appUrl(ops, '/contenus'));
+    const create = page.getByRole('form', { name: 'Créer une page' });
+    await create.getByLabel('Modèle').selectOption({ label: 'Voyage Paris → Dakar' });
+    // The template pre-fills the page; the editor keeps the last word.
+    await expect(create.getByLabel('Chemin public')).toHaveValue('/paris-dakar');
+    await expect(create.getByLabel('Titre')).toHaveValue('Paris → Dakar');
+    await create.getByLabel('Chemin public').fill(path);
+    await create.getByRole('button', { name: 'Créer la page' }).click();
+    await expect(page).toHaveURL(/\/contenus\/edition\?entree=/);
+
+    const form = page.getByRole('form', { name: `Modifier : ${path}` });
+    await expect(form.locator('.ops-content-block')).toHaveCount(8);
+    const editor = page.getByTestId('content-editor');
+    // The template never decides indexing: the page stays a non-indexed draft.
+    await expect(editor.getByText('Jamais publiée')).toBeVisible();
+
+    // Dates, itinerary and coaches are read live; PAR and DKR are not stops of
+    // this test network, so the preview says that no departure is scheduled.
+    const preview = page.frameLocator('[data-testid="content-preview-frame"]');
+    await expect(preview.getByRole('heading', { level: 1 })).toHaveText('Paris → Dakar');
+    await expect(
+      preview.getByText('Aucun départ n’est programmé pour le moment sur ce trajet', {
+        exact: false,
+      }),
+    ).toBeVisible();
+    await expect(
+      preview.getByRole('heading', { level: 3, name: seed.coaches[0]!.name }),
+    ).toBeVisible();
     expect(errors).toEqual([]);
   });
 
