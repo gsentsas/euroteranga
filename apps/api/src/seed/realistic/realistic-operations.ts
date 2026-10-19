@@ -38,6 +38,9 @@ export interface RealisticOperationsServices {
   tracking: TrackingService;
 }
 
+/** The synthetic customers' reserved addresses (see realisticCustomerEmail). */
+const SEED_EMAIL = { startsWith: 'etr-v1-', endsWith: '@example.test' } as const;
+
 /** Draws one value of a weighted list with a deterministic random number. */
 function weighted<T>(items: ReadonlyArray<[T, number]>, random: () => number): T {
   const total = items.reduce((sum, [, weight]) => sum + weight, 0);
@@ -217,7 +220,15 @@ export class RealisticOperations {
   /** Each traveller of a confirmed booking declares 0 to 2 bags, as on the client app. */
   private async declareBags(trip: UpcomingTrip): Promise<string> {
     const links = await this.db.bookingPassenger.findMany({
-      where: { booking: { tripId: trip.id, confirmedAt: { not: null }, cancelledAt: null } },
+      // Synthetic customers only: a real customer's booking is never touched.
+      where: {
+        booking: {
+          tripId: trip.id,
+          confirmedAt: { not: null },
+          cancelledAt: null,
+          customerIdentity: { normalizedEmail: SEED_EMAIL },
+        },
+      },
       orderBy: { passenger: { reference: 'asc' } },
       select: {
         booking: { select: { reference: true, customerIdentityId: true } },

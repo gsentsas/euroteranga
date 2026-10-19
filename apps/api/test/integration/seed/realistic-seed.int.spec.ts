@@ -35,14 +35,17 @@ const today = () => new Date().toISOString().slice(0, 10);
 interface Harness {
   t: TestApp;
   drop: () => Promise<void>;
-  run: (overrides?: Partial<RealisticSeedOptions>) => Promise<RealisticSeedReport>;
+  run: (
+    overrides?: Partial<RealisticSeedOptions>,
+    layers?: { operations?: boolean },
+  ) => Promise<RealisticSeedReport>;
   cleanup: (options: { dryRun: boolean }) => Promise<RealisticSeedReport>;
 }
 
 async function harness(): Promise<Harness> {
   const database = await isolatedDatabase();
   const t = await startTestApp(integrationEnv({ DATABASE_URL: database.url }));
-  const seed = () =>
+  const seed = (layers: { operations?: boolean } = {}) =>
     new RealisticSeed({
       db: db(t.app),
       network: t.app.get(NetworkService),
@@ -59,16 +62,19 @@ async function harness(): Promise<Harness> {
         payments: t.app.get(PaymentService),
         webhooks: t.app.get(PaymentWebhookService),
       },
-      operations: {
-        audit: t.app.get(AuditService),
-        baggage: t.app.get(BaggageService),
-        crew: t.app.get(CrewService),
-        incidents: t.app.get(IncidentService),
-        tracking: t.app.get(TrackingService),
-      },
+      operations:
+        layers.operations === false
+          ? undefined
+          : {
+              audit: t.app.get(AuditService),
+              baggage: t.app.get(BaggageService),
+              crew: t.app.get(CrewService),
+              incidents: t.app.get(IncidentService),
+              tracking: t.app.get(TrackingService),
+            },
     });
-  const run = (overrides: Partial<RealisticSeedOptions> = {}) =>
-    seed().run({ anchorDate: today(), tripsPerDirection: 6, dryRun: false, ...overrides });
+  const run = (overrides: Partial<RealisticSeedOptions> = {}, layers = {}) =>
+    seed(layers).run({ anchorDate: today(), tripsPerDirection: 6, dryRun: false, ...overrides });
   return {
     t,
     run,
@@ -644,5 +650,85 @@ describe('realistic seed: never reuses an identity it did not create (isolated d
     expect(await client.authIdentity.findUniqueOrThrow({ where: { id: person.id } })).toEqual(
       person,
     );
+  });
+});
+
+describe('realistic seed: a real customer is never touched (isolated database)', () => {
+  let h: Harness;
+
+  beforeAll(async () => {
+    h = await harness();
+    await h.run({}, { operations: false });
+  }, 180_000);
+
+  afterAll(async () => {
+    await h.drop();
+  });
+
+  it('declares bags for synthetic customers only', async () => {
+    const client = db(h.t.app);
+    // A real customer books and pays the soonest Paris -> Dakar departure.
+    const trip = await client.trip.findFirstOrThrow({
+      where: { reference: { startsWith: 'ET-PILOT-PARDKR-' } },
+      orderBy: { plannedDepartureAt: 'asc' },
+      include: { routeVersion: { include: { waypoints: { orderBy: { sequence: 'asc' } } } } },
+    });
+    const customer = await client.authIdentity.create({
+      data: {
+        realm: 'CUSTOMER',
+        email: 'voyageuse@example.org',
+        normalizedEmail: 'voyageuse@example.org',
+        status: 'ACTIVE',
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const actor = { kind: 'system' as const, source: 'test', customerIdentityId: customer.id };
+    const [origin, destination] = [
+      trip.routeVersion.waypoints[0]!.id,
+      trip.routeVersion.waypoints.at(-1)!.id,
+    ];
+    const free = (
+      await h.t.app.get(PublicBookingService).availability(trip.id, origin, destination)
+    ).cells.find((cell) => 'available' in cell && cell.available)!;
+    const booking = await h.t.app.get(BookingService).create(
+      {
+        tripId: trip.id,
+        originRouteWaypointId: origin,
+        destinationRouteWaypointId: destination,
+        seatMapCellIds: [free.id],
+      },
+      actor,
+    );
+    const payment = await h.t.app
+      .get(PaymentService)
+      .create(actor, booking.reference, 'test-payment-real-customer-01');
+    const row = await client.payment.findUniqueOrThrow({
+      where: { reference: payment.result.payment.reference },
+    });
+    await h.t.app.get(PaymentWebhookService).process('SANDBOX', {
+      providerEventId: 'evt_test_real_customer_01',
+      type: 'PAYMENT_SUCCEEDED',
+      providerPaymentId: row.providerPaymentId!,
+      amountMinor: BigInt(row.amountMinor),
+      currencyCode: row.currencyCode,
+      failureCode: null,
+      payloadHash: 'a'.repeat(64),
+    });
+    const france = await client.country.findUniqueOrThrow({ where: { iso2: 'FR' } });
+    await h.t.app.get(PassengerDocumentService).createPassenger(actor, booking.reference, {
+      givenName: 'Claire',
+      familyName: 'Voyageuse',
+      dateOfBirth: new Date('1990-05-04T00:00:00.000Z'),
+      nationalityCountryId: france.id,
+    });
+
+    await h.run();
+    const real = await client.baggage.count({
+      where: { bookingPassenger: { booking: { customerIdentityId: customer.id } } },
+    });
+    expect(real).toBe(0);
+    expect(
+      await client.baggage.count({ where: { bookingPassenger: { booking: { tripId: trip.id } } } }),
+    ).toBeGreaterThan(0);
   });
 });
