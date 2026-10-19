@@ -75,6 +75,7 @@ const FIELD_NAMES: Record<string, string> = {
   links: 'liens',
   caption: 'légende',
   email: 'e-mail',
+  items: 'élément',
 };
 
 /** "blocks.2.items.0.title" → "Section 3 › élément 1 › titre". */
@@ -212,8 +213,40 @@ export function ContentEditor({ entryId }: { entryId: string }) {
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    const warnInternalNavigation = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const anchor = target.closest('a[href]');
+      if (!(anchor instanceof HTMLAnchorElement)) return;
+      if ((anchor.target && anchor.target !== '_self') || anchor.hasAttribute('download')) return;
+      const href = anchor.getAttribute('href');
+      if (!href || href.startsWith('#')) return;
+      const destination = new URL(anchor.href, window.location.href);
+      if (
+        destination.origin !== window.location.origin ||
+        destination.href === window.location.href
+      )
+        return;
+      if (!window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?')) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
     window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
+    window.document.addEventListener('click', warnInternalNavigation, true);
+    return () => {
+      window.removeEventListener('beforeunload', warn);
+      window.document.removeEventListener('click', warnInternalNavigation, true);
+    };
   }, [dirty]);
 
   const issues = useMemo(() => {

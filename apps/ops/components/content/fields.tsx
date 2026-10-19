@@ -8,7 +8,7 @@ import {
   type DocumentPath,
   type RichText,
 } from '@euroteranga/content';
-import { useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { MediaPicker } from '../media/media-picker';
 import { useEditor } from './editor-context';
 
@@ -409,6 +409,28 @@ export function RichTextField({
     return Array.isArray(value) && value.length > 0 ? richTextToMarkup(value as RichText) : '';
   });
   const [localError, setLocalError] = useState<string | null>(null);
+  const localErrorPath = path.map(String).join('.');
+  const localErrorRef = useRef({
+    path,
+    key: localErrorPath,
+    message: localError,
+    report: editor.reportLocal,
+  });
+  localErrorRef.current = {
+    path,
+    key: localErrorPath,
+    message: localError,
+    report: editor.reportLocal,
+  };
+
+  useEffect(() => {
+    const current = localErrorRef.current;
+    if (current.message) current.report(current.path, current.message);
+    return () => {
+      const latest = localErrorRef.current;
+      latest.report(current.path, null);
+    };
+  }, [localErrorPath]);
 
   const apply = (next: string) => {
     setText(next);

@@ -75,6 +75,19 @@ test.describe('ops website content editor', () => {
     const save = form.getByRole('button', { name: 'Enregistrer le brouillon' });
     await expect(save).toBeDisabled();
 
+    // Client-side navigation must not silently discard unsaved edits.
+    const titleField = form.getByLabel('Titre de la page');
+    await titleField.fill(`Éditeur ${run} modifié`);
+    const dialogPromise = page.waitForEvent('dialog');
+    const leaveAttempt = page.getByRole('link', { name: '← Tous les contenus' }).click();
+    const dialog = await dialogPromise;
+    expect(dialog.message()).toContain('modifications non enregistrées');
+    await dialog.dismiss();
+    await leaveAttempt;
+    await expect(page).toHaveURL(/\/contenus\/edition\?entree=/);
+    await titleField.fill(`Éditeur ${run}`);
+    await expect(save).toBeDisabled();
+
     // A new section is empty, hence refused until it is filled in.
     await form.getByLabel('Nouvelle section').selectOption('cards');
     await form.getByRole('button', { name: 'Ajouter la section' }).click();
@@ -93,7 +106,20 @@ test.describe('ops website content editor', () => {
     await body.fill('Un texte **non fermé');
     await expect(rich.getByText('Ligne 1 : « ** » non fermé (gras)')).toBeVisible();
     await expect(save).toBeDisabled();
-    await body.fill('## Bagages\n\nUn **bagage** en soute. <b>Le balisage reste du texte.</b>');
+
+    // Removing an invalid rich-text section must also remove its local parsing error.
+    await rich.getByRole('button', { name: /Retirer : Section 2/ }).click();
+    await rich.getByRole('button', { name: 'Retirer la section' }).click();
+    await expect(issues).toHaveCount(0);
+
+    // Recreate the section used by the publication scenario.
+    await form.getByLabel('Nouvelle section').selectOption('richText');
+    await form.getByRole('button', { name: 'Ajouter la section' }).click();
+    const validRich = form.locator('.ops-content-block').nth(1);
+    const validBody = validRich.getByRole('textbox', { name: 'Texte', exact: true });
+    await validBody.fill(
+      '## Bagages\n\nUn **bagage** en soute. <b>Le balisage reste du texte.</b>',
+    );
     await expect(issues).toHaveCount(0);
 
     // The preview is the website rendering, in a frame without scripts nor origin.
