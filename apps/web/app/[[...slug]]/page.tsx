@@ -1,8 +1,8 @@
-import { contentPathSchema } from '@euroteranga/content';
-import { SitePage } from '@euroteranga/site';
+import { contentPathSchema, mediaIdsOf } from '@euroteranga/content';
+import { SitePage, type SiteMedia } from '@euroteranga/site';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { loadPage, loadSiteContext } from '../../lib/content';
+import { loadMedia, loadPage, loadSiteContext } from '../../lib/content';
 import {
   DEFAULT_TITLE,
   jsonLd,
@@ -38,15 +38,50 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { seo, title } = page.document;
   const searchTitle = seo.title ?? title;
   const site = siteSeo();
+  // MEDIA-1: the page's social image, when chosen and still active.
+  const social = seo.socialMediaId
+    ? ((await loadMedia([seo.socialMediaId])).get(seo.socialMediaId) ?? null)
+    : null;
+  const socialImage = social ? socialImageOf(social) : null;
   return {
     // The home page title is complete; other pages use the "%s — EURO TERANGA" template.
     title: path === '/' ? { absolute: searchTitle || DEFAULT_TITLE } : searchTitle,
     description: seo.description,
     alternates: { canonical: path },
-    openGraph: { ...openGraphBase(), title: searchTitle, description: seo.description, url: path },
-    twitter: { ...twitterBase(), title: searchTitle, description: seo.description },
+    openGraph: {
+      ...openGraphBase(),
+      ...(socialImage ? { images: [socialImage] } : {}),
+      title: searchTitle,
+      description: seo.description,
+      url: path,
+    },
+    twitter: {
+      ...twitterBase(),
+      ...(socialImage ? { images: [socialImage.url] } : {}),
+      title: searchTitle,
+      description: seo.description,
+    },
     // A page can opt out of indexing even when the site itself is indexable.
     robots: seo.indexable ? robotsOf(site) : { index: false, follow: true },
+  };
+}
+
+/** The largest rendition up to 1600 px wide, as an Open Graph image. */
+function socialImageOf(media: SiteMedia) {
+  const candidates = (media.srcSet ?? '')
+    .split(', ')
+    .map((entry) => {
+      const [url = '', width = ''] = entry.split(' ');
+      return { url, width: Number(width.replace(/w$/, '')) };
+    })
+    .filter((candidate) => candidate.url && candidate.width > 0 && candidate.width <= 1600);
+  const best = candidates.at(-1);
+  if (!best) return null;
+  return {
+    url: best.url,
+    width: best.width,
+    height: Math.round((best.width * media.height) / media.width),
+    alt: media.alt,
   };
 }
 
@@ -86,6 +121,7 @@ export default async function ContentPage({ params }: Params) {
         (block.type === 'routes' && block.showFromPrices) ||
         (block.type === 'hero' && block.journeyCard),
     ),
+    mediaIds: mediaIdsOf(document),
   });
   return (
     <>

@@ -9,6 +9,7 @@ import {
   type RichText,
 } from '@euroteranga/content';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { MediaPicker } from '../media/media-picker';
 import { useEditor } from './editor-context';
 
 function describedBy(...ids: Array<string | false | null | undefined>): string | undefined {
@@ -700,8 +701,8 @@ export function ListField({
 }
 
 /**
- * An image of the public media library. The library itself is MEDIA-1:
- * until then an image can be kept or removed, not chosen.
+ * An image of the public media library (MEDIA-1), chosen among the active
+ * images. `disabled` locks it like the other fields of its section.
  */
 export function MediaField({
   path,
@@ -725,26 +726,13 @@ export function MediaField({
         {label}
         {required ? null : <span className="ops-content-optional"> (facultatif)</span>}
       </span>
-      {mediaId ? (
-        <p>
-          Image de la médiathèque : <code>{mediaId}</code>
-        </p>
-      ) : (
-        <p className="et-hint">Aucune image.</p>
-      )}
-      <p className="et-hint">
-        Le choix d’une image arrive avec la médiathèque (MEDIA-1). En attendant, une section sans
-        image affiche son illustration ou son texte seul.
-      </p>
-      {mediaId && !required && !disabled && !editor.readOnly ? (
-        <button
-          type="button"
-          className="et-button et-button--secondary"
-          onClick={() => editor.set(path, undefined)}
-        >
-          Retirer l’image
-        </button>
-      ) : null}
+      <MediaPicker
+        mediaId={mediaId}
+        readOnly={editor.readOnly || disabled}
+        required={required}
+        {...(error ? { describedBy: `${id}-error` } : {})}
+        onChange={(next) => editor.set(path, next)}
+      />
       <FieldError id={`${id}-error`} message={error} />
     </div>
   );

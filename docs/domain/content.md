@@ -187,7 +187,13 @@ editors preview exactly what visitors get.
   - text is React text and rich text is a typed tree, so markup typed by an
     editor is displayed literally;
   - a page without a hero gets its title as its single H1;
-  - images render only when the media library resolves them (MEDIA-1).
+  - images come from the media library (MEDIA-1, `docs/domain/media.md`):
+    the page's media ids are resolved in one public batch read
+    (`GET /v1/media?ids=`), then rendered as responsive WebP (`srcset`,
+    `sizes` per section, the hero with `fetchpriority="high"`) loaded from
+    the API origin. An unknown or archived image is left out, never shown
+    broken. The page's `seo.socialMediaId` becomes its Open Graph and
+    Twitter image.
 - **Caching:** API reads are cached by Next.js for 60 s (300 s for prices
   and stops), so a publication appears within a minute.
 - **Server-side configuration** (read at runtime by `euroteranga-web`):
@@ -235,7 +241,12 @@ editor (`/contenus/edition?entree=<id>`) works on one entry.
     nothing in it can act on OPS and its links lead nowhere;
   - mobile (390 px), tablet (768 px) and desktop (1280 px) widths use the
     real breakpoints of the website;
-  - "from" prices are not shown in the preview.
+  - "from" prices are not shown in the preview;
+  - images are read from the public media endpoint, like on the website.
+- **Images:** an image field shows the chosen image and opens a picker of
+  the active images of the media library (`media.read`), with a filter on
+  their description. An image that became unavailable is flagged; the
+  API refuses to save, publish or restore a document that references it.
 - **Workflow:**
   - "Enregistrer le brouillon" saves the draft with the `updatedAt` it
     started from. If someone saved meanwhile, the API answers
@@ -252,8 +263,9 @@ editor (`/contenus/edition?entree=<id>`) works on one entry.
 
 ## Deliberately not in CMS
 
-- **Media library:** MEDIA-1. Blocks already reference media ids
-  (`mediaIds` lists them).
+- **Image files:** the media library (MEDIA-1, `docs/domain/media.md`)
+  holds them; documents only reference their ids (`mediaIdsOf` and
+  `mediaReferencesOf` list them).
 - **Testimonials:** not modelled, so that no fake review can be published.
 - **Scheduled publication:** not modelled.
 - **Real-time co-editing:** not modelled.

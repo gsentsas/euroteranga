@@ -30,6 +30,16 @@ command boundary, and the ClamAV adapter implements the small clamd `INSTREAM`
 protocol with Node's built-in TCP streams. This avoids extra runtime packages,
 containers and a mandatory external service in deterministic CI.
 
+## MEDIA-1 additions
+
+| Package        | Purpose                                                                              | License                                                                       | Maintenance/security                                                                                                                                                        | Alternatives and runtime impact                                                                                                                                                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sharp` 0.35.5 | Decoding of uploaded website images and WebP re-encoding without metadata (API only) | Apache-2.0; prebuilt libvips (`@img/sharp-libvips-*` 1.3.4) LGPL-3.0-or-later | Most used Node image library, actively maintained, published 2026-09-27. Prebuilt binaries for the pilot platform (linux-x64), no compiler needed. Covered by `pnpm audit`. | Pure-JS decoders cannot safely re-encode every JPEG/PNG/WebP with orientation, nor bound pixels before decoding. Native code loads only in the API process. Exposure is reduced by the format allow-list checked before decoding, the pixel limit and failing on decoder errors (`docs/security/media.md`). |
+
+`sharp` is a catalog pin (`pnpm-workspace.yaml`) used only by `apps/api`. Its
+platform packages are optional dependencies: only the one matching the
+installing machine is downloaded.
+
 ## Overrides (fixed by forcing a patched version)
 
 Declared in `pnpm-workspace.yaml` → `overrides`.

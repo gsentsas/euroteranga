@@ -42,6 +42,7 @@ const PREAUTHENTICATED_SESSIONS = {
   permitDenied: 'E2E_PERMIT_DENIED_SESSION',
   contentEditor: 'E2E_CONTENT_EDITOR_SESSION',
   contentDenied: 'E2E_CONTENT_DENIED_SESSION',
+  mediaEditor: 'E2E_MEDIA_EDITOR_SESSION',
 } as const;
 
 /**
@@ -202,6 +203,7 @@ function preauthenticatedSessionEnvironment(fixture: Fixture): string | undefine
     'permitDenied',
     'contentEditor',
     'contentDenied',
+    'mediaEditor',
   ] as const) {
     if (fixture.email === FIXTURES[name].email) return PREAUTHENTICATED_SESSIONS[name];
   }

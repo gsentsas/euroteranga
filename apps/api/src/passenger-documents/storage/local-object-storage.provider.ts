@@ -10,14 +10,24 @@ import {
 } from './object-storage.provider.js';
 
 /**
- * Private development/CI adapter. It is refused by configuration in staging
- * and production, never writes below a web root, and creates directories/files
+ * Local filesystem adapter. For passenger documents it is a private
+ * development/CI adapter refused by configuration in staging and production;
+ * MEDIA-1 also uses it, with its own root and key space, for public website
+ * images. It never writes below a web root, and creates directories/files
  * with owner-only permissions. Business code only sees ObjectStorageProvider.
  */
 export class LocalObjectStorageProvider implements ObjectStorageProvider {
   private readonly root: string;
 
-  constructor(root: string) {
+  /**
+   * `assertKey` restricts the keys this instance accepts: the private
+   * document namespaces by default, the public media namespace for MEDIA-1,
+   * so neither store can ever read or write the other's objects.
+   */
+  constructor(
+    root: string,
+    private readonly assertKey: (key: string) => void = assertPrivateObjectKey,
+  ) {
     this.root = resolve(root);
     // Defense in depth behind configuration: never chmod or populate "/".
     if (this.root === sep) throw new Error('local object storage needs a dedicated root');
@@ -125,7 +135,7 @@ export class LocalObjectStorageProvider implements ObjectStorageProvider {
   }
 
   private path(key: string): string {
-    assertPrivateObjectKey(key);
+    this.assertKey(key);
     const path = resolve(this.root, key);
     if (!path.startsWith(`${this.root}${sep}`)) throw new ObjectStorageError('INVALID_KEY');
     return path;

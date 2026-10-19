@@ -454,6 +454,13 @@ enum ContentRevisionStatus {
   @@map("content_revision_status")
 }
 
+enum PublicMediaStatus {
+  ACTIVE
+  ARCHIVED
+
+  @@map("public_media_status")
+}
+
 model AuthIdentity {
   id              String             @id @default(uuid(7)) @db.Uuid
   realm           AuthRealm
@@ -525,6 +532,9 @@ model AuthIdentity {
   incidentsOpened                  Incident[]               @relation("IncidentOpener")
   contentRevisionsAuthored         ContentRevision[]        @relation("ContentRevisionAuthor")
   contentRevisionsPublished        ContentRevision[]        @relation("ContentRevisionPublisher")
+  publicMediaCreated               PublicMediaAsset[]       @relation("PublicMediaCreator")
+  publicMediaUpdated               PublicMediaAsset[]       @relation("PublicMediaUpdater")
+  publicMediaArchived              PublicMediaAsset[]       @relation("PublicMediaArchiver")
   incidentsOwned                   Incident[]               @relation("IncidentOwner")
   incidentActions                  IncidentAction[]         @relation("IncidentActionActor")
   incidentAttachments              IncidentAttachment[]     @relation("IncidentAttachmentUploader")
@@ -2330,16 +2340,16 @@ model DepartureAuthorization {
 /// CMS-1: one public page, the site settings or the navigation. Never deleted:
 /// a page is archived (no longer served). Kind and key are immutable.
 model ContentEntry {
-  id         String           @id @default(uuid(7)) @db.Uuid
-  kind       ContentEntryKind
+  id           String           @id @default(uuid(7)) @db.Uuid
+  kind         ContentEntryKind
   /// PAGE: its public path (e.g. "/paris-dakar"); singletons: "site", "navigation".
   key          String           @db.VarChar(120)
   /// Highest revision number ever issued: numbers are never reused, even
   /// when a draft is discarded (maintained by the revision trigger).
   lastRevision Int              @default(0) @map("last_revision")
   archivedAt   DateTime?        @map("archived_at") @db.Timestamptz(3)
-  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt  DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   revisions ContentRevision[]
 
@@ -2378,4 +2388,71 @@ model ContentRevision {
   @@index([authorIdentityId])
   @@index([publishedByIdentityId])
   @@map("content_revision")
+}
+
+/// MEDIA-1: an image of the public website media library. It is separate
+/// from passenger documents (private storage, never public). The uploaded
+/// file itself is never kept: only WebP renditions re-encoded without
+/// metadata (EXIF, GPS, ICC comments) are stored and served.
+model PublicMediaAsset {
+  id                   String            @id @default(uuid(7)) @db.Uuid
+  status               PublicMediaStatus @default(ACTIVE)
+  /// Alternative text read by screen readers (required, never empty).
+  altText              String            @map("alt_text") @db.VarChar(250)
+  caption              String?           @db.VarChar(240)
+  /// Author or rights holder, shown with the image when set.
+  credit               String?           @db.VarChar(160)
+  /// jpeg, png or webp: the format the upload was decoded from.
+  sourceFormat         String            @map("source_format") @db.VarChar(8)
+  /// SHA-256 of the uploaded bytes. Unique among active assets (partial
+  /// index in SQL): an archived file can be uploaded again as a new asset.
+  sourceSha256         String            @map("source_sha256") @db.Char(64)
+  sourceBytes          Int               @map("source_bytes")
+  /// Dimensions once the EXIF orientation is applied.
+  width                Int
+  height               Int
+  /// Point kept visible when the image is cropped, in percent (0-100).
+  focalX               Int               @default(50) @map("focal_x") @db.SmallInt
+  focalY               Int               @default(50) @map("focal_y") @db.SmallInt
+  /// Null only for system actors.
+  createdByIdentityId  String?           @map("created_by_identity_id") @db.Uuid
+  updatedByIdentityId  String?           @map("updated_by_identity_id") @db.Uuid
+  archivedAt           DateTime?         @map("archived_at") @db.Timestamptz(3)
+  archivedByIdentityId String?           @map("archived_by_identity_id") @db.Uuid
+  archiveReason        String?           @map("archive_reason") @db.VarChar(300)
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  renditions PublicMediaRendition[]
+  createdBy  AuthIdentity?          @relation("PublicMediaCreator", fields: [createdByIdentityId], references: [id], onDelete: Restrict)
+  updatedBy  AuthIdentity?          @relation("PublicMediaUpdater", fields: [updatedByIdentityId], references: [id], onDelete: Restrict)
+  archivedBy AuthIdentity?          @relation("PublicMediaArchiver", fields: [archivedByIdentityId], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@index([sourceSha256])
+  @@index([createdByIdentityId])
+  @@index([updatedByIdentityId])
+  @@index([archivedByIdentityId])
+  @@map("public_media_asset")
+}
+
+/// MEDIA-1: one immutable WebP rendition of a media asset, stored under a
+/// content-addressed key (`public-media/<xx>/<sha256>`).
+model PublicMediaRendition {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  assetId    String   @map("asset_id") @db.Uuid
+  width      Int
+  height     Int
+  format     String   @db.VarChar(8)
+  bytes      Int
+  sha256     String   @db.Char(64)
+  /// Content-addressed: the same bytes uploaded again share the file.
+  storageKey String   @map("storage_key") @db.VarChar(120)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  asset PublicMediaAsset @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@unique([assetId, width])
+  @@index([storageKey])
+  @@map("public_media_rendition")
 }

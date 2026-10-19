@@ -15,7 +15,11 @@ import { z } from 'zod';
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 const optionalText = (max: number) => text(max).optional();
-const uuid = z.uuid();
+/**
+ * A media id, stored in its canonical lowercase form: usage lookups and
+ * comparisons with PostgreSQL uuid values are exact.
+ */
+const uuid = z.uuid().transform((value) => value.toLowerCase());
 
 /** Public paths: `/`, `/paris-dakar`, `/aide/bagages`. Lowercase, digits, dashes. */
 export const CONTENT_PATH_PATTERN =
@@ -454,6 +458,25 @@ export function missingOwnerInputs(settings: SiteSettings): string[] {
     }
   }
   return missing;
+}
+
+/** Where a page references media: the field path and the media id (MEDIA-1). */
+export function mediaReferencesOf(page: PageDocument): Array<{ path: string; mediaId: string }> {
+  const references: Array<{ path: string; mediaId: string }> = [];
+  if (page.seo.socialMediaId) {
+    references.push({ path: 'seo.socialMediaId', mediaId: page.seo.socialMediaId });
+  }
+  page.blocks.forEach((block, index) => {
+    if ('mediaId' in block && block.mediaId) {
+      references.push({ path: `blocks.${index}.mediaId`, mediaId: block.mediaId });
+    }
+    if (block.type === 'gallery') {
+      block.items.forEach((item, at) =>
+        references.push({ path: `blocks.${index}.items.${at}.mediaId`, mediaId: item.mediaId }),
+      );
+    }
+  });
+  return references;
 }
 
 /** Media referenced by a page (MEDIA-1 checks them; CMS-1 only lists them). */

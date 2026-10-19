@@ -21,6 +21,46 @@ export interface SiteMedia {
   width: number;
   height: number;
   srcSet?: string;
+  /** Point kept visible when the image is cropped, in percent. */
+  focalX?: number;
+  focalY?: number;
+  /** Library caption, shown when the block has none. */
+  caption?: string | null;
+  credit?: string | null;
+}
+
+/** An active image as the public media API describes it. */
+export interface PublicMediaRecord {
+  altText: string;
+  caption: string | null;
+  credit: string | null;
+  width: number;
+  height: number;
+  focalX: number;
+  focalY: number;
+  renditions: ReadonlyArray<{ width: number; path: string }>;
+}
+
+/** Default `src` for browsers without srcset support: a mid-size rendition. */
+const DEFAULT_RENDITION_WIDTH = 960;
+
+/** Responsive WebP image of a public media record; `url` makes rendition paths absolute. */
+export function siteMediaOf(media: PublicMediaRecord, url: (path: string) => string): SiteMedia {
+  const renditions = [...media.renditions].sort((a, b) => a.width - b.width);
+  const fallback =
+    renditions.filter((rendition) => rendition.width <= DEFAULT_RENDITION_WIDTH).at(-1) ??
+    renditions[0];
+  return {
+    src: fallback ? url(fallback.path) : '',
+    srcSet: renditions.map((rendition) => `${url(rendition.path)} ${rendition.width}w`).join(', '),
+    alt: media.altText,
+    width: media.width,
+    height: media.height,
+    focalX: media.focalX,
+    focalY: media.focalY,
+    caption: media.caption,
+    credit: media.credit,
+  };
 }
 
 /** Everything a page needs that is not in its own document. */
@@ -99,34 +139,58 @@ function Illustration({ name }: { name: string }) {
   return null;
 }
 
+/** Rendered widths of an image, for the browser to pick a rendition. */
+const SIZES = {
+  half: '(max-width: 900px) 100vw, 50vw',
+  contained: '(max-width: 900px) 100vw, 900px',
+  wide: '100vw',
+  gallery: '(max-width: 600px) 100vw, (max-width: 900px) 50vw, 33vw',
+} as const;
+
 function Figure({
   mediaId,
   ctx,
   caption,
   priority,
+  sizes = 'contained',
 }: {
   mediaId: string;
   ctx: SiteContext;
   caption?: string | undefined;
   priority?: boolean;
+  sizes?: keyof typeof SIZES;
 }) {
   const media = ctx.media?.(mediaId) ?? null;
+  // An unknown or archived image is left out rather than shown broken.
   if (!media) return null;
+  const legend = caption ?? media.caption ?? null;
+  const focal =
+    media.focalX !== undefined &&
+    media.focalY !== undefined &&
+    (media.focalX !== 50 || media.focalY !== 50)
+      ? { objectPosition: `${media.focalX}% ${media.focalY}%` }
+      : undefined;
   return (
     <figure className="public-figure">
       <img
         src={media.src}
-        {...(media.srcSet
-          ? { srcSet: media.srcSet, sizes: '(max-width: 900px) 100vw, 900px' }
-          : {})}
+        {...(media.srcSet ? { srcSet: media.srcSet, sizes: SIZES[sizes] } : {})}
         alt={media.alt}
         width={media.width}
         height={media.height}
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"
         {...(priority ? { fetchPriority: 'high' as const } : {})}
+        {...(focal ? { style: focal } : {})}
       />
-      {caption ? <figcaption>{caption}</figcaption> : null}
+      {legend || media.credit ? (
+        <figcaption>
+          {legend}
+          {media.credit ? (
+            <span className="public-figure__credit">Crédit photo : {media.credit}</span>
+          ) : null}
+        </figcaption>
+      ) : null}
     </figure>
   );
 }
@@ -207,7 +271,9 @@ function Hero({
               {block.note}
             </p>
           ) : null}
-          {block.mediaId ? <Figure mediaId={block.mediaId} ctx={ctx} priority /> : null}
+          {block.mediaId ? (
+            <Figure mediaId={block.mediaId} ctx={ctx} priority sizes="half" />
+          ) : null}
         </div>
         {block.journeyCard ? (
           <div className="public-trip-card" role="group" aria-label="Liaison Paris Dakar">
@@ -463,7 +529,7 @@ export function Block({
             </div>
             <div className="public-text-image__visual">
               {block.mediaId ? (
-                <Figure mediaId={block.mediaId} ctx={ctx} />
+                <Figure mediaId={block.mediaId} ctx={ctx} sizes="half" />
               ) : (
                 <Illustration name={block.illustration} />
               )}
@@ -479,7 +545,12 @@ export function Block({
           ctx={ctx}
           extraClass={`public-image-block public-image-block--${block.layout}`}
         >
-          <Figure mediaId={block.mediaId} ctx={ctx} caption={block.caption} />
+          <Figure
+            mediaId={block.mediaId}
+            ctx={ctx}
+            caption={block.caption}
+            sizes={block.layout === 'wide' ? 'wide' : 'contained'}
+          />
         </Section>
       );
     case 'stats':
@@ -502,7 +573,13 @@ export function Block({
           <SectionHead id={titleId} kicker={block.kicker} title={block.title} />
           <div className="public-gallery">
             {block.items.map((item, at) => (
-              <Figure key={at} mediaId={item.mediaId} ctx={ctx} caption={item.caption} />
+              <Figure
+                key={at}
+                mediaId={item.mediaId}
+                ctx={ctx}
+                caption={item.caption}
+                sizes="gallery"
+              />
             ))}
           </div>
         </Section>

@@ -1394,4 +1394,89 @@ describe('content client (CMS-1)', () => {
       },
     });
   });
+  it('uploads a media image as multipart and keeps only well-formed media details (MEDIA-1)', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { csrfToken: 'c1' } },
+      {
+        status: 409,
+        body: {
+          code: 'MEDIA_DUPLICATE',
+          message: 'Cette image est déjà dans la médiathèque.',
+          details: { mediaId: '01900000-0000-7000-8000-00000000c0de', storageKey: 'dropped' },
+        },
+      },
+      { status: 200, body: { csrfToken: 'c2' } },
+      {
+        status: 409,
+        body: {
+          code: 'MEDIA_IN_USE',
+          message: 'Cette image est utilisée.',
+          details: {
+            usages: [
+              { kind: 'PAGE', key: '/', status: 'PUBLISHED', email: 'dropped@example.test' },
+              { kind: 'PAGE', key: '/x', status: 'SUPERSEDED' },
+              'not a usage',
+            ],
+          },
+        },
+      },
+      { status: 200, body: { items: [] } },
+    ]);
+    const client = createAuthClient('http://api.test/');
+    const file = new Blob([new Uint8Array([0xff, 0xd8, 0xff])], { type: 'image/jpeg' });
+    const duplicate = await client.admin.media.upload({
+      file,
+      altText: 'Autocar',
+      caption: 'Départ',
+      focalX: 30,
+      focalY: 0,
+      replaces: '01900000-0000-7000-8000-000000000001',
+    });
+    expect(calls[1]?.url).toBe('http://api.test/v1/admin/media');
+    expect((calls[1]?.init.headers as Record<string, string>)['X-CSRF-Token']).toBe('c1');
+    const form = calls[1]?.init.body as FormData;
+    expect([...form.keys()]).toEqual([
+      'altText',
+      'caption',
+      'focalX',
+      'focalY',
+      'replaces',
+      'file',
+    ]);
+    expect(form.get('focalY')).toBe('0');
+    expect(duplicate).toEqual({
+      ok: false,
+      error: {
+        status: 409,
+        code: 'MEDIA_DUPLICATE',
+        message: 'Cette image est déjà dans la médiathèque.',
+        details: { mediaId: '01900000-0000-7000-8000-00000000c0de' },
+      },
+    });
+
+    const inUse = await client.admin.media.archive(
+      '01900000-0000-7000-8000-00000000c0de',
+      'Vieille',
+    );
+    expect(JSON.parse(String(calls[3]?.init.body))).toEqual({ reason: 'Vieille' });
+    expect(inUse).toMatchObject({
+      ok: false,
+      error: {
+        details: {
+          usages: [{ kind: 'PAGE', key: '/', status: 'PUBLISHED', entryArchived: false }],
+        },
+      },
+    });
+
+    await client.media.many([
+      '01900000-0000-7000-8000-000000000001',
+      '01900000-0000-7000-8000-000000000002',
+    ]);
+    expect(calls[4]?.url).toBe(
+      'http://api.test/v1/media?ids=01900000-0000-7000-8000-000000000001%2C01900000-0000-7000-8000-000000000002',
+    );
+    expect(client.media.url('/v1/media/files/a/480.webp')).toBe(
+      'http://api.test/v1/media/files/a/480.webp',
+    );
+  });
 });

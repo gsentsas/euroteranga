@@ -7,7 +7,16 @@ import {
   siteSettingsSchema,
   type PageDocument,
 } from '@euroteranga/content';
-import type { AppLinks, FromPrice, RouteDirection, SiteContext } from '@euroteranga/site';
+import {
+  resolveMedia,
+  siteMediaOf,
+  type AppLinks,
+  type FromPrice,
+  type PublicMediaRecord,
+  type RouteDirection,
+  type SiteContext,
+  type SiteMedia,
+} from '@euroteranga/site';
 import { publicEnv } from './env';
 
 /**
@@ -121,12 +130,39 @@ async function fromPrices(): Promise<SiteContext['fromPrices']> {
   return Object.fromEntries(entries);
 }
 
+/** Image URLs are public: the browser loads them from the API origin (CSP img-src). */
+function publicApiUrl(path: string): string {
+  return `${publicEnv.NEXT_PUBLIC_API_BASE_URL.replace(/\/+$/, '')}${path}`;
+}
+
+/**
+ * Active images among `ids` (MEDIA-1), in batches of 50 resolved in
+ * parallel (bounded). Unknown or archived ones are absent, and a failed or
+ * slow batch only leaves its own images out: text never waits on images.
+ */
+export async function loadMedia(ids: readonly string[]): Promise<Map<string, SiteMedia>> {
+  return resolveMedia(ids, async (batch) => {
+    const result = await read<{ items: Array<PublicMediaRecord & { id: string }> }>(
+      `/v1/media?ids=${batch.join(',')}`,
+      CONTENT_REVALIDATE_SECONDS,
+    );
+    if (result.status !== 'ok') return null;
+    return new Map(result.data.items.map((item) => [item.id, siteMediaOf(item, publicApiUrl)]));
+  });
+}
+
 /** Published settings and navigation (defaults until published), links and prices. */
-export async function loadSiteContext(options: { prices: boolean }): Promise<SiteContext> {
-  const site = await read<{ settings: unknown; navigation: unknown }>(
-    '/v1/content/site',
-    CONTENT_REVALIDATE_SECONDS,
-  );
+export async function loadSiteContext(options: {
+  prices: boolean;
+  mediaIds?: readonly string[];
+}): Promise<SiteContext> {
+  const [site, media] = await Promise.all([
+    read<{ settings: unknown; navigation: unknown }>(
+      '/v1/content/site',
+      CONTENT_REVALIDATE_SECONDS,
+    ),
+    loadMedia(options.mediaIds ?? []),
+  ]);
   const settings =
     (site.status === 'ok' && siteSettingsSchema.safeParse(site.data.settings).data) ||
     DEFAULT_SITE_SETTINGS;
@@ -138,6 +174,7 @@ export async function loadSiteContext(options: { prices: boolean }): Promise<Sit
     navigation,
     apps: appLinks(settings.apps),
     fromPrices: options.prices ? await fromPrices() : {},
+    media: (id) => media.get(id.toLowerCase()) ?? null,
     year: new Date().getUTCFullYear(),
   };
 }

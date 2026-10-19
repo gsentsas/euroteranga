@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import '../../content.css';
+import '../../media.css';
 import { ContentEditorRoute } from '../../../components/content/content-editor-route';
 import { OpsShell } from '../../../components/ops-shell';
 import { RequirePermission } from '../../../components/staff-access';

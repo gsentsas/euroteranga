@@ -4,8 +4,10 @@ import {
   DEFAULT_SITE_SETTINGS,
   SINGLETON_KEYS,
   documentSchemaOf,
+  mediaReferencesOf,
   pageDocumentSchema,
   type ContentKind,
+  type PageDocument,
 } from '@euroteranga/content';
 import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
@@ -97,6 +99,37 @@ function validate(kind: ContentKind, document: unknown): Record<string, unknown>
     throw ContentErrors.documentInvalid(issues);
   }
   return result.data as Record<string, unknown>;
+}
+
+/**
+ * MEDIA-1: every image a page references must be an active media asset.
+ * FOR SHARE serializes with an archive (FOR UPDATE), which in turn refuses
+ * an image still referenced by a draft or live revision.
+ */
+async function assertMediaUsable(
+  tx: DatabaseTransaction,
+  kind: ContentKind,
+  document: Record<string, unknown>,
+): Promise<void> {
+  if (kind !== 'PAGE') return;
+  const references = mediaReferencesOf(document as PageDocument);
+  if (references.length === 0) return;
+  const ids = [...new Set(references.map((reference) => reference.mediaId))];
+  const rows = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"::text AS "id" FROM "public_media_asset"
+    WHERE "id" = ANY(${ids}::uuid[]) AND "status" = 'ACTIVE'
+    FOR SHARE`;
+  // Documents hold canonical (lowercase) ids, as PostgreSQL prints uuid values.
+  const active = new Set(rows.map((row) => row.id.toLowerCase()));
+  const missing = references.filter((reference) => !active.has(reference.mediaId.toLowerCase()));
+  if (missing.length > 0) {
+    throw ContentErrors.documentInvalid(
+      missing.map((reference) => ({
+        path: reference.path,
+        message: 'Image introuvable ou archivée dans la médiathèque.',
+      })),
+    );
+  }
 }
 
 /** Search metadata of a page document, normalized for comparison (null for singletons). */
@@ -312,6 +345,7 @@ export class ContentService {
         const { draft, published } = await currentRevisions(tx, id);
         assertExpectedDraft(draft, input.expectedDraftUpdatedAt);
         const document = validate(entry.kind, input.document);
+        await assertMediaUsable(tx, entry.kind, document);
         const base = draft ?? published;
         if (
           base &&
@@ -371,7 +405,7 @@ export class ContentService {
         if (!draft) throw ContentErrors.noDraft();
         assertExpectedDraft(draft, input.expectedDraftUpdatedAt);
         // The model may have evolved since the draft was saved: check it again.
-        validate(entry.kind, draft.document);
+        await assertMediaUsable(tx, entry.kind, validate(entry.kind, draft.document));
         if (published) {
           await tx.contentRevision.update({
             where: { id: published.id },
@@ -437,6 +471,7 @@ export class ContentService {
         });
         if (!source) throw ContentErrors.revisionNotFound();
         const document = validate(entry.kind, source.document);
+        await assertMediaUsable(tx, entry.kind, document);
         if (
           published &&
           !caller.canManageSeo &&

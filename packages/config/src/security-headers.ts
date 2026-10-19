@@ -30,7 +30,8 @@ function contentSecurityPolicy(env: PublicEnv): string {
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline'${localDevelopment ? " 'unsafe-eval'" : ''}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    // MEDIA-1: website images are served by the API (first party only).
+    `img-src 'self' data: blob: ${apiOrigin}`,
     "font-src 'self' data:",
     `connect-src 'self' ${apiOrigin}${localDevelopment ? ' ws: wss:' : ''}`,
     "worker-src 'self' blob:",
