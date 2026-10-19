@@ -556,7 +556,10 @@ export class PilotBootstrap {
     }
     const countryId = countries.get(vehicle.registrationCountryIso2);
     const { registrationCountryIso2: _country, ...fields } = vehicle;
-    const input = vehicleCreateSchema.parse({ ...fields, registrationCountryId: countryId ?? null });
+    const input = vehicleCreateSchema.parse({
+      ...fields,
+      registrationCountryId: countryId ?? null,
+    });
     // The same unique-key check for a dry run and a write: a dry run never
     // plans a coach whose name or plate another vehicle already holds.
     if (!current || previousName) {
