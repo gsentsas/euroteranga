@@ -20,8 +20,9 @@ The policy:
 - blocks plugin/object content and all frames;
 - prevents the application from being embedded with `frame-ancestors 'none'`;
 - constrains `base-uri` and `form-action` to the application origin;
-- allows only local/data/blob image/font/worker resources needed by the current
-  applications;
+- allows only local/data/blob font and worker resources, and images from the
+  application, `data:`/`blob:` and the exact Core API origin (MEDIA-1: the
+  website images are served by the API). There is never a wildcard source;
 - adds `upgrade-insecure-requests` in staging and production.
 
 Staging/production browser builds reject an HTTP

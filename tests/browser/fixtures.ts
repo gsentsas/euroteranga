@@ -196,6 +196,10 @@ export const FIXTURES = {
   get contentDenied(): Fixture {
     return { realm: 'STAFF', email: runScoped('content-denied'), roles: ['DISPATCHER'] };
   },
+  /** MEDIA-1: content.* and media.*, its own session (parallel to the CMS-2 scenarios). */
+  get mediaEditor(): Fixture {
+    return { realm: 'STAFF', email: runScoped('media-editor'), roles: ['CONTENT_EDITOR'] };
+  },
   get permitManager(): Fixture {
     return { realm: 'STAFF', email: runScoped('permit-manager'), roles: ['OPS_MANAGER'] };
   },
@@ -251,7 +255,8 @@ export type PreauthenticatedFixture =
   | 'permitReader'
   | 'permitDenied'
   | 'contentEditor'
-  | 'contentDenied';
+  | 'contentDenied'
+  | 'mediaEditor';
 
 const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string> = {
   crew: 'E2E_CREW_SESSION',
@@ -274,6 +279,7 @@ const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string
   permitDenied: 'E2E_PERMIT_DENIED_SESSION',
   contentEditor: 'E2E_CONTENT_EDITOR_SESSION',
   contentDenied: 'E2E_CONTENT_DENIED_SESSION',
+  mediaEditor: 'E2E_MEDIA_EDITOR_SESSION',
 };
 
 /**

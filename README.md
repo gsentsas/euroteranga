@@ -143,6 +143,12 @@ with `pnpm auth:bootstrap-super-admin` (CLI only): see
 Search-engine indexing is closed by default everywhere: see
 [`docs/runbooks/seo-indexing.md`](docs/runbooks/seo-indexing.md).
 
+The public media library (MEDIA-1) adds `PUBLIC_MEDIA_STORAGE` (`DISABLED` by
+default, or `LOCAL`), `PUBLIC_MEDIA_LOCAL_ROOT` (a dedicated directory, never
+the passenger-document root), `PUBLIC_MEDIA_MAX_BYTES` and
+`PUBLIC_MEDIA_MAX_PIXELS`. See [`docs/domain/media.md`](docs/domain/media.md)
+and [`docs/runbooks/public-media-storage.md`](docs/runbooks/public-media-storage.md).
+
 `NEXT_PUBLIC_*` values are embedded in browser code: builds fail when a
 sensitive-looking variable uses this prefix.
 
