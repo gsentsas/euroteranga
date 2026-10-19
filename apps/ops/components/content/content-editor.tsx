@@ -242,10 +242,10 @@ export function ContentEditor({ entryId }: { entryId: string }) {
       }
     };
     window.addEventListener('beforeunload', warn);
-    document.addEventListener('click', warnInternalNavigation, true);
+    window.document.addEventListener('click', warnInternalNavigation, true);
     return () => {
       window.removeEventListener('beforeunload', warn);
-      document.removeEventListener('click', warnInternalNavigation, true);
+      window.document.removeEventListener('click', warnInternalNavigation, true);
     };
   }, [dirty]);
 
