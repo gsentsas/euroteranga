@@ -117,7 +117,9 @@ test.describe('ops website content editor', () => {
     await form.getByRole('button', { name: 'Ajouter la section' }).click();
     const validRich = form.locator('.ops-content-block').nth(1);
     const validBody = validRich.getByRole('textbox', { name: 'Texte', exact: true });
-    await validBody.fill('## Bagages\n\nUn **bagage** en soute. <b>Le balisage reste du texte.</b>');
+    await validBody.fill(
+      '## Bagages\n\nUn **bagage** en soute. <b>Le balisage reste du texte.</b>',
+    );
     await expect(issues).toHaveCount(0);
 
     // The preview is the website rendering, in a frame without scripts nor origin.
