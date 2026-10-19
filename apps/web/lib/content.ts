@@ -7,7 +7,15 @@ import {
   siteSettingsSchema,
   type PageDocument,
 } from '@euroteranga/content';
-import type { AppLinks, FromPrice, RouteDirection, SiteContext } from '@euroteranga/site';
+import {
+  siteMediaOf,
+  type AppLinks,
+  type FromPrice,
+  type PublicMediaRecord,
+  type RouteDirection,
+  type SiteContext,
+  type SiteMedia,
+} from '@euroteranga/site';
 import { publicEnv } from './env';
 
 /**
@@ -121,12 +129,44 @@ async function fromPrices(): Promise<SiteContext['fromPrices']> {
   return Object.fromEntries(entries);
 }
 
+/** Image URLs are public: the browser loads them from the API origin (CSP img-src). */
+function publicApiUrl(path: string): string {
+  return `${publicEnv.NEXT_PUBLIC_API_BASE_URL.replace(/\/+$/, '')}${path}`;
+}
+
+const MEDIA_BATCH = 50;
+
+/**
+ * Active images among `ids` (MEDIA-1). Unknown or archived ones are absent,
+ * and an unavailable API only leaves the images out: text never waits.
+ */
+export async function loadMedia(ids: readonly string[]): Promise<Map<string, SiteMedia>> {
+  const found = new Map<string, SiteMedia>();
+  const unique = [...new Set(ids)];
+  for (let start = 0; start < unique.length; start += MEDIA_BATCH) {
+    const batch = unique.slice(start, start + MEDIA_BATCH);
+    const result = await read<{ items: Array<PublicMediaRecord & { id: string }> }>(
+      `/v1/media?ids=${batch.join(',')}`,
+      CONTENT_REVALIDATE_SECONDS,
+    );
+    if (result.status !== 'ok') continue;
+    for (const item of result.data.items) found.set(item.id, siteMediaOf(item, publicApiUrl));
+  }
+  return found;
+}
+
 /** Published settings and navigation (defaults until published), links and prices. */
-export async function loadSiteContext(options: { prices: boolean }): Promise<SiteContext> {
-  const site = await read<{ settings: unknown; navigation: unknown }>(
-    '/v1/content/site',
-    CONTENT_REVALIDATE_SECONDS,
-  );
+export async function loadSiteContext(options: {
+  prices: boolean;
+  mediaIds?: readonly string[];
+}): Promise<SiteContext> {
+  const [site, media] = await Promise.all([
+    read<{ settings: unknown; navigation: unknown }>(
+      '/v1/content/site',
+      CONTENT_REVALIDATE_SECONDS,
+    ),
+    loadMedia(options.mediaIds ?? []),
+  ]);
   const settings =
     (site.status === 'ok' && siteSettingsSchema.safeParse(site.data.settings).data) ||
     DEFAULT_SITE_SETTINGS;
@@ -138,6 +178,7 @@ export async function loadSiteContext(options: { prices: boolean }): Promise<Sit
     navigation,
     apps: appLinks(settings.apps),
     fromPrices: options.prices ? await fromPrices() : {},
+    media: (id) => media.get(id) ?? null,
     year: new Date().getUTCFullYear(),
   };
 }

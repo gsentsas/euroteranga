@@ -6,7 +6,7 @@ import {
 } from '@euroteranga/content';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { SiteContext } from './blocks.js';
+import { siteMediaOf, type SiteContext } from './blocks.js';
 import { formatPrice } from './money.js';
 import { SitePage } from './shell.js';
 
@@ -123,5 +123,55 @@ describe('public website rendering', () => {
       }),
     );
     expect(contact).toContain('contact@example.org');
+  });
+  it('renders responsive WebP images with focal point, caption and credit (MEDIA-1)', () => {
+    const id = '01900000-0000-7000-8000-000000000001';
+    const media = siteMediaOf(
+      {
+        altText: 'Autocar au départ',
+        caption: 'Gare routière',
+        credit: 'Euro Teranga',
+        width: 2000,
+        height: 1000,
+        focalX: 30,
+        focalY: 70,
+        renditions: [
+          { width: 1600, path: `/v1/media/files/${id}/1600.webp` },
+          { width: 480, path: `/v1/media/files/${id}/480.webp` },
+          { width: 960, path: `/v1/media/files/${id}/960.webp` },
+          { width: 2000, path: `/v1/media/files/${id}/2000.webp` },
+        ],
+      },
+      (path) => `https://api.example${path}`,
+    );
+    expect(media.src).toBe(`https://api.example/v1/media/files/${id}/960.webp`);
+    expect(media.srcSet).toBe(
+      [480, 960, 1600, 2000]
+        .map((width) => `https://api.example/v1/media/files/${id}/${width}.webp ${width}w`)
+        .join(', '),
+    );
+    const page = pageDocumentSchema.parse({
+      title: 'Galerie',
+      seo: { description: 'Description.' },
+      blocks: [
+        { type: 'hero', title: 'Paris ↔ Dakar', mediaId: id, journeyCard: false },
+        { type: 'gallery', items: [{ mediaId: id, caption: 'Légende du bloc' }] },
+      ],
+    });
+    const html = render(page, ctx({ media: (wanted) => (wanted === id ? media : null) }));
+    expect(html).toContain('fetchPriority="high"');
+    expect(html).toContain('sizes="(max-width: 900px) 100vw, 50vw"');
+    expect(html).toContain('sizes="(max-width: 600px) 100vw, (max-width: 900px) 50vw, 33vw"');
+    expect(html).toContain('object-position:30% 70%');
+    // The block caption wins over the library caption; the credit is always shown.
+    expect(html).toContain('Gare routière');
+    expect(html).toContain('Légende du bloc');
+    expect(html.match(/Crédit photo : Euro Teranga/g)).toHaveLength(2);
+    const centred = render(
+      page,
+      ctx({ media: () => ({ ...media, focalX: 50, focalY: 50, credit: null, caption: null }) }),
+    );
+    expect(centred).not.toContain('object-position');
+    expect(centred).not.toContain('Crédit photo');
   });
 });

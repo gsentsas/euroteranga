@@ -987,6 +987,12 @@ body {
   font-size: 0.9rem;
 }
 
+.public-figure__credit {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.8rem;
+}
+
 .public-image-block--contained .public-figure {
   max-width: 56rem;
   margin: 0 auto;
@@ -1034,6 +1040,12 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
   gap: 1rem;
+}
+
+/* Uniform tiles: images are cropped around their focal point (MEDIA-1). */
+.public-gallery .public-figure img {
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
 }
 
 .public-banner {

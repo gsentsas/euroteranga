@@ -2,6 +2,8 @@ export {
   Block,
   Blocks,
   RichTextView,
+  siteMediaOf,
+  type PublicMediaRecord,
   type RouteDirection,
   type SiteContext,
   type SiteMedia,
