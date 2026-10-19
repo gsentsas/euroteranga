@@ -24,6 +24,32 @@ import {
 
 /** Largest file the API can be configured to accept (PUBLIC_MEDIA_MAX_BYTES). */
 const CLIENT_MAX_BYTES = 20 * 1024 * 1024;
+/** Width of the local preview drawn before the upload. */
+const PREVIEW_WIDTH = 960;
+
+/**
+ * Local preview of a chosen file, decoded by the browser and redrawn into a
+ * canvas: the page shows a re-encoded bitmap, never the file itself (nor an
+ * object URL of it). Null when the browser cannot decode the file.
+ */
+async function previewOf(file: File): Promise<string | null> {
+  let bitmap: ImageBitmap | null = null;
+  try {
+    bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, PREVIEW_WIDTH / bitmap.width);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.85);
+  } catch {
+    return null;
+  } finally {
+    bitmap?.close();
+  }
+}
 const PAGE_SIZE = 48;
 
 function Counter({ value, max }: { value: string; max: number }) {
@@ -147,7 +173,7 @@ function FocalPointEditor({
       <legend>Point focal</legend>
       {src ? (
         <div className="ops-media-focal__stage">
-          {/* eslint-disable-next-line @next/next/no-img-element -- local preview or API rendition */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- canvas preview or API rendition */}
           <img
             src={src}
             alt=""
@@ -244,13 +270,15 @@ function MediaUploadForm({
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!file) {
-      setPreview(null);
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
+    setPreview(null);
+    if (!file) return;
+    let cancelled = false;
+    void previewOf(file).then((url) => {
+      if (!cancelled) setPreview(url);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [file]);
 
   const choose = (chosen: File | null) => {

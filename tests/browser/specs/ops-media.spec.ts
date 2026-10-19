@@ -105,6 +105,10 @@ test.describe('ops public media library', () => {
     await upload
       .getByLabel('Fichier image')
       .setInputFiles({ name: 'autocar.png', mimeType: 'image/png', buffer: png });
+    // The local preview is a canvas-decoded bitmap (data: URL), never the file itself.
+    const localPreview = upload.locator('.ops-media-focal__stage img');
+    await expectLoaded(localPreview);
+    expect(await localPreview.getAttribute('src')).toMatch(/^data:image\/jpeg;base64,/);
     await upload.getByLabel('Texte alternatif').fill(alt);
     await upload.getByLabel(/^Crédit photo/).fill('EURO TERANGA (synthétique)');
     await upload.getByLabel(/^Horizontal/).fill('30');
