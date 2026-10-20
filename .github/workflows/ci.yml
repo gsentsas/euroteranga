@@ -250,8 +250,10 @@ jobs:
           fetch-depth: 0 # scan the full history, not only the last commit
       - name: Forbidden files and quality-gate bypass markers
         run: bash scripts/check-forbidden-files.sh
-      - name: Validate Plesk nginx fragments
+      - name: Validate Plesk deployment scripts and nginx fragments
         run: |
+          bash -n infrastructure/plesk/deploy-release.sh
+          bash -n infrastructure/plesk/pilot-env-guard.sh
           if grep -RFn '\\n' infrastructure/plesk/nginx --include='*.conf'; then
             echo "::error::Literal \\n sequence found in Plesk nginx fragment"
             exit 1
