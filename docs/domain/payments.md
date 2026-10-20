@@ -7,6 +7,13 @@
 > code or IBAN is ever collected. Browser and integration tests use synthetic
 > data only.
 
+> **PAY-HUB-1** adds the multi-provider foundation: a catalogue of
+> customer-facing methods distinct from providers, a capability registry, and
+> immutable multi-currency quotes. Every new attempt starts from a quote;
+> `Payment.amountMinor` keeps its PR-10 meaning (the booking amount). No real
+> provider is activated. See [docs/payments](../payments/) (payment matrix,
+> provider routing, multi-currency, reconciliation, provider onboarding).
+
 PR-10 lets the authenticated CUSTOMER who owns a HELD booking start a payment
 attempt. The attempt's result arrives later as a signed provider event. A
 success confirms the booking atomically, and the booking then keeps its seats
@@ -388,14 +395,19 @@ Migration `20261013230000_payments` enforces these rules for every writer:
 
 CUSTOMER endpoints (`/v1/booking`, CUSTOMER session):
 
-| Method | Path                            | CSRF | Purpose                                                    |
-| ------ | ------------------------------- | ---- | ---------------------------------------------------------- |
-| POST   | `/bookings/:reference/payments` | yes  | Start an attempt (optional `Idempotency-Key`; empty body). |
-| GET    | `/bookings/:reference/payments` | no   | The booking's attempts, newest first.                      |
-| POST   | `/payments/:reference/cancel`   | yes  | Give up a PENDING attempt; the booking stays HELD.         |
+| Method | Path                                                   | CSRF | Purpose                                                                                        |
+| ------ | ------------------------------------------------------ | ---- | ---------------------------------------------------------------------------------------------- |
+| GET    | `/bookings/:reference/payment-options?payerCountry=SN` | no   | PAY-HUB-1: methods of a payer country, each with `code`, `label`, `group`, `available`.        |
+| POST   | `/bookings/:reference/payment-quotes`                  | yes  | PAY-HUB-1: an immutable quote, body `{ payerCountry, paymentMethod }` (intentions only).       |
+| POST   | `/bookings/:reference/payments`                        | yes  | Start an attempt from a quote, body `{ quoteId, paymentMethod }` (optional `Idempotency-Key`). |
+| GET    | `/bookings/:reference/payments`                        | no   | The booking's attempts, newest first.                                                          |
+| POST   | `/payments/:reference/cancel`                          | yes  | Give up a PENDING attempt; the booking stays HELD.                                             |
 
 A CUSTOMER sees only: `reference`, `status`, `amountMinor`, `currencyCode`,
-`currencyMinorUnit`, `createdAt`, `succeededAt`, `failedAt`, `cancelledAt`.
+`currencyMinorUnit`, `paymentMethod`, `payerCountry`, `presentment` (the
+amount the payer was asked for; null for PR-10 attempts), `createdAt`,
+`succeededAt`, `failedAt`, `cancelledAt`. Payment options and quotes never
+name a provider, a priority or a configuration detail.
 The booking views add `confirmedAt` and `payment` (the latest attempt). A
 CUSTOMER never sees a provider id, failure detail, event, signature or secret.
 Someone else's booking or payment answers the same 404 as an unknown one
@@ -403,33 +415,42 @@ Someone else's booking or payment answers the same 404 as an unknown one
 
 STAFF endpoints (`/v1/admin/payments`, STAFF session + `ops.access`):
 
-| Method | Path          | Permission              | Purpose                                                                |
-| ------ | ------------- | ----------------------- | ---------------------------------------------------------------------- |
-| GET    | `/`           | `payment.read`          | Keyset list; filters `status`, `bookingReference`, `paymentReference`. |
-| GET    | `/:id`        | `payment.read`          | Detail with the provider event timeline (no payload, no signature).    |
-| POST   | `/:id/cancel` | `payment.manage` + CSRF | Give up a PENDING attempt, with a 3–500 character reason.              |
+| Method | Path          | Permission              | Purpose                                                                                                                                                                            |
+| ------ | ------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/`           | `payment.read`          | Keyset list; filters `status`, `bookingReference`, `paymentReference`, and (PAY-HUB-1) `provider`, `method`, `payerCountry`, `currency` (presentment), `createdFrom`, `createdTo`. |
+| GET    | `/:id`        | `payment.read`          | Detail with the provider event timeline (no payload, no signature).                                                                                                                |
+| POST   | `/:id/cancel` | `payment.manage` + CSRF | Give up a PENDING attempt, with a 3–500 character reason.                                                                                                                          |
 
 There is deliberately no "mark paid" endpoint: SUCCEEDED only comes from a
 valid provider event. The STAFF booking detail includes `payments` only for
 callers holding `payment.read`, so a profile with `booking.read` alone receives
 no financial payment detail.
 
-| Code                              | HTTP                    | When                                                 |
-| --------------------------------- | ----------------------- | ---------------------------------------------------- |
-| `PAYMENT_NOT_FOUND`               | 404                     | unknown or foreign attempt; unknown provider attempt |
-| `PAYMENT_PROVIDER_UNAVAILABLE`    | 503                     | `PAYMENT_PROVIDER=DISABLED`                          |
-| `PAYMENT_BOOKING_NOT_PAYABLE`     | 409                     | cancelled booking, trip not SCHEDULED or departed    |
-| `PAYMENT_BOOKING_EXPIRED`         | 409                     | the hold has expired (initiation or late success)    |
-| `PAYMENT_BOOKING_CONFIRMED`       | 409                     | the booking is already confirmed                     |
-| `PAYMENT_ALREADY_PENDING`         | 409                     | another attempt is PENDING                           |
-| `PAYMENT_ALREADY_SUCCEEDED`       | 409                     | a second success event for a succeeded attempt       |
-| `PAYMENT_INVALID_TRANSITION`      | 409                     | the attempt is no longer PENDING                     |
-| `PAYMENT_IDEMPOTENCY_KEY_INVALID` | 400                     | malformed `Idempotency-Key`                          |
-| `PAYMENT_IDEMPOTENCY_KEY_REUSED`  | 422                     | a key already used for another booking               |
-| `PAYMENT_WEBHOOK_INVALID`         | 400, 401, 413, 415, 422 | an event that fails a check                          |
-| `PAYMENT_WEBHOOK_REPLAY`          | 409                     | an already received provider event id                |
-| `BOOKING_CONFIRMED`               | 409                     | PR-09 cancellation of a confirmed booking            |
-| `TRIP_HAS_CONFIRMED_BOOKINGS`     | 409                     | trip cancellation with a confirmed booking           |
+| Code                              | HTTP                    | When                                                                    |
+| --------------------------------- | ----------------------- | ----------------------------------------------------------------------- |
+| `PAYMENT_NOT_FOUND`               | 404                     | unknown or foreign attempt; unknown provider attempt                    |
+| `PAYMENT_PROVIDER_UNAVAILABLE`    | 503                     | `PAYMENT_PROVIDER=DISABLED`                                             |
+| `PAYMENT_BOOKING_NOT_PAYABLE`     | 409                     | cancelled booking, trip not SCHEDULED or departed                       |
+| `PAYMENT_BOOKING_EXPIRED`         | 409                     | the hold has expired (initiation or late success)                       |
+| `PAYMENT_BOOKING_CONFIRMED`       | 409                     | the booking is already confirmed                                        |
+| `PAYMENT_ALREADY_PENDING`         | 409                     | another attempt is PENDING                                              |
+| `PAYMENT_ALREADY_SUCCEEDED`       | 409                     | a second success event for a succeeded attempt                          |
+| `PAYMENT_INVALID_TRANSITION`      | 409                     | the attempt is no longer PENDING                                        |
+| `PAYMENT_IDEMPOTENCY_KEY_INVALID` | 400                     | malformed `Idempotency-Key`                                             |
+| `PAYMENT_IDEMPOTENCY_KEY_REUSED`  | 422                     | a key already used for another booking or quote                         |
+| `PAYMENT_METHOD_UNAVAILABLE`      | 409                     | no active provider collects that method (never replaced by another one) |
+| `PAYMENT_COUNTRY_UNSUPPORTED`     | 422                     | payer country outside FR, ES, MA, MR, SN                                |
+| `PAYMENT_CURRENCY_UNSUPPORTED`    | 422                     | a currency the hub does not present                                     |
+| `PAYMENT_FX_UNAVAILABLE`          | 503                     | no rate source for that conversion (staging, production)                |
+| `PAYMENT_QUOTE_NOT_FOUND`         | 404                     | unknown quote, or a quote of another booking                            |
+| `PAYMENT_QUOTE_EXPIRED`           | 409                     | the quote's validity has passed                                         |
+| `PAYMENT_QUOTE_ALREADY_USED`      | 409                     | the quote already started an attempt                                    |
+| `PAYMENT_QUOTE_MISMATCH`          | 422                     | the method sent is not the quote's                                      |
+| `PAYMENT_QUOTE_LIMIT_REACHED`     | 429                     | more than 50 quotes for one booking                                     |
+| `PAYMENT_WEBHOOK_INVALID`         | 400, 401, 413, 415, 422 | an event that fails a check                                             |
+| `PAYMENT_WEBHOOK_REPLAY`          | 409                     | an already received provider event id                                   |
+| `BOOKING_CONFIRMED`               | 409                     | PR-09 cancellation of a confirmed booking                               |
+| `TRIP_HAS_CONFIRMED_BOOKINGS`     | 409                     | trip cancellation with a confirmed booking                              |
 
 No raw Prisma or PostgreSQL error is ever returned.
 
