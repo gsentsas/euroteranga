@@ -110,6 +110,11 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
     workDir = mkdtempSync(join(tmpdir(), 'et-pr10-upgrade-'));
     storageRoot = mkdtempSync(join(tmpdir(), 'et-pr10-documents-'));
     const pr10 = join(workDir, 'migrations');
+    // PAY-HUB-1 belongs to this history only because it is built through
+    // today's API (which starts no payment without a quote): here it runs
+    // before the later migrations, an order production never sees. The real
+    // order, every migration then PAY-HUB-1 on PR-10 payments, is measured
+    // by payments/upgrade-from-pr10-payments.int.spec.ts.
     for (const entry of readdirSync(MIGRATIONS)) {
       if (historical(entry, PAYMENT_MIGRATION)) {
         cpSync(join(MIGRATIONS, entry), join(pr10, entry), { recursive: true });
