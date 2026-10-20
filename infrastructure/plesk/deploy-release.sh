@@ -43,8 +43,9 @@ runuser -u "$APP_USER" -- git --git-dir="$MIRROR" merge-base --is-ancestor \
 
 RELEASE="$RELEASES/$SHA"
 if [ ! -d "$RELEASE" ]; then
-  TMP="$RELEASES/.${SHA}.tmp.$$"
+  TMP="$RELEASES/.${SHA}.tmp.$"
   rm -rf "$TMP"
+  trap 'rm -rf -- "$TMP"' EXIT
   install -d -m 0750 -o "$APP_USER" -g psacln "$TMP"
   runuser -u "$APP_USER" -- git --git-dir="$MIRROR" archive "$SHA" |
     runuser -u "$APP_USER" -- tar -x -C "$TMP"
@@ -66,7 +67,7 @@ if [ ! -d "$RELEASE" ]; then
 cd '$TMP'
 git init -q
 trap 'rm -rf .git' EXIT
-git add -A
+git add -f -A
 pnpm check:forbidden-files
 rm -rf .git
 trap - EXIT"
@@ -83,6 +84,7 @@ trap - EXIT"
     NEXT_PUBLIC_CLIENT_URL="$NEXT_PUBLIC_CLIENT_URL" \
     bash -c "cd '$TMP' && pnpm build"
   mv "$TMP" "$RELEASE"
+  trap - EXIT
 fi
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
