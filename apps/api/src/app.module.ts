@@ -21,6 +21,8 @@ import { NetworkModule } from './network/network.module.js';
 import { PaymentModule } from './payments/payment.module.js';
 import type { PayPalGateway } from './payments/providers/paypal-payment.provider.js';
 import type { StripeGateway } from './payments/providers/stripe-payment.provider.js';
+import type { PaymentProvider } from './payments/providers/payment-provider.js';
+import type { WaveGateway } from './payments/providers/wave-payment.provider.js';
 import { PassengerDocumentModule } from './passenger-documents/passenger-document.module.js';
 import { PricingModule } from './pricing/pricing.module.js';
 import { ReportingModule } from './reporting/reporting.module.js';
@@ -38,6 +40,8 @@ export interface AppModuleOptions {
   mailProvider?: AuthMailProvider;
   stripeGateway?: StripeGateway;
   paypalGateway?: PayPalGateway;
+  waveGateway?: WaveGateway;
+  testPaymentProviders?: readonly PaymentProvider[];
 }
 
 @Module({})
@@ -66,6 +70,10 @@ export class AppModule {
         PaymentModule.register({
           ...(options.stripeGateway ? { stripeGateway: options.stripeGateway } : {}),
           ...(options.paypalGateway ? { paypalGateway: options.paypalGateway } : {}),
+          ...(options.waveGateway ? { waveGateway: options.waveGateway } : {}),
+          ...(options.testPaymentProviders
+            ? { testPaymentProviders: options.testPaymentProviders }
+            : {}),
         }),
         PassengerDocumentModule,
         ComplianceModule,

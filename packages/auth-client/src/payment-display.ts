@@ -72,10 +72,15 @@ export function describePaymentOption(
  * Hosted payment pages the browser may be sent to: Stripe Checkout (PAY-EU-1)
  * and PayPal's approval page (PAY-PAYPAL-1, live and sandbox).
  */
-const TRUSTED_CHECKOUT_PAGES: ReadonlyArray<{ origin: string; pathname?: string }> = [
-  { origin: 'https://checkout.stripe.com' },
-  { origin: 'https://www.paypal.com', pathname: '/checkoutnow' },
-  { origin: 'https://www.sandbox.paypal.com', pathname: '/checkoutnow' },
+const TRUSTED_CHECKOUT_PAGES: ReadonlyArray<{
+  provider: string;
+  origin: string;
+  pathname?: string | RegExp;
+}> = [
+  { provider: 'STRIPE', origin: 'https://checkout.stripe.com' },
+  { provider: 'PAYPAL', origin: 'https://www.paypal.com', pathname: '/checkoutnow' },
+  { provider: 'PAYPAL', origin: 'https://www.sandbox.paypal.com', pathname: '/checkoutnow' },
+  { provider: 'WAVE', origin: 'https://pay.wave.com', pathname: /^\/c\/cos-[a-z0-9]{1,16}$/ },
 ];
 
 /**
@@ -94,7 +99,12 @@ export function paymentRedirectTarget(checkout: CreatePaymentResult['checkout'])
   if (url.username !== '' || url.password !== '') return null;
   const trusted = TRUSTED_CHECKOUT_PAGES.some(
     (page) =>
-      page.origin === url.origin && (page.pathname === undefined || page.pathname === url.pathname),
+      page.provider === checkout.provider &&
+      page.origin === url.origin &&
+      (page.pathname === undefined ||
+        (typeof page.pathname === 'string'
+          ? page.pathname === url.pathname
+          : page.pathname.test(url.pathname))),
   );
   return trusted ? url.toString() : null;
 }

@@ -130,6 +130,8 @@ export interface ProviderEvent {
   providerEventId: string;
   type: 'PAYMENT_SUCCEEDED' | 'PAYMENT_FAILED';
   providerPaymentId: string;
+  /** Provider-echoed Payment.reference, when its contract exposes one. */
+  paymentReference?: string;
   amountMinor: bigint | null;
   currencyCode: string | null;
   /** PAYMENT_FAILED only, already normalized. */

@@ -1,4 +1,4 @@
-# Payment matrix (PAY-HUB-1, PAY-EU-1, PAY-PAYPAL-1)
+# Payment matrix (PAY-HUB-1, PAY-EU-1, PAY-PAYPAL-1, PAY-SN-1A)
 
 What EURO TERANGA intends to offer each payer country, and how far each
 method really is. Four distinct facts, never to be confused:
@@ -13,9 +13,11 @@ method really is. Four distinct facts, never to be confused:
 Current state: every row below is SUPPORTED; IMPLEMENTED is given per row
 (**STRIPE**, since PAY-EU-1, for `CARD` in France and Spain, `BIZUM` in Spain
 and `KLARNA` in France and Spain; **PAYPAL**, since PAY-PAYPAL-1, for `PAYPAL`
-in France and Spain, never in Senegal); **CONFIGURED = NO and LIVE = NO
+in France and Spain, never in Senegal); and **WAVE** since PAY-SN-1A for
+`WAVE_SN` direct au Sénégal. **CONFIGURED = NO and LIVE = NO
 everywhere**. Production and the pilot run with `PAYMENT_PROVIDER=DISABLED`,
-`PAYMENT_STRIPE_MODE=DISABLED` and `PAYMENT_PAYPAL_MODE=DISABLED`: no method
+`PAYMENT_STRIPE_MODE=DISABLED`, `PAYMENT_PAYPAL_MODE=DISABLED`,
+`PAYMENT_WAVE_MODE=DISABLED` et `PAYMENT_ORANGE_MONEY_MODE=DISABLED`: no method
 is available there, and the payment options API says so
 (`available: false`).
 
@@ -34,8 +36,9 @@ production). It is test-only: it moves no money and is never LIVE.
 - **Declared providers** are those the capability registry
   (`payment-capability.registry.ts`) lists for the method in that country and
   currency, best first. Apart from STRIPE and PAYPAL (checked against their
-  documentation, see [stripe-europe.md](stripe-europe.md) and
-  [paypal.md](paypal.md)), they are **planning hypotheses**, to be checked before their adapter PR
+  documentation, see [stripe-europe.md](stripe-europe.md),
+  [paypal.md](paypal.md) and [wave-senegal.md](wave-senegal.md)), they are
+  **planning hypotheses**, to be checked before their adapter PR
   ([provider-onboarding.md](provider-onboarding.md)).
 - **Notes** give the documented reason when a provider able to offer a method
   does not collect it for EURO TERANGA.
@@ -97,18 +100,22 @@ when either changes.
 
 ### Sénégal (SN), XOF
 
-| Method            | Label              | Confirmation | Declared providers                    | SUPPORTED | IMPLEMENTED | CONFIGURED | LIVE | Note                                 |
-| ----------------- | ------------------ | ------------ | ------------------------------------- | --------- | ----------- | ---------- | ---- | ------------------------------------ |
-| `CARD`            | Carte bancaire     | INSTANT      | `PAYDUNYA`, `PAYTECH`                 | YES       | NO          | NO         | NO   | —                                    |
-| `PAYPAL`          | PayPal             | INSTANT      | —                                     | YES       | NO          | NO         | NO   | PAYPAL: XOF is not a PayPal currency |
-| `WAVE_SN`         | Wave (recommended) | ASYNC_SHORT  | `WAVE`, `PAYDUNYA`, `PAYTECH`         | YES       | NO          | NO         | NO   | —                                    |
-| `ORANGE_MONEY_SN` | Orange Money       | ASYNC_SHORT  | `ORANGE_MONEY`, `PAYDUNYA`, `PAYTECH` | YES       | NO          | NO         | NO   | —                                    |
-| `FREE_MONEY_SN`   | Free Money         | ASYNC_SHORT  | `PAYDUNYA`, `PAYTECH`                 | YES       | NO          | NO         | NO   | —                                    |
-| `EXPRESSO_SN`     | Expresso           | ASYNC_SHORT  | `PAYDUNYA`, `PAYTECH`                 | YES       | NO          | NO         | NO   | —                                    |
-| `WIZALL_SN`       | Wizall             | ASYNC_SHORT  | `PAYDUNYA`, `PAYTECH`                 | YES       | NO          | NO         | NO   | —                                    |
-| `DJAMO_SN`        | Djamo              | ASYNC_SHORT  | `PAYDUNYA`, `PAYTECH`                 | YES       | NO          | NO         | NO   | —                                    |
-| `BANK_TRANSFER`   | Virement bancaire  | ASYNC_LONG   | `MANUAL_BANK_TRANSFER`                | YES       | NO          | NO         | NO   | `ASYNC_LONG`: needs a booking policy |
-| `CASH_AT_AGENCY`  | Paiement en agence | ASYNC_LONG   | `CASH`                                | YES       | NO          | NO         | NO   | `ASYNC_LONG`: needs a booking policy |
+| Method            | Label              | Confirmation | Declared providers     | SUPPORTED | IMPLEMENTED | CONFIGURED | LIVE | Note                                                   |
+| ----------------- | ------------------ | ------------ | ---------------------- | --------- | ----------- | ---------- | ---- | ------------------------------------------------------ |
+| `CARD`            | Carte bancaire     | INSTANT      | —                      | YES       | NO          | NO         | NO   | Hors scope PAY-SN-1                                    |
+| `PAYPAL`          | PayPal             | INSTANT      | —                      | YES       | NO          | NO         | NO   | PAYPAL: XOF is not a PayPal currency                   |
+| `WAVE_SN`         | Wave (recommended) | ASYNC_SHORT  | `WAVE` direct          | YES       | YES (WAVE)  | NO         | NO   | Hold requis 2100 s; hold par défaut 900 s incompatible |
+| `ORANGE_MONEY_SN` | Orange Money       | ASYNC_SHORT  | `ORANGE_MONEY` direct  | YES       | NO          | NO         | NO   | `BLOCKED_PENDING_OFFICIAL_MERCHANT_DOCS`               |
+| `FREE_MONEY_SN`   | Free Money         | ASYNC_SHORT  | —                      | YES       | NO          | NO         | NO   | Hors scope PAY-SN-1                                    |
+| `EXPRESSO_SN`     | Expresso           | ASYNC_SHORT  | —                      | YES       | NO          | NO         | NO   | Hors scope PAY-SN-1                                    |
+| `WIZALL_SN`       | Wizall             | ASYNC_SHORT  | —                      | YES       | NO          | NO         | NO   | Hors scope PAY-SN-1                                    |
+| `DJAMO_SN`        | Djamo              | ASYNC_SHORT  | —                      | YES       | NO          | NO         | NO   | Hors scope PAY-SN-1                                    |
+| `BANK_TRANSFER`   | Virement bancaire  | ASYNC_LONG   | `MANUAL_BANK_TRANSFER` | YES       | NO          | NO         | NO   | `ASYNC_LONG`: needs a booking policy                   |
+| `CASH_AT_AGENCY`  | Paiement en agence | ASYNC_LONG   | `CASH`                 | YES       | NO          | NO         | NO   | `ASYNC_LONG`: needs a booking policy                   |
+
+Les codes historiques `PAYDUNYA` et `PAYTECH` restent dans l'enum technique
+pour compatibilité, mais leurs méthodes, pays et devises sont vides : ils ne
+sont routables nulle part et ne constituent aucun fallback Sénégal.
 
 ## Presentment currencies
 

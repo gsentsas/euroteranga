@@ -10,6 +10,8 @@ import { buildAuthConfig } from './auth/auth.config.js';
 import type { AuthMailProvider } from './auth/mail/auth-mail.provider.js';
 import type { PayPalGateway } from './payments/providers/paypal-payment.provider.js';
 import type { StripeGateway } from './payments/providers/stripe-payment.provider.js';
+import type { PaymentProvider } from './payments/providers/payment-provider.js';
+import type { WaveGateway } from './payments/providers/wave-payment.provider.js';
 import { FoundationExceptionFilter } from './common/exception.filter.js';
 import { NestJsonLogger } from './common/logging.js';
 import { requestIdMiddleware } from './common/request-id.js';
@@ -26,6 +28,10 @@ export interface CreateAppOptions {
   stripeGateway?: StripeGateway;
   /** Test-only PayPal API override (CI never reaches PayPal); production uses the SDK. */
   paypalGateway?: PayPalGateway;
+  /** Test-only Wave HTTP override (CI never reaches Wave). */
+  waveGateway?: WaveGateway;
+  /** Test-only complete provider overrides; production passes none. */
+  testPaymentProviders?: readonly PaymentProvider[];
 }
 
 export async function createApp(options: CreateAppOptions): Promise<NestExpressApplication> {

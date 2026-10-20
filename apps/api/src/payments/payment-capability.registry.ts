@@ -69,14 +69,6 @@ const capability = (
   implemented: input.implemented ?? false,
 });
 
-const SENEGAL_MOBILE = [
-  'WAVE_SN',
-  'ORANGE_MONEY_SN',
-  'FREE_MONEY_SN',
-  'EXPRESSO_SN',
-  'WIZALL_SN',
-  'DJAMO_SN',
-] as const;
 const MAURITANIA_MOBILE = [
   'BANKILY_MR',
   'MASRVI_MR',
@@ -114,15 +106,17 @@ export const STRIPE_COLLECTION_WINDOW_SECONDS = 31 * 60;
  */
 export const PAYPAL_START_HOLD_SECONDS = 2 * 60;
 export const STRIPE_HOLD_MARGIN_SECONDS = 5 * 60;
+/** Wave checkouts expire after 30 minutes; the seat hold must outlast that. */
+export const WAVE_COLLECTION_WINDOW_SECONDS = 30 * 60;
+export const WAVE_HOLD_MARGIN_SECONDS = 5 * 60;
 
 /**
  * Declared reach of every provider in the programme. A declaration never
  * makes a provider routable: only an injected, active adapter is. SANDBOX is
- * test-only (local and CI). STRIPE (PAY-EU-1) and PAYPAL (PAY-PAYPAL-1) are
- * implemented, but disabled by default and never live in the pilot; their
- * declarations are checked against the providers' documentation
- * (stripe-europe.md, paypal.md). Every other real declaration remains a
- * planning hypothesis.
+ * test-only (local and CI). STRIPE (PAY-EU-1), PAYPAL (PAY-PAYPAL-1) and WAVE
+ * (PAY-SN-1A) are implemented, but disabled by default and never live in the
+ * pilot; their declarations are checked against the providers' documentation.
+ * Every other real declaration remains a planning hypothesis.
  */
 export const PROVIDER_CAPABILITY_DECLARATIONS: readonly Declaration[] = [
   capability('SANDBOX', {
@@ -197,36 +191,38 @@ export const PROVIDER_CAPABILITY_DECLARATIONS: readonly Declaration[] = [
     implemented: true,
   }),
   capability('PAYDUNYA', {
-    methods: ['CARD', ...SENEGAL_MOBILE],
-    countries: ['SN'],
-    currencies: ['XOF'],
+    // Historical provider code only: PAY-SN-1 explicitly forbids aggregators.
+    methods: [],
+    countries: [],
+    currencies: [],
     priority: 30,
-    phone: true,
-    refunds: 'FULL',
   }),
   capability('PAYTECH', {
-    methods: ['CARD', ...SENEGAL_MOBILE],
-    countries: ['SN'],
-    currencies: ['XOF'],
+    // Historical provider code only: no Senegal route, method or fallback.
+    methods: [],
+    countries: [],
+    currencies: [],
     priority: 40,
-    phone: true,
-    refunds: 'FULL',
   }),
   capability('WAVE', {
     methods: ['WAVE_SN'],
     countries: ['SN'],
     currencies: ['XOF'],
+    collectionWindowSeconds: WAVE_COLLECTION_WINDOW_SECONDS,
+    minimumHoldRemainingSeconds: WAVE_COLLECTION_WINDOW_SECONDS + WAVE_HOLD_MARGIN_SECONDS,
     priority: 10,
-    phone: true,
+    phone: false,
     refunds: 'FULL',
+    implemented: true,
   }),
   capability('ORANGE_MONEY', {
+    // Direct target retained in the matrix, but not implemented/routable until
+    // Orange supplies the exact Senegal merchant contract.
     methods: ['ORANGE_MONEY_SN'],
     countries: ['SN'],
     currencies: ['XOF'],
     priority: 10,
-    phone: true,
-    refunds: 'FULL',
+    phone: false,
   }),
   capability('CMI', {
     methods: ['CMI_CARD', 'CARD', 'MAROCPAY'],
@@ -326,9 +322,9 @@ export function capabilityCollects(item: ProviderCapability, input: PaymentRoute
 /**
  * Central, fail-closed router: it only returns injected, active adapters, and
  * only for the exact method the customer chose. A method nobody can collect
- * is unavailable: there is never a fallback to another method (a Wave
- * payment is never silently charged to a card), only to another provider of
- * the same method (Wave direct, then an aggregator offering Wave).
+ * is unavailable: there is never a fallback to another method. Generic
+ * same-method priority remains available for other corridors, but WAVE_SN has
+ * exactly one declared provider: direct Wave, never an aggregator or a card.
  */
 @Injectable()
 export class PaymentCapabilityRegistry {

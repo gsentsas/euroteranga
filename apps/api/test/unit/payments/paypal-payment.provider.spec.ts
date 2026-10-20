@@ -694,6 +694,7 @@ describe('PayPal wiring (PAY-PAYPAL-1)', () => {
     sandboxWebhookKey: null,
     stripe: null,
     paypal: null,
+    wave: null,
     returnUrl: RETURN_URL,
   };
   const { logger } = captured();

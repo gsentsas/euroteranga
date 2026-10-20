@@ -542,6 +542,7 @@ describe('Stripe wiring (PAY-EU-1)', () => {
     sandboxWebhookKey: null,
     stripe: null,
     paypal: null,
+    wave: null,
     returnUrl: RETURN_URL,
   };
   const { logger } = captured();

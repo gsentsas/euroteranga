@@ -6,6 +6,7 @@ import {
   loadApiEnv,
   PAYPAL_LIVE_MODE_ENABLED,
   STRIPE_LIVE_MODE_ENABLED,
+  WAVE_LIVE_MODE_ENABLED,
 } from './index.js';
 
 const key = (bytes = 32) => randomBytes(bytes).toString('base64');
@@ -377,5 +378,92 @@ describe('PayPal configuration (PAY-PAYPAL-1)', () => {
     ]) {
       expect(example).not.toMatch(new RegExp(`^${name}=.`, 'm'));
     }
+  });
+});
+
+describe('Wave Senegal configuration (PAY-SN-1A)', () => {
+  const credentials = () => ({
+    PAYMENT_WAVE_API_KEY: `wave_sn_prod_${randomBytes(24).toString('hex')}`,
+    PAYMENT_WAVE_WEBHOOK_SECRET: `wave_sn_WHS_${randomBytes(24).toString('hex')}`,
+    PAYMENT_WAVE_REQUEST_SIGNING_SECRET: `wave_sn_AKS_${randomBytes(24).toString('hex')}`,
+  });
+
+  it('is DISABLED by default, with Orange Money blocked and no credential', () => {
+    const loaded = loadApiEnv(env());
+    expect(loaded.PAYMENT_WAVE_MODE).toBe('DISABLED');
+    expect(loaded.PAYMENT_WAVE_API_KEY).toBeUndefined();
+    expect(loaded.PAYMENT_WAVE_WEBHOOK_SECRET).toBeUndefined();
+    expect(loaded.PAYMENT_WAVE_REQUEST_SIGNING_SECRET).toBeUndefined();
+    expect(loaded.PAYMENT_ORANGE_MONEY_MODE).toBe('DISABLED');
+  });
+
+  it.each([
+    'PAYMENT_WAVE_API_KEY',
+    'PAYMENT_WAVE_WEBHOOK_SECRET',
+    'PAYMENT_WAVE_REQUEST_SIGNING_SECRET',
+  ] as const)('refuses stale %s while DISABLED', (name) => {
+    const values = credentials();
+    expect(() => loadApiEnv(env({ [name]: values[name] }))).toThrow(
+      new RegExp(`${name}: must be unset when PAYMENT_WAVE_MODE=DISABLED`),
+    );
+  });
+
+  it('refuses LIVE in every environment and requires the complete signed setup', () => {
+    expect(WAVE_LIVE_MODE_ENABLED).toBe(false);
+    for (const target of [env(), deployedEnv('staging'), deployedEnv('production')]) {
+      expect(() => loadApiEnv({ ...target, PAYMENT_WAVE_MODE: 'LIVE', ...credentials() })).toThrow(
+        /PAYMENT_WAVE_MODE: LIVE is not enabled/,
+      );
+    }
+    expect(() => loadApiEnv(env({ PAYMENT_WAVE_MODE: 'LIVE' }))).toThrow(
+      /PAYMENT_WAVE_API_KEY: is required when PAYMENT_WAVE_MODE=LIVE/,
+    );
+  });
+
+  it('refuses malformed credentials without printing their values', () => {
+    const malformed = `wave_sn_wrong_${randomBytes(24).toString('hex')}`;
+    let message = '';
+    try {
+      loadApiEnv(
+        env({
+          PAYMENT_WAVE_MODE: 'LIVE',
+          ...credentials(),
+          PAYMENT_WAVE_API_KEY: malformed,
+        }),
+      );
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain('PAYMENT_WAVE_API_KEY');
+    expect(message).not.toContain(malformed);
+  });
+
+  it('does not invent a Wave sandbox or an Orange test/live mode', () => {
+    expect(() => loadApiEnv(env({ PAYMENT_WAVE_MODE: 'SANDBOX' }))).toThrow(
+      /PAYMENT_WAVE_MODE: must be DISABLED or LIVE/,
+    );
+    for (const mode of ['TEST', 'LIVE']) {
+      expect(() => loadApiEnv(env({ PAYMENT_ORANGE_MONEY_MODE: mode }))).toThrow(
+        /PAYMENT_ORANGE_MONEY_MODE/,
+      );
+    }
+  });
+
+  it('documents both methods as disabled and no secret in .env.example', () => {
+    const example = readFileSync(new URL('../../../.env.example', import.meta.url), 'utf8');
+    expect(/^PAYMENT_WAVE_MODE=(.*)$/m.exec(example)?.[1]).toBe('DISABLED');
+    expect(/^PAYMENT_ORANGE_MONEY_MODE=(.*)$/m.exec(example)?.[1]).toBe('DISABLED');
+    for (const name of [
+      'PAYMENT_WAVE_API_KEY',
+      'PAYMENT_WAVE_WEBHOOK_SECRET',
+      'PAYMENT_WAVE_REQUEST_SIGNING_SECRET',
+    ]) {
+      expect(example).not.toMatch(new RegExp(`^${name}=.`, 'm'));
+    }
+    const orange = readFileSync(
+      new URL('../../../docs/payments/orange-money-senegal.md', import.meta.url),
+      'utf8',
+    );
+    expect(orange).toContain('ORANGE_MONEY_ADAPTER=BLOCKED_PENDING_OFFICIAL_MERCHANT_DOCS');
   });
 });
