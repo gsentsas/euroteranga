@@ -432,9 +432,13 @@ describe('passenger compliance evaluation (isolated database)', () => {
     await complianceApi(alice).evaluate(journey.bookingReference, passenger);
     const summary = await complianceApi(alice).summary(journey.bookingReference);
     expect(summary.headers['cache-control']).toBe('no-store');
-    expect(JSON.stringify(summary.body)).not.toMatch(
-      /fingerprint|sourceUrl|source|verifiedBy|reviewer|reason"|objectKey|sha256|"id"|customerIdentityId|engineVersion/i,
+    const serialized = JSON.stringify(summary.body);
+    expect(serialized).not.toMatch(
+      /fingerprint|sourceUrl|source|verifiedBy|reviewer|reason"|objectKey|sha256|customerIdentityId|engineVersion/i,
     );
+    // Internal database keys are lowercase `id`. Keep this check case-sensitive
+    // so a legitimate ISO country code such as "ID" (Indonesia) is not rejected.
+    expect(serialized).not.toMatch(/"id"\s*:/);
   });
 
   it('rate-limits customer evaluations by an opaque identity bucket', async () => {
