@@ -1,4 +1,4 @@
-# Settlement and reconciliation (PAY-HUB-1, PAY-EU-1)
+# Settlement and reconciliation (PAY-HUB-1, PAY-EU-1, PAY-PAYPAL-1)
 
 Three facts, at three moments, in three models:
 
@@ -63,3 +63,18 @@ Money collected without a confirmed booking (a success after the hold, or on
 a cancelled attempt) is visible as a `PAYMENT_SUCCEEDED` event on an attempt
 that is not SUCCEEDED; it is refunded from the Stripe Dashboard, then the
 refund is recorded in OPS. See [stripe-europe.md](stripe-europe.md#reconciliation).
+
+## PayPal (PAY-PAYPAL-1)
+
+Five PayPal facts, never merged: the **order** (stored as
+`providerPaymentId`), its **capture** (the money; a `PAYMENT.CAPTURE.COMPLETED`
+event succeeds the attempt), a **refund**, PayPal's **fee**
+(`seller_receivable_breakdown`, not read) and the **payout** to the bank. Only
+the order id is kept; no capture id, fee, net amount, settlement or payout is
+stored or invented.
+
+A capture completed after the hold, or after a trip or booking cancellation,
+is recorded and refused: it shows as a `PAYMENT_SUCCEEDED` event on an attempt
+that is not SUCCEEDED (the query above, with `p.provider = 'PAYPAL'`), and is
+refunded in the PayPal account, then recorded in OPS. See
+[paypal.md](paypal.md#refunds-and-reconciliation).

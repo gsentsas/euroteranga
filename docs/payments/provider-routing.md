@@ -1,4 +1,4 @@
-# Provider routing (PAY-HUB-1, PAY-EU-1)
+# Provider routing (PAY-HUB-1, PAY-EU-1, PAY-PAYPAL-1)
 
 A **method** is what the customer chooses (Wave, a CB card, Bankily). A
 **provider** is who collects it (Wave directly, an aggregator such as
@@ -25,20 +25,32 @@ Each provider declares, once:
 
 PAY-EU-1 adds, per provider:
 
-| Field                         | Meaning                                                                                        |
-| ----------------------------- | ---------------------------------------------------------------------------------------------- |
-| `methodCountries`             | Narrower countries of some methods (Stripe: Bizum in Spain only).                              |
-| `amountLimits`                | Presentment bounds per method and country (Stripe: 0.50 EUR minimum, Bizum and Klarna maxima). |
-| `cardNetworks`                | Networks accepted for `CARD`, per country: badges of the card option, never choices.           |
-| `deviceWallets`               | Wallets its card page may add on an eligible device (never a promise, never a choice).         |
-| `collectionWindowSeconds`     | How long its checkout stays payable (Stripe: 31 minutes); null without a checkout of its own.  |
-| `minimumHoldRemainingSeconds` | Hold time that must remain to start (Stripe: 36 minutes, the window plus 5).                   |
-| `excludedMethods`             | Methods it could offer but does not collect for EURO TERANGA, with the documented reason.      |
+| Field                           | Meaning                                                                                                                                                                                  |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `methodCountries`               | Narrower countries of some methods (Stripe: Bizum in Spain only).                                                                                                                        |
+| `amountLimits`                  | Presentment bounds per method and country (Stripe: 0.50 EUR minimum, Bizum and Klarna maxima).                                                                                           |
+| `cardNetworks`                  | Networks accepted for `CARD`, per country: badges of the card option, never choices.                                                                                                     |
+| `deviceWallets`                 | Wallets its card page may add on an eligible device (never a promise, never a choice).                                                                                                   |
+| `collectionWindowSeconds`       | How long its checkout stays payable (Stripe: 31 minutes); null without a checkout of its own.                                                                                            |
+| `minimumHoldRemainingSeconds`   | Hold time that must remain to start (Stripe: 36 minutes, the window plus 5).                                                                                                             |
+| `excludedMethods`               | Methods it could offer but does not collect for EURO TERANGA, with the documented reason.                                                                                                |
+| `localCancelPreventsCollection` | PAY-PAYPAL-1: no money moves unless EURO TERANGA asks for it (SANDBOX, PayPal), so cancelling the attempt locally is enough; false for Stripe, whose checkout is closed at Stripe first. |
 
 A declaration alone never makes a provider routable: only an **injected,
-active adapter** is (`PAYMENT_PROVIDERS`). Adapters: SANDBOX (local and CI)
-and, since PAY-EU-1, STRIPE (only with `PAYMENT_STRIPE_MODE` TEST or LIVE;
-DISABLED by default).
+active adapter** is (`PAYMENT_PROVIDERS`). Adapters: SANDBOX (local and CI),
+STRIPE since PAY-EU-1 (only with `PAYMENT_STRIPE_MODE` TEST or LIVE) and
+PAYPAL since PAY-PAYPAL-1 (only with `PAYMENT_PAYPAL_MODE` SANDBOX or LIVE;
+France and Spain, EUR). Both real adapters are DISABLED by default.
+
+### Providers with a capture step (PayPal)
+
+For PayPal the payer's approval takes no money. The approval is a
+non-terminal event: EURO TERANGA captures only while the attempt is PENDING
+and its hold has at least 60 seconds left, after a short locked check that
+records `PAYMENT_CAPTURE_REQUESTED`, and outside any transaction. Only the
+capture's own terminal event (`PAYMENT.CAPTURE.COMPLETED`) can succeed the
+attempt. A capture key derived from the payment reference makes a
+redelivered approval the same capture. See [paypal.md](paypal.md).
 
 ## Fail-closed conditions
 

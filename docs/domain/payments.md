@@ -3,7 +3,7 @@
 > Implemented in PR-10 and extended by PR-22 operational refunds: payment
 > attempts, provider events, booking confirmation and bounded refund facts. **NOT PRODUCTION DEPLOYED.** **No real payment service
 > provider (PSP) is configured**: the only active provider, **SANDBOX**, is a local simulation for
-> development, tests and CI (the Stripe adapter of PAY-EU-1 exists but is disabled). No real money is ever moved, and no card, security
+> development, tests and CI (the Stripe and PayPal adapters exist but are disabled). No real money is ever moved, and no card, security
 > code or IBAN is ever collected. Browser and integration tests use synthetic
 > data only.
 
@@ -19,6 +19,14 @@
 > **disabled by default** (`PAYMENT_STRIPE_MODE=DISABLED`), refused on the
 > pilot, and never LIVE in this release. Refunds are still recorded facts,
 > not sent to Stripe. See [stripe-europe.md](../payments/stripe-europe.md).
+
+> **PAY-PAYPAL-1** adds **PayPal Wallet** (Orders API v2, France and Spain,
+> EUR). The payer's approval is not a payment: EURO TERANGA captures only
+> while the attempt and its hold are payable, and only the capture's own
+> event confirms the booking. Disabled by default
+> (`PAYMENT_PAYPAL_MODE=DISABLED`), refused on the pilot, never LIVE in this
+> release; refunds are not sent to PayPal. See
+> [paypal.md](../payments/paypal.md).
 
 PR-10 lets the authenticated CUSTOMER who owns a HELD booking start a payment
 attempt. The attempt's result arrives later as a signed provider event. A
@@ -260,7 +268,9 @@ stays EXPIRED and its seats are not taken back. With SANDBOX, no customer can
 be charged. With Stripe (PAY-EU-1), an attempt only starts while the hold
 outlasts the Checkout session by five minutes, and the session expires before
 the hold; a late success can only come from a delayed event, is recorded,
-never confirms, and must be refunded. **A real PSP integration must add a provider-specific strategy for
+never confirms, and must be refunded. With PayPal (PAY-PAYPAL-1), a late
+approval is never captured, and a capture completing after the hold is
+recorded, never confirms, and must be refunded. **A real PSP integration must add a provider-specific strategy for
 asynchronous payments and compensation:** void or refund a capture that
 arrives too late, a success on a cancelled attempt, or a mismatched amount.
 Until then these cases are recorded and refused, never applied.

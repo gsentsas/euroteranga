@@ -64,6 +64,16 @@ stored in `/var/www/vhosts/euroteranga.com/backups/`.
 The first staging deployment intentionally uses PAYMENT_PROVIDER=DISABLED,
 OBJECT_STORAGE_PROVIDER=DISABLED and MALWARE_SCANNER=DISABLED.
 
+The real payment adapters stay off on the pilot: `deploy-release.sh` sources
+`infrastructure/plesk/pilot-env-guard.sh`, which refuses to deploy unless
+`APP_ENV=staging`, `PAYMENT_PROVIDER=DISABLED`, `PAYMENT_STRIPE_MODE` and
+`PAYMENT_PAYPAL_MODE` are unset or `DISABLED`, and no Stripe or PayPal
+credential is present (`PAYMENT_STRIPE_SECRET_KEY`,
+`PAYMENT_STRIPE_WEBHOOK_SECRET`, `PAYMENT_PAYPAL_CLIENT_ID`,
+`PAYMENT_PAYPAL_CLIENT_SECRET`, `PAYMENT_PAYPAL_WEBHOOK_ID`). See
+[stripe-europe.md](../payments/stripe-europe.md) and
+[paypal.md](../payments/paypal.md).
+
 A complete business pilot requiring real payment or passenger-document upload
 remains NO-GO until a real PSP adapter, private S3-compatible storage and
 CLAMAV (or another supported approved scanner) are provisioned.
