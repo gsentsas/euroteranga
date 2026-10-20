@@ -542,7 +542,7 @@ function RefundForm({
       <p className="et-hint" data-testid={'refund-not-sent-' + paymentReference}>
         Enregistre le remboursement et son avoir dans EURO TERANGA uniquement : aucun ordre de
         remboursement n’est envoyé au prestataire de paiement. Exécutez-le d’abord chez le
-        prestataire (pour Stripe, dans son tableau de bord).
+        prestataire (pour Stripe ou PayPal, dans leur tableau de bord).
       </p>
       <div className="et-network-adders">
         <div className="et-field">

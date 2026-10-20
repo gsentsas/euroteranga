@@ -68,8 +68,15 @@ export function describePaymentOption(
   };
 }
 
-/** Hosted payment pages the browser may be sent to (PAY-EU-1: Stripe Checkout only). */
-const TRUSTED_CHECKOUT_ORIGINS = ['https://checkout.stripe.com'] as const;
+/**
+ * Hosted payment pages the browser may be sent to: Stripe Checkout (PAY-EU-1)
+ * and PayPal's approval page (PAY-PAYPAL-1, live and sandbox).
+ */
+const TRUSTED_CHECKOUT_PAGES: ReadonlyArray<{ origin: string; pathname?: string }> = [
+  { origin: 'https://checkout.stripe.com' },
+  { origin: 'https://www.paypal.com', pathname: '/checkoutnow' },
+  { origin: 'https://www.sandbox.paypal.com', pathname: '/checkoutnow' },
+];
 
 /**
  * Where the browser goes to pay, if anywhere: only an https page of a trusted
@@ -84,9 +91,10 @@ export function paymentRedirectTarget(checkout: CreatePaymentResult['checkout'])
   } catch {
     return null;
   }
-  return (TRUSTED_CHECKOUT_ORIGINS as readonly string[]).includes(url.origin) &&
-    url.username === '' &&
-    url.password === ''
-    ? url.toString()
-    : null;
+  if (url.username !== '' || url.password !== '') return null;
+  const trusted = TRUSTED_CHECKOUT_PAGES.some(
+    (page) =>
+      page.origin === url.origin && (page.pathname === undefined || page.pathname === url.pathname),
+  );
+  return trusted ? url.toString() : null;
 }

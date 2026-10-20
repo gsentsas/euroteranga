@@ -26,9 +26,24 @@ import { secretKey } from './auth-env.js';
  * Both Stripe secrets are server-side only, never NEXT_PUBLIC_ values, never
  * logged, and must be unset while Stripe is DISABLED. No publishable key is
  * needed: the customer pays on the page hosted by Stripe (Checkout).
+ *
+ * PayPal (PAY-PAYPAL-1), independent as well:
+ *
+ * - PAYMENT_PAYPAL_MODE: DISABLED (default: no credential, no adapter, no
+ *   network call), SANDBOX (PayPal sandbox credentials, local and CI only) or
+ *   LIVE (refused in this release).
+ * - PAYMENT_PAYPAL_CLIENT_ID, PAYMENT_PAYPAL_CLIENT_SECRET: the REST app's
+ *   OAuth 2.0 client credentials. The flow is server-side only, so neither is
+ *   ever sent to a browser; the secret is never logged.
+ * - PAYMENT_PAYPAL_WEBHOOK_ID: the ID of the webhook configured for that app,
+ *   which PayPal's signature verification needs. Not a secret, but it only
+ *   ever comes from this configuration, never from a request.
+ *
+ * All three must be unset while PayPal is DISABLED.
  */
 export const PAYMENT_PROVIDERS = ['SANDBOX', 'DISABLED'] as const;
 export const PAYMENT_STRIPE_MODES = ['DISABLED', 'TEST', 'LIVE'] as const;
+export const PAYMENT_PAYPAL_MODES = ['DISABLED', 'SANDBOX', 'LIVE'] as const;
 
 /**
  * Release gate of PAYMENT_STRIPE_MODE=LIVE. The pilot takes no real money:
@@ -37,8 +52,14 @@ export const PAYMENT_STRIPE_MODES = ['DISABLED', 'TEST', 'LIVE'] as const;
  */
 export const STRIPE_LIVE_MODE_ENABLED = false;
 
+/** Release gate of PAYMENT_PAYPAL_MODE=LIVE, closed for the same reasons. */
+export const PAYPAL_LIVE_MODE_ENABLED = false;
+
 const STRIPE_SECRET_KEY = /^(sk|rk)_(test|live)_[A-Za-z0-9]{16,240}$/;
 const STRIPE_WEBHOOK_SECRET = /^whsec_[A-Za-z0-9+/=]{16,240}$/;
+/** REST app credentials (opaque to us) and webhook ID (Webhooks API: `^[a-zA-Z0-9]+$`, 50 max). */
+const PAYPAL_CREDENTIAL = /^[A-Za-z0-9_-]{16,256}$/;
+const PAYPAL_WEBHOOK_ID = /^[A-Za-z0-9]{1,50}$/;
 
 /** An empty value (`NAME=` in an env file) is the same as an unset one. */
 const optionalSecret = (pattern: RegExp, message: string) =>
@@ -71,6 +92,21 @@ export const paymentEnvShape = {
     STRIPE_WEBHOOK_SECRET,
     'must be a Stripe webhook signing secret (whsec_)',
   ),
+  PAYMENT_PAYPAL_MODE: z
+    .enum(PAYMENT_PAYPAL_MODES, { error: 'must be DISABLED, SANDBOX or LIVE' })
+    .default('DISABLED'),
+  PAYMENT_PAYPAL_CLIENT_ID: optionalSecret(
+    PAYPAL_CREDENTIAL,
+    'must be a PayPal REST app client ID (16-256 letters, digits, - or _)',
+  ),
+  PAYMENT_PAYPAL_CLIENT_SECRET: optionalSecret(
+    PAYPAL_CREDENTIAL,
+    'must be a PayPal REST app client secret (16-256 letters, digits, - or _)',
+  ),
+  PAYMENT_PAYPAL_WEBHOOK_ID: optionalSecret(
+    PAYPAL_WEBHOOK_ID,
+    'must be a PayPal webhook ID (1-50 letters or digits)',
+  ),
 };
 
 type PaymentEnvInput = z.infer<z.ZodObject<typeof paymentEnvShape>> & {
@@ -83,6 +119,7 @@ type PaymentEnvInput = z.infer<z.ZodObject<typeof paymentEnvShape>> & {
 /** Cross-field rules: SANDBOX needs its own key and never runs when deployed. */
 export function refinePaymentEnv(env: PaymentEnvInput, ctx: z.RefinementCtx): void {
   refineStripeEnv(env, ctx);
+  refinePayPalEnv(env, ctx);
   const issue = (path: string, message: string) =>
     ctx.addIssue({ code: 'custom', path: [path], message });
 
@@ -141,5 +178,47 @@ function refineStripeEnv(env: PaymentEnvInput, ctx: z.RefinementCtx): void {
   }
   if (!webhookSecret) {
     issue('PAYMENT_STRIPE_WEBHOOK_SECRET', `is required when PAYMENT_STRIPE_MODE=${mode}`);
+  }
+}
+
+const PAYPAL_VARIABLES = [
+  'PAYMENT_PAYPAL_CLIENT_ID',
+  'PAYMENT_PAYPAL_CLIENT_SECRET',
+  'PAYMENT_PAYPAL_WEBHOOK_ID',
+] as const;
+
+/**
+ * PayPal fails closed like Stripe: DISABLED carries no credential at all;
+ * SANDBOX needs all three values and runs in local and CI only; LIVE is
+ * refused by the release gate. Messages name variables, never values.
+ */
+function refinePayPalEnv(env: PaymentEnvInput, ctx: z.RefinementCtx): void {
+  const issue = (path: string, message: string) =>
+    ctx.addIssue({ code: 'custom', path: [path], message });
+  const mode = env.PAYMENT_PAYPAL_MODE;
+
+  if (mode === 'DISABLED') {
+    for (const name of PAYPAL_VARIABLES) {
+      if (env[name]) issue(name, 'must be unset when PAYMENT_PAYPAL_MODE=DISABLED');
+    }
+    return;
+  }
+  if (mode === 'SANDBOX' && env.APP_ENV !== 'local' && env.APP_ENV !== 'ci') {
+    issue('PAYMENT_PAYPAL_MODE', 'SANDBOX is allowed in local and ci only');
+  }
+  if (mode === 'LIVE' && !PAYPAL_LIVE_MODE_ENABLED) {
+    issue(
+      'PAYMENT_PAYPAL_MODE',
+      'LIVE is not enabled in this release: the pilot takes no real money',
+    );
+  }
+  for (const name of PAYPAL_VARIABLES) {
+    if (!env[name]) issue(name, `is required when PAYMENT_PAYPAL_MODE=${mode}`);
+  }
+  if (
+    env.PAYMENT_PAYPAL_CLIENT_ID &&
+    env.PAYMENT_PAYPAL_CLIENT_ID === env.PAYMENT_PAYPAL_CLIENT_SECRET
+  ) {
+    issue('PAYMENT_PAYPAL_CLIENT_SECRET', 'must differ from PAYMENT_PAYPAL_CLIENT_ID');
   }
 }

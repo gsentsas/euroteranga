@@ -1,4 +1,4 @@
-# Payment matrix (PAY-HUB-1, PAY-EU-1)
+# Payment matrix (PAY-HUB-1, PAY-EU-1, PAY-PAYPAL-1)
 
 What EURO TERANGA intends to offer each payer country, and how far each
 method really is. Four distinct facts, never to be confused:
@@ -11,11 +11,13 @@ method really is. Four distinct facts, never to be confused:
 | LIVE        | Configured, active and moving real money.                                                      |
 
 Current state: every row below is SUPPORTED; IMPLEMENTED is given per row
-(only **STRIPE**, since PAY-EU-1, for `CARD` in France and Spain, `BIZUM` in
-Spain and `KLARNA` in France and Spain); **CONFIGURED = NO and LIVE = NO
-everywhere**. Production and the pilot run with `PAYMENT_PROVIDER=DISABLED`
-and `PAYMENT_STRIPE_MODE=DISABLED`: no method is available there, and the
-payment options API says so (`available: false`).
+(**STRIPE**, since PAY-EU-1, for `CARD` in France and Spain, `BIZUM` in Spain
+and `KLARNA` in France and Spain; **PAYPAL**, since PAY-PAYPAL-1, for `PAYPAL`
+in France and Spain, never in Senegal); **CONFIGURED = NO and LIVE = NO
+everywhere**. Production and the pilot run with `PAYMENT_PROVIDER=DISABLED`,
+`PAYMENT_STRIPE_MODE=DISABLED` and `PAYMENT_PAYPAL_MODE=DISABLED`: no method
+is available there, and the payment options API says so
+(`available: false`).
 
 **SANDBOX** collects every method of every country except the `ASYNC_LONG`
 ones, in local and CI only (refused by the configuration in staging and
@@ -31,9 +33,9 @@ production). It is test-only: it moves no money and is never LIVE.
   vocabulary only and are never offered.
 - **Declared providers** are those the capability registry
   (`payment-capability.registry.ts`) lists for the method in that country and
-  currency, best first. Apart from STRIPE (checked against Stripe's
-  documentation, see [stripe-europe.md](stripe-europe.md)), they are
-  **planning hypotheses**, to be checked before their adapter PR
+  currency, best first. Apart from STRIPE and PAYPAL (checked against their
+  documentation, see [stripe-europe.md](stripe-europe.md) and
+  [paypal.md](paypal.md)), they are **planning hypotheses**, to be checked before their adapter PR
   ([provider-onboarding.md](provider-onboarding.md)).
 - **Notes** give the documented reason when a provider able to offer a method
   does not collect it for EURO TERANGA.
@@ -48,7 +50,7 @@ when either changes.
 | `CARD`                 | Carte bancaire (recommended) | INSTANT      | `STRIPE`           | YES       | YES (STRIPE) | NO         | NO   | —                                                                                        |
 | `APPLE_PAY`            | Apple Pay                    | INSTANT      | —                  | YES       | NO           | NO         | NO   | STRIPE: `NOT_SELECTABLE_IN_CHECKOUT`                                                     |
 | `GOOGLE_PAY`           | Google Pay                   | INSTANT      | —                  | YES       | NO           | NO         | NO   | STRIPE: `NOT_SELECTABLE_IN_CHECKOUT`                                                     |
-| `PAYPAL`               | PayPal                       | INSTANT      | `PAYPAL`           | YES       | NO           | NO         | NO   | STRIPE: `SEPARATE_PROVIDER_PR`                                                           |
+| `PAYPAL`               | PayPal                       | INSTANT      | `PAYPAL`           | YES       | YES (PAYPAL) | NO         | NO   | STRIPE: `SEPARATE_PROVIDER_PR`                                                           |
 | `SEPA_CREDIT_TRANSFER` | Virement SEPA                | ASYNC_LONG   | —                  | YES       | NO           | NO         | NO   | `ASYNC_LONG`: needs a booking policy; STRIPE: `ASYNC_SETTLEMENT_REQUIRES_BOOKING_POLICY` |
 | `SEPA_DIRECT_DEBIT`    | Prélèvement SEPA             | ASYNC_LONG   | —                  | YES       | NO           | NO         | NO   | `ASYNC_LONG`: needs a booking policy; STRIPE: `ASYNC_SETTLEMENT_REQUIRES_BOOKING_POLICY` |
 | `WERO`                 | Wero                         | INSTANT      | —                  | YES       | NO           | NO         | NO   | STRIPE: `NOT_SUPPORTED_BY_PINNED_SDK`                                                    |
@@ -62,7 +64,7 @@ when either changes.
 | `CARD`                 | Carte bancaire      | INSTANT      | `STRIPE`           | YES       | YES (STRIPE) | NO         | NO   | —                                                                                        |
 | `APPLE_PAY`            | Apple Pay           | INSTANT      | —                  | YES       | NO           | NO         | NO   | STRIPE: `NOT_SELECTABLE_IN_CHECKOUT`                                                     |
 | `GOOGLE_PAY`           | Google Pay          | INSTANT      | —                  | YES       | NO           | NO         | NO   | STRIPE: `NOT_SELECTABLE_IN_CHECKOUT`                                                     |
-| `PAYPAL`               | PayPal              | INSTANT      | `PAYPAL`           | YES       | NO           | NO         | NO   | STRIPE: `SEPARATE_PROVIDER_PR`                                                           |
+| `PAYPAL`               | PayPal              | INSTANT      | `PAYPAL`           | YES       | YES (PAYPAL) | NO         | NO   | STRIPE: `SEPARATE_PROVIDER_PR`                                                           |
 | `SEPA_CREDIT_TRANSFER` | Virement SEPA       | ASYNC_LONG   | —                  | YES       | NO           | NO         | NO   | `ASYNC_LONG`: needs a booking policy; STRIPE: `ASYNC_SETTLEMENT_REQUIRES_BOOKING_POLICY` |
 | `SEPA_DIRECT_DEBIT`    | Prélèvement SEPA    | ASYNC_LONG   | —                  | YES       | NO           | NO         | NO   | `ASYNC_LONG`: needs a booking policy; STRIPE: `ASYNC_SETTLEMENT_REQUIRES_BOOKING_POLICY` |
 | `BIZUM`                | Bizum (recommended) | INSTANT      | `STRIPE`           | YES       | YES (STRIPE) | NO         | NO   | —                                                                                        |
@@ -98,7 +100,7 @@ when either changes.
 | Method            | Label              | Confirmation | Declared providers                    | SUPPORTED | IMPLEMENTED | CONFIGURED | LIVE | Note                                 |
 | ----------------- | ------------------ | ------------ | ------------------------------------- | --------- | ----------- | ---------- | ---- | ------------------------------------ |
 | `CARD`            | Carte bancaire     | INSTANT      | `PAYDUNYA`, `PAYTECH`                 | YES       | NO          | NO         | NO   | —                                    |
-| `PAYPAL`          | PayPal             | INSTANT      | `PAYPAL`                              | YES       | NO          | NO         | NO   | —                                    |
+| `PAYPAL`          | PayPal             | INSTANT      | —                                     | YES       | NO          | NO         | NO   | PAYPAL: XOF is not a PayPal currency |
 | `WAVE_SN`         | Wave (recommended) | ASYNC_SHORT  | `WAVE`, `PAYDUNYA`, `PAYTECH`         | YES       | NO          | NO         | NO   | —                                    |
 | `ORANGE_MONEY_SN` | Orange Money       | ASYNC_SHORT  | `ORANGE_MONEY`, `PAYDUNYA`, `PAYTECH` | YES       | NO          | NO         | NO   | —                                    |
 | `FREE_MONEY_SN`   | Free Money         | ASYNC_SHORT  | `PAYDUNYA`, `PAYTECH`                 | YES       | NO          | NO         | NO   | —                                    |

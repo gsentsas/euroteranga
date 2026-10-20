@@ -14,7 +14,8 @@ import { normalizeBookingReference, withFreshReference } from '../bookings/booki
 import { DatabaseService } from '../database/database.service.js';
 import type { AdminPaymentListQuery, PaymentCreate } from './payment.dto.js';
 import { PaymentErrors } from './payment.errors.js';
-import { PaymentCapabilityRegistry } from './payment-capability.registry.js';
+import { declaredCapability, PaymentCapabilityRegistry } from './payment-capability.registry.js';
+import { PAYMENT_CAPTURE_REQUESTED } from './payment-webhook.service.js';
 import { isPayerCountry, type PaymentProviderCode } from './payment-catalog.js';
 import {
   amountToNumber,
@@ -525,12 +526,13 @@ export class PaymentService {
       select: { provider: true, providerPaymentId: true },
     });
     if (!payment?.providerPaymentId) return;
-    const provider = this.registry.provider(payment.provider as PaymentProviderCode);
-    if (!provider?.cancelPayment) {
-      // A provider checkout exists but its adapter is gone: never cancel blind.
-      if (payment.provider !== 'SANDBOX') throw PaymentErrors.providerUnavailable();
-      return;
-    }
+    const code = payment.provider as PaymentProviderCode;
+    // Nothing is collected unless EURO TERANGA captures (SANDBOX, PayPal): the
+    // local cancellation itself prevents it (LOCAL_CANCEL_PREVENTS_CAPTURE).
+    if (declaredCapability(code).localCancelPreventsCollection) return;
+    const provider = this.registry.provider(code);
+    // A provider checkout exists but its adapter is gone: never cancel blind.
+    if (!provider?.cancelPayment) throw PaymentErrors.providerUnavailable();
     const outcome = await provider.cancelPayment(payment.providerPaymentId);
     if (outcome === 'COMPLETED') throw PaymentErrors.providerCompleting();
   }
@@ -544,6 +546,17 @@ export class PaymentService {
       const [payment] = await lock(tx);
       if (!payment) throw PaymentErrors.notFound();
       if (payment.status !== 'PENDING') throw PaymentErrors.invalidTransition();
+      // A capture was requested (serialized by the payment lock): the
+      // provider's event decides the attempt now, not a cancellation.
+      const captureRequested = await tx.auditEvent.findFirst({
+        where: {
+          resourceType: 'payment',
+          resourceId: payment.id,
+          action: PAYMENT_CAPTURE_REQUESTED,
+        },
+        select: { id: true },
+      });
+      if (captureRequested) throw PaymentErrors.providerCompleting();
       await cancelPendingPayments(
         tx,
         this.audit,

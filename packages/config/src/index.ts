@@ -7,8 +7,10 @@ export {
 } from './booking-env.js';
 export {
   EXAMPLE_PAYMENT_SANDBOX_WEBHOOK_SECRET,
+  PAYMENT_PAYPAL_MODES,
   PAYMENT_PROVIDERS,
   PAYMENT_STRIPE_MODES,
+  PAYPAL_LIVE_MODE_ENABLED,
   STRIPE_LIVE_MODE_ENABLED,
 } from './payment-env.js';
 export {

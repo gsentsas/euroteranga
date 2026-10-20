@@ -49,7 +49,7 @@ const wave = {
 } as const;
 
 describe('payment capability registry (PAY-HUB-1)', () => {
-  it('declares every provider once; only SANDBOX (test-only) and STRIPE have an adapter', () => {
+  it('declares every provider once; only SANDBOX (test-only), STRIPE and PAYPAL have an adapter', () => {
     expect(PROVIDER_CAPABILITY_DECLARATIONS.map((item) => item.providerCode)).toEqual([
       ...PAYMENT_PROVIDER_CODES,
     ]);
@@ -57,7 +57,7 @@ describe('payment capability registry (PAY-HUB-1)', () => {
       PROVIDER_CAPABILITY_DECLARATIONS.filter((item) => item.implemented).map(
         (item) => item.providerCode,
       ),
-    ).toEqual(['SANDBOX', 'STRIPE']);
+    ).toEqual(['SANDBOX', 'STRIPE', 'PAYPAL']);
     expect(PROVIDER_CAPABILITY_DECLARATIONS.every((item) => item.active === false)).toBe(true);
     const sandbox = PROVIDER_CAPABILITY_DECLARATIONS.find(
       (item) => item.providerCode === 'SANDBOX',
