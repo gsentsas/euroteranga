@@ -267,8 +267,7 @@ export class WavePaymentProvider implements PaymentProvider {
       collectionWindowSeconds === null ||
       !Number.isFinite(expiresAtMs) ||
       originalHoldMarginSeconds < 0 ||
-      Date.now() + collectionWindowSeconds * 1000 >
-        expiresAtMs + originalHoldMarginSeconds * 1000
+      Date.now() + collectionWindowSeconds * 1000 > expiresAtMs + originalHoldMarginSeconds * 1000
     ) {
       throw PaymentErrors.bookingExpired();
     }
