@@ -54,7 +54,12 @@ test('payment customer: SANDBOX payments confirm bookings, which keep their seat
   // No card, security code or IBAN field, and no third-party frame.
   await expect(page.getByRole('textbox')).toHaveCount(0);
   await expect(page.locator('iframe')).toHaveCount(0);
+  // PAY-HUB-1: a payer country and a method (France and a card by default),
+  // then the exact amount quoted by the server, before anything starts.
+  await expect(payment.getByLabel('Pays du payeur')).toHaveValue('FR');
   await payment.getByRole('button', { name: 'Continuer vers le paiement' }).click();
+  await expect(payment.getByTestId('payment-quote-amount')).toHaveText('123,45 EUR');
+  await payment.getByRole('button', { name: `Confirmer le paiement de ${reference}` }).click();
   await expect(payment.getByRole('status')).toContainText('en attente de confirmation');
   // The provider's signed event, sent by the test harness; the page refreshes by itself.
   const firstPayment = await sandboxSuccess(page.request, reference);
@@ -75,6 +80,10 @@ test('payment customer: SANDBOX payments confirm bookings, which keep their seat
   await expect(held).toContainText('123,45 EUR');
   await held
     .getByRole('button', { name: `Continuer vers le paiement de ${expiring.reference}` })
+    .click();
+  await expect(held.getByTestId('payment-quote-amount')).toHaveText('123,45 EUR');
+  await held
+    .getByRole('button', { name: `Confirmer le paiement de ${expiring.reference}` })
     .click();
   await expect(held.getByRole('status')).toContainText('en attente de confirmation');
   await expect(held.getByRole('button', { name: /Continuer vers le paiement/ })).toHaveCount(0);

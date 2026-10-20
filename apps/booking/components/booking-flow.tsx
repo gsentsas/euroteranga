@@ -144,11 +144,21 @@ function ConfirmedBooking({
         <dt>Montant payé</dt>
         <dd data-testid="booking-paid-amount">
           <strong>
-            {formatMoney(
-              payment?.amountMinor ?? booking.totalAmountMinor,
-              booking.currencyCode,
-              booking.currencyMinorUnit,
-            )}
+            {payment?.presentment && payment.presentment.currencyCode !== booking.currencyCode
+              ? `${formatMoney(
+                  payment.presentment.amountMinor,
+                  payment.presentment.currencyCode,
+                  payment.presentment.currencyMinorUnit,
+                )} (soit ${formatMoney(
+                  payment.amountMinor,
+                  booking.currencyCode,
+                  booking.currencyMinorUnit,
+                )})`
+              : formatMoney(
+                  payment?.amountMinor ?? booking.totalAmountMinor,
+                  booking.currencyCode,
+                  booking.currencyMinorUnit,
+                )}
           </strong>
         </dd>
         <dt>Référence du paiement</dt>

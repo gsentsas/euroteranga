@@ -173,8 +173,17 @@ export {
   type CustomerBookingSeat,
   type CustomerBookingStatus,
   type CustomerPayment,
+  type CreatePaymentInput,
   type CreatePaymentResult,
+  type PayerCountryCode,
+  type PaymentAmount,
   type PaymentFailureCode,
+  type PaymentMethodCode,
+  type PaymentOption,
+  type PaymentOptions,
+  type PaymentProviderCode,
+  type PaymentQuote,
+  type PaymentQuoteInput,
   type PaymentPage,
   type PaymentStatus,
   type FinanceCurrencySummary,
@@ -297,3 +306,4 @@ export {
   multiplyAmountMinor,
   parseMoneyToMinor,
 } from './money.js';
+export { describePaymentQuote, PAYER_COUNTRY_OPTIONS } from './payment-display.js';

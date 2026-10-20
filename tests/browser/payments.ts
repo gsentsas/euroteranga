@@ -28,14 +28,16 @@ export async function sandboxSuccess(request: APIRequestContext, bookingReferenc
     const payment = await db.payment.findFirstOrThrow({
       where: { booking: { reference: bookingReference }, status: 'PENDING' },
       orderBy: { id: 'desc' },
+      include: { quote: true },
     });
+    // What the provider collected: the quote's presentment amount (PAY-HUB-1).
     const raw = JSON.stringify({
       id: `evt_${randomBytes(12).toString('hex')}`,
       type: 'payment.succeeded',
       data: {
         providerPaymentId: payment.providerPaymentId,
-        amountMinor: Number(payment.amountMinor),
-        currency: payment.currencyCode,
+        amountMinor: Number(payment.quote?.presentmentAmountMinor ?? payment.amountMinor),
+        currency: payment.quote?.presentmentCurrencyCode ?? payment.currencyCode,
       },
     });
     const timestamp = Math.floor(Date.now() / 1000);

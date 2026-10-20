@@ -4,8 +4,12 @@ import {
   hasFareTableDetails,
   type AdminBooking,
   type AdminPaymentDetail,
+  type CreatePaymentInput,
   type CreatePaymentResult,
   type CustomerPayment,
+  type PaymentOptions,
+  type PaymentQuote,
+  type PaymentQuoteInput,
   type PaymentPage,
   type AdminFareTable,
   type BookingAvailability,
@@ -1229,11 +1233,18 @@ describe('admin client', () => {
       amountMinor: 6_000_000_000,
       currencyCode: 'EUR',
       currencyMinorUnit: 2,
+      paymentMethod: 'CARD_CB',
+      payerCountry: 'FR',
+      presentment: { amountMinor: 6_000_000_000, currencyCode: 'EUR', currencyMinorUnit: 2 },
       createdAt: '2030-01-01T00:00:00.000Z',
       succeededAt: null,
       failedAt: null,
       cancelledAt: null,
     };
+    const intent = {
+      quoteId: '01900000-0000-7000-8000-000000000001',
+      paymentMethod: 'CARD_CB',
+    } as const;
     const calls = mockFetch([
       { status: 200, body: { csrfToken: 'c' } },
       {
@@ -1254,21 +1265,21 @@ describe('admin client', () => {
       { status: 200, body: { ...payment, id: 'p', status: 'CANCELLED', events: [] } },
     ]);
     const client = createAuthClient('http://api.test/');
-    const created = await client.booking.customer.createPayment('ETB-AAAAAAAAAAAA');
+    const created = await client.booking.customer.createPayment('ETB-AAAAAAAAAAAA', intent);
     expect(calls[0]?.url).toBe('http://api.test/v1/auth/customer/csrf');
     expect(calls[1]).toMatchObject({
       url: 'http://api.test/v1/booking/bookings/ETB-AAAAAAAAAAAA/payments',
     });
     expect(calls[1]?.init.method).toBe('POST');
-    // No business field: amount, currency and provider come from the server.
-    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({});
+    // The chosen quote and its method only: amount, currency and provider come from the server.
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual(intent);
     expect(calls[1]?.init.headers).toEqual({
       'Content-Type': 'application/json',
       'X-CSRF-Token': 'c',
     });
     expect(created.ok && created.data.payment.amountMinor).toBe(6_000_000_000);
 
-    await client.booking.customer.createPayment('ETB-AAAAAAAAAAAA', intentKey);
+    await client.booking.customer.createPayment('ETB-AAAAAAAAAAAA', intent, intentKey);
     expect(calls[3]?.init.headers).toEqual({
       'Idempotency-Key': intentKey,
       'Content-Type': 'application/json',
@@ -1297,16 +1308,52 @@ describe('admin client', () => {
     expect(JSON.parse(String(calls[10]?.init.body))).toEqual({ reason: 'Bloqué' });
   });
 
+  it('reads payment options and requests quotes with intentions only (PAY-HUB-1)', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { country: 'SN', currency: 'XOF', currencyMinorUnit: 0, methods: [] } },
+      { status: 200, body: { csrfToken: 'q' } },
+      { status: 201, body: { id: 'quote' } },
+    ]);
+    const client = createAuthClient('http://api.test');
+    await client.booking.customer.paymentOptions('ETB-AAAAAAAAAAAA', 'SN');
+    expect(calls[0]?.url).toBe(
+      'http://api.test/v1/booking/bookings/ETB-AAAAAAAAAAAA/payment-options?payerCountry=SN',
+    );
+    expect(calls[0]?.init.method ?? 'GET').toBe('GET');
+    await client.booking.customer.createPaymentQuote('ETB-AAAAAAAAAAAA', {
+      payerCountry: 'SN',
+      paymentMethod: 'WAVE_SN',
+    });
+    expect(calls[2]?.url).toBe(
+      'http://api.test/v1/booking/bookings/ETB-AAAAAAAAAAAA/payment-quotes',
+    );
+    expect(calls[2]?.init.method).toBe('POST');
+    expect(JSON.parse(String(calls[2]?.init.body))).toEqual({
+      payerCountry: 'SN',
+      paymentMethod: 'WAVE_SN',
+    });
+    expect(calls[2]?.init.headers).toMatchObject({ 'X-CSRF-Token': 'q' });
+  });
+
   it('types payments explicitly: exact amounts, no provider detail for customers', () => {
     const client = createAuthClient('http://api.test');
     expectTypeOf(client.booking.customer.createPayment).returns.resolves.toEqualTypeOf<
       ApiResult<CreatePaymentResult>
     >();
-    // Only the booking reference (and an optional key): never an amount.
+    // The booking reference, the quote to pay (and an optional key): never an amount.
     expectTypeOf(client.booking.customer.createPayment).parameter(0).toEqualTypeOf<string>();
     expectTypeOf(client.booking.customer.createPayment)
       .parameter(1)
+      .toEqualTypeOf<CreatePaymentInput>();
+    expectTypeOf<CreatePaymentInput>().not.toHaveProperty('amountMinor');
+    expectTypeOf<PaymentQuoteInput>().not.toHaveProperty('amountMinor');
+    expectTypeOf<PaymentQuoteInput>().not.toHaveProperty('currencyCode');
+    expectTypeOf(client.booking.customer.createPayment)
+      .parameter(2)
       .toEqualTypeOf<string | undefined>();
+    // Payment options never say which provider collects a method.
+    expectTypeOf<PaymentOptions['methods'][number]>().not.toHaveProperty('provider');
+    expectTypeOf<PaymentQuote>().not.toHaveProperty('providerCandidate');
     expectTypeOf(client.booking.customer.listPayments).returns.resolves.toEqualTypeOf<
       ApiResult<{ items: CustomerPayment[] }>
     >();
