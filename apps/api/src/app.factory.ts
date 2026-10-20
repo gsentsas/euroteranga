@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { buildAuthConfig } from './auth/auth.config.js';
 import type { AuthMailProvider } from './auth/mail/auth-mail.provider.js';
+import type { PayPalGateway } from './payments/providers/paypal-payment.provider.js';
 import type { StripeGateway } from './payments/providers/stripe-payment.provider.js';
 import { FoundationExceptionFilter } from './common/exception.filter.js';
 import { NestJsonLogger } from './common/logging.js';
@@ -23,6 +24,8 @@ export interface CreateAppOptions {
   mailProvider?: AuthMailProvider;
   /** Test-only Stripe API override (CI never reaches Stripe); production uses the SDK. */
   stripeGateway?: StripeGateway;
+  /** Test-only PayPal API override (CI never reaches PayPal); production uses the SDK. */
+  paypalGateway?: PayPalGateway;
 }
 
 export async function createApp(options: CreateAppOptions): Promise<NestExpressApplication> {

@@ -5,6 +5,7 @@ import { createLogger, type Logger } from '@euroteranga/logger';
 import type { Type } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { createApp } from '../../src/app.factory.js';
+import type { PayPalGateway } from '../../src/payments/providers/paypal-payment.provider.js';
 import type { StripeGateway } from '../../src/payments/providers/stripe-payment.provider.js';
 import { FakeAuthMailProvider } from './fake-auth-mail.provider.js';
 
@@ -112,7 +113,7 @@ export async function startTestApp(
   env: ApiEnv,
   extraControllers: Type<unknown>[] = [],
   /** PAY-EU-1: a fake of the Stripe API calls, so CI never reaches Stripe. */
-  options: { stripeGateway?: StripeGateway } = {},
+  options: { stripeGateway?: StripeGateway; paypalGateway?: PayPalGateway } = {},
 ): Promise<TestApp> {
   const { logger, logs } = captureLogger();
   const mail = new FakeAuthMailProvider();
@@ -122,6 +123,7 @@ export async function startTestApp(
     extraControllers,
     mailProvider: mail,
     ...(options.stripeGateway ? { stripeGateway: options.stripeGateway } : {}),
+    ...(options.paypalGateway ? { paypalGateway: options.paypalGateway } : {}),
   });
   await app.init();
   return { app, logs, mail };

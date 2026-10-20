@@ -1,4 +1,8 @@
-import { STRIPE_LIVE_MODE_ENABLED, type ApiEnv } from '@euroteranga/config';
+import {
+  PAYPAL_LIVE_MODE_ENABLED,
+  STRIPE_LIVE_MODE_ENABLED,
+  type ApiEnv,
+} from '@euroteranga/config';
 import type { Logger } from '@euroteranga/logger';
 import { Module, type DynamicModule } from '@nestjs/common';
 import { API_ENV, API_LOGGER } from '../config/config.module.js';
@@ -20,6 +24,11 @@ import { CustomerPaymentController } from './customer-payment.controller.js';
 import { PAYMENT_PROVIDERS, type PaymentProvider } from './providers/payment-provider.js';
 import { SandboxPaymentProvider } from './providers/sandbox-payment.provider.js';
 import {
+  PayPalPaymentProvider,
+  PayPalSdkGateway,
+  type PayPalGateway,
+} from './providers/paypal-payment.provider.js';
+import {
   StripePaymentProvider,
   StripeSdkGateway,
   type StripeGateway,
@@ -27,22 +36,28 @@ import {
 
 /** Test-only replacement of the Stripe API calls (null: the official SDK). */
 export const STRIPE_GATEWAY = Symbol('STRIPE_GATEWAY');
+/** Test-only replacement of the PayPal API calls (null: the official SDK). */
+export const PAYPAL_GATEWAY = Symbol('PAYPAL_GATEWAY');
 
 export interface PaymentModuleOptions {
   /** Tests only: CI never reaches Stripe. Production passes nothing. */
   stripeGateway?: StripeGateway;
+  /** Tests only: CI never reaches PayPal. Production passes nothing. */
+  paypalGateway?: PayPalGateway;
 }
 
 /**
  * The configured adapters, side by side: SANDBOX (local and CI only, refused
- * by the configuration when deployed) and STRIPE (PAY-EU-1, only when
- * PAYMENT_STRIPE_MODE is TEST or LIVE). DISABLED wires nothing: no key is
+ * by the configuration when deployed), STRIPE (PAY-EU-1, only when
+ * PAYMENT_STRIPE_MODE is TEST or LIVE) and PAYPAL (PAY-PAYPAL-1, only when
+ * PAYMENT_PAYPAL_MODE is SANDBOX or LIVE). DISABLED wires nothing: no key is
  * read, no client is built, no network call can happen.
  */
 export function paymentProvidersFactory(
   config: PaymentConfig,
   logger: Logger,
   stripeGateway: StripeGateway | null,
+  paypalGateway: PayPalGateway | null = null,
 ): PaymentProvider[] {
   const providers: PaymentProvider[] = [];
   if (config.provider === 'SANDBOX' && config.sandboxWebhookKey) {
@@ -59,6 +74,21 @@ export function paymentProvidersFactory(
         webhookSecret: config.stripe.webhookSecret,
         returnUrl: config.returnUrl,
         gateway: stripeGateway ?? new StripeSdkGateway(config.stripe.secretKey),
+        logger,
+      }),
+    );
+  }
+  if (config.paypal) {
+    if (config.paypal.mode === 'LIVE' && !PAYPAL_LIVE_MODE_ENABLED) {
+      throw new Error('PAYMENT_PAYPAL_MODE=LIVE is not enabled in this release');
+    }
+    const { mode, clientId, clientSecret, webhookId } = config.paypal;
+    providers.push(
+      new PayPalPaymentProvider({
+        mode,
+        webhookId,
+        returnUrl: config.returnUrl,
+        gateway: paypalGateway ?? new PayPalSdkGateway(mode, clientId, clientSecret),
         logger,
       }),
     );
@@ -90,10 +120,11 @@ export class PaymentModule {
       providers: [
         { provide: PAYMENT_CONFIG, useFactory: buildPaymentConfig, inject: [API_ENV] },
         { provide: STRIPE_GATEWAY, useValue: options.stripeGateway ?? null },
+        { provide: PAYPAL_GATEWAY, useValue: options.paypalGateway ?? null },
         {
           provide: PAYMENT_PROVIDERS,
           useFactory: paymentProvidersFactory,
-          inject: [PAYMENT_CONFIG, API_LOGGER, STRIPE_GATEWAY],
+          inject: [PAYMENT_CONFIG, API_LOGGER, STRIPE_GATEWAY, PAYPAL_GATEWAY],
         },
         { provide: FX_RATE_SOURCE, useFactory: fxRateSourceFactory, inject: [API_ENV] },
         PaymentCapabilityRegistry,

@@ -7,6 +7,16 @@ export interface StripeConfig {
   webhookSecret: string;
 }
 
+export interface PayPalConfig {
+  mode: 'SANDBOX' | 'LIVE';
+  /** Server-side only: never sent to a browser. */
+  clientId: string;
+  /** Never logged, never returned. */
+  clientSecret: string;
+  /** From this configuration only, never from a request. */
+  webhookId: string;
+}
+
 export interface PaymentConfig {
   /** Configured provider; DISABLED refuses every payment initiation. */
   provider: 'SANDBOX' | 'DISABLED';
@@ -14,6 +24,8 @@ export interface PaymentConfig {
   sandboxWebhookKey: Buffer | null;
   /** Stripe (PAY-EU-1): null while PAYMENT_STRIPE_MODE=DISABLED, the default. */
   stripe: StripeConfig | null;
+  /** PayPal (PAY-PAYPAL-1): null while PAYMENT_PAYPAL_MODE=DISABLED, the default. */
+  paypal: PayPalConfig | null;
   /** Where a provider's page sends the customer back: the client area. It confirms nothing. */
   returnUrl: string;
 }
@@ -37,6 +49,18 @@ export function buildPaymentConfig(env: ApiEnv): PaymentConfig {
             mode: stripeMode,
             secretKey: env.PAYMENT_STRIPE_SECRET_KEY,
             webhookSecret: env.PAYMENT_STRIPE_WEBHOOK_SECRET,
+          }
+        : null,
+    paypal:
+      env.PAYMENT_PAYPAL_MODE !== 'DISABLED' &&
+      env.PAYMENT_PAYPAL_CLIENT_ID &&
+      env.PAYMENT_PAYPAL_CLIENT_SECRET &&
+      env.PAYMENT_PAYPAL_WEBHOOK_ID
+        ? {
+            mode: env.PAYMENT_PAYPAL_MODE,
+            clientId: env.PAYMENT_PAYPAL_CLIENT_ID,
+            clientSecret: env.PAYMENT_PAYPAL_CLIENT_SECRET,
+            webhookId: env.PAYMENT_PAYPAL_WEBHOOK_ID,
           }
         : null,
     returnUrl: `${env.CLIENT_PUBLIC_URL.replace(/\/+$/, '')}/compte`,

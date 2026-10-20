@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   EXAMPLE_PAYMENT_SANDBOX_WEBHOOK_SECRET,
   loadApiEnv,
+  PAYPAL_LIVE_MODE_ENABLED,
   STRIPE_LIVE_MODE_ENABLED,
 } from './index.js';
 
@@ -12,6 +13,9 @@ const key = (bytes = 32) => randomBytes(bytes).toString('base64');
 const stripeKey = (mode: 'test' | 'live', kind: 'sk' | 'rk' = 'sk') =>
   `${kind}_${mode}_${randomBytes(24).toString('hex')}`;
 const stripeWebhookSecret = () => `whsec_${randomBytes(24).toString('hex')}`;
+/** Synthetic PayPal-shaped credentials, generated at run time. */
+const paypalCredential = () => randomBytes(36).toString('base64url');
+const paypalWebhookId = () => randomBytes(10).toString('hex').toUpperCase();
 
 function env(overrides: Record<string, string> = {}) {
   return {
@@ -250,5 +254,128 @@ describe('Stripe configuration (PAY-EU-1)', () => {
     expect(example).not.toMatch(/^PAYMENT_STRIPE_SECRET_KEY=./m);
     expect(example).not.toMatch(/^PAYMENT_STRIPE_WEBHOOK_SECRET=./m);
     expect(example).not.toMatch(/(sk|rk|pk)_(test|live)_[A-Za-z0-9]{8,}/);
+  });
+});
+
+describe('PayPal configuration (PAY-PAYPAL-1)', () => {
+  const paypal = (
+    mode: string,
+    values: { clientId?: string; clientSecret?: string; webhookId?: string } = {},
+  ) => ({
+    PAYMENT_PAYPAL_MODE: mode,
+    ...(values.clientId === undefined ? {} : { PAYMENT_PAYPAL_CLIENT_ID: values.clientId }),
+    ...(values.clientSecret === undefined
+      ? {}
+      : { PAYMENT_PAYPAL_CLIENT_SECRET: values.clientSecret }),
+    ...(values.webhookId === undefined ? {} : { PAYMENT_PAYPAL_WEBHOOK_ID: values.webhookId }),
+  });
+  const complete = () => ({
+    clientId: paypalCredential(),
+    clientSecret: paypalCredential(),
+    webhookId: paypalWebhookId(),
+  });
+
+  it('is DISABLED by default and needs no credential', () => {
+    const loaded = loadApiEnv(env());
+    expect(loaded.PAYMENT_PAYPAL_MODE).toBe('DISABLED');
+    expect(loaded.PAYMENT_PAYPAL_CLIENT_ID).toBeUndefined();
+    expect(loaded.PAYMENT_PAYPAL_CLIENT_SECRET).toBeUndefined();
+    expect(loaded.PAYMENT_PAYPAL_WEBHOOK_ID).toBeUndefined();
+    const empty = loadApiEnv(
+      env(paypal('DISABLED', { clientId: '', clientSecret: '', webhookId: '' })),
+    );
+    expect(empty.PAYMENT_PAYPAL_CLIENT_SECRET).toBeUndefined();
+  });
+
+  it.each([
+    ['client ID', { clientId: paypalCredential() }, 'PAYMENT_PAYPAL_CLIENT_ID'],
+    ['client secret', { clientSecret: paypalCredential() }, 'PAYMENT_PAYPAL_CLIENT_SECRET'],
+    ['webhook ID', { webhookId: paypalWebhookId() }, 'PAYMENT_PAYPAL_WEBHOOK_ID'],
+  ])('refuses a stale %s while DISABLED', (_label, values, name) => {
+    expect(() => loadApiEnv(env(paypal('DISABLED', values)))).toThrow(
+      new RegExp(`${name}: must be unset when PAYMENT_PAYPAL_MODE=DISABLED`),
+    );
+  });
+
+  it('accepts SANDBOX with complete credentials in local and ci, next to Stripe', () => {
+    for (const appEnv of ['local', 'ci']) {
+      const values = complete();
+      const loaded = loadApiEnv(env({ APP_ENV: appEnv, ...paypal('SANDBOX', values) }));
+      expect(loaded.PAYMENT_PAYPAL_MODE).toBe('SANDBOX');
+      expect(loaded.PAYMENT_PAYPAL_WEBHOOK_ID).toBe(values.webhookId);
+      expect(loaded.PAYMENT_STRIPE_MODE).toBe('DISABLED');
+      expect(loaded.PAYMENT_PROVIDER).toBe('DISABLED');
+    }
+  });
+
+  it.each([
+    ['client ID', 'clientId', 'PAYMENT_PAYPAL_CLIENT_ID'],
+    ['client secret', 'clientSecret', 'PAYMENT_PAYPAL_CLIENT_SECRET'],
+    ['webhook ID', 'webhookId', 'PAYMENT_PAYPAL_WEBHOOK_ID'],
+  ] as const)('refuses SANDBOX without its %s', (_label, missing, name) => {
+    const values: Record<string, string> = complete();
+    delete values[missing];
+    expect(() => loadApiEnv(env(paypal('SANDBOX', values)))).toThrow(
+      new RegExp(`${name}: is required when PAYMENT_PAYPAL_MODE=SANDBOX`),
+    );
+  });
+
+  it('refuses malformed values and a secret equal to the client ID', () => {
+    expect(() =>
+      loadApiEnv(env(paypal('SANDBOX', { ...complete(), webhookId: 'WH-not/valid' }))),
+    ).toThrow(/PAYMENT_PAYPAL_WEBHOOK_ID: must be a PayPal webhook ID/);
+    expect(() => loadApiEnv(env(paypal('SANDBOX', { ...complete(), clientId: 'short' })))).toThrow(
+      /PAYMENT_PAYPAL_CLIENT_ID: must be a PayPal REST app client ID/,
+    );
+    const same = paypalCredential();
+    expect(() =>
+      loadApiEnv(env(paypal('SANDBOX', { ...complete(), clientId: same, clientSecret: same }))),
+    ).toThrow(/PAYMENT_PAYPAL_CLIENT_SECRET: must differ from PAYMENT_PAYPAL_CLIENT_ID/);
+    expect(() => loadApiEnv(env(paypal('TEST')))).toThrow(
+      /PAYMENT_PAYPAL_MODE: must be DISABLED, SANDBOX or LIVE/,
+    );
+  });
+
+  it.each(['staging', 'production'] as const)('refuses SANDBOX in %s', (appEnv) => {
+    expect(() => loadApiEnv(deployedEnv(appEnv, paypal('SANDBOX', complete())))).toThrow(
+      /PAYMENT_PAYPAL_MODE: SANDBOX is allowed in local and ci only/,
+    );
+    expect(loadApiEnv(deployedEnv(appEnv)).PAYMENT_PAYPAL_MODE).toBe('DISABLED');
+  });
+
+  it('refuses LIVE in every environment: the release gate is closed', () => {
+    expect(PAYPAL_LIVE_MODE_ENABLED).toBe(false);
+    for (const target of [env(), deployedEnv('staging'), deployedEnv('production')]) {
+      expect(() => loadApiEnv({ ...target, ...paypal('LIVE', complete()) })).toThrow(
+        /PAYMENT_PAYPAL_MODE: LIVE is not enabled/,
+      );
+    }
+    expect(() => loadApiEnv(deployedEnv('production', paypal('LIVE')))).toThrow(
+      /PAYMENT_PAYPAL_CLIENT_SECRET: is required when PAYMENT_PAYPAL_MODE=LIVE/,
+    );
+  });
+
+  it('never prints a PayPal credential in a configuration error', () => {
+    const values = complete();
+    let message = '';
+    try {
+      loadApiEnv(deployedEnv('staging', paypal('SANDBOX', values)));
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain('PAYMENT_PAYPAL_MODE');
+    for (const value of Object.values(values)) expect(message).not.toContain(value);
+  });
+
+  it('documents PayPal as DISABLED, without any value, in .env.example', () => {
+    const example = readFileSync(new URL('../../../.env.example', import.meta.url), 'utf8');
+    expect(/^PAYMENT_PAYPAL_MODE=(.*)$/m.exec(example)?.[1]).toBe('DISABLED');
+    for (const name of [
+      'PAYMENT_PAYPAL_CLIENT_ID',
+      'PAYMENT_PAYPAL_CLIENT_SECRET',
+      'PAYMENT_PAYPAL_WEBHOOK_ID',
+    ]) {
+      expect(example).not.toMatch(new RegExp(`^${name}=.`, 'm'));
+    }
   });
 });

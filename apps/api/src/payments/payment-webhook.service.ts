@@ -10,7 +10,29 @@ import {
   type PaymentEventRejection,
   type PaymentFailureCode,
 } from './payment-rules.js';
-import type { PaymentProviderName, ProviderEvent } from './providers/payment-provider.js';
+import type {
+  PaymentProviderName,
+  ProviderApproval,
+  ProviderEvent,
+} from './providers/payment-provider.js';
+
+/** Audit action of a capture request (PAY-PAYPAL-1); such an attempt is no longer cancellable. */
+export const PAYMENT_CAPTURE_REQUESTED = 'PAYMENT_CAPTURE_REQUESTED';
+/** Hold time that must still remain when EURO TERANGA asks a provider to capture. */
+export const CAPTURE_HOLD_MARGIN_SECONDS = 60;
+
+/** Why an approval is not captured. Nothing is collected and nothing changes. */
+export type CaptureRefusal =
+  | 'PAYMENT_NOT_FOUND'
+  | 'PAYMENT_NOT_PENDING'
+  | 'BOOKING_NOT_PAYABLE'
+  | 'BOOKING_EXPIRED'
+  | 'AMOUNT_MISMATCH'
+  | 'CURRENCY_MISMATCH';
+
+export type CaptureDecision =
+  | { capture: true; paymentReference: string; providerPaymentId: string }
+  | { capture: false; refusal: CaptureRefusal };
 
 /**
  * Result of one provider event. Some refusals are recorded first (the event
@@ -66,6 +88,7 @@ export function expectedProviderAmount(
 interface LockedBooking {
   id: string;
   reference: string;
+  trip_id: string;
   cancelled_at: Date | null;
   confirmed_at: Date | null;
   hold_expires_at: Date;
@@ -116,12 +139,87 @@ export class PaymentWebhookService {
     return recorded?.payloadHash ?? null;
   }
 
-  private async apply(
+  /**
+   * PAY-PAYPAL-1: whether an authenticated approval may be captured, decided
+   * in one short transaction on the locked rows: the attempt is still
+   * PENDING, the approved amount (when the provider states it) is the
+   * quote's presentment, the booking is still an active hold with at least
+   * CAPTURE_HOLD_MARGIN_SECONDS left, and its trip is still payable. A
+   * capture request is then recorded in the audit trail, and from then on
+   * the attempt can no longer be cancelled: the provider is called after
+   * commit, outside any transaction. Nothing here confirms anything.
+   */
+  async prepareCapture(
+    provider: PaymentProviderName,
+    approval: ProviderApproval,
+  ): Promise<CaptureDecision> {
+    return this.database.client.$transaction(async (tx) => {
+      const refuse = (refusal: CaptureRefusal) => ({ capture: false, refusal }) as const;
+      const payment = await this.lockPayment(tx, provider, approval.providerPaymentId);
+      if (!payment) return refuse('PAYMENT_NOT_FOUND');
+      if (payment.status !== 'PENDING') return refuse('PAYMENT_NOT_PENDING');
+      const expected = expectedProviderAmount(payment);
+      if (!expected) return refuse('AMOUNT_MISMATCH');
+      if (approval.amountMinor !== null && approval.amountMinor !== expected.amountMinor) {
+        return refuse('AMOUNT_MISMATCH');
+      }
+      if (approval.currencyCode !== null && approval.currencyCode !== expected.currencyCode) {
+        return refuse('CURRENCY_MISMATCH');
+      }
+      const [booking] = await tx.$queryRaw<LockedBooking[]>`
+        SELECT "id", "reference", "trip_id", "cancelled_at", "confirmed_at", "hold_expires_at"
+        FROM "booking" WHERE "id" = ${payment.booking_id}::uuid
+        FOR UPDATE
+      `;
+      if (!booking || booking.cancelled_at || booking.confirmed_at) {
+        return refuse('BOOKING_NOT_PAYABLE');
+      }
+      const now = await databaseNow(tx);
+      if (booking.hold_expires_at.getTime() - now.getTime() < CAPTURE_HOLD_MARGIN_SECONDS * 1000) {
+        return refuse('BOOKING_EXPIRED');
+      }
+      // Read without a lock (the lock order is trip -> payment -> booking).
+      const [trip] = await tx.$queryRaw<
+        Array<{ status: string; planned_departure_at: Date | null }>
+      >`
+        SELECT "status"::text AS "status", "planned_departure_at"
+        FROM "trip" WHERE "id" = ${booking.trip_id}::uuid
+      `;
+      if (
+        trip?.status !== 'SCHEDULED' ||
+        !trip.planned_departure_at ||
+        trip.planned_departure_at.getTime() <= now.getTime()
+      ) {
+        return refuse('BOOKING_NOT_PAYABLE');
+      }
+      await this.audit.record(
+        {
+          action: PAYMENT_CAPTURE_REQUESTED,
+          resourceType: 'payment',
+          resourceId: payment.id,
+          metadata: {
+            provider,
+            providerEventId: approval.providerEventId,
+            paymentReference: payment.reference,
+            bookingReference: booking.reference,
+          },
+        },
+        tx,
+      );
+      return {
+        capture: true,
+        paymentReference: payment.reference,
+        providerPaymentId: approval.providerPaymentId,
+      };
+    });
+  }
+
+  /** The attempt of a provider id, locked; its immutable quote is read without a lock. */
+  private async lockPayment(
     tx: DatabaseTransaction,
     provider: PaymentProviderName,
-    event: ProviderEvent,
-  ): Promise<WebhookOutcome> {
-    // The quote is immutable (payment_quote_guard): read without a lock.
+    providerPaymentId: string,
+  ): Promise<LockedPayment | undefined> {
     const [payment] = await tx.$queryRaw<LockedPayment[]>`
       SELECT p."id", p."reference", p."status"::text AS "status", p."booking_id",
         p."amount_minor", p."currency_code", p."currency_minor_unit", p."quote_id",
@@ -132,9 +230,18 @@ export class PaymentWebhookService {
       FROM "payment" p
       LEFT JOIN "payment_quote" q ON q."id" = p."quote_id"
       WHERE p."provider" = ${provider}::"payment_provider"
-        AND p."provider_payment_id" = ${event.providerPaymentId}
+        AND p."provider_payment_id" = ${providerPaymentId}
       FOR UPDATE OF p
     `;
+    return payment;
+  }
+
+  private async apply(
+    tx: DatabaseTransaction,
+    provider: PaymentProviderName,
+    event: ProviderEvent,
+  ): Promise<WebhookOutcome> {
+    const payment = await this.lockPayment(tx, provider, event.providerPaymentId);
     if (!payment) throw PaymentErrors.notFound();
     // Events of one payment are serialized by its lock: this check is exact.
     const seen = await tx.paymentEvent.findUnique({
@@ -164,13 +271,16 @@ export class PaymentWebhookService {
       return { outcome: 'REJECTED', error } as const;
     };
 
-    // Exactly the amount the payer was asked for, in that currency.
+    // Exactly the amount the payer was asked for, in that currency. A
+    // failure that states no amount (it moved no money) has nothing to check.
     const expected = expectedProviderAmount(payment);
-    if (!expected || event.amountMinor !== expected.amountMinor) {
-      return reject('AMOUNT_MISMATCH', PaymentErrors.webhookInvalid(422));
-    }
-    if (event.currencyCode !== expected.currencyCode) {
-      return reject('CURRENCY_MISMATCH', PaymentErrors.webhookInvalid(422));
+    if (event.type === 'PAYMENT_SUCCEEDED' || event.amountMinor !== null) {
+      if (!expected || event.amountMinor !== expected.amountMinor) {
+        return reject('AMOUNT_MISMATCH', PaymentErrors.webhookInvalid(422));
+      }
+      if (event.currencyCode !== expected.currencyCode) {
+        return reject('CURRENCY_MISMATCH', PaymentErrors.webhookInvalid(422));
+      }
     }
     if (payment.status !== 'PENDING') {
       return payment.status === 'SUCCEEDED' && event.type === 'PAYMENT_SUCCEEDED'
@@ -186,7 +296,7 @@ export class PaymentWebhookService {
     }
 
     const [booking] = await tx.$queryRaw<LockedBooking[]>`
-      SELECT "id", "reference", "cancelled_at", "confirmed_at", "hold_expires_at"
+      SELECT "id", "reference", "trip_id", "cancelled_at", "confirmed_at", "hold_expires_at"
       FROM "booking" WHERE "id" = ${payment.booking_id}::uuid
       FOR UPDATE
     `;
@@ -207,6 +317,9 @@ export class PaymentWebhookService {
       return { outcome: 'REJECTED', error: PaymentErrors.bookingExpired() };
     }
 
+    // Checked above for every success: exactly the quote's presentment.
+    const collected = expected;
+    if (!collected) return reject('AMOUNT_MISMATCH', PaymentErrors.webhookInvalid(422));
     await record({ processed: true });
     await tx.payment.update({
       where: { id: payment.id },
@@ -231,8 +344,8 @@ export class PaymentWebhookService {
           succeededAt: now,
           amountMinor: amount,
           currencyCode: payment.currency_code,
-          collectedAmountMinor: amountToNumber(expected.amountMinor),
-          collectedCurrencyCode: expected.currencyCode,
+          collectedAmountMinor: amountToNumber(collected.amountMinor),
+          collectedCurrencyCode: collected.currencyCode,
         },
         metadata,
       },

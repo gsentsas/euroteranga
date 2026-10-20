@@ -26,7 +26,8 @@ export type ProviderExclusionReason =
   | 'BUSINESS_CATEGORY_PROHIBITED'
   | 'NOT_SELECTABLE_IN_CHECKOUT'
   | 'NOT_SUPPORTED_BY_PINNED_SDK'
-  | 'SEPARATE_PROVIDER_PR';
+  | 'SEPARATE_PROVIDER_PR'
+  | 'CURRENCY_NOT_SUPPORTED_BY_PROVIDER';
 
 export interface ProviderCapability {
   providerCode: PaymentProviderCode;
@@ -58,6 +59,14 @@ export interface ProviderCapability {
   minimumHoldRemainingSeconds: number;
   /** Methods documented by the provider but not collected for EURO TERANGA, with the reason. */
   excludedMethods: readonly { method: PaymentMethodCode; reason: ProviderExclusionReason }[];
+  /**
+   * True when no money can move unless EURO TERANGA itself asks for it later
+   * (SANDBOX; PayPal, which collects only on our capture): cancelling the
+   * attempt locally is then enough to prevent collection
+   * (LOCAL_CANCEL_PREVENTS_CAPTURE). False for a provider whose own checkout
+   * collects by itself (Stripe): it needs `cancelPayment` first.
+   */
+  localCancelPreventsCollection: boolean;
   testMode: boolean;
   refundCapabilities: 'NONE' | 'FULL' | 'FULL_AND_PARTIAL';
   partialRefundCapabilities: boolean;
@@ -111,21 +120,42 @@ export interface ProviderWebhookRequest {
 }
 
 /**
- * A provider event, normalized (our types and codes, never provider text).
- * amountMinor and currencyCode are what the provider collected: they are
- * compared with the quote's presentment amount.
+ * A terminal provider event, normalized (our types and codes, never provider
+ * text). amountMinor and currencyCode are what the provider collected: they
+ * are compared with the quote's presentment amount. A failure moves no money,
+ * so a provider may omit its amount (PayPal's approval reversal): null then.
+ * A success without an amount is refused (AMOUNT_MISMATCH).
  */
 export interface ProviderEvent {
   providerEventId: string;
   type: 'PAYMENT_SUCCEEDED' | 'PAYMENT_FAILED';
   providerPaymentId: string;
-  amountMinor: bigint;
-  currencyCode: string;
+  amountMinor: bigint | null;
+  currencyCode: string | null;
   /** PAYMENT_FAILED only, already normalized. */
   failureCode: PaymentFailureCode | null;
   /** Hex SHA-256 of the raw payload (the payload itself is not stored). */
   payloadHash: string;
 }
+
+/**
+ * A non-terminal provider event (PAY-PAYPAL-1): the payer approved the
+ * payment at the provider, which takes no money yet. EURO TERANGA then
+ * decides whether to capture; only the capture's own terminal event can
+ * succeed the attempt. The amount, when the provider includes it, must equal
+ * the quote's presentment before any capture.
+ */
+export interface ProviderApproval {
+  type: 'PAYMENT_APPROVED';
+  providerEventId: string;
+  providerPaymentId: string;
+  amountMinor: bigint | null;
+  currencyCode: string | null;
+  payloadHash: string;
+}
+
+/** What a capture request became at the provider, as far as it says synchronously. */
+export type ProviderCaptureResult = 'CAPTURE_REQUESTED' | 'ALREADY_CAPTURED' | 'NOT_CAPTURABLE';
 
 export interface PaymentProvider {
   readonly name: PaymentProviderName;
@@ -141,16 +171,31 @@ export interface PaymentProvider {
   createPayment(request: ProviderPaymentRequest): Promise<ProviderCheckout>;
   /**
    * Authenticates a webhook: content type, size, timestamp freshness and
-   * signature (constant time). Throws PAYMENT_WEBHOOK_INVALID.
+   * signature (constant time). Throws PAYMENT_WEBHOOK_INVALID. A provider
+   * whose signature can only be checked by its own API (PayPal) answers
+   * asynchronously; it then throws PAYMENT_PROVIDER_UNAVAILABLE when that
+   * check cannot be completed (fail closed: the provider retries).
    */
-  verifyWebhook(request: ProviderWebhookRequest, nowMs: number): Buffer;
+  verifyWebhook(request: ProviderWebhookRequest, nowMs: number): Buffer | Promise<Buffer>;
   /**
    * Parses an authenticated payload. Throws PAYMENT_WEBHOOK_INVALID. Returns
    * null for an authentic event that carries no payment result (a delayed
    * payment still processing, an event type we do not use): it is
-   * acknowledged and changes nothing.
+   * acknowledged and changes nothing. A provider with a separate capture step
+   * (PayPal) also returns approvals.
    */
-  parseWebhook(rawBody: Buffer): ProviderEvent | null;
+  parseWebhook(rawBody: Buffer): ProviderEvent | ProviderApproval | null;
+  /**
+   * Captures an approved payment (PayPal), outside any transaction, with a
+   * deterministic idempotency key: the same approval delivered twice is the
+   * same capture. The result never confirms anything: the capture's own
+   * signed event does. Throws PAYMENT_PROVIDER_UNAVAILABLE when the outcome
+   * is unknown (a timeout), so the approval is redelivered and retried.
+   */
+  capturePayment?(
+    providerPaymentId: string,
+    idempotencyKey: string,
+  ): Promise<ProviderCaptureResult>;
   /**
    * Closes the provider's checkout of a PENDING attempt before EURO TERANGA
    * cancels it, so the customer can no longer pay there. CLOSED: it can no

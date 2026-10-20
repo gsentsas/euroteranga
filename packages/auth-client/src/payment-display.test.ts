@@ -34,6 +34,23 @@ describe('paymentRedirectTarget (PAY-EU-1)', () => {
     expect(paymentRedirectTarget(checkout(null))).toBeNull();
   });
 
+  it('follows PayPal approval pages only (PAY-PAYPAL-1)', () => {
+    for (const host of ['www.paypal.com', 'www.sandbox.paypal.com']) {
+      expect(
+        paymentRedirectTarget(checkout(`https://${host}/checkoutnow?token=5O190127TN364715T`)),
+      ).toBe(`https://${host}/checkoutnow?token=5O190127TN364715T`);
+    }
+    for (const url of [
+      'https://www.paypal.com/signin',
+      'https://paypal.com/checkoutnow?token=5O190127TN364715T',
+      'https://www.paypal.com.example.test/checkoutnow?token=5O190127TN364715T',
+      'http://www.paypal.com/checkoutnow?token=5O190127TN364715T',
+      'https://user:pass@www.paypal.com/checkoutnow?token=5O190127TN364715T',
+    ]) {
+      expect(paymentRedirectTarget(checkout(url)), url).toBeNull();
+    }
+  });
+
   it.each([
     'http://checkout.stripe.com/c/pay/cs_test_a1',
     'https://checkout.stripe.com.example.test/c/pay',

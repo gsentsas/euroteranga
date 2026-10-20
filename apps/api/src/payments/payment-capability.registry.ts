@@ -33,6 +33,7 @@ const capability = (
     collectionWindowSeconds?: number | null;
     minimumHoldRemainingSeconds?: number;
     excluded?: readonly { method: PaymentMethodCode; reason: ProviderExclusionReason }[];
+    localCancel?: boolean;
     redirect?: boolean;
     phone?: boolean;
     merchantCountries?: readonly PayerCountry[];
@@ -54,6 +55,7 @@ const capability = (
   collectionWindowSeconds: input.collectionWindowSeconds ?? null,
   minimumHoldRemainingSeconds: input.minimumHoldRemainingSeconds ?? 0,
   excludedMethods: input.excluded ?? [],
+  localCancelPreventsCollection: input.localCancel ?? false,
   testMode: input.testMode ?? false,
   refundCapabilities: input.refunds ?? 'NONE',
   partialRefundCapabilities: input.partialRefunds ?? false,
@@ -104,15 +106,23 @@ const euros = (minMinor: number, maxMinor: number): ProviderAmountLimit => ({
  * minutes to start paying). See docs/payments/stripe-europe.md.
  */
 export const STRIPE_COLLECTION_WINDOW_SECONDS = 31 * 60;
+
+/**
+ * PayPal (PAY-PAYPAL-1): an attempt starts only while two minutes of hold
+ * remain, so the payer has time to approve; the default 15-minute hold is
+ * enough. A late approval is never captured.
+ */
+export const PAYPAL_START_HOLD_SECONDS = 2 * 60;
 export const STRIPE_HOLD_MARGIN_SECONDS = 5 * 60;
 
 /**
  * Declared reach of every provider in the programme. A declaration never
  * makes a provider routable: only an injected, active adapter is. SANDBOX is
- * test-only (local and CI). STRIPE is the first real adapter (PAY-EU-1):
- * implemented, but disabled by default and never live in the pilot; its
- * declaration is checked against Stripe's documentation (stripe-europe.md).
- * Every other real declaration remains a planning hypothesis.
+ * test-only (local and CI). STRIPE (PAY-EU-1) and PAYPAL (PAY-PAYPAL-1) are
+ * implemented, but disabled by default and never live in the pilot; their
+ * declarations are checked against the providers' documentation
+ * (stripe-europe.md, paypal.md). Every other real declaration remains a
+ * planning hypothesis.
  */
 export const PROVIDER_CAPABILITY_DECLARATIONS: readonly Declaration[] = [
   capability('SANDBOX', {
@@ -131,6 +141,8 @@ export const PROVIDER_CAPABILITY_DECLARATIONS: readonly Declaration[] = [
     implemented: true,
     testMode: true,
     redirect: false,
+    // Moves no money at all.
+    localCancel: true,
   }),
   capability('STRIPE', {
     // Each one restricted exactly with Checkout's allowed_payment_method_types.
@@ -166,12 +178,23 @@ export const PROVIDER_CAPABILITY_DECLARATIONS: readonly Declaration[] = [
     instant: true,
   }),
   capability('PAYPAL', {
+    // PayPal Wallet through the Orders API v2 (PAY-PAYPAL-1). XOF, MAD and
+    // MRU are not PayPal currencies: no Senegal, Morocco or Mauritania.
     methods: ['PAYPAL'],
-    countries: ['FR', 'ES', 'SN'],
-    currencies: ['EUR', 'XOF'],
+    countries: ['FR', 'ES'],
+    currencies: ['EUR'],
+    // Approval takes no money and no checkout expires on its own clock:
+    // the attempt only needs time for the payer to approve, and the capture
+    // re-checks the hold (CAPTURE_HOLD_MARGIN_SECONDS).
+    minimumHoldRemainingSeconds: PAYPAL_START_HOLD_SECONDS,
+    // Money moves only when EURO TERANGA captures (LOCAL_CANCEL_PREVENTS_CAPTURE).
+    localCancel: true,
     priority: 20,
+    merchantCountries: ['FR', 'ES'],
+    // PayPal's own capability; EURO TERANGA does not send refunds yet.
     refunds: 'FULL_AND_PARTIAL',
     partialRefunds: true,
+    implemented: true,
   }),
   capability('PAYDUNYA', {
     methods: ['CARD', ...SENEGAL_MOBILE],

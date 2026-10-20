@@ -65,6 +65,43 @@ describe('pilot deploy guard', () => {
     expect(firstAction).toBeGreaterThan(called);
   });
 
+  it('accepts PayPal completely disabled, unset or explicit', () => {
+    expect(guard({ ...PILOT, PAYMENT_PAYPAL_MODE: 'DISABLED' }).status).toBe(0);
+    expect(
+      guard({ ...PILOT, PAYMENT_STRIPE_MODE: 'DISABLED', PAYMENT_PAYPAL_MODE: 'DISABLED' }).status,
+    ).toBe(0);
+    expect(
+      guard({ ...PILOT, PAYMENT_PAYPAL_MODE: 'DISABLED', PAYMENT_PAYPAL_CLIENT_ID: '' }),
+    ).toMatchObject({ status: 0 });
+  });
+
+  it.each(['SANDBOX', 'LIVE', 'sandbox', ''])('refuses PAYMENT_PAYPAL_MODE=%s', (mode) => {
+    const result = guard({ ...PILOT, PAYMENT_PAYPAL_MODE: mode });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('PAYMENT_PAYPAL_MODE=DISABLED');
+  });
+
+  it.each([
+    'PAYMENT_PAYPAL_CLIENT_ID',
+    'PAYMENT_PAYPAL_CLIENT_SECRET',
+    'PAYMENT_PAYPAL_WEBHOOK_ID',
+  ])('refuses a stale %s, and never prints it', (name) => {
+    const value = `x${randomBytes(16).toString('hex')}`;
+    const result = guard({ ...PILOT, PAYMENT_PAYPAL_MODE: 'DISABLED', [name]: value });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('refuses PayPal credentials');
+    expect(result.stderr).not.toContain(value);
+  });
+
+  it('still refuses Stripe when PayPal is disabled', () => {
+    expect(
+      guard({ ...PILOT, PAYMENT_PAYPAL_MODE: 'DISABLED', PAYMENT_STRIPE_MODE: 'TEST' }).status,
+    ).toBe(1);
+    expect(
+      guard({ ...PILOT, PAYMENT_PAYPAL_MODE: 'DISABLED', PAYMENT_STRIPE_SECRET_KEY: 'x' }).status,
+    ).toBe(1);
+  });
+
   it('keeps the earlier pilot rules: staging only, PAYMENT_PROVIDER=DISABLED', () => {
     expect(guard({ ...PILOT, APP_ENV: 'production' }).status).toBe(1);
     expect(guard({ PAYMENT_PROVIDER: 'DISABLED' }).status).toBe(1);

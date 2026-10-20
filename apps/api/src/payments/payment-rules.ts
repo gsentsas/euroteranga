@@ -26,6 +26,17 @@ export function normalizePaymentReference(value: string): string | null {
   return PAYMENT_REFERENCE_PATTERN.test(reference) ? reference : null;
 }
 
+/**
+ * Provider-side idempotency key of the capture of an attempt (PAY-PAYPAL-1):
+ * derived from its reference, never random, so every redelivered approval
+ * asks for the very same capture. Distinct from the creation key (the
+ * reference itself), as PayPal requires one key per call type; 24 characters,
+ * within PayPal-Request-Id's 38.
+ */
+export function captureIdempotencyKey(paymentReference: string): string {
+  return `${paymentReference}-CAPTURE`;
+}
+
 /** Same format as the payment_idempotency_key_format CHECK (e.g. a UUID). */
 export const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9_-]{16,64}$/;
 
