@@ -253,6 +253,26 @@ export class WavePaymentProvider implements PaymentProvider {
     const recovered = this.singleSession(existing, input);
     if (recovered) return recovered;
 
+    // Wave does not let us set an explicit Checkout expiry. A replay may
+    // therefore create a fresh 30-minute session only while the safety margin
+    // reserved at attempt creation can still cover that full collection
+    // window. Otherwise Wave could remain payable after the booking hold.
+    const collectionWindowSeconds = this.capability.collectionWindowSeconds;
+    const expiresAtMs = request.expiresAt?.getTime() ?? Number.NaN;
+    const originalHoldMarginSeconds =
+      collectionWindowSeconds === null
+        ? -1
+        : this.capability.minimumHoldRemainingSeconds - collectionWindowSeconds;
+    if (
+      collectionWindowSeconds === null ||
+      !Number.isFinite(expiresAtMs) ||
+      originalHoldMarginSeconds < 0 ||
+      Date.now() + collectionWindowSeconds * 1000 >
+        expiresAtMs + originalHoldMarginSeconds * 1000
+    ) {
+      throw PaymentErrors.bookingExpired();
+    }
+
     try {
       return await this.checkout(this.options.gateway.createCheckout(input), input);
     } catch (error) {

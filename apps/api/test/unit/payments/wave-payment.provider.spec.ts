@@ -53,7 +53,7 @@ const payment = (overrides: Partial<ProviderPaymentRequest> = {}): ProviderPayme
   presentmentAmountMinor: 24_900n,
   presentmentCurrencyCode: 'XOF',
   presentmentCurrencyMinorUnit: 0,
-  expiresAt: new Date(NOW + WAVE_COLLECTION_WINDOW_SECONDS * 1000),
+  expiresAt: new Date(Date.now() + WAVE_COLLECTION_WINDOW_SECONDS * 1000),
   ...overrides,
 });
 
@@ -265,6 +265,29 @@ describe('Wave Checkout creation and recovery', () => {
     expect(replay).toEqual(first);
     expect(gateway.createCalls).toHaveLength(1);
     expect(gateway.searchCalls).toHaveLength(2);
+  });
+
+  it('recovers an existing checkout but refuses a fresh one after the original hold margin is spent', async () => {
+    const lateExpiresAt = () =>
+      new Date(
+        Date.now() +
+          (WAVE_COLLECTION_WINDOW_SECONDS - WAVE_HOLD_MARGIN_SECONDS) * 1000 -
+          1,
+      );
+
+    const existing = setup();
+    const first = await existing.provider.createPayment(payment());
+    expect(
+      await existing.provider.createPayment(payment({ expiresAt: lateExpiresAt() })),
+    ).toEqual(first);
+    expect(existing.gateway.createCalls).toHaveLength(1);
+
+    const fresh = setup();
+    expect(
+      await codeOf(() => fresh.provider.createPayment(payment({ expiresAt: lateExpiresAt() }))),
+    ).toEqual([409, 'PAYMENT_BOOKING_EXPIRED']);
+    expect(fresh.gateway.searchCalls).toEqual(['ETP-ABCDEFGHJK23']);
+    expect(fresh.gateway.createCalls).toHaveLength(0);
   });
 
   it('recovers an unknown create result by reference without creating twice', async () => {

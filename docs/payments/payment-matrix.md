@@ -35,8 +35,8 @@ production). It is test-only: it moves no money and is never LIVE.
   vocabulary only and are never offered.
 - **Declared providers** are those the capability registry
   (`payment-capability.registry.ts`) lists for the method in that country and
-  currency, best first. Apart from STRIPE and PAYPAL (checked against their
-  documentation, see [stripe-europe.md](stripe-europe.md),
+  currency, best first. Apart from STRIPE, PAYPAL and WAVE (checked against
+  their documentation, see [stripe-europe.md](stripe-europe.md),
   [paypal.md](paypal.md) and [wave-senegal.md](wave-senegal.md)), they are
   **planning hypotheses**, to be checked before their adapter PR
   ([provider-onboarding.md](provider-onboarding.md)).
