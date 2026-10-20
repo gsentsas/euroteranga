@@ -5,6 +5,7 @@ import {
   isPaymentMethod,
   methodGroup,
   methodOffered,
+  methodSettlement,
   methodsForCountry,
   PAYER_COUNTRIES,
   PAYMENT_METHOD_BY_CODE,
@@ -15,14 +16,16 @@ import {
   PRESENTMENT_CURRENCY_CODES,
 } from '../../../src/payments/payment-catalog.js';
 
+const NETWORK_CODES: readonly string[] = ['CARD_CB', 'CARD_VISA', 'CARD_MASTERCARD', 'CARD_AMEX'];
+
 describe('payment catalogue (PAY-HUB-1)', () => {
-  it('lists every customer-facing method once, with a label and at least one country', () => {
+  it('lists every method once, with a label; only card network codes are never offered', () => {
     expect(PAYMENT_METHOD_CODES).toHaveLength(31);
     expect(new Set(PAYMENT_METHOD_CODES).size).toBe(PAYMENT_METHOD_CODES.length);
     expect(PAYMENT_METHODS.map((method) => method.code)).toEqual([...PAYMENT_METHOD_CODES]);
     for (const method of PAYMENT_METHODS) {
       expect(method.label.trim(), method.code).not.toBe('');
-      expect(method.countries.length, method.code).toBeGreaterThan(0);
+      expect(method.countries.length > 0, method.code).toBe(!NETWORK_CODES.includes(method.code));
       for (const country of method.recommendedCountries) {
         expect(method.countries, method.code).toContain(country);
       }
@@ -66,7 +69,8 @@ describe('payment catalogue (PAY-HUB-1)', () => {
     expect(codes('MR')).toEqual(expect.arrayContaining(['BANKILY_MR', 'MASRVI_MR', 'SEDAD_MR']));
     expect(codes('MA')).toEqual(expect.arrayContaining(['CMI_CARD', 'MAROCPAY']));
     expect(codes('ES')).toContain('BIZUM');
-    expect(codes('FR')).toEqual(expect.arrayContaining(['CARD_CB', 'WERO', 'ALMA']));
+    expect(codes('FR')).toEqual(expect.arrayContaining(['CARD', 'WERO', 'ALMA']));
+    expect(methodGroup(PAYMENT_METHOD_BY_CODE.get('CARD')!, 'FR')).toBe('RECOMMENDED');
 
     const wave = PAYMENT_METHOD_BY_CODE.get('WAVE_SN')!;
     expect(methodGroup(wave, 'SN')).toBe('RECOMMENDED');
@@ -90,5 +94,48 @@ describe('payment catalogue (PAY-HUB-1)', () => {
     expect(isPayerCountry('SN')).toBe(true);
     expect(isPayerCountry('DE')).toBe(false);
     expect(isPayerCountry('sn')).toBe(false);
+  });
+});
+
+describe('payment catalogue (PAY-EU-1)', () => {
+  it('offers one card choice in every country; networks are badges, never choices', () => {
+    for (const country of PAYER_COUNTRIES) {
+      expect(methodOffered('CARD', country), country).toBe(true);
+      for (const network of NETWORK_CODES) {
+        expect(methodOffered(network as 'CARD_CB', country), `${network} ${country}`).toBe(false);
+        expect(methodsForCountry(country).map((method) => method.code)).not.toContain(network);
+      }
+    }
+    // Still part of the vocabulary: earlier attempts keep their method.
+    for (const network of NETWORK_CODES) expect(isPaymentMethod(network)).toBe(true);
+  });
+
+  it('keeps Bizum to Spain, Wero to France, Alma and Klarna to France and Spain', () => {
+    expect(PAYMENT_METHOD_BY_CODE.get('BIZUM')!.countries).toEqual(['ES']);
+    expect(methodOffered('BIZUM', 'FR')).toBe(false);
+    expect(PAYMENT_METHOD_BY_CODE.get('WERO')!.countries).toEqual(['FR']);
+    expect(methodOffered('WERO', 'ES')).toBe(false);
+    expect(PAYMENT_METHOD_BY_CODE.get('ALMA')!.countries).toEqual(['FR', 'ES']);
+    expect(PAYMENT_METHOD_BY_CODE.get('KLARNA')!.countries).toEqual(['FR', 'ES']);
+  });
+
+  it('classifies when each method is confirmed: days-long ones need a booking policy', () => {
+    const settlement = Object.fromEntries(
+      PAYMENT_METHOD_CODES.map((code) => [code, methodSettlement(code)]),
+    );
+    for (const code of ['CARD', 'APPLE_PAY', 'GOOGLE_PAY', 'BIZUM', 'WERO', 'KLARNA', 'ALMA']) {
+      expect(settlement[code], code).toBe('INSTANT');
+    }
+    for (const code of [
+      'SEPA_DIRECT_DEBIT',
+      'SEPA_CREDIT_TRANSFER',
+      'BANK_TRANSFER',
+      'CASH_AT_AGENCY',
+      'MOROCCO_CASH_AGENCY',
+    ]) {
+      expect(settlement[code], code).toBe('ASYNC_LONG');
+    }
+    expect(settlement.WAVE_SN).toBe('ASYNC_SHORT');
+    expect(() => methodSettlement('UNKNOWN' as 'CARD')).toThrow(/unknown payment method/);
   });
 });

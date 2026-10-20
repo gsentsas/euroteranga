@@ -706,12 +706,12 @@ describe('realistic seed: a real customer is never touched (isolated database)',
     );
     const quote = await h.t.app
       .get(PaymentQuoteService)
-      .create(actor, booking.reference, { payerCountry: 'FR', paymentMethod: 'CARD_CB' });
+      .create(actor, booking.reference, { payerCountry: 'FR', paymentMethod: 'CARD' });
     const payment = await h.t.app
       .get(PaymentService)
       .create(actor, booking.reference, 'test-payment-real-customer-01', {
         quoteId: quote.id,
-        paymentMethod: 'CARD_CB',
+        paymentMethod: 'CARD',
       });
     const row = await client.payment.findUniqueOrThrow({
       where: { reference: payment.result.payment.reference },

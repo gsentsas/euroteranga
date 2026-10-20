@@ -40,10 +40,16 @@ function syntheticProvider(
   };
 }
 
-const wave = { method: 'WAVE_SN', payerCountry: 'SN', currencyCode: 'XOF' } as const;
+const wave = {
+  method: 'WAVE_SN',
+  payerCountry: 'SN',
+  currencyCode: 'XOF',
+  presentmentAmountMinor: 163_333n,
+  holdRemainingSeconds: 900,
+} as const;
 
 describe('payment capability registry (PAY-HUB-1)', () => {
-  it('declares every provider once; only SANDBOX has an adapter, and it is test-only', () => {
+  it('declares every provider once; only SANDBOX (test-only) and STRIPE have an adapter', () => {
     expect(PROVIDER_CAPABILITY_DECLARATIONS.map((item) => item.providerCode)).toEqual([
       ...PAYMENT_PROVIDER_CODES,
     ]);
@@ -51,7 +57,7 @@ describe('payment capability registry (PAY-HUB-1)', () => {
       PROVIDER_CAPABILITY_DECLARATIONS.filter((item) => item.implemented).map(
         (item) => item.providerCode,
       ),
-    ).toEqual(['SANDBOX']);
+    ).toEqual(['SANDBOX', 'STRIPE']);
     expect(PROVIDER_CAPABILITY_DECLARATIONS.every((item) => item.active === false)).toBe(true);
     const sandbox = PROVIDER_CAPABILITY_DECLARATIONS.find(
       (item) => item.providerCode === 'SANDBOX',
@@ -86,8 +92,15 @@ describe('payment capability registry (PAY-HUB-1)', () => {
       live: false,
       testMode: true,
     });
+    // Implemented since PAY-EU-1, but not configured here, never live, and
+    // no refund is ever sent to it by EURO TERANGA.
     const stripe = registry.capabilities().find((item) => item.providerCode === 'STRIPE')!;
-    expect(stripe).toMatchObject({ implemented: false, configured: false, live: false });
+    expect(stripe).toMatchObject({
+      implemented: true,
+      configured: false,
+      live: false,
+      refundExecutionImplemented: false,
+    });
   });
 
   it('prefers the lowest priority, the quote candidate first, with a stable tie-break', () => {
@@ -122,10 +135,7 @@ describe('payment capability registry (PAY-HUB-1)', () => {
       supportedMethods: ['WAVE_SN'],
       priority: 30,
     });
-    const cards = syntheticProvider('STRIPE', {
-      supportedMethods: ['CARD', 'CARD_VISA'],
-      priority: 1,
-    });
+    const cards = syntheticProvider('PAYTECH', { supportedMethods: ['CARD'], priority: 1 });
     // Wave direct is down: the aggregator collecting Wave takes over.
     const withAggregator = new PaymentCapabilityRegistry([direct, aggregator, cards]);
     expect(withAggregator.route({ ...wave, preferredProvider: 'WAVE' })?.provider.name).toBe(
@@ -136,9 +146,7 @@ describe('payment capability registry (PAY-HUB-1)', () => {
     expect(cardsOnly.hasActiveProvider()).toBe(true);
     expect(cardsOnly.route(wave)).toBeNull();
     expect(cardsOnly.candidates(wave)).toEqual([]);
-    expect(
-      cardsOnly.route({ method: 'CARD', payerCountry: 'SN', currencyCode: 'XOF' })?.provider.name,
-    ).toBe('STRIPE');
+    expect(cardsOnly.route({ ...wave, method: 'CARD' })?.provider.name).toBe('PAYTECH');
   });
 
   it('routes only within the declared countries and currencies', () => {

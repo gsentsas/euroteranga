@@ -1,8 +1,10 @@
 'use client';
 
 import {
+  describePaymentOption,
   describePaymentQuote,
   PAYER_COUNTRY_OPTIONS,
+  paymentRedirectTarget,
   type CustomerBooking,
   type PayerCountryCode,
   type PaymentMethodCode,
@@ -109,6 +111,13 @@ export function BookingPayment({
         return;
       }
       setQuote(null);
+      // A hosted provider page (Stripe Checkout): the browser goes there to
+      // pay. Coming back confirms nothing; the provider's signed event does.
+      const target = paymentRedirectTarget(result.data.checkout);
+      if (target) {
+        window.location.assign(target);
+        return;
+      }
       const refreshed = await auth.booking.customer.booking(booking.reference);
       if (refreshed.ok) onBooking(refreshed.data);
     } finally {
@@ -130,7 +139,8 @@ export function BookingPayment({
       ) : null}
       <p>
         Le montant à régler est calculé par EURO TERANGA, dans la devise de votre pays de paiement.
-        Nous ne vous demandons jamais votre numéro de carte, votre cryptogramme ou votre IBAN.
+        Nous ne vous demandons jamais votre numéro de carte, votre cryptogramme ou votre IBAN : le
+        cas échéant, vous les saisissez sur la page sécurisée du prestataire de paiement.
       </p>
       <FormAlert message={error} />
       {pending && booking.payment ? (
@@ -150,7 +160,7 @@ export function BookingPayment({
             setCountry(code as PayerCountryCode);
             setQuote(null);
           }}
-          methods={methods}
+          methods={methods?.map((item) => ({ ...item, ...describePaymentOption(item) })) ?? null}
           method={method}
           onMethodChange={(code) => setMethod(code as PaymentMethodCode)}
           quote={quote ? describePaymentQuote(quote) : null}

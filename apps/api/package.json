@@ -36,6 +36,7 @@
     "reflect-metadata": "catalog:",
     "rxjs": "catalog:",
     "sharp": "catalog:",
+    "stripe": "catalog:",
     "uqr": "catalog:",
     "zod": "catalog:"
   },

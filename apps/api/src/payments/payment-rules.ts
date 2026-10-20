@@ -76,6 +76,11 @@ export function bookingAmountMinor(unitAmountMinor: number, seatCount: number): 
   return BigInt(unitAmountMinor) * BigInt(seatCount);
 }
 
+/** Whole seconds of hold left at `now` (negative once expired). */
+export function holdRemaining(holdExpiresAt: Date, now: Date): number {
+  return Math.floor((holdExpiresAt.getTime() - now.getTime()) / 1000);
+}
+
 /** A BIGINT amount as a JSON number, only when it is exactly representable. */
 export function amountToNumber(amountMinor: bigint): number {
   const value = Number(amountMinor);

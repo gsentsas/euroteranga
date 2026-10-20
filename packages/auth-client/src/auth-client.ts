@@ -912,12 +912,22 @@ export interface PaymentAmount {
   currencyMinorUnit: number;
 }
 
+/** A card network accepted by the provider that would collect a card (PAY-EU-1). */
+export type CardNetworkCode = 'CB' | 'VISA' | 'MASTERCARD' | 'AMEX';
+
 /** One method of a payer country, and whether it can be used right now. */
 export interface PaymentOption {
   code: PaymentMethodCode;
   label: string;
   group: 'RECOMMENDED' | 'MOBILE_MONEY' | 'CARD_WALLET' | 'BANK' | 'AGENCY';
   available: boolean;
+  /** CARD only, when available: the networks accepted (badges, never choices). */
+  acceptedNetworks: CardNetworkCode[];
+  /**
+   * CARD only, when available: wallets the provider's page may also offer on
+   * an eligible device. Device eligibility is unknown: never a promise.
+   */
+  deviceWallets: Array<'APPLE_PAY' | 'GOOGLE_PAY'>;
 }
 
 /** GET bookings/:reference/payment-options: nothing about providers or routing. */

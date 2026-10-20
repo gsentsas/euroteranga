@@ -82,7 +82,7 @@ describe('admin payments', () => {
         currencyCode: 'EUR',
         currencyMinorUnit: 2,
         // PAY-HUB-1: the quote the attempt was started from (an identity quote).
-        paymentMethod: 'CARD_CB',
+        paymentMethod: 'CARD',
         payerCountry: 'FR',
         presentment: { amountMinor: 7_500, currencyCode: 'EUR', currencyMinorUnit: 2 },
         quote: {

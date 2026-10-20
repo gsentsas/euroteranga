@@ -203,7 +203,7 @@ describe('customer payments and booking confirmation (isolated database)', () =>
           currencyCode: 'EUR',
           currencyMinorUnit: 2,
           // PAY-HUB-1: the method and the amount presented to the payer.
-          paymentMethod: 'CARD_CB',
+          paymentMethod: 'CARD',
           payerCountry: 'FR',
           presentment: { amountMinor: 24_690, currencyCode: 'EUR', currencyMinorUnit: 2 },
           createdAt: expect.any(String),

@@ -19,6 +19,7 @@ import { IncidentModule } from './incidents/incident.module.js';
 import { ManifestModule } from './manifests/manifest.module.js';
 import { NetworkModule } from './network/network.module.js';
 import { PaymentModule } from './payments/payment.module.js';
+import type { StripeGateway } from './payments/providers/stripe-payment.provider.js';
 import { PassengerDocumentModule } from './passenger-documents/passenger-document.module.js';
 import { PricingModule } from './pricing/pricing.module.js';
 import { ReportingModule } from './reporting/reporting.module.js';
@@ -34,6 +35,7 @@ export interface AppModuleOptions {
   logger: Logger;
   extraControllers?: Type<unknown>[];
   mailProvider?: AuthMailProvider;
+  stripeGateway?: StripeGateway;
 }
 
 @Module({})
@@ -59,7 +61,9 @@ export class AppModule {
         ContentModule,
         MediaModule,
         BookingModule,
-        PaymentModule,
+        PaymentModule.register(
+          options.stripeGateway ? { stripeGateway: options.stripeGateway } : {},
+        ),
         PassengerDocumentModule,
         ComplianceModule,
         BaggageModule,

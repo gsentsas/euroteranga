@@ -1,6 +1,7 @@
-import type { ApiEnv } from '@euroteranga/config';
-import { Module } from '@nestjs/common';
-import { API_ENV } from '../config/config.module.js';
+import { STRIPE_LIVE_MODE_ENABLED, type ApiEnv } from '@euroteranga/config';
+import type { Logger } from '@euroteranga/logger';
+import { Module, type DynamicModule } from '@nestjs/common';
+import { API_ENV, API_LOGGER } from '../config/config.module.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { AdminPaymentController } from './admin-payment.controller.js';
 import { buildPaymentConfig, PAYMENT_CONFIG, type PaymentConfig } from './payment.config.js';
@@ -18,17 +19,51 @@ import { PaymentWebhookService } from './payment-webhook.service.js';
 import { CustomerPaymentController } from './customer-payment.controller.js';
 import { PAYMENT_PROVIDERS, type PaymentProvider } from './providers/payment-provider.js';
 import { SandboxPaymentProvider } from './providers/sandbox-payment.provider.js';
+import {
+  StripePaymentProvider,
+  StripeSdkGateway,
+  type StripeGateway,
+} from './providers/stripe-payment.provider.js';
+
+/** Test-only replacement of the Stripe API calls (null: the official SDK). */
+export const STRIPE_GATEWAY = Symbol('STRIPE_GATEWAY');
+
+export interface PaymentModuleOptions {
+  /** Tests only: CI never reaches Stripe. Production passes nothing. */
+  stripeGateway?: StripeGateway;
+}
 
 /**
- * The configured adapters: SANDBOX (local and CI only, refused by the
- * configuration when deployed) or none (DISABLED). PAY-HUB-1 has no adapter
- * for a real provider: no real money can be taken.
+ * The configured adapters, side by side: SANDBOX (local and CI only, refused
+ * by the configuration when deployed) and STRIPE (PAY-EU-1, only when
+ * PAYMENT_STRIPE_MODE is TEST or LIVE). DISABLED wires nothing: no key is
+ * read, no client is built, no network call can happen.
  */
-function paymentProvidersFactory(config: PaymentConfig): PaymentProvider[] {
+export function paymentProvidersFactory(
+  config: PaymentConfig,
+  logger: Logger,
+  stripeGateway: StripeGateway | null,
+): PaymentProvider[] {
+  const providers: PaymentProvider[] = [];
   if (config.provider === 'SANDBOX' && config.sandboxWebhookKey) {
-    return [new SandboxPaymentProvider(config.sandboxWebhookKey)];
+    providers.push(new SandboxPaymentProvider(config.sandboxWebhookKey));
   }
-  return [];
+  if (config.stripe) {
+    // The configuration refuses LIVE already; never start one regardless.
+    if (config.stripe.mode === 'LIVE' && !STRIPE_LIVE_MODE_ENABLED) {
+      throw new Error('PAYMENT_STRIPE_MODE=LIVE is not enabled in this release');
+    }
+    providers.push(
+      new StripePaymentProvider({
+        mode: config.stripe.mode,
+        webhookSecret: config.stripe.webhookSecret,
+        returnUrl: config.returnUrl,
+        gateway: stripeGateway ?? new StripeSdkGateway(config.stripe.secretKey),
+        logger,
+      }),
+    );
+  }
+  return providers;
 }
 
 /**
@@ -45,18 +80,28 @@ function fxRateSourceFactory(env: ApiEnv): FxRateSource | null {
  * Guards, AuthorizationService and AuditService come from the global
  * AuthorizationModule (which re-exports the single AuthModule instance).
  */
-@Module({
-  imports: [DatabaseModule],
-  controllers: [CustomerPaymentController, PaymentWebhookController, AdminPaymentController],
-  providers: [
-    { provide: PAYMENT_CONFIG, useFactory: buildPaymentConfig, inject: [API_ENV] },
-    { provide: PAYMENT_PROVIDERS, useFactory: paymentProvidersFactory, inject: [PAYMENT_CONFIG] },
-    { provide: FX_RATE_SOURCE, useFactory: fxRateSourceFactory, inject: [API_ENV] },
-    PaymentCapabilityRegistry,
-    PaymentFxService,
-    PaymentQuoteService,
-    PaymentService,
-    PaymentWebhookService,
-  ],
-})
-export class PaymentModule {}
+@Module({})
+export class PaymentModule {
+  static register(options: PaymentModuleOptions = {}): DynamicModule {
+    return {
+      module: PaymentModule,
+      imports: [DatabaseModule],
+      controllers: [CustomerPaymentController, PaymentWebhookController, AdminPaymentController],
+      providers: [
+        { provide: PAYMENT_CONFIG, useFactory: buildPaymentConfig, inject: [API_ENV] },
+        { provide: STRIPE_GATEWAY, useValue: options.stripeGateway ?? null },
+        {
+          provide: PAYMENT_PROVIDERS,
+          useFactory: paymentProvidersFactory,
+          inject: [PAYMENT_CONFIG, API_LOGGER, STRIPE_GATEWAY],
+        },
+        { provide: FX_RATE_SOURCE, useFactory: fxRateSourceFactory, inject: [API_ENV] },
+        PaymentCapabilityRegistry,
+        PaymentFxService,
+        PaymentQuoteService,
+        PaymentService,
+        PaymentWebhookService,
+      ],
+    };
+  }
+}

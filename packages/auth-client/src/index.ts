@@ -179,6 +179,7 @@ export {
   type PaymentAmount,
   type PaymentFailureCode,
   type PaymentMethodCode,
+  type CardNetworkCode,
   type PaymentOption,
   type PaymentOptions,
   type PaymentProviderCode,
@@ -306,4 +307,9 @@ export {
   multiplyAmountMinor,
   parseMoneyToMinor,
 } from './money.js';
-export { describePaymentQuote, PAYER_COUNTRY_OPTIONS } from './payment-display.js';
+export {
+  describePaymentOption,
+  describePaymentQuote,
+  PAYER_COUNTRY_OPTIONS,
+  paymentRedirectTarget,
+} from './payment-display.js';

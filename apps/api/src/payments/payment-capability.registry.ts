@@ -1,8 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  methodSettlement,
   PAYMENT_METHOD_CODES,
   PAYMENT_PROVIDER_CODES,
   PAYER_COUNTRIES,
+  type CardNetwork,
   type PayerCountry,
   type PaymentMethodCode,
   type PaymentProviderCode,
@@ -10,7 +12,9 @@ import {
 import {
   PAYMENT_PROVIDERS,
   type PaymentProvider,
+  type ProviderAmountLimit,
   type ProviderCapability,
+  type ProviderExclusionReason,
 } from './providers/payment-provider.js';
 
 type Declaration = ProviderCapability & { implemented: boolean };
@@ -22,6 +26,13 @@ const capability = (
     countries: readonly PayerCountry[];
     currencies: readonly string[];
     priority: number;
+    methodCountries?: ProviderCapability['methodCountries'];
+    amountLimits?: ProviderCapability['amountLimits'];
+    cardNetworks?: ProviderCapability['cardNetworks'];
+    deviceWallets?: ProviderCapability['deviceWallets'];
+    collectionWindowSeconds?: number | null;
+    minimumHoldRemainingSeconds?: number;
+    excluded?: readonly { method: PaymentMethodCode; reason: ProviderExclusionReason }[];
     redirect?: boolean;
     phone?: boolean;
     merchantCountries?: readonly PayerCountry[];
@@ -35,7 +46,14 @@ const capability = (
   providerCode,
   supportedMethods: input.methods,
   payerCountries: input.countries,
+  methodCountries: input.methodCountries ?? {},
   supportedCurrencies: input.currencies,
+  amountLimits: input.amountLimits ?? {},
+  cardNetworks: input.cardNetworks ?? {},
+  deviceWallets: input.deviceWallets ?? [],
+  collectionWindowSeconds: input.collectionWindowSeconds ?? null,
+  minimumHoldRemainingSeconds: input.minimumHoldRemainingSeconds ?? 0,
+  excludedMethods: input.excluded ?? [],
   testMode: input.testMode ?? false,
   refundCapabilities: input.refunds ?? 'NONE',
   partialRefundCapabilities: input.partialRefunds ?? false,
@@ -49,8 +67,6 @@ const capability = (
   implemented: input.implemented ?? false,
 });
 
-const CARDS = ['CARD', 'CARD_CB', 'CARD_VISA', 'CARD_MASTERCARD', 'CARD_AMEX'] as const;
-const WALLETS = ['APPLE_PAY', 'GOOGLE_PAY'] as const;
 const SENEGAL_MOBILE = [
   'WAVE_SN',
   'ORANGE_MONEY_SN',
@@ -68,18 +84,47 @@ const MAURITANIA_MOBILE = [
   'BCI_PAY_MR',
 ] as const;
 
+const EUROPEAN_CARD_NETWORKS = {
+  FR: ['CB', 'VISA', 'MASTERCARD', 'AMEX'],
+  ES: ['VISA', 'MASTERCARD', 'AMEX'],
+} as const satisfies Partial<Record<PayerCountry, readonly CardNetwork[]>>;
+
+const euros = (minMinor: number, maxMinor: number): ProviderAmountLimit => ({
+  minMinor: BigInt(minMinor),
+  maxMinor: BigInt(maxMinor),
+});
+
 /**
- * Declared future reach of every provider in the programme. Only SANDBOX has
- * an adapter in PAY-HUB-1, and it is test-only; all real declarations stay
- * implemented=false, configured=false and live=false until their own PR and
- * merchant onboarding. Declaring a provider here never makes it routable:
- * only an injected adapter is.
+ * Stripe Checkout (PAY-EU-1). Its session can be paid for at least 30 minutes
+ * (Stripe's minimum `expires_at`), plus one minute against clock skew; the
+ * hold must outlast it by five more minutes, so Checkout always closes before
+ * the seats are freed: an attempt starts only while 36 minutes of hold remain.
+ * With the default 15-minute hold Stripe is therefore unavailable;
+ * BOOKING_HOLD_TTL_SECONDS must be raised first (3600 s leaves the customer 24
+ * minutes to start paying). See docs/payments/stripe-europe.md.
+ */
+export const STRIPE_COLLECTION_WINDOW_SECONDS = 31 * 60;
+export const STRIPE_HOLD_MARGIN_SECONDS = 5 * 60;
+
+/**
+ * Declared reach of every provider in the programme. A declaration never
+ * makes a provider routable: only an injected, active adapter is. SANDBOX is
+ * test-only (local and CI). STRIPE is the first real adapter (PAY-EU-1):
+ * implemented, but disabled by default and never live in the pilot; its
+ * declaration is checked against Stripe's documentation (stripe-europe.md).
+ * Every other real declaration remains a planning hypothesis.
  */
 export const PROVIDER_CAPABILITY_DECLARATIONS: readonly Declaration[] = [
   capability('SANDBOX', {
     methods: PAYMENT_METHOD_CODES,
     countries: PAYER_COUNTRIES,
     currencies: ['EUR', 'XOF', 'MAD', 'MRU'],
+    cardNetworks: {
+      ...EUROPEAN_CARD_NETWORKS,
+      MA: ['VISA', 'MASTERCARD'],
+      MR: ['VISA', 'MASTERCARD'],
+      SN: ['VISA', 'MASTERCARD'],
+    },
     priority: 10_000,
     refunds: 'FULL_AND_PARTIAL',
     partialRefunds: true,
@@ -88,22 +133,37 @@ export const PROVIDER_CAPABILITY_DECLARATIONS: readonly Declaration[] = [
     redirect: false,
   }),
   capability('STRIPE', {
-    methods: [
-      ...CARDS,
-      ...WALLETS,
-      'SEPA_CREDIT_TRANSFER',
-      'SEPA_DIRECT_DEBIT',
-      'BIZUM',
-      'WERO',
-      'KLARNA',
-      'ALMA',
+    // Each one restricted exactly with Checkout's allowed_payment_method_types.
+    methods: ['CARD', 'BIZUM', 'KLARNA'],
+    countries: ['FR', 'ES'],
+    methodCountries: { BIZUM: ['ES'] },
+    currencies: ['EUR'],
+    // Stripe's minimum charge is 0.50 EUR; Bizum allows up to 5,000 EUR, and
+    // Klarna's largest offer is 4,000 EUR in France and 10,000 EUR in Spain.
+    amountLimits: {
+      CARD: { FR: euros(50, 99_999_999), ES: euros(50, 99_999_999) },
+      BIZUM: { ES: euros(50, 500_000) },
+      KLARNA: { FR: euros(50, 400_000), ES: euros(50, 1_000_000) },
+    },
+    cardNetworks: EUROPEAN_CARD_NETWORKS,
+    deviceWallets: ['APPLE_PAY', 'GOOGLE_PAY'],
+    collectionWindowSeconds: STRIPE_COLLECTION_WINDOW_SECONDS,
+    minimumHoldRemainingSeconds: STRIPE_COLLECTION_WINDOW_SECONDS + STRIPE_HOLD_MARGIN_SECONDS,
+    excluded: [
+      { method: 'APPLE_PAY', reason: 'NOT_SELECTABLE_IN_CHECKOUT' },
+      { method: 'GOOGLE_PAY', reason: 'NOT_SELECTABLE_IN_CHECKOUT' },
+      { method: 'SEPA_DIRECT_DEBIT', reason: 'ASYNC_SETTLEMENT_REQUIRES_BOOKING_POLICY' },
+      { method: 'SEPA_CREDIT_TRANSFER', reason: 'ASYNC_SETTLEMENT_REQUIRES_BOOKING_POLICY' },
+      { method: 'ALMA', reason: 'BUSINESS_CATEGORY_PROHIBITED' },
+      { method: 'WERO', reason: 'NOT_SUPPORTED_BY_PINNED_SDK' },
+      { method: 'PAYPAL', reason: 'SEPARATE_PROVIDER_PR' },
     ],
-    countries: ['FR', 'ES', 'MA', 'MR', 'SN'],
-    currencies: ['EUR', 'XOF', 'MAD', 'MRU'],
     priority: 10,
     merchantCountries: ['FR', 'ES'],
     refunds: 'FULL_AND_PARTIAL',
     partialRefunds: true,
+    implemented: true,
+    instant: true,
   }),
   capability('PAYPAL', {
     methods: ['PAYPAL'],
@@ -146,7 +206,7 @@ export const PROVIDER_CAPABILITY_DECLARATIONS: readonly Declaration[] = [
     refunds: 'FULL',
   }),
   capability('CMI', {
-    methods: ['CMI_CARD', 'CARD_VISA', 'CARD_MASTERCARD', 'MAROCPAY'],
+    methods: ['CMI_CARD', 'CARD', 'MAROCPAY'],
     countries: ['MA'],
     currencies: ['MAD'],
     priority: 10,
@@ -213,8 +273,31 @@ export interface PaymentRouteRequest {
   method: PaymentMethodCode;
   payerCountry: PayerCountry;
   currencyCode: string;
+  /** What the payer will be asked for, in minor units of currencyCode. */
+  presentmentAmountMinor: bigint;
+  /** Hold time left now; a provider whose checkout could outlive it is skipped. */
+  holdRemainingSeconds: number;
   /** Tried first when it can still collect this method (the quote's candidate). */
   preferredProvider?: PaymentProviderCode;
+}
+
+/** Whether a capability collects this request, all conditions together (fail closed). */
+export function capabilityCollects(item: ProviderCapability, input: PaymentRouteRequest): boolean {
+  const countries = item.methodCountries[input.method] ?? item.payerCountries;
+  const limit = item.amountLimits[input.method]?.[input.payerCountry];
+  return (
+    item.active &&
+    // A result days later cannot hold seats: such methods need a booking policy first.
+    methodSettlement(input.method) !== 'ASYNC_LONG' &&
+    item.supportedMethods.includes(input.method) &&
+    item.payerCountries.includes(input.payerCountry) &&
+    countries.includes(input.payerCountry) &&
+    item.supportedCurrencies.includes(input.currencyCode) &&
+    (!limit ||
+      (input.presentmentAmountMinor >= limit.minMinor &&
+        input.presentmentAmountMinor <= limit.maxMinor)) &&
+    input.holdRemainingSeconds >= item.minimumHoldRemainingSeconds
+  );
 }
 
 /**
@@ -252,15 +335,7 @@ export class PaymentCapabilityRegistry {
   /** Every active adapter able to collect this method, here, in this currency, best first. */
   candidates(input: PaymentRouteRequest): PaymentRoute[] {
     return [...this.configured.values()]
-      .filter((provider) => {
-        const item = provider.capability;
-        return (
-          item.active &&
-          item.supportedMethods.includes(input.method) &&
-          item.payerCountries.includes(input.payerCountry) &&
-          item.supportedCurrencies.includes(input.currencyCode)
-        );
-      })
+      .filter((provider) => capabilityCollects(provider.capability, input))
       .sort((left, right) => {
         if (left.name === input.preferredProvider) return -1;
         if (right.name === input.preferredProvider) return 1;
@@ -289,7 +364,10 @@ export class PaymentCapabilityRegistry {
         providerCode: declaration.providerCode,
         supportedMethods: declaration.supportedMethods,
         payerCountries: declaration.payerCountries,
+        methodCountries: declaration.methodCountries,
         supportedCurrencies: declaration.supportedCurrencies,
+        cardNetworks: declaration.cardNetworks,
+        excludedMethods: declaration.excludedMethods,
         testMode: adapter?.testMode ?? declaration.testMode,
         refundCapabilities: declaration.refundCapabilities,
         partialRefundCapabilities: declaration.partialRefundCapabilities,
@@ -300,6 +378,9 @@ export class PaymentCapabilityRegistry {
         requiresMerchantEntityCountry: declaration.requiresMerchantEntityCountry,
         supported: true,
         implemented: declaration.implemented,
+        // No adapter sends a refund to its provider yet (STRIPE included):
+        // OPS refunds are recorded facts, executed outside EURO TERANGA.
+        refundExecutionImplemented: false,
         configured: Boolean(adapter),
         live: Boolean(adapter?.capability.active && !adapter.testMode),
       };

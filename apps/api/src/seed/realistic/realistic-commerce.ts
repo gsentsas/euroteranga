@@ -37,7 +37,7 @@ export interface RealisticCommerceServices {
  * fares are in euros, so the quote is the identity (no conversion) and the
  * SANDBOX event carries the booking amount.
  */
-const SEED_PAYMENT = { payerCountry: 'FR', paymentMethod: 'CARD_CB' } as const;
+const SEED_PAYMENT = { payerCountry: 'FR', paymentMethod: 'CARD' } as const;
 
 export const DIRECTIONS = [
   { name: 'outbound', short: 'out', routeCode: 'ET-PAR-DKR' },

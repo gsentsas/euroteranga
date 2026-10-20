@@ -16,10 +16,9 @@ import {
   methodsForCountry,
   PRESENTMENT_CURRENCIES,
   type PayerCountry,
-  type PaymentProviderCode,
 } from './payment-catalog.js';
 import { PaymentFxService } from './payment-fx.service.js';
-import { amountToNumber, bookingAmountMinor } from './payment-rules.js';
+import { amountToNumber, bookingAmountMinor, holdRemaining } from './payment-rules.js';
 
 /** How long a quoted amount stays valid, never beyond the booking hold. */
 export const PAYMENT_QUOTE_TTL_SECONDS = 600;
@@ -121,6 +120,7 @@ export class PaymentQuoteService {
         unitAmountMinor: true,
         currencyCode: true,
         currencyMinorUnit: true,
+        holdExpiresAt: true,
         _count: { select: { seats: true } },
       },
     });
@@ -133,22 +133,34 @@ export class PaymentQuoteService {
       toCurrency: presentment.code,
       toMinorUnit: presentment.minorUnit,
     });
+    const now = await databaseNow(this.database.client);
+    const holdRemainingSeconds = holdRemaining(booking.holdExpiresAt, now);
     return {
       country,
       currency: presentment.code,
       currencyMinorUnit: presentment.minorUnit,
-      methods: methodsForCountry(country).map((descriptor) => ({
-        code: descriptor.code,
-        label: descriptor.label,
-        group: methodGroup(descriptor, country),
-        available:
-          converted !== null &&
-          this.registry.route({
-            method: descriptor.code,
-            payerCountry: country,
-            currencyCode: presentment.code,
-          }) !== null,
-      })),
+      methods: methodsForCountry(country).map((descriptor) => {
+        const route = converted
+          ? this.registry.route({
+              method: descriptor.code,
+              payerCountry: country,
+              currencyCode: presentment.code,
+              presentmentAmountMinor: converted.presentmentAmountMinor,
+              holdRemainingSeconds,
+            })
+          : null;
+        // Card badges and device wallets come from the provider that would
+        // collect the card, never from the catalogue: no promise without one.
+        const card = descriptor.code === 'CARD' && route ? route.capability : null;
+        return {
+          code: descriptor.code,
+          label: descriptor.label,
+          group: methodGroup(descriptor, country),
+          available: route !== null,
+          acceptedNetworks: card?.cardNetworks[country] ?? [],
+          deviceWallets: card?.deviceWallets ?? [],
+        };
+      }),
     };
   }
 
@@ -157,13 +169,6 @@ export class PaymentQuoteService {
     const country = this.payerCountry(input.payerCountry);
     if (!methodOffered(input.paymentMethod, country)) throw PaymentErrors.methodUnavailable();
     if (!this.registry.hasActiveProvider()) throw PaymentErrors.providerUnavailable();
-    const presentment = PRESENTMENT_CURRENCIES[country];
-    const route = this.registry.route({
-      method: input.paymentMethod,
-      payerCountry: country,
-      currencyCode: presentment.code,
-    });
-    if (!route) throw PaymentErrors.methodUnavailable();
     const booking = await this.database.client.booking.findFirst({
       where: {
         reference: this.bookingReference(rawReference),
@@ -180,7 +185,6 @@ export class PaymentQuoteService {
         tripId: booking.tripId,
         country,
         method: input.paymentMethod,
-        provider: route.provider.name,
       }),
     );
     return customerQuoteView(quote);
@@ -194,7 +198,6 @@ export class PaymentQuoteService {
       tripId: string;
       country: PayerCountry;
       method: PaymentQuoteCreate['paymentMethod'];
-      provider: PaymentProviderCode;
     },
   ): Promise<PaymentQuoteRow> {
     // Lock order of every payment path: trip (shared) -> booking.
@@ -238,6 +241,15 @@ export class PaymentQuoteService {
       toMinorUnit: presentment.minorUnit,
     });
     if (!conversion) throw PaymentErrors.fxUnavailable();
+    // Routed on the exact amount and the remaining hold, from the locked rows.
+    const route = this.registry.route({
+      method: input.method,
+      payerCountry: input.country,
+      currencyCode: presentment.code,
+      presentmentAmountMinor: conversion.presentmentAmountMinor,
+      holdRemainingSeconds: holdRemaining(booking.hold_expires_at, now),
+    });
+    if (!route) throw PaymentErrors.methodUnavailable();
 
     const quote = await tx.paymentQuote.create({
       data: {
@@ -254,7 +266,7 @@ export class PaymentQuoteService {
         expiresAt: quoteExpiry(now, booking.hold_expires_at),
         payerCountry: input.country,
         paymentMethod: input.method,
-        providerCandidate: input.provider,
+        providerCandidate: route.provider.name,
       },
       select: paymentQuoteSelect,
     });
