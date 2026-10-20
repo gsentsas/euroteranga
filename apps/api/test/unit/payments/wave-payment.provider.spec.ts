@@ -269,17 +269,13 @@ describe('Wave Checkout creation and recovery', () => {
 
   it('recovers an existing checkout but refuses a fresh one after the original hold margin is spent', async () => {
     const lateExpiresAt = () =>
-      new Date(
-        Date.now() +
-          (WAVE_COLLECTION_WINDOW_SECONDS - WAVE_HOLD_MARGIN_SECONDS) * 1000 -
-          1,
-      );
+      new Date(Date.now() + (WAVE_COLLECTION_WINDOW_SECONDS - WAVE_HOLD_MARGIN_SECONDS) * 1000 - 1);
 
     const existing = setup();
     const first = await existing.provider.createPayment(payment());
-    expect(
-      await existing.provider.createPayment(payment({ expiresAt: lateExpiresAt() })),
-    ).toEqual(first);
+    expect(await existing.provider.createPayment(payment({ expiresAt: lateExpiresAt() }))).toEqual(
+      first,
+    );
     expect(existing.gateway.createCalls).toHaveLength(1);
 
     const fresh = setup();
