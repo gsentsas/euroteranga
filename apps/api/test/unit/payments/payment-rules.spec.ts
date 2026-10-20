@@ -11,6 +11,7 @@ import {
 import {
   adminPaymentListQuerySchema,
   paymentCreateSchema,
+  paymentQuoteCreateSchema,
   staffPaymentCancelSchema,
 } from '../../../src/payments/payment.dto.js';
 
@@ -107,10 +108,33 @@ describe('booking status with payments (PR-10)', () => {
 });
 
 describe('payment request schemas', () => {
-  it('accepts no business field from a customer', () => {
-    expect(paymentCreateSchema.safeParse({}).success).toBe(true);
-    for (const body of [{ amountMinor: 1 }, { currencyCode: 'EUR' }, { provider: 'SANDBOX' }]) {
+  it('accepts no business field from a customer: a quote and its method only (PAY-HUB-1)', () => {
+    const quoteId = '01900000-0000-7000-8000-000000000001';
+    expect(paymentCreateSchema.safeParse({ quoteId, paymentMethod: 'WAVE_SN' }).success).toBe(true);
+    for (const body of [
+      {},
+      { quoteId },
+      { paymentMethod: 'WAVE_SN' },
+      { quoteId: 'not-a-uuid', paymentMethod: 'WAVE_SN' },
+      { quoteId, paymentMethod: 'WAVE' },
+      { quoteId, paymentMethod: 'WAVE_SN', amountMinor: 1 },
+      { quoteId, paymentMethod: 'WAVE_SN', currencyCode: 'EUR' },
+      { quoteId, paymentMethod: 'WAVE_SN', provider: 'SANDBOX' },
+    ]) {
       expect(paymentCreateSchema.safeParse(body).success, JSON.stringify(body)).toBe(false);
+    }
+    // A quote request states intentions only: no amount, currency, rate or provider.
+    expect(
+      paymentQuoteCreateSchema.parse({ payerCountry: ' sn ', paymentMethod: 'WAVE_SN' }),
+    ).toEqual({ payerCountry: 'SN', paymentMethod: 'WAVE_SN' });
+    for (const body of [
+      { payerCountry: 'SN', paymentMethod: 'WAVE_SN', amountMinor: 1 },
+      { payerCountry: 'SN', paymentMethod: 'WAVE_SN', currencyCode: 'XOF' },
+      { payerCountry: 'SN', paymentMethod: 'WAVE_SN', fxRate: '1' },
+      { payerCountry: 'SN', paymentMethod: 'WAVE_SN', provider: 'WAVE' },
+      { payerCountry: 'SEN', paymentMethod: 'WAVE_SN' },
+    ]) {
+      expect(paymentQuoteCreateSchema.safeParse(body).success, JSON.stringify(body)).toBe(false);
     }
   });
 

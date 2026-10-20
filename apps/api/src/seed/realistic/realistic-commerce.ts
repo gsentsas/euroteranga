@@ -8,6 +8,7 @@ import type { PublicBookingService } from '../../bookings/public-booking.service
 import { passengerCreateSchema } from '../../passenger-documents/passenger-document.dto.js';
 import type { PassengerDocumentService } from '../../passenger-documents/passenger-document.service.js';
 import type { PaymentService } from '../../payments/payment.service.js';
+import type { PaymentQuoteService } from '../../payments/payment-quote.service.js';
 import type { PaymentWebhookService } from '../../payments/payment-webhook.service.js';
 import {
   REALISTIC_BOOKING_PLAN,
@@ -27,8 +28,16 @@ export interface RealisticCommerceServices {
   publicBooking: PublicBookingService;
   passengers: PassengerDocumentService;
   payments: PaymentService;
+  quotes: PaymentQuoteService;
   webhooks: PaymentWebhookService;
 }
+
+/**
+ * How synthetic customers pay (PAY-HUB-1): a card, from France. The pilot
+ * fares are in euros, so the quote is the identity (no conversion) and the
+ * SANDBOX event carries the booking amount.
+ */
+const SEED_PAYMENT = { payerCountry: 'FR', paymentMethod: 'CARD_CB' } as const;
 
 export const DIRECTIONS = [
   { name: 'outbound', short: 'out', routeCode: 'ET-PAR-DKR' },
@@ -577,10 +586,12 @@ export class RealisticCommerce {
     if (booking.state === 'HELD') {
       let payment = booking.payment;
       if (!payment) {
+        const quote = await this.services.quotes.create(actor, booking.reference, SEED_PAYMENT);
         const created = await this.services.payments.create(
           actor,
           booking.reference,
           `seed-pay-${booking.reference}`,
+          { quoteId: quote.id, paymentMethod: SEED_PAYMENT.paymentMethod },
         );
         payment = { reference: created.result.payment.reference, status: 'PENDING' };
         if (group.state === 'pending') {
@@ -659,7 +670,12 @@ export class RealisticCommerce {
   private async settle(paymentReference: string, succeeded: boolean): Promise<void> {
     const payment = await this.db.payment.findUniqueOrThrow({
       where: { reference: paymentReference },
-      select: { providerPaymentId: true, amountMinor: true, currencyCode: true },
+      select: {
+        providerPaymentId: true,
+        amountMinor: true,
+        currencyCode: true,
+        quote: { select: { presentmentAmountMinor: true, presentmentCurrencyCode: true } },
+      },
     });
     if (!payment.providerPaymentId) throw new RealisticConflict('SANDBOX attempt without an id');
     const providerEventId = `evt_seed_${paymentReference.replace(/[^A-Za-z0-9]/g, '_')}`;
@@ -672,8 +688,9 @@ export class RealisticCommerce {
       providerEventId,
       type: succeeded ? 'PAYMENT_SUCCEEDED' : 'PAYMENT_FAILED',
       providerPaymentId: payment.providerPaymentId,
-      amountMinor: BigInt(payment.amountMinor),
-      currencyCode: payment.currencyCode,
+      // What the provider collected: the quote's presentment amount.
+      amountMinor: payment.quote?.presentmentAmountMinor ?? payment.amountMinor,
+      currencyCode: payment.quote?.presentmentCurrencyCode ?? payment.currencyCode,
       failureCode: succeeded ? null : 'DECLINED',
       payloadHash: createHash('sha256').update(payload).digest('hex'),
     });

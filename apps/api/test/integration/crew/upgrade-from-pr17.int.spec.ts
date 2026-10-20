@@ -14,7 +14,7 @@ import {
   staffCheckInApi,
 } from '../../support/check-in-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
-import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
+import { CURRENT_MIGRATIONS, historical, withoutPaymentHub } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -63,8 +63,13 @@ describe('upgrade from a real PR-17 database', () => {
 
     workDir = mkdtempSync(join(tmpdir(), 'et-pr17-upgrade-'));
     const historicalMigrations = join(workDir, 'migrations');
+    // PAY-HUB-1 belongs to this history only because it is built through
+    // today's API (which starts no payment without a quote): here it runs
+    // before the later migrations, an order production never sees. The real
+    // order, every migration then PAY-HUB-1 on PR-10 payments, is measured
+    // by payments/upgrade-from-pr10-payments.int.spec.ts.
     for (const entry of readdirSync(MIGRATIONS)) {
-      if (entry <= PR17_MIGRATION) {
+      if (historical(entry, PR17_MIGRATION)) {
         cpSync(join(MIGRATIONS, entry), join(historicalMigrations, entry), { recursive: true });
       }
     }
@@ -79,8 +84,8 @@ describe('upgrade from a real PR-17 database', () => {
     );
     deploy(config, url);
     raw = createDatabaseClient({ databaseUrl: url });
-    expect(await applied()).toHaveLength(17);
-    expect((await applied()).at(-1)).toBe(PR17_MIGRATION);
+    expect(withoutPaymentHub(await applied())).toHaveLength(17);
+    expect(withoutPaymentHub(await applied()).at(-1)).toBe(PR17_MIGRATION);
 
     const env = integrationEnv({ DATABASE_URL: url });
     t = await startTestApp(env);

@@ -31,7 +31,7 @@ import {
 import { uploadDocument } from '../../support/passenger-document-helpers.js';
 import { paymentApi, settle } from '../../support/payment-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
-import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
+import { CURRENT_MIGRATIONS, historical, withoutPaymentHub } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -136,8 +136,13 @@ describe('upgrade from a real PR-13 database', () => {
     workDir = mkdtempSync(join(tmpdir(), 'et-pr13-upgrade-'));
     storageRoot = mkdtempSync(join(tmpdir(), 'et-pr13-documents-'));
     const pr13 = join(workDir, 'migrations');
+    // PAY-HUB-1 belongs to this history only because it is built through
+    // today's API (which starts no payment without a quote): here it runs
+    // before the later migrations, an order production never sees. The real
+    // order, every migration then PAY-HUB-1 on PR-10 payments, is measured
+    // by payments/upgrade-from-pr10-payments.int.spec.ts.
     for (const entry of readdirSync(MIGRATIONS)) {
-      if (entry <= BAGGAGE_MIGRATION) {
+      if (historical(entry, BAGGAGE_MIGRATION)) {
         cpSync(join(MIGRATIONS, entry), join(pr13, entry), { recursive: true });
       }
     }
@@ -152,7 +157,7 @@ describe('upgrade from a real PR-13 database', () => {
     );
     deploy(config, url);
     raw = createDatabaseClient({ databaseUrl: url });
-    expect(await applied()).toHaveLength(13);
+    expect(withoutPaymentHub(await applied())).toHaveLength(13);
 
     env = integrationEnv({ DATABASE_URL: url, OBJECT_STORAGE_LOCAL_ROOT: storageRoot });
     t = await startTestApp(env);
@@ -212,8 +217,8 @@ describe('upgrade from a real PR-13 database', () => {
     const cancelled = await bookingApi(customer).post('/bookings', holdBody(fixture, 2, 4, ['2B']));
     await bookingApi(customer).post(`/bookings/${cancelled.body.reference}/cancel`);
 
-    expect(await applied()).toHaveLength(13);
-    expect((await applied()).at(-1)).toBe(BAGGAGE_MIGRATION);
+    expect(withoutPaymentHub(await applied())).toHaveLength(13);
+    expect(withoutPaymentHub(await applied()).at(-1)).toBe(BAGGAGE_MIGRATION);
     expect(
       (
         await raw.$queryRawUnsafe<Array<{ status: string }>>(

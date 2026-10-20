@@ -30,7 +30,8 @@ import { NetworkService } from '../network/network.service.js';
 import { PassengerDocumentService } from '../passenger-documents/passenger-document.service.js';
 import { PaymentService } from '../payments/payment.service.js';
 import { PaymentWebhookService } from '../payments/payment-webhook.service.js';
-import { PAYMENT_PROVIDER, type PaymentProvider } from '../payments/providers/payment-provider.js';
+import { PaymentCapabilityRegistry } from '../payments/payment-capability.registry.js';
+import { PaymentQuoteService } from '../payments/payment-quote.service.js';
 import { PILOT_DATASET_VERSION } from '../pilot/pilot-dataset.js';
 import { PricingService } from '../pricing/pricing.service.js';
 import { SeatMapService } from '../seat-maps/seat-map.service.js';
@@ -52,11 +53,11 @@ const out = (line: string) => process.stdout.write(`${line}\n`);
  * Bookings need SANDBOX payments, which the configuration allows in local and
  * CI only: the commerce layer never runs in staging or production.
  */
-function commerceUnavailable(env: ApiEnv, provider: PaymentProvider | null): string | undefined {
+function commerceUnavailable(env: ApiEnv, registry: PaymentCapabilityRegistry): string | undefined {
   if (env.APP_ENV !== 'local' && env.APP_ENV !== 'ci') {
     return `bookings need SANDBOX payments (local and CI only), APP_ENV=${env.APP_ENV}`;
   }
-  if (!provider || provider.name !== 'SANDBOX') return 'PAYMENT_PROVIDER is not SANDBOX';
+  if (!registry.provider('SANDBOX')) return 'PAYMENT_PROVIDER is not SANDBOX';
   return undefined;
 }
 const err = (line: string) => process.stderr.write(`${line}\n`);
@@ -98,8 +99,10 @@ async function main(): Promise<number> {
   });
   try {
     const database = app.get(DatabaseService);
-    const provider = app.get<PaymentProvider | null>(PAYMENT_PROVIDER, { strict: false });
-    const unavailable = commerceUnavailable(env, provider);
+    const unavailable = commerceUnavailable(
+      env,
+      app.get(PaymentCapabilityRegistry, { strict: false }),
+    );
     const seed = new RealisticSeed({
       db: database.client,
       network: app.get(NetworkService),
@@ -116,6 +119,7 @@ async function main(): Promise<number> {
             publicBooking: app.get(PublicBookingService, { strict: false }),
             passengers: app.get(PassengerDocumentService, { strict: false }),
             payments: app.get(PaymentService, { strict: false }),
+            quotes: app.get(PaymentQuoteService, { strict: false }),
             webhooks: app.get(PaymentWebhookService, { strict: false }),
           },
       operations: unavailable

@@ -14,6 +14,56 @@ export const PaymentErrors = {
       'PAYMENT_PROVIDER_UNAVAILABLE',
       'Le paiement en ligne n’est pas disponible pour le moment.',
     ),
+  methodUnavailable: () =>
+    new PublicApiError(
+      409,
+      'PAYMENT_METHOD_UNAVAILABLE',
+      'Ce moyen de paiement n’est pas disponible pour ce pays et cette devise.',
+    ),
+  countryUnsupported: () =>
+    new PublicApiError(
+      422,
+      'PAYMENT_COUNTRY_UNSUPPORTED',
+      'Le paiement n’est pas proposé pour ce pays.',
+    ),
+  currencyUnsupported: () =>
+    new PublicApiError(
+      422,
+      'PAYMENT_CURRENCY_UNSUPPORTED',
+      'Cette devise n’est pas acceptée pour le paiement.',
+    ),
+  fxUnavailable: () =>
+    new PublicApiError(
+      503,
+      'PAYMENT_FX_UNAVAILABLE',
+      'Le montant dans cette devise ne peut pas être calculé pour le moment.',
+    ),
+  quoteNotFound: () =>
+    new PublicApiError(404, 'PAYMENT_QUOTE_NOT_FOUND', 'Proposition de paiement introuvable.'),
+  quoteAlreadyUsed: () =>
+    new PublicApiError(
+      409,
+      'PAYMENT_QUOTE_ALREADY_USED',
+      'Cette proposition de paiement a déjà servi. Demandez un nouveau montant.',
+    ),
+  quoteLimitReached: () =>
+    new PublicApiError(
+      429,
+      'PAYMENT_QUOTE_LIMIT_REACHED',
+      'Trop de propositions de paiement pour cette réservation.',
+    ),
+  quoteExpired: () =>
+    new PublicApiError(
+      409,
+      'PAYMENT_QUOTE_EXPIRED',
+      'Cette proposition de paiement a expiré. Demandez un nouveau montant.',
+    ),
+  quoteMismatch: () =>
+    new PublicApiError(
+      422,
+      'PAYMENT_QUOTE_MISMATCH',
+      'La proposition de paiement ne correspond pas à ce paiement.',
+    ),
   bookingNotPayable: () =>
     new PublicApiError(
       409,

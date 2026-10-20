@@ -256,11 +256,72 @@ enum FinanceEntryStatus {
 }
 
 /// PR-10: payment service providers. SANDBOX is local and test-only: it calls
-/// no external service and is refused in staging and production.
+/// no external service and is refused in staging and production. PAY-HUB-1
+/// declares the future providers; none has an adapter or a configuration yet.
 enum PaymentProvider {
   SANDBOX
+  STRIPE
+  PAYPAL
+  PAYDUNYA
+  PAYTECH
+  WAVE
+  ORANGE_MONEY
+  CMI
+  CHARIPAY
+  MOOSYL
+  MANUAL_BANK_TRANSFER
+  CASH
 
   @@map("payment_provider")
+}
+
+/// PAY-HUB-1: the customer-facing means of payment. This is deliberately
+/// separate from PaymentProvider: Wave may be routed directly or through an
+/// aggregator without changing the method chosen by the customer.
+enum PaymentMethod {
+  CARD
+  CARD_CB
+  CARD_VISA
+  CARD_MASTERCARD
+  CARD_AMEX
+  APPLE_PAY
+  GOOGLE_PAY
+  PAYPAL
+  SEPA_CREDIT_TRANSFER
+  SEPA_DIRECT_DEBIT
+  BIZUM
+  WERO
+  KLARNA
+  ALMA
+  WAVE_SN
+  ORANGE_MONEY_SN
+  FREE_MONEY_SN
+  EXPRESSO_SN
+  WIZALL_SN
+  DJAMO_SN
+  MAROCPAY
+  CMI_CARD
+  MOROCCO_CASH_AGENCY
+  BANKILY_MR
+  MASRVI_MR
+  SEDAD_MR
+  BIMBANK_MR
+  CLICK_MR
+  BCI_PAY_MR
+  BANK_TRANSFER
+  CASH_AT_AGENCY
+
+  @@map("payment_method")
+}
+
+enum PaymentFxSource {
+  FX_IDENTITY
+  FX_SYNTHETIC_CI
+  FX_MANUAL_OPS
+  FX_PROVIDER
+  FX_EXTERNAL_SERVICE
+
+  @@map("payment_fx_source")
 }
 
 /// PR-10: lifecycle of one payment attempt. PENDING -> SUCCEEDED | FAILED |
@@ -973,26 +1034,26 @@ model RouteWaypoint {
 /// The lifecycle (creation as PLANNED, allowed transitions, RETIRED terminal,
 /// no physical deletion) is enforced by triggers in the PR-05 migration.
 model Vehicle {
-  id                    String        @id @default(uuid(7)) @db.Uuid
-  code                  String        @unique @db.VarChar(32)
+  id                    String           @id @default(uuid(7)) @db.Uuid
+  code                  String           @unique @db.VarChar(32)
   /// Optional operational name used by the teams (e.g. "Teranga 01").
-  name                  String?       @unique @db.VarChar(80)
+  name                  String?          @unique @db.VarChar(80)
   /// Application-level shape check only (17 characters, no I/O/Q).
-  vin                   String?       @unique @db.VarChar(17)
-  registrationPlate     String?       @map("registration_plate") @db.VarChar(16)
-  registrationCountryId String?       @map("registration_country_id") @db.Uuid
-  manufacturer          String        @db.VarChar(80)
-  model                 String        @db.VarChar(80)
-  modelYear             Int?          @map("model_year")
-  status                VehicleStatus @default(PLANNED)
-  statusChangedAt       DateTime?     @map("status_changed_at") @db.Timestamptz(3)
-  retiredAt             DateTime?     @map("retired_at") @db.Timestamptz(3)
+  vin                   String?          @unique @db.VarChar(17)
+  registrationPlate     String?          @map("registration_plate") @db.VarChar(16)
+  registrationCountryId String?          @map("registration_country_id") @db.Uuid
+  manufacturer          String           @db.VarChar(80)
+  model                 String           @db.VarChar(80)
+  modelYear             Int?             @map("model_year")
+  status                VehicleStatus    @default(PLANNED)
+  statusChangedAt       DateTime?        @map("status_changed_at") @db.Timestamptz(3)
+  retiredAt             DateTime?        @map("retired_at") @db.Timestamptz(3)
   /// Physical seat map currently configured (a published version).
-  seatMapVersionId      String?       @map("seat_map_version_id") @db.Uuid
+  seatMapVersionId      String?          @map("seat_map_version_id") @db.Uuid
   /// Equipment actually on board, maintained by the fleet team (distinct values).
   amenities             VehicleAmenity[] @default([])
-  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   registrationCountry Country?           @relation(fields: [registrationCountryId], references: [id], onDelete: Restrict)
   seatMapVersion      SeatMapVersion?    @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
@@ -1254,6 +1315,7 @@ model Booking {
   fareEntry                FareEntry          @relation(fields: [fareEntryId], references: [id], onDelete: Restrict)
   seats                    BookingSeat[]
   payments                 Payment[]
+  paymentQuotes            PaymentQuote[]
   passengers               BookingPassenger[]
 
   @@index([customerIdentityId, id])
@@ -1460,6 +1522,10 @@ model Payment {
   bookingId          String          @map("booking_id") @db.Uuid
   /// The paying CUSTOMER: always the owner of the booking (trigger).
   customerIdentityId String          @map("customer_identity_id") @db.Uuid
+  /// PAY-HUB-1: the immutable quote this attempt was started from. NULL only
+  /// for PR-10 attempts (made before quotes existed); payment_guard requires
+  /// it for every new attempt.
+  quoteId            String?         @unique @map("quote_id") @db.Uuid
   provider           PaymentProvider
   /// Opaque id of the attempt at the provider (never a secret).
   providerPaymentId  String?         @map("provider_payment_id") @db.VarChar(128)
@@ -1478,10 +1544,12 @@ model Payment {
   failedAt           DateTime?       @map("failed_at") @db.Timestamptz(3)
   cancelledAt        DateTime?       @map("cancelled_at") @db.Timestamptz(3)
 
-  booking          Booking        @relation(fields: [bookingId], references: [id], onDelete: Restrict)
-  customerIdentity AuthIdentity   @relation("PaymentCustomer", fields: [customerIdentityId], references: [id], onDelete: Restrict)
+  booking          Booking            @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  customerIdentity AuthIdentity       @relation("PaymentCustomer", fields: [customerIdentityId], references: [id], onDelete: Restrict)
+  quote            PaymentQuote?      @relation(fields: [quoteId], references: [id], onDelete: Restrict)
   events           PaymentEvent[]
   refunds          Refund[]
+  settlement       PaymentSettlement?
 
   // At most one PENDING and one SUCCEEDED attempt per booking: partial unique
   // indexes created in the PR-10 migration (like the earlier partial indexes,
@@ -1491,6 +1559,63 @@ model Payment {
   @@index([bookingId, id])
   @@index([status, id])
   @@map("payment")
+}
+
+/// PAY-HUB-1: immutable conversion and routing snapshot shown to the customer
+/// before initiation. Payment.amount remains the booking amount; provider
+/// calls and events use the presentment amount stored here. Immutable
+/// (payment_quote_guard): a new price is a new quote. The presented amount is
+/// the booking amount at fxRate, rounded half up (payment_quote_presentment_from_rate).
+model PaymentQuote {
+  id                           String          @id @default(uuid(7)) @db.Uuid
+  bookingId                    String          @map("booking_id") @db.Uuid
+  bookingAmountMinor           BigInt          @map("booking_amount_minor")
+  bookingCurrencyCode          String          @map("booking_currency_code") @db.VarChar(3)
+  bookingCurrencyMinorUnit     Int             @map("booking_currency_minor_unit")
+  presentmentAmountMinor       BigInt          @map("presentment_amount_minor")
+  presentmentCurrencyCode      String          @map("presentment_currency_code") @db.VarChar(3)
+  presentmentCurrencyMinorUnit Int             @map("presentment_currency_minor_unit")
+  /// Exact decimal rate from booking major units to presentment major units
+  /// (1 with FX_IDENTITY, when both currencies are the same).
+  fxRate                       Decimal         @map("fx_rate") @db.Decimal(30, 12)
+  fxSource                     PaymentFxSource @map("fx_source")
+  quotedAt                     DateTime        @map("quoted_at") @db.Timestamptz(3)
+  expiresAt                    DateTime        @map("expires_at") @db.Timestamptz(3)
+  payerCountry                 String          @map("payer_country") @db.Char(2)
+  paymentMethod                PaymentMethod   @map("payment_method")
+  /// Internal router decision at quote time; never exposed to the customer.
+  /// The attempt may use another provider of the same method (fallback).
+  providerCandidate            PaymentProvider @map("provider_candidate")
+
+  booking Booking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  payment Payment?
+
+  @@index([bookingId, quotedAt, id])
+  @@index([payerCountry, paymentMethod, quotedAt])
+  @@map("payment_quote")
+}
+
+/// PAY-HUB-1: bank/provider settlement is distinct from payment success.
+/// The row is append-only and may arrive well after the booking confirmation.
+model PaymentSettlement {
+  id                          String          @id @default(uuid(7)) @db.Uuid
+  paymentId                   String          @unique @map("payment_id") @db.Uuid
+  provider                    PaymentProvider
+  providerTransactionId       String          @map("provider_transaction_id") @db.VarChar(128)
+  settlementReference         String          @map("settlement_reference") @db.VarChar(128)
+  grossAmountMinor            BigInt          @map("gross_amount_minor")
+  providerFeeMinor            BigInt          @map("provider_fee_minor")
+  netAmountMinor              BigInt          @map("net_amount_minor")
+  settlementCurrencyCode      String          @map("settlement_currency_code") @db.VarChar(3)
+  settlementCurrencyMinorUnit Int             @map("settlement_currency_minor_unit")
+  settledAt                   DateTime        @map("settled_at") @db.Timestamptz(3)
+  recordedAt                  DateTime        @default(now()) @map("recorded_at") @db.Timestamptz(3)
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([provider, settlementReference])
+  @@index([settledAt, id])
+  @@map("payment_settlement")
 }
 
 /// PR-10: one provider event received through a signed webhook. Immutable:

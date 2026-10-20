@@ -853,10 +853,117 @@ export type CustomerBookingStatus = 'HELD' | 'CONFIRMED' | 'EXPIRED' | 'CANCELLE
 /** One payment attempt: PENDING, then a single terminal state. */
 export type PaymentStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
 
+/** PAY-HUB-1: what the customer chooses (a provider is the server's business). */
+export type PaymentMethodCode =
+  | 'CARD'
+  | 'CARD_CB'
+  | 'CARD_VISA'
+  | 'CARD_MASTERCARD'
+  | 'CARD_AMEX'
+  | 'APPLE_PAY'
+  | 'GOOGLE_PAY'
+  | 'PAYPAL'
+  | 'SEPA_CREDIT_TRANSFER'
+  | 'SEPA_DIRECT_DEBIT'
+  | 'BIZUM'
+  | 'WERO'
+  | 'KLARNA'
+  | 'ALMA'
+  | 'WAVE_SN'
+  | 'ORANGE_MONEY_SN'
+  | 'FREE_MONEY_SN'
+  | 'EXPRESSO_SN'
+  | 'WIZALL_SN'
+  | 'DJAMO_SN'
+  | 'MAROCPAY'
+  | 'CMI_CARD'
+  | 'MOROCCO_CASH_AGENCY'
+  | 'BANKILY_MR'
+  | 'MASRVI_MR'
+  | 'SEDAD_MR'
+  | 'BIMBANK_MR'
+  | 'CLICK_MR'
+  | 'BCI_PAY_MR'
+  | 'BANK_TRANSFER'
+  | 'CASH_AT_AGENCY';
+
+/** Payer countries of the corridor. */
+export type PayerCountryCode = 'FR' | 'ES' | 'MA' | 'MR' | 'SN';
+
+/** Providers of the programme (only SANDBOX, test-only, has an adapter today). */
+export type PaymentProviderCode =
+  | 'SANDBOX'
+  | 'STRIPE'
+  | 'PAYPAL'
+  | 'PAYDUNYA'
+  | 'PAYTECH'
+  | 'WAVE'
+  | 'ORANGE_MONEY'
+  | 'CMI'
+  | 'CHARIPAY'
+  | 'MOOSYL'
+  | 'MANUAL_BANK_TRANSFER'
+  | 'CASH';
+
+/** An exact amount in minor units, with its currency. */
+export interface PaymentAmount {
+  amountMinor: number;
+  currencyCode: string;
+  currencyMinorUnit: number;
+}
+
+/** One method of a payer country, and whether it can be used right now. */
+export interface PaymentOption {
+  code: PaymentMethodCode;
+  label: string;
+  group: 'RECOMMENDED' | 'MOBILE_MONEY' | 'CARD_WALLET' | 'BANK' | 'AGENCY';
+  available: boolean;
+}
+
+/** GET bookings/:reference/payment-options: nothing about providers or routing. */
+export interface PaymentOptions {
+  country: PayerCountryCode;
+  currency: string;
+  currencyMinorUnit: number;
+  methods: PaymentOption[];
+}
+
+/** The customer's intentions; the server computes every amount and the rate. */
+export interface PaymentQuoteInput {
+  payerCountry: PayerCountryCode;
+  paymentMethod: PaymentMethodCode;
+}
+
 /**
- * A payment attempt of the signed-in customer. The amount is derived by the
- * server from the booking (exact integer, minor units); no provider id,
- * failure detail, signature or card data is ever exposed.
+ * An immutable quote: the booking amount, the amount the payer will be asked
+ * for in their currency, the exact rate and the validity. A new price is a
+ * new quote; a quote takes no money and confirms nothing.
+ */
+export interface PaymentQuote {
+  id: string;
+  paymentMethod: PaymentMethodCode;
+  payerCountry: PayerCountryCode;
+  booking: PaymentAmount;
+  presentment: PaymentAmount;
+  /** Exact decimal string (booking major unit -> presentment major unit). */
+  fxRate: string;
+  fxSource:
+    'FX_IDENTITY' | 'FX_SYNTHETIC_CI' | 'FX_MANUAL_OPS' | 'FX_PROVIDER' | 'FX_EXTERNAL_SERVICE';
+  quotedAt: string;
+  expiresAt: string;
+}
+
+/** Which quote to pay, and its method confirmed: never an amount. */
+export interface CreatePaymentInput {
+  quoteId: string;
+  paymentMethod: PaymentMethodCode;
+}
+
+/**
+ * A payment attempt of the signed-in customer. amountMinor is the booking
+ * amount, derived by the server (exact integer, minor units); presentment is
+ * what the payer was asked for (null for attempts made before PAY-HUB-1). No
+ * provider id, failure detail, signature or card data is ever exposed.
  */
 export interface CustomerPayment {
   reference: string;
@@ -864,6 +971,9 @@ export interface CustomerPayment {
   amountMinor: number;
   currencyCode: string;
   currencyMinorUnit: number;
+  paymentMethod: PaymentMethodCode | null;
+  payerCountry: PayerCountryCode | null;
+  presentment: PaymentAmount | null;
   createdAt: string;
   succeededAt: string | null;
   failedAt: string | null;
@@ -873,10 +983,11 @@ export interface CustomerPayment {
 /**
  * A started attempt. SANDBOX (development, tests, CI only) collects nothing in
  * the browser: no redirect, no card; the result arrives as a provider event.
+ * A redirect, when a provider has one, never confirms anything by itself.
  */
 export interface CreatePaymentResult {
   payment: CustomerPayment;
-  checkout: { provider: 'SANDBOX'; testMode: boolean; redirectUrl: string | null };
+  checkout: { provider: PaymentProviderCode; testMode: boolean; redirectUrl: string | null };
 }
 
 /** Normalized failure codes (never raw provider text). */
@@ -952,11 +1063,19 @@ export interface AdminBooking extends Omit<CustomerBooking, 'seats' | 'payment'>
 /** STAFF view of a payment attempt (payment.read). */
 export interface AdminPayment extends CustomerPayment {
   id: string;
-  provider: 'SANDBOX';
+  provider: PaymentProviderCode;
   /** The provider's opaque id, for reconciliation (not a secret). */
   providerPaymentId: string | null;
   booking: { id: string; reference: string; status: CustomerBookingStatus };
   customerIdentityId: string;
+  /** The quote the attempt was started from (null before PAY-HUB-1). */
+  quote: {
+    id: string;
+    fxRate: string;
+    fxSource: PaymentQuote['fxSource'];
+    quotedAt: string;
+    expiresAt: string;
+  } | null;
   failureCode: PaymentFailureCode | null;
 }
 
@@ -984,6 +1103,14 @@ export interface AdminPaymentListOptions {
   status?: PaymentStatus;
   bookingReference?: string;
   paymentReference?: string;
+  provider?: PaymentProviderCode;
+  method?: PaymentMethodCode;
+  payerCountry?: PayerCountryCode;
+  /** Presentment currency. */
+  currency?: 'EUR' | 'XOF' | 'MAD' | 'MRU';
+  /** ISO 8601 with offset. */
+  createdFrom?: string;
+  createdTo?: string;
 }
 
 export type FinanceRevenueType = 'BAGGAGE' | 'OPTION' | 'OTHER';
@@ -2980,16 +3107,30 @@ export function createAuthClient(baseUrl: string) {
             'customer',
             `/v1/booking/bookings/${encodeURIComponent(reference)}/cancel`,
           ),
+        /** PAY-HUB-1: the methods of a payer country for this booking. */
+        paymentOptions: (reference: string, payerCountry: PayerCountryCode) =>
+          call<PaymentOptions>(
+            'GET',
+            `/v1/booking/bookings/${encodeURIComponent(reference)}/payment-options?${query({ payerCountry })}`,
+          ),
+        /** PAY-HUB-1: an immutable quote of the amount to pay; takes no money. */
+        createPaymentQuote: (reference: string, input: PaymentQuoteInput) =>
+          withCsrf<PaymentQuote>(
+            'customer',
+            `/v1/booking/bookings/${encodeURIComponent(reference)}/payment-quotes`,
+            input,
+          ),
         /**
-         * Starts a payment attempt for a HELD booking (PR-10). Reuse the same
-         * idempotency key when retrying the same intent: the API then returns
-         * the same attempt instead of creating another one.
+         * Starts a payment attempt for a HELD booking from one of its quotes.
+         * Reuse the same idempotency key (and the same quote) when retrying
+         * the same intent: the API then returns the same attempt instead of
+         * creating another one.
          */
-        createPayment: (reference: string, idempotencyKey?: string) =>
+        createPayment: (reference: string, input: CreatePaymentInput, idempotencyKey?: string) =>
           withCsrf<CreatePaymentResult>(
             'customer',
             `/v1/booking/bookings/${encodeURIComponent(reference)}/payments`,
-            {},
+            input,
             idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
           ),
         listPayments: (reference: string) =>
@@ -3512,6 +3653,12 @@ export function createAuthClient(baseUrl: string) {
               status: options.status,
               bookingReference: options.bookingReference,
               paymentReference: options.paymentReference,
+              provider: options.provider,
+              method: options.method,
+              payerCountry: options.payerCountry,
+              currency: options.currency,
+              createdFrom: options.createdFrom,
+              createdTo: options.createdTo,
             })}`,
           ),
         getPayment: (paymentId: string) =>

@@ -20,7 +20,7 @@ import { complianceApi } from '../../support/compliance-helpers.js';
 import { uploadDocument } from '../../support/passenger-document-helpers.js';
 import { paymentApi, settle } from '../../support/payment-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
-import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
+import { CURRENT_MIGRATIONS, historical, withoutPaymentHub } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -125,8 +125,13 @@ describe('upgrade from a real PR-12 database', () => {
     workDir = mkdtempSync(join(tmpdir(), 'et-pr12-upgrade-'));
     storageRoot = mkdtempSync(join(tmpdir(), 'et-pr12-documents-'));
     const pr12 = join(workDir, 'migrations');
+    // PAY-HUB-1 belongs to this history only because it is built through
+    // today's API (which starts no payment without a quote): here it runs
+    // before the later migrations, an order production never sees. The real
+    // order, every migration then PAY-HUB-1 on PR-10 payments, is measured
+    // by payments/upgrade-from-pr10-payments.int.spec.ts.
     for (const entry of readdirSync(MIGRATIONS)) {
-      if (entry <= COMPLIANCE_MIGRATION) {
+      if (historical(entry, COMPLIANCE_MIGRATION)) {
         cpSync(join(MIGRATIONS, entry), join(pr12, entry), { recursive: true });
       }
     }
@@ -141,7 +146,7 @@ describe('upgrade from a real PR-12 database', () => {
     );
     deploy(config, url);
     raw = createDatabaseClient({ databaseUrl: url });
-    expect(await applied()).toHaveLength(12);
+    expect(withoutPaymentHub(await applied())).toHaveLength(12);
 
     env = integrationEnv({ DATABASE_URL: url, OBJECT_STORAGE_LOCAL_ROOT: storageRoot });
     t = await startTestApp(env);
@@ -181,8 +186,8 @@ describe('upgrade from a real PR-12 database', () => {
     const cancelled = await bookingApi(customer).post('/bookings', holdBody(fixture, 2, 4, ['2B']));
     await bookingApi(customer).post(`/bookings/${cancelled.body.reference}/cancel`);
 
-    expect(await applied()).toHaveLength(12);
-    expect((await applied()).at(-1)).toBe(COMPLIANCE_MIGRATION);
+    expect(withoutPaymentHub(await applied())).toHaveLength(12);
+    expect(withoutPaymentHub(await applied()).at(-1)).toBe(COMPLIANCE_MIGRATION);
     expect(
       (
         await raw.$queryRawUnsafe<Array<{ status: string }>>(
@@ -200,7 +205,7 @@ describe('upgrade from a real PR-12 database', () => {
     // and any later additive migration).
     const pr13 = join(workDir, 'migrations-pr13');
     for (const entry of readdirSync(MIGRATIONS)) {
-      if (entry <= BAGGAGE_MIGRATION) {
+      if (historical(entry, BAGGAGE_MIGRATION)) {
         cpSync(join(MIGRATIONS, entry), join(pr13, entry), { recursive: true });
       }
     }
@@ -233,8 +238,8 @@ describe('upgrade from a real PR-12 database', () => {
   });
 
   it('applies only PR-13, preserves every populated historical row and backfills nothing', async () => {
-    expect(afterBaggage.applied).toHaveLength(13);
-    expect(afterBaggage.applied.at(-1)).toBe(BAGGAGE_MIGRATION);
+    expect(withoutPaymentHub(afterBaggage.applied)).toHaveLength(13);
+    expect(withoutPaymentHub(afterBaggage.applied).at(-1)).toBe(BAGGAGE_MIGRATION);
     expect(afterBaggage.snapshot).toEqual(before);
     expect(afterBaggage.counts).toEqual([0, 0]);
     // Still true once the later migrations are applied.

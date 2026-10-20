@@ -2,10 +2,10 @@ import type { ApiEnv } from '@euroteranga/config';
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
-  PAYMENT_PROVIDER,
   type PaymentProvider,
   type ProviderPaymentRequest,
 } from '../../../src/payments/providers/payment-provider.js';
+import { PaymentCapabilityRegistry } from '../../../src/payments/payment-capability.registry.js';
 import { adminApi, isolatedDatabase, staffActor } from '../../support/admin-helpers.js';
 import { db, withoutRequestId } from '../../support/auth-helpers.js';
 import {
@@ -48,7 +48,7 @@ describe('customer payments and booking confirmation (isolated database)', () =>
     database = await isolatedDatabase();
     env = integrationEnv({ DATABASE_URL: database.url, BOOKING_HOLD_TTL_SECONDS: '900' });
     t = await startTestApp(env);
-    provider = t.app.get<PaymentProvider>(PAYMENT_PROVIDER);
+    provider = t.app.get(PaymentCapabilityRegistry).provider('SANDBOX')!;
     countryId = await syntheticCountry(t.app);
     [alice, bob] = await Promise.all([customerActor(t.app), customerActor(t.app)]);
   });
@@ -202,6 +202,10 @@ describe('customer payments and booking confirmation (isolated database)', () =>
           amountMinor: 24_690,
           currencyCode: 'EUR',
           currencyMinorUnit: 2,
+          // PAY-HUB-1: the method and the amount presented to the payer.
+          paymentMethod: 'CARD_CB',
+          payerCountry: 'FR',
+          presentment: { amountMinor: 24_690, currencyCode: 'EUR', currencyMinorUnit: 2 },
           createdAt: expect.any(String),
           succeededAt: null,
           failedAt: null,

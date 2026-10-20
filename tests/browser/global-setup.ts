@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { createDatabaseClient } from '@euroteranga/database';
+import { createDatabaseClient, type DatabaseTransaction } from '@euroteranga/database';
 import { hash } from '@node-rs/argon2';
 import { contentSeed, homeSeed, pagesSeed } from './content-seed.js';
 import {
@@ -545,6 +545,7 @@ async function seedPaymentData(db: ReturnType<typeof createDatabaseClient>): Pro
         reference: seed.paymentReference,
         bookingId: held.id,
         customerIdentityId: customer.id,
+        quoteId: await identityQuote(tx, held.id, BigInt(seed.unitAmountMinor), now),
         provider: 'SANDBOX',
         providerPaymentId: `sbx_e2e_${seed.run.toLowerCase()}`,
         amountMinor: BigInt(seed.unitAmountMinor),
@@ -570,6 +571,38 @@ async function seedPaymentData(db: ReturnType<typeof createDatabaseClient>): Pro
     });
     await tx.booking.update({ where: { id: held.id }, data: { confirmedAt: now } });
   });
+}
+
+/**
+ * PAY-HUB-1: every attempt starts from a quote. The synthetic e2e bookings
+ * are in euros and paid from France by card: an identity quote, no rate.
+ */
+async function identityQuote(
+  tx: DatabaseTransaction,
+  bookingId: string,
+  amountMinor: bigint,
+  now: Date,
+): Promise<string> {
+  const quote = await tx.paymentQuote.create({
+    data: {
+      bookingId,
+      bookingAmountMinor: amountMinor,
+      bookingCurrencyCode: 'EUR',
+      bookingCurrencyMinorUnit: 2,
+      presentmentAmountMinor: amountMinor,
+      presentmentCurrencyCode: 'EUR',
+      presentmentCurrencyMinorUnit: 2,
+      fxRate: '1',
+      fxSource: 'FX_IDENTITY',
+      quotedAt: now,
+      expiresAt: new Date(now.getTime() + 10 * 60_000),
+      payerCountry: 'FR',
+      paymentMethod: 'CARD_CB',
+      providerCandidate: 'SANDBOX',
+    },
+    select: { id: true },
+  });
+  return quote.id;
 }
 
 /**
@@ -717,6 +750,12 @@ async function seedConfirmedBooking(
         reference: seed.paymentReference,
         bookingId: held.id,
         customerIdentityId: customer.id,
+        quoteId: await identityQuote(
+          tx,
+          held.id,
+          BigInt(fare.amountMinor) * BigInt(cells.length),
+          now,
+        ),
         provider: 'SANDBOX',
         providerPaymentId: `sbx_e2e_${seed.tag}_${seed.run.toLowerCase()}`,
         amountMinor: BigInt(fare.amountMinor) * BigInt(cells.length),

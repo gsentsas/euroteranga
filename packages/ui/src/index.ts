@@ -8,6 +8,12 @@ export {
   TextField,
   useFormSubmit,
 } from './forms.js';
+export {
+  PaymentChoice,
+  type PaymentChoiceMethod,
+  type PaymentChoiceProps,
+  type PaymentChoiceQuote,
+} from './payment-choice.js';
 export { SessionPanel, type SessionPanelData, type SessionPanelProps } from './session-panel.js';
 
 export { JourneyShell, type JourneyShellProps } from './journey-shell.js';

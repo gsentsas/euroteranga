@@ -7,9 +7,10 @@ import {
 } from '@euroteranga/auth-client';
 import { FormAlert, FormStatus } from '@euroteranga/ui';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { auth } from '../lib/auth';
 import { paymentTestEnvironment } from '../lib/env';
+import { CustomerPaymentChoice } from './customer-payment-choice';
 
 const STATUS_LABELS: Record<CustomerBookingStatus, string> = {
   HELD: 'Provisoire',
@@ -44,8 +45,9 @@ function stopName(booking: CustomerBooking, end: 'origin' | 'destination'): stri
 
 /**
  * CUSTOMER-owned bookings only; ownership and every mutation are checked
- * again by the API. A HELD booking can be paid (the amount comes from the
- * server; no card or bank data is ever asked here); a CONFIRMED one shows
+ * again by the API. A HELD booking can be paid (the payer chooses a country
+ * and a method, the server quotes the amount; no card or bank data is ever
+ * asked here); a CONFIRMED one shows
  * its payment and can no longer be cancelled online (no refund yet).
  */
 export function CustomerBookings() {
@@ -54,8 +56,6 @@ export function CustomerBookings() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyReference, setBusyReference] = useState<string | null>(null);
-  // Idempotency keys of payment intents, in memory only, by booking reference.
-  const intents = useRef(new Map<string, string>());
 
   const load = useCallback(async () => {
     setError(null);
@@ -79,28 +79,14 @@ export function CustomerBookings() {
     return () => window.clearInterval(timer);
   }, [load, pending]);
 
-  const pay = async (reference: string) => {
-    setBusyReference(reference);
-    setError(null);
-    setNotice(null);
-    const key = intents.current.get(reference) ?? crypto.randomUUID();
-    intents.current.set(reference, key);
-    try {
-      const result = await auth.booking.customer.createPayment(reference, key);
-      // The same key only retries a request that may not have reached the API.
-      if (result.ok || result.error.status !== 0) intents.current.delete(reference);
-      if (!result.ok) {
-        setError(result.error.message);
-        return;
-      }
+  /** An attempt was started from a quote: show it PENDING until the provider answers. */
+  const started = useCallback(
+    async (paymentReference: string) => {
       await load();
-      setNotice(
-        `Paiement ${result.data.payment.reference} en attente de confirmation par le prestataire.`,
-      );
-    } finally {
-      setBusyReference(null);
-    }
-  };
+      setNotice(`Paiement ${paymentReference} en attente de confirmation par le prestataire.`);
+    },
+    [load],
+  );
 
   const cancelPayment = async (paymentReference: string, bookingReference: string) => {
     setBusyReference(bookingReference);
@@ -224,11 +210,22 @@ export function CustomerBookings() {
                       <dt>Montant payé</dt>
                       <dd data-testid={`paid-amount-${booking.reference}`}>
                         <strong>
-                          {formatMoney(
-                            payment.amountMinor,
-                            booking.currencyCode,
-                            booking.currencyMinorUnit,
-                          )}
+                          {payment.presentment &&
+                          payment.presentment.currencyCode !== booking.currencyCode
+                            ? `${formatMoney(
+                                payment.presentment.amountMinor,
+                                payment.presentment.currencyCode,
+                                payment.presentment.currencyMinorUnit,
+                              )} (soit ${formatMoney(
+                                payment.amountMinor,
+                                booking.currencyCode,
+                                booking.currencyMinorUnit,
+                              )})`
+                            : formatMoney(
+                                payment.amountMinor,
+                                booking.currencyCode,
+                                booking.currencyMinorUnit,
+                              )}
                         </strong>
                       </dd>
                       <dt>Référence du paiement</dt>
@@ -272,15 +269,13 @@ export function CustomerBookings() {
                         Annuler la tentative de paiement {payment.reference}
                       </button>
                     ) : (
-                      <button
-                        type="button"
-                        className="et-button"
-                        disabled={busyReference === booking.reference}
-                        aria-label={`Continuer vers le paiement de ${booking.reference}`}
-                        onClick={() => void pay(booking.reference)}
-                      >
-                        Continuer vers le paiement
-                      </button>
+                      <CustomerPaymentChoice
+                        booking={booking}
+                        busy={busyReference === booking.reference}
+                        onBusy={(busy) => setBusyReference(busy ? booking.reference : null)}
+                        onStarted={started}
+                        onError={setError}
+                      />
                     )}
                     <button
                       type="button"

@@ -14,7 +14,7 @@ import {
 } from '../../support/booking-helpers.js';
 import { paymentApi, settle } from '../../support/payment-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
-import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
+import { CURRENT_MIGRATIONS, historical, withoutPaymentHub } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -66,8 +66,13 @@ describe('upgrade from a real PR-21 database', () => {
 
     workDir = mkdtempSync(join(tmpdir(), 'et-pr21-upgrade-'));
     const historicalMigrations = join(workDir, 'migrations');
+    // PAY-HUB-1 belongs to this history only because it is built through
+    // today's API (which starts no payment without a quote): here it runs
+    // before the later migrations, an order production never sees. The real
+    // order, every migration then PAY-HUB-1 on PR-10 payments, is measured
+    // by payments/upgrade-from-pr10-payments.int.spec.ts.
     for (const entry of readdirSync(MIGRATIONS)) {
-      if (entry <= PR21_MIGRATION) {
+      if (historical(entry, PR21_MIGRATION)) {
         cpSync(join(MIGRATIONS, entry), join(historicalMigrations, entry), { recursive: true });
       }
     }
@@ -86,8 +91,8 @@ describe('upgrade from a real PR-21 database', () => {
     deploy(config, url);
 
     raw = createDatabaseClient({ databaseUrl: url });
-    expect(await applied()).toHaveLength(21);
-    expect((await applied()).at(-1)).toBe(PR21_MIGRATION);
+    expect(withoutPaymentHub(await applied())).toHaveLength(21);
+    expect(withoutPaymentHub(await applied()).at(-1)).toBe(PR21_MIGRATION);
 
     const before = await raw.$queryRawUnsafe<
       Array<{ revenue: string | null; refund: string | null }>

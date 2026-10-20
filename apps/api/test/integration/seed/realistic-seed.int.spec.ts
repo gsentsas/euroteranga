@@ -12,6 +12,7 @@ import { IncidentService } from '../../../src/incidents/incident.service.js';
 import { NetworkService } from '../../../src/network/network.service.js';
 import { PassengerDocumentService } from '../../../src/passenger-documents/passenger-document.service.js';
 import { PaymentService } from '../../../src/payments/payment.service.js';
+import { PaymentQuoteService } from '../../../src/payments/payment-quote.service.js';
 import { PaymentWebhookService } from '../../../src/payments/payment-webhook.service.js';
 import { PricingService } from '../../../src/pricing/pricing.service.js';
 import { SeatMapService } from '../../../src/seat-maps/seat-map.service.js';
@@ -63,6 +64,7 @@ async function harness(): Promise<Harness> {
         publicBooking: t.app.get(PublicBookingService),
         passengers: t.app.get(PassengerDocumentService),
         payments: t.app.get(PaymentService),
+        quotes: t.app.get(PaymentQuoteService),
         webhooks: t.app.get(PaymentWebhookService),
       },
       operations:
@@ -702,9 +704,15 @@ describe('realistic seed: a real customer is never touched (isolated database)',
       },
       actor,
     );
+    const quote = await h.t.app
+      .get(PaymentQuoteService)
+      .create(actor, booking.reference, { payerCountry: 'FR', paymentMethod: 'CARD_CB' });
     const payment = await h.t.app
       .get(PaymentService)
-      .create(actor, booking.reference, 'test-payment-real-customer-01');
+      .create(actor, booking.reference, 'test-payment-real-customer-01', {
+        quoteId: quote.id,
+        paymentMethod: 'CARD_CB',
+      });
     const row = await client.payment.findUniqueOrThrow({
       where: { reference: payment.result.payment.reference },
     });

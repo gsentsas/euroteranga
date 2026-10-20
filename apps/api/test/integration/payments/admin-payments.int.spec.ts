@@ -81,6 +81,17 @@ describe('admin payments', () => {
         amountMinor: 7_500,
         currencyCode: 'EUR',
         currencyMinorUnit: 2,
+        // PAY-HUB-1: the quote the attempt was started from (an identity quote).
+        paymentMethod: 'CARD_CB',
+        payerCountry: 'FR',
+        presentment: { amountMinor: 7_500, currencyCode: 'EUR', currencyMinorUnit: 2 },
+        quote: {
+          id: expect.any(String),
+          fxRate: '1',
+          fxSource: 'FX_IDENTITY',
+          quotedAt: expect.any(String),
+          expiresAt: expect.any(String),
+        },
         failureCode: null,
         createdAt: expect.any(String),
         succeededAt: expect.any(String),

@@ -6,6 +6,8 @@ import {
   SandboxPaymentProvider,
   signSandboxPayload,
 } from '../../../src/payments/providers/sandbox-payment.provider.js';
+import { declaredCapability } from '../../../src/payments/payment-capability.registry.js';
+import { PAYMENT_METHOD_CODES } from '../../../src/payments/payment-catalog.js';
 
 const timingSafeEqual = vi.hoisted(() => vi.fn());
 vi.mock('node:crypto', async (importOriginal) => {
@@ -55,14 +57,46 @@ const codeOf = (fn: () => unknown): [number, string] => {
 };
 
 describe('SANDBOX provider', () => {
+  it('declares every method, country and currency of the catalogue, as a test-only adapter', () => {
+    expect(provider.capability).toEqual(declaredCapability('SANDBOX'));
+    expect(provider.capability).toMatchObject({
+      providerCode: 'SANDBOX',
+      testMode: true,
+      active: true,
+      requiresRedirect: false,
+      supportedCurrencies: ['EUR', 'XOF', 'MAD', 'MRU'],
+      payerCountries: ['FR', 'ES', 'MA', 'MR', 'SN'],
+    });
+    expect(provider.capability.supportedMethods).toEqual([...PAYMENT_METHOD_CODES]);
+    expect(provider.testMode).toBe(true);
+  });
+
+  it('keys the attempt on the payment reference alone, whatever the presented amount', async () => {
+    const base = {
+      paymentReference: 'ETP-000000000002',
+      bookingReference: 'ETB-000000000002',
+      paymentMethod: 'WAVE_SN',
+      payerCountry: 'SN',
+      presentmentAmountMinor: 163_333n,
+      presentmentCurrencyCode: 'XOF',
+      presentmentCurrencyMinorUnit: 0,
+    } as const;
+    const first = await provider.createPayment(base);
+    const again = await provider.createPayment({ ...base, presentmentAmountMinor: 1n });
+    expect(again.providerPaymentId).toBe(first.providerPaymentId);
+    expect(first.redirectUrl).toBeNull();
+  });
+
   it('creates an idempotent opaque attempt and collects nothing (no redirect, no card data)', async () => {
     const request = {
       paymentReference: 'ETP-000000000000',
       bookingReference: 'ETB-000000000000',
-      amountMinor: 24_690n,
-      currencyCode: 'EUR',
-      currencyMinorUnit: 2,
-    };
+      paymentMethod: 'CARD_CB',
+      payerCountry: 'FR',
+      presentmentAmountMinor: 24_690n,
+      presentmentCurrencyCode: 'EUR',
+      presentmentCurrencyMinorUnit: 2,
+    } as const;
     const checkout = await provider.createPayment(request);
     const replay = await provider.createPayment(request);
     const other = await provider.createPayment({

@@ -1,4 +1,5 @@
 import type { PaymentFailureCode } from '../payment-rules.js';
+import type { PayerCountry, PaymentMethodCode, PaymentProviderCode } from '../payment-catalog.js';
 
 /**
  * Provider abstraction (ADR-027). The business service only talks to this
@@ -6,15 +7,42 @@ import type { PaymentFailureCode } from '../payment-rules.js';
  * always arrive as authenticated provider events through the webhook
  * pipeline, never as an immediate success returned to the service.
  */
-export type PaymentProviderName = 'SANDBOX';
+export type PaymentProviderName = PaymentProviderCode;
 
+export interface ProviderCapability {
+  providerCode: PaymentProviderCode;
+  supportedMethods: readonly PaymentMethodCode[];
+  payerCountries: readonly PayerCountry[];
+  supportedCurrencies: readonly string[];
+  testMode: boolean;
+  refundCapabilities: 'NONE' | 'FULL' | 'FULL_AND_PARTIAL';
+  partialRefundCapabilities: boolean;
+  webhookCapabilities: readonly ('SIGNED_EVENTS' | 'REPLAY_PROTECTION' | 'TIMESTAMP_CHECK')[];
+  instantConfirmation: boolean;
+  requiresRedirect: boolean;
+  requiresPhone: boolean;
+  requiresMerchantEntityCountry: readonly PayerCountry[];
+  /** Lower is preferred; it is strictly internal and never returned as a payment option. */
+  priority: number;
+  /** Runtime switch. A configured adapter is still unroutable while inactive. */
+  active: boolean;
+}
+
+/**
+ * What a provider needs to collect one attempt, and nothing more: never a
+ * password, session, PIN, OTP, card number or security code (the provider
+ * collects those itself, on its own pages or apps). The amount is the
+ * presentment amount of the immutable quote, the one the payer was shown.
+ */
 export interface ProviderPaymentRequest {
   /** Our public payment reference, the provider-side idempotency key. */
   paymentReference: string;
   bookingReference: string;
-  amountMinor: bigint;
-  currencyCode: string;
-  currencyMinorUnit: number;
+  paymentMethod: PaymentMethodCode;
+  payerCountry: PayerCountry;
+  presentmentAmountMinor: bigint;
+  presentmentCurrencyCode: string;
+  presentmentCurrencyMinorUnit: number;
 }
 
 export interface ProviderCheckout {
@@ -31,7 +59,11 @@ export interface ProviderWebhookRequest {
   header: (name: string) => string | undefined;
 }
 
-/** A provider event, normalized (our types and codes, never provider text). */
+/**
+ * A provider event, normalized (our types and codes, never provider text).
+ * amountMinor and currencyCode are what the provider collected: they are
+ * compared with the quote's presentment amount.
+ */
 export interface ProviderEvent {
   providerEventId: string;
   type: 'PAYMENT_SUCCEEDED' | 'PAYMENT_FAILED';
@@ -48,6 +80,7 @@ export interface PaymentProvider {
   readonly name: PaymentProviderName;
   /** True for providers that move no real money (SANDBOX). */
   readonly testMode: boolean;
+  readonly capability: ProviderCapability;
   /**
    * Registers an attempt at the provider after the PENDING Payment has been
    * committed. paymentReference is a mandatory provider-side idempotency key:
@@ -64,5 +97,5 @@ export interface PaymentProvider {
   parseWebhook(rawBody: Buffer): ProviderEvent;
 }
 
-/** Nest injection token of the configured provider (null when DISABLED). */
-export const PAYMENT_PROVIDER = Symbol('PAYMENT_PROVIDER');
+/** Nest injection token of every configured adapter (empty when DISABLED). */
+export const PAYMENT_PROVIDERS = Symbol('PAYMENT_PROVIDERS');

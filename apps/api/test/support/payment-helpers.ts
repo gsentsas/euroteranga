@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { decodeSecretKey, type ApiEnv } from '@euroteranga/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
@@ -8,18 +8,85 @@ import type { BookableFixture, CustomerActor } from './booking-helpers.js';
 
 export const WEBHOOK_PATH = '/v1/payments/webhooks/sandbox';
 
+/**
+ * The payer each booking currency is quoted for, without conversion: the
+ * PR-10 tests keep paying the booking amount (an identity quote).
+ */
+export const IDENTITY_PAYER: Readonly<
+  Record<string, { payerCountry: string; paymentMethod: string }>
+> = {
+  EUR: { payerCountry: 'FR', paymentMethod: 'CARD_CB' },
+  XOF: { payerCountry: 'SN', paymentMethod: 'WAVE_SN' },
+  MAD: { payerCountry: 'MA', paymentMethod: 'CMI_CARD' },
+  MRU: { payerCountry: 'MR', paymentMethod: 'BANKILY_MR' },
+};
+
+/**
+ * Request body sent with each Idempotency-Key: a replay, even a concurrent
+ * one, sends the very same request (the same quote).
+ */
+const bodiesByKey = new Map<string, Promise<unknown>>();
+
 /** Customer payment calls (session cookie, customer origin, CSRF on POST). */
 export function paymentApi(actor: CustomerActor) {
+  const quote = async (
+    bookingReference: string,
+    body: unknown,
+    options: { csrf?: string | null } = {},
+  ) => {
+    const csrf = options.csrf === undefined ? await actor.csrf() : options.csrf;
+    return actor.http.post(
+      `/v1/booking/bookings/${bookingReference}/payment-quotes`,
+      body,
+      actor.cookie,
+      csrf ?? undefined,
+    );
+  };
+  /**
+   * The default payment request: a fresh identity quote of the booking. When
+   * no quote can be made (an expired or cancelled hold, payments disabled),
+   * an unknown quote id lets the payment endpoint give its own answer.
+   */
+  const defaultBody = async (bookingReference: string) => {
+    const booking = await actor.http.get(`/v1/booking/bookings/${bookingReference}`, actor.cookie);
+    const payer = IDENTITY_PAYER[(booking.body as { currencyCode?: string }).currencyCode ?? 'EUR'];
+    const intent = payer ?? IDENTITY_PAYER.EUR!;
+    const quoted = await quote(bookingReference, intent);
+    return {
+      quoteId: quoted.status === 201 ? (quoted.body.id as string) : randomUUID(),
+      paymentMethod: intent.paymentMethod,
+    };
+  };
   return {
+    options: (bookingReference: string, payerCountry: string) =>
+      actor.http.get(
+        `/v1/booking/bookings/${bookingReference}/payment-options?payerCountry=${payerCountry}`,
+        actor.cookie,
+      ),
+    quote,
+    /** A ready-to-send payment request (a fresh identity quote), e.g. before a forced race. */
+    paymentBody: defaultBody,
     create: async (
       bookingReference: string,
       options: { key?: string; csrf?: string | null; body?: unknown } = {},
     ) => {
+      const slot = options.key ? `${actor.id}:${options.key}` : null;
+      let request: Promise<unknown>;
+      if (options.body !== undefined) {
+        request = Promise.resolve(options.body);
+        if (slot) bodiesByKey.set(slot, request);
+      } else if (slot) {
+        request = bodiesByKey.get(slot) ?? defaultBody(bookingReference);
+        bodiesByKey.set(slot, request);
+      } else {
+        request = defaultBody(bookingReference);
+      }
+      const body = await request;
       const csrf = options.csrf === undefined ? await actor.csrf() : options.csrf;
       return actor.http
         .post(
           `/v1/booking/bookings/${bookingReference}/payments`,
-          options.body ?? {},
+          body,
           actor.cookie,
           csrf ?? undefined,
         )
@@ -37,6 +104,51 @@ export function paymentApi(actor: CustomerActor) {
       );
     },
   };
+}
+
+/**
+ * An identity quote of a booking written directly (no API in front), as a
+ * payment test needs one for every new attempt. Throws when the booking can
+ * no longer be quoted (payment_quote_guard).
+ */
+export async function insertIdentityQuote(
+  client: ReturnType<typeof db>,
+  bookingId: string,
+  options: { expiresAt?: Date } = {},
+): Promise<{ id: string; paymentMethod: string }> {
+  const booking = await client.booking.findUniqueOrThrow({
+    where: { id: bookingId },
+    select: {
+      unitAmountMinor: true,
+      currencyCode: true,
+      currencyMinorUnit: true,
+      holdExpiresAt: true,
+      _count: { select: { seats: true } },
+    },
+  });
+  const payer = IDENTITY_PAYER[booking.currencyCode] ?? IDENTITY_PAYER.EUR!;
+  const amount = BigInt(booking.unitAmountMinor) * BigInt(booking._count.seats);
+  const quotedAt = new Date();
+  const ttl = new Date(quotedAt.getTime() + 10 * 60_000);
+  return client.paymentQuote.create({
+    data: {
+      bookingId,
+      bookingAmountMinor: amount,
+      bookingCurrencyCode: booking.currencyCode,
+      bookingCurrencyMinorUnit: booking.currencyMinorUnit,
+      presentmentAmountMinor: amount,
+      presentmentCurrencyCode: booking.currencyCode,
+      presentmentCurrencyMinorUnit: booking.currencyMinorUnit,
+      fxRate: '1',
+      fxSource: 'FX_IDENTITY',
+      quotedAt,
+      expiresAt: options.expiresAt ?? (ttl < booking.holdExpiresAt ? ttl : booking.holdExpiresAt),
+      payerCountry: payer.payerCountry,
+      paymentMethod: payer.paymentMethod as 'CARD_CB',
+      providerCandidate: 'SANDBOX',
+    },
+    select: { id: true, paymentMethod: true },
+  });
 }
 
 /** Fresh client idempotency key (as a browser would generate). */
