@@ -1233,7 +1233,7 @@ describe('admin client', () => {
       amountMinor: 6_000_000_000,
       currencyCode: 'EUR',
       currencyMinorUnit: 2,
-      paymentMethod: 'CARD_CB',
+      paymentMethod: 'CARD',
       payerCountry: 'FR',
       presentment: { amountMinor: 6_000_000_000, currencyCode: 'EUR', currencyMinorUnit: 2 },
       createdAt: '2030-01-01T00:00:00.000Z',
@@ -1243,7 +1243,7 @@ describe('admin client', () => {
     };
     const intent = {
       quoteId: '01900000-0000-7000-8000-000000000001',
-      paymentMethod: 'CARD_CB',
+      paymentMethod: 'CARD',
     } as const;
     const calls = mockFetch([
       { status: 200, body: { csrfToken: 'c' } },

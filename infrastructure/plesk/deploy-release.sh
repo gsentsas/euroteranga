@@ -24,11 +24,9 @@ set -a
 . "$API_ENV"
 . "$PUBLIC_ENV"
 set +a
-[ "${APP_ENV:-}" = "staging" ] || { echo "Pilot deploy expects APP_ENV=staging" >&2; exit 1; }
-[ "${PAYMENT_PROVIDER:-}" = "DISABLED" ] || {
-  echo "Pilot deploy expects PAYMENT_PROVIDER=DISABLED until a real PSP exists" >&2
-  exit 1
-}
+# APP_ENV=staging, PAYMENT_PROVIDER=DISABLED, Stripe DISABLED without credentials.
+. "$(dirname "${BASH_SOURCE[0]}")/pilot-env-guard.sh"
+pilot_env_guard || exit 1
 
 install -d -m 0750 -o "$APP_USER" -g psacln "$APP_ROOT/.deploy" "$RELEASES"
 install -d -m 0700 -o "$APP_USER" -g psacln "$BACKUPS"

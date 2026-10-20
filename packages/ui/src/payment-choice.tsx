@@ -6,6 +6,10 @@ export interface PaymentChoiceMethod {
   code: string;
   label: string;
   available: boolean;
+  /** Card networks accepted, as labels (badges of the card option, never choices). */
+  acceptedNetworks?: readonly string[];
+  /** A wallet the provider's page may add on an eligible device; never a promise. */
+  deviceWalletsHint?: string | null;
 }
 
 /** The quote shown before paying: what the payer will be asked for, until when. */
@@ -44,7 +48,8 @@ export interface PaymentChoiceProps {
  * PAY-HUB-1: the payer's country and method, then the exact amount in their
  * currency before anything starts. Methods nobody can collect right now are
  * listed but disabled: a method is never silently replaced by another one.
- * The component collects no card, account or phone data.
+ * A card option shows the networks its provider accepts (PAY-EU-1), as
+ * information only. The component collects no card, account or phone data.
  */
 export function PaymentChoice({
   bookingReference,
@@ -63,6 +68,7 @@ export function PaymentChoice({
 }: PaymentChoiceProps) {
   const id = useId();
   const anyAvailable = methods?.some((item) => item.available) ?? false;
+  const selected = methods?.find((item) => item.code === method);
   if (quote) {
     return (
       <div className="et-payment-choice" data-testid="payment-quote">
@@ -130,6 +136,16 @@ export function PaymentChoice({
           ))}
         </select>
       </div>
+      {selected?.available && selected.acceptedNetworks?.length ? (
+        <p className="et-hint" data-testid="payment-card-networks">
+          Cartes acceptées : {selected.acceptedNetworks.join(', ')}.
+        </p>
+      ) : null}
+      {selected?.available && selected.deviceWalletsHint ? (
+        <p className="et-hint" data-testid="payment-device-wallets">
+          {selected.deviceWalletsHint}
+        </p>
+      ) : null}
       {methods && !anyAvailable ? (
         <p className="et-hint">
           Aucun moyen de paiement n’est disponible pour ce pays pour le moment.

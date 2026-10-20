@@ -100,6 +100,22 @@ export class PaymentWebhookService {
     }
   }
 
+  /**
+   * The payload hash recorded for a provider event id, if any: tells a
+   * provider's redelivery of the very same event (acknowledged) from another
+   * payload reusing its id (refused).
+   */
+  async recordedPayloadHash(
+    provider: PaymentProviderName,
+    providerEventId: string,
+  ): Promise<string | null> {
+    const recorded = await this.database.client.paymentEvent.findUnique({
+      where: { provider_providerEventId: { provider, providerEventId } },
+      select: { payloadHash: true },
+    });
+    return recorded?.payloadHash ?? null;
+  }
+
   private async apply(
     tx: DatabaseTransaction,
     provider: PaymentProviderName,

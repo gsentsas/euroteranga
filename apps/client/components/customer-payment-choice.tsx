@@ -1,8 +1,10 @@
 'use client';
 
 import {
+  describePaymentOption,
   describePaymentQuote,
   PAYER_COUNTRY_OPTIONS,
+  paymentRedirectTarget,
   type CustomerBooking,
   type PayerCountryCode,
   type PaymentMethodCode,
@@ -94,6 +96,13 @@ export function CustomerPaymentChoice({
         return;
       }
       setQuote(null);
+      // A hosted provider page (Stripe Checkout): the browser goes there to
+      // pay. Coming back confirms nothing; the provider's signed event does.
+      const target = paymentRedirectTarget(result.data.checkout);
+      if (target) {
+        window.location.assign(target);
+        return;
+      }
       await onStarted(result.data.payment.reference);
     } finally {
       onBusy(false);
@@ -110,7 +119,7 @@ export function CustomerPaymentChoice({
         setCountry(code as PayerCountryCode);
         setQuote(null);
       }}
-      methods={methods}
+      methods={methods?.map((item) => ({ ...item, ...describePaymentOption(item) })) ?? null}
       method={method}
       onMethodChange={(code) => setMethod(code as PaymentMethodCode)}
       quote={quote ? describePaymentQuote(quote) : null}

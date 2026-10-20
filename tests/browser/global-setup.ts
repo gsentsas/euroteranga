@@ -597,7 +597,7 @@ async function identityQuote(
       quotedAt: now,
       expiresAt: new Date(now.getTime() + 10 * 60_000),
       payerCountry: 'FR',
-      paymentMethod: 'CARD_CB',
+      paymentMethod: 'CARD',
       providerCandidate: 'SANDBOX',
     },
     select: { id: true },

@@ -149,12 +149,12 @@ describe('payment hub database invariants (isolated database)', () => {
           fxRate: '1.5',
           fxSource: 'FX_IDENTITY',
           payerCountry: 'FR',
-          paymentMethod: 'CARD_CB',
+          paymentMethod: 'CARD',
         }),
       ),
     ).rejects.toThrow(/payment_quote_fx_identity|payment_quote_presentment_from_rate/);
     const identity = await insertIdentityQuote(prisma(), booking.id);
-    expect(identity.paymentMethod).toBe('CARD_CB');
+    expect(identity.paymentMethod).toBe('CARD');
 
     // Immutable and never deleted or truncated.
     await expect(

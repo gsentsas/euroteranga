@@ -1,107 +1,112 @@
-# Payment matrix (PAY-HUB-1)
+# Payment matrix (PAY-HUB-1, PAY-EU-1)
 
 What EURO TERANGA intends to offer each payer country, and how far each
 method really is. Four distinct facts, never to be confused:
 
-| Column      | Meaning                                                                                                                 |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------- |
-| SUPPORTED   | The method is in the catalogue (`payment-catalog.ts`) for that country: we intend to offer it.                          |
-| IMPLEMENTED | A provider adapter able to collect it exists in the code. PAY-HUB-1 only builds the foundation: no real adapter exists. |
-| CONFIGURED  | An adapter is wired in this environment, with its merchant account and secrets.                                         |
-| LIVE        | Configured, active and moving real money.                                                                               |
+| Column      | Meaning                                                                                        |
+| ----------- | ---------------------------------------------------------------------------------------------- |
+| SUPPORTED   | The method is in the catalogue (`payment-catalog.ts`) for that country: we intend to offer it. |
+| IMPLEMENTED | A real provider adapter in the code collects it there (SANDBOX, test-only, is not counted).    |
+| CONFIGURED  | An adapter is wired in this environment, with its merchant account and secrets.                |
+| LIVE        | Configured, active and moving real money.                                                      |
 
-Current state, for every row below: SUPPORTED = YES, IMPLEMENTED = foundation
-only (no adapter), CONFIGURED = NO, LIVE = NO. Production runs with
-`PAYMENT_PROVIDER=DISABLED`: no method is available there, and the payment
-options API says so (`available: false`).
+Current state: every row below is SUPPORTED; IMPLEMENTED is given per row
+(only **STRIPE**, since PAY-EU-1, for `CARD` in France and Spain, `BIZUM` in
+Spain and `KLARNA` in France and Spain); **CONFIGURED = NO and LIVE = NO
+everywhere**. Production and the pilot run with `PAYMENT_PROVIDER=DISABLED`
+and `PAYMENT_STRIPE_MODE=DISABLED`: no method is available there, and the
+payment options API says so (`available: false`).
 
-**SANDBOX** collects every method of every country, in local and CI only
-(refused by the configuration in staging and production). It is test-only:
-it moves no money and is never LIVE.
+**SANDBOX** collects every method of every country except the `ASYNC_LONG`
+ones, in local and CI only (refused by the configuration in staging and
+production). It is test-only: it moves no money and is never LIVE.
 
-"Declared providers" are the providers the capability registry
-(`payment-capability.registry.ts`) lists as able to collect the method in that
-country and currency, best first. They are **planning hypotheses**: each one
-must be checked against the provider's contract and documentation before its
-adapter PR (see [provider-onboarding.md](provider-onboarding.md)). A method
-with no declared provider still needs one to be chosen.
+- **Confirmation**: `INSTANT` (completed on the spot), `ASYNC_SHORT` (a result
+  within minutes, inside the hold), `ASYNC_LONG` (days: unavailable until a
+  booking policy exists, `ASYNC_SETTLEMENT_REQUIRES_BOOKING_POLICY`).
+- **Cards**: one `CARD` choice per country. Its accepted networks are badges
+  coming from the provider that would collect it (Stripe: CB, Visa,
+  Mastercard, American Express in France; Visa, Mastercard, American Express
+  in Spain). `CARD_CB`, `CARD_VISA`, `CARD_MASTERCARD` and `CARD_AMEX` remain
+  vocabulary only and are never offered.
+- **Declared providers** are those the capability registry
+  (`payment-capability.registry.ts`) lists for the method in that country and
+  currency, best first. Apart from STRIPE (checked against Stripe's
+  documentation, see [stripe-europe.md](stripe-europe.md)), they are
+  **planning hypotheses**, to be checked before their adapter PR
+  ([provider-onboarding.md](provider-onboarding.md)).
+- **Notes** give the documented reason when a provider able to offer a method
+  does not collect it for EURO TERANGA.
 
 The tables are generated from the catalogue and the registry; regenerate them
 when either changes.
 
 ### France (FR), EUR
 
-| Method                 | Label                  | Declared providers | SUPPORTED | IMPLEMENTED                 | CONFIGURED | LIVE |
-| ---------------------- | ---------------------- | ------------------ | --------- | --------------------------- | ---------- | ---- |
-| `CARD_CB`              | Carte CB (recommended) | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `CARD_VISA`            | Visa                   | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `CARD_MASTERCARD`      | Mastercard             | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `CARD_AMEX`            | American Express       | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `APPLE_PAY`            | Apple Pay              | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `GOOGLE_PAY`           | Google Pay             | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `PAYPAL`               | PayPal                 | `PAYPAL`           | YES       | foundation only, no adapter | NO         | NO   |
-| `SEPA_CREDIT_TRANSFER` | Virement SEPA          | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `SEPA_DIRECT_DEBIT`    | Prélèvement SEPA       | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `BIZUM`                | Bizum                  | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `WERO`                 | Wero                   | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `KLARNA`               | Klarna                 | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `ALMA`                 | Alma                   | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
+| Method                 | Label                        | Confirmation | Declared providers | SUPPORTED | IMPLEMENTED  | CONFIGURED | LIVE | Note                                                                                     |
+| ---------------------- | ---------------------------- | ------------ | ------------------ | --------- | ------------ | ---------- | ---- | ---------------------------------------------------------------------------------------- |
+| `CARD`                 | Carte bancaire (recommended) | INSTANT      | `STRIPE`           | YES       | YES (STRIPE) | NO         | NO   | —                                                                                        |
+| `APPLE_PAY`            | Apple Pay                    | INSTANT      | —                  | YES       | NO           | NO         | NO   | STRIPE: `NOT_SELECTABLE_IN_CHECKOUT`                                                     |
+| `GOOGLE_PAY`           | Google Pay                   | INSTANT      | —                  | YES       | NO           | NO         | NO   | STRIPE: `NOT_SELECTABLE_IN_CHECKOUT`                                                     |
+| `PAYPAL`               | PayPal                       | INSTANT      | `PAYPAL`           | YES       | NO           | NO         | NO   | STRIPE: `SEPARATE_PROVIDER_PR`                                                           |
+| `SEPA_CREDIT_TRANSFER` | Virement SEPA                | ASYNC_LONG   | —                  | YES       | NO           | NO         | NO   | `ASYNC_LONG`: needs a booking policy; STRIPE: `ASYNC_SETTLEMENT_REQUIRES_BOOKING_POLICY` |
+| `SEPA_DIRECT_DEBIT`    | Prélèvement SEPA             | ASYNC_LONG   | —                  | YES       | NO           | NO         | NO   | `ASYNC_LONG`: needs a booking policy; STRIPE: `ASYNC_SETTLEMENT_REQUIRES_BOOKING_POLICY` |
+| `WERO`                 | Wero                         | INSTANT      | —                  | YES       | NO           | NO         | NO   | STRIPE: `NOT_SUPPORTED_BY_PINNED_SDK`                                                    |
+| `KLARNA`               | Klarna                       | INSTANT      | `STRIPE`           | YES       | YES (STRIPE) | NO         | NO   | —                                                                                        |
+| `ALMA`                 | Alma                         | INSTANT      | —                  | YES       | NO           | NO         | NO   | STRIPE: `BUSINESS_CATEGORY_PROHIBITED`                                                   |
 
 ### Espagne (ES), EUR
 
-| Method                 | Label               | Declared providers | SUPPORTED | IMPLEMENTED                 | CONFIGURED | LIVE |
-| ---------------------- | ------------------- | ------------------ | --------- | --------------------------- | ---------- | ---- |
-| `CARD_VISA`            | Visa                | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `CARD_MASTERCARD`      | Mastercard          | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `CARD_AMEX`            | American Express    | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `APPLE_PAY`            | Apple Pay           | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `GOOGLE_PAY`           | Google Pay          | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `PAYPAL`               | PayPal              | `PAYPAL`           | YES       | foundation only, no adapter | NO         | NO   |
-| `SEPA_CREDIT_TRANSFER` | Virement SEPA       | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `SEPA_DIRECT_DEBIT`    | Prélèvement SEPA    | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `BIZUM`                | Bizum (recommended) | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
-| `KLARNA`               | Klarna              | `STRIPE`           | YES       | foundation only, no adapter | NO         | NO   |
+| Method                 | Label               | Confirmation | Declared providers | SUPPORTED | IMPLEMENTED  | CONFIGURED | LIVE | Note                                                                                     |
+| ---------------------- | ------------------- | ------------ | ------------------ | --------- | ------------ | ---------- | ---- | ---------------------------------------------------------------------------------------- |
+| `CARD`                 | Carte bancaire      | INSTANT      | `STRIPE`           | YES       | YES (STRIPE) | NO         | NO   | —                                                                                        |
+| `APPLE_PAY`            | Apple Pay           | INSTANT      | —                  | YES       | NO           | NO         | NO   | STRIPE: `NOT_SELECTABLE_IN_CHECKOUT`                                                     |
+| `GOOGLE_PAY`           | Google Pay          | INSTANT      | —                  | YES       | NO           | NO         | NO   | STRIPE: `NOT_SELECTABLE_IN_CHECKOUT`                                                     |
+| `PAYPAL`               | PayPal              | INSTANT      | `PAYPAL`           | YES       | NO           | NO         | NO   | STRIPE: `SEPARATE_PROVIDER_PR`                                                           |
+| `SEPA_CREDIT_TRANSFER` | Virement SEPA       | ASYNC_LONG   | —                  | YES       | NO           | NO         | NO   | `ASYNC_LONG`: needs a booking policy; STRIPE: `ASYNC_SETTLEMENT_REQUIRES_BOOKING_POLICY` |
+| `SEPA_DIRECT_DEBIT`    | Prélèvement SEPA    | ASYNC_LONG   | —                  | YES       | NO           | NO         | NO   | `ASYNC_LONG`: needs a booking policy; STRIPE: `ASYNC_SETTLEMENT_REQUIRES_BOOKING_POLICY` |
+| `BIZUM`                | Bizum (recommended) | INSTANT      | `STRIPE`           | YES       | YES (STRIPE) | NO         | NO   | —                                                                                        |
+| `KLARNA`               | Klarna              | INSTANT      | `STRIPE`           | YES       | YES (STRIPE) | NO         | NO   | —                                                                                        |
+| `ALMA`                 | Alma                | INSTANT      | —                  | YES       | NO           | NO         | NO   | STRIPE: `BUSINESS_CATEGORY_PROHIBITED`                                                   |
 
 ### Maroc (MA), MAD
 
-| Method                | Label                   | Declared providers     | SUPPORTED | IMPLEMENTED                 | CONFIGURED | LIVE |
-| --------------------- | ----------------------- | ---------------------- | --------- | --------------------------- | ---------- | ---- |
-| `CARD_VISA`           | Visa                    | `CMI`, `STRIPE`        | YES       | foundation only, no adapter | NO         | NO   |
-| `CARD_MASTERCARD`     | Mastercard              | `CMI`, `STRIPE`        | YES       | foundation only, no adapter | NO         | NO   |
-| `MAROCPAY`            | MarocPay                | `CMI`, `CHARIPAY`      | YES       | foundation only, no adapter | NO         | NO   |
-| `CMI_CARD`            | Carte CMI (recommended) | `CMI`                  | YES       | foundation only, no adapter | NO         | NO   |
-| `MOROCCO_CASH_AGENCY` | Paiement en agence      | `CASH`                 | YES       | foundation only, no adapter | NO         | NO   |
-| `BANK_TRANSFER`       | Virement bancaire       | `MANUAL_BANK_TRANSFER` | YES       | foundation only, no adapter | NO         | NO   |
+| Method                | Label                   | Confirmation | Declared providers     | SUPPORTED | IMPLEMENTED | CONFIGURED | LIVE | Note                                 |
+| --------------------- | ----------------------- | ------------ | ---------------------- | --------- | ----------- | ---------- | ---- | ------------------------------------ |
+| `CARD`                | Carte bancaire          | INSTANT      | `CMI`                  | YES       | NO          | NO         | NO   | —                                    |
+| `MAROCPAY`            | MarocPay                | ASYNC_SHORT  | `CMI`, `CHARIPAY`      | YES       | NO          | NO         | NO   | —                                    |
+| `CMI_CARD`            | Carte CMI (recommended) | INSTANT      | `CMI`                  | YES       | NO          | NO         | NO   | —                                    |
+| `MOROCCO_CASH_AGENCY` | Paiement en agence      | ASYNC_LONG   | `CASH`                 | YES       | NO          | NO         | NO   | `ASYNC_LONG`: needs a booking policy |
+| `BANK_TRANSFER`       | Virement bancaire       | ASYNC_LONG   | `MANUAL_BANK_TRANSFER` | YES       | NO          | NO         | NO   | `ASYNC_LONG`: needs a booking policy |
 
 ### Mauritanie (MR), MRU
 
-| Method            | Label                 | Declared providers     | SUPPORTED | IMPLEMENTED                 | CONFIGURED | LIVE |
-| ----------------- | --------------------- | ---------------------- | --------- | --------------------------- | ---------- | ---- |
-| `CARD_VISA`       | Visa                  | `STRIPE`               | YES       | foundation only, no adapter | NO         | NO   |
-| `CARD_MASTERCARD` | Mastercard            | `STRIPE`               | YES       | foundation only, no adapter | NO         | NO   |
-| `BANKILY_MR`      | Bankily (recommended) | `MOOSYL`               | YES       | foundation only, no adapter | NO         | NO   |
-| `MASRVI_MR`       | Masrvi                | `MOOSYL`               | YES       | foundation only, no adapter | NO         | NO   |
-| `SEDAD_MR`        | Sedad                 | `MOOSYL`               | YES       | foundation only, no adapter | NO         | NO   |
-| `BIMBANK_MR`      | BimBank               | `MOOSYL`               | YES       | foundation only, no adapter | NO         | NO   |
-| `CLICK_MR`        | Click                 | `MOOSYL`               | YES       | foundation only, no adapter | NO         | NO   |
-| `BCI_PAY_MR`      | BCI Pay               | `MOOSYL`               | YES       | foundation only, no adapter | NO         | NO   |
-| `BANK_TRANSFER`   | Virement bancaire     | `MANUAL_BANK_TRANSFER` | YES       | foundation only, no adapter | NO         | NO   |
-| `CASH_AT_AGENCY`  | Paiement en agence    | `CASH`                 | YES       | foundation only, no adapter | NO         | NO   |
+| Method           | Label                 | Confirmation | Declared providers     | SUPPORTED | IMPLEMENTED | CONFIGURED | LIVE | Note                                 |
+| ---------------- | --------------------- | ------------ | ---------------------- | --------- | ----------- | ---------- | ---- | ------------------------------------ |
+| `CARD`           | Carte bancaire        | INSTANT      | —                      | YES       | NO          | NO         | NO   | —                                    |
+| `BANKILY_MR`     | Bankily (recommended) | ASYNC_SHORT  | `MOOSYL`               | YES       | NO          | NO         | NO   | —                                    |
+| `MASRVI_MR`      | Masrvi                | ASYNC_SHORT  | `MOOSYL`               | YES       | NO          | NO         | NO   | —                                    |
+| `SEDAD_MR`       | Sedad                 | ASYNC_SHORT  | `MOOSYL`               | YES       | NO          | NO         | NO   | —                                    |
+| `BIMBANK_MR`     | BimBank               | ASYNC_SHORT  | `MOOSYL`               | YES       | NO          | NO         | NO   | —                                    |
+| `CLICK_MR`       | Click                 | ASYNC_SHORT  | `MOOSYL`               | YES       | NO          | NO         | NO   | —                                    |
+| `BCI_PAY_MR`     | BCI Pay               | ASYNC_SHORT  | `MOOSYL`               | YES       | NO          | NO         | NO   | —                                    |
+| `BANK_TRANSFER`  | Virement bancaire     | ASYNC_LONG   | `MANUAL_BANK_TRANSFER` | YES       | NO          | NO         | NO   | `ASYNC_LONG`: needs a booking policy |
+| `CASH_AT_AGENCY` | Paiement en agence    | ASYNC_LONG   | `CASH`                 | YES       | NO          | NO         | NO   | `ASYNC_LONG`: needs a booking policy |
 
 ### Sénégal (SN), XOF
 
-| Method            | Label              | Declared providers                    | SUPPORTED | IMPLEMENTED                 | CONFIGURED | LIVE |
-| ----------------- | ------------------ | ------------------------------------- | --------- | --------------------------- | ---------- | ---- |
-| `CARD`            | Carte bancaire     | `STRIPE`, `PAYDUNYA`, `PAYTECH`       | YES       | foundation only, no adapter | NO         | NO   |
-| `PAYPAL`          | PayPal             | `PAYPAL`                              | YES       | foundation only, no adapter | NO         | NO   |
-| `WAVE_SN`         | Wave (recommended) | `WAVE`, `PAYDUNYA`, `PAYTECH`         | YES       | foundation only, no adapter | NO         | NO   |
-| `ORANGE_MONEY_SN` | Orange Money       | `ORANGE_MONEY`, `PAYDUNYA`, `PAYTECH` | YES       | foundation only, no adapter | NO         | NO   |
-| `FREE_MONEY_SN`   | Free Money         | `PAYDUNYA`, `PAYTECH`                 | YES       | foundation only, no adapter | NO         | NO   |
-| `EXPRESSO_SN`     | Expresso           | `PAYDUNYA`, `PAYTECH`                 | YES       | foundation only, no adapter | NO         | NO   |
-| `WIZALL_SN`       | Wizall             | `PAYDUNYA`, `PAYTECH`                 | YES       | foundation only, no adapter | NO         | NO   |
-| `DJAMO_SN`        | Djamo              | `PAYDUNYA`, `PAYTECH`                 | YES       | foundation only, no adapter | NO         | NO   |
-| `BANK_TRANSFER`   | Virement bancaire  | `MANUAL_BANK_TRANSFER`                | YES       | foundation only, no adapter | NO         | NO   |
-| `CASH_AT_AGENCY`  | Paiement en agence | `CASH`                                | YES       | foundation only, no adapter | NO         | NO   |
+| Method            | Label              | Confirmation | Declared providers                    | SUPPORTED | IMPLEMENTED | CONFIGURED | LIVE | Note                                 |
+| ----------------- | ------------------ | ------------ | ------------------------------------- | --------- | ----------- | ---------- | ---- | ------------------------------------ |
+| `CARD`            | Carte bancaire     | INSTANT      | `PAYDUNYA`, `PAYTECH`                 | YES       | NO          | NO         | NO   | —                                    |
+| `PAYPAL`          | PayPal             | INSTANT      | `PAYPAL`                              | YES       | NO          | NO         | NO   | —                                    |
+| `WAVE_SN`         | Wave (recommended) | ASYNC_SHORT  | `WAVE`, `PAYDUNYA`, `PAYTECH`         | YES       | NO          | NO         | NO   | —                                    |
+| `ORANGE_MONEY_SN` | Orange Money       | ASYNC_SHORT  | `ORANGE_MONEY`, `PAYDUNYA`, `PAYTECH` | YES       | NO          | NO         | NO   | —                                    |
+| `FREE_MONEY_SN`   | Free Money         | ASYNC_SHORT  | `PAYDUNYA`, `PAYTECH`                 | YES       | NO          | NO         | NO   | —                                    |
+| `EXPRESSO_SN`     | Expresso           | ASYNC_SHORT  | `PAYDUNYA`, `PAYTECH`                 | YES       | NO          | NO         | NO   | —                                    |
+| `WIZALL_SN`       | Wizall             | ASYNC_SHORT  | `PAYDUNYA`, `PAYTECH`                 | YES       | NO          | NO         | NO   | —                                    |
+| `DJAMO_SN`        | Djamo              | ASYNC_SHORT  | `PAYDUNYA`, `PAYTECH`                 | YES       | NO          | NO         | NO   | —                                    |
+| `BANK_TRANSFER`   | Virement bancaire  | ASYNC_LONG   | `MANUAL_BANK_TRANSFER`                | YES       | NO          | NO         | NO   | `ASYNC_LONG`: needs a booking policy |
+| `CASH_AT_AGENCY`  | Paiement en agence | ASYNC_LONG   | `CASH`                                | YES       | NO          | NO         | NO   | `ASYNC_LONG`: needs a booking policy |
 
 ## Presentment currencies
 

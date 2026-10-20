@@ -20,6 +20,7 @@ import {
   amountToNumber,
   bookingAmountMinor,
   generatePaymentReference,
+  holdRemaining,
   normalizePaymentReference,
   parseIdempotencyKey,
 } from './payment-rules.js';
@@ -267,6 +268,7 @@ export class PaymentService {
         bookingId: true,
         paymentMethod: true,
         payerCountry: true,
+        presentmentAmountMinor: true,
         presentmentCurrencyCode: true,
         providerCandidate: true,
         bookingAmountMinor: true,
@@ -298,6 +300,8 @@ export class PaymentService {
       method: quote.paymentMethod,
       payerCountry: quote.payerCountry,
       currencyCode: quote.presentmentCurrencyCode,
+      presentmentAmountMinor: quote.presentmentAmountMinor,
+      holdRemainingSeconds: holdRemaining(booking.hold_expires_at, now),
       preferredProvider: quote.providerCandidate,
     });
     if (!route) throw PaymentErrors.methodUnavailable();
@@ -358,6 +362,8 @@ export class PaymentService {
     if (!provider) throw PaymentErrors.providerUnavailable();
     const quote = reserved.quote;
     if (!isPayerCountry(quote.payerCountry)) throw PaymentErrors.countryUnsupported();
+    // From the stored attempt: a replay sends exactly the same request.
+    const window = provider.capability.collectionWindowSeconds;
     const checkout = await provider.createPayment({
       paymentReference: reserved.reference,
       bookingReference: reserved.booking.reference,
@@ -366,6 +372,7 @@ export class PaymentService {
       presentmentAmountMinor: quote.presentmentAmountMinor,
       presentmentCurrencyCode: quote.presentmentCurrencyCode,
       presentmentCurrencyMinorUnit: quote.presentmentCurrencyMinorUnit,
+      expiresAt: window === null ? null : new Date(reserved.createdAt.getTime() + window * 1000),
     });
     const payment = await this.database.client.$transaction((tx) =>
       this.attachProviderPaymentId(tx, reserved.id, checkout),
@@ -470,6 +477,7 @@ export class PaymentService {
   async cancelByCustomer(actor: CustomerActor, rawReference: string) {
     const reference = normalizePaymentReference(rawReference);
     if (!reference) throw PaymentErrors.notFound();
+    await this.closeAtProvider({ reference, customerIdentityId: customerIdentityOf(actor) });
     await this.cancel(
       (tx) => tx.$queryRaw<LockedPayment[]>`
         SELECT p."id", p."reference", p."status"::text AS "status",
@@ -490,6 +498,7 @@ export class PaymentService {
 
   /** payment.manage: give up a PENDING attempt, with a reason. Never "mark paid". */
   async cancelByStaff(actor: AuthPrincipal, id: string, reason: string) {
+    await this.closeAtProvider({ id });
     await this.cancel(
       (tx) => tx.$queryRaw<LockedPayment[]>`
         SELECT p."id", p."reference", p."status"::text AS "status",
@@ -501,6 +510,29 @@ export class PaymentService {
       { actor, reason, cancelledBy: 'STAFF' },
     );
     return this.adminPayment(id);
+  }
+
+  /**
+   * Before a PENDING attempt is cancelled, its provider checkout is closed
+   * (outside any transaction), so the customer can no longer pay an attempt
+   * EURO TERANGA considers cancelled. If the payer already finished there,
+   * the attempt is not cancelled: the provider's event decides it. Unknown,
+   * foreign and terminal attempts are left to the locked transaction.
+   */
+  private async closeAtProvider(where: Prisma.PaymentWhereInput): Promise<void> {
+    const payment = await this.database.client.payment.findFirst({
+      where: { ...where, status: 'PENDING' },
+      select: { provider: true, providerPaymentId: true },
+    });
+    if (!payment?.providerPaymentId) return;
+    const provider = this.registry.provider(payment.provider as PaymentProviderCode);
+    if (!provider?.cancelPayment) {
+      // A provider checkout exists but its adapter is gone: never cancel blind.
+      if (payment.provider !== 'SANDBOX') throw PaymentErrors.providerUnavailable();
+      return;
+    }
+    const outcome = await provider.cancelPayment(payment.providerPaymentId);
+    if (outcome === 'COMPLETED') throw PaymentErrors.providerCompleting();
   }
 
   /** Lock order: payment only (the booking does not change). */

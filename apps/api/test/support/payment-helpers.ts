@@ -15,7 +15,7 @@ export const WEBHOOK_PATH = '/v1/payments/webhooks/sandbox';
 export const IDENTITY_PAYER: Readonly<
   Record<string, { payerCountry: string; paymentMethod: string }>
 > = {
-  EUR: { payerCountry: 'FR', paymentMethod: 'CARD_CB' },
+  EUR: { payerCountry: 'FR', paymentMethod: 'CARD' },
   XOF: { payerCountry: 'SN', paymentMethod: 'WAVE_SN' },
   MAD: { payerCountry: 'MA', paymentMethod: 'CMI_CARD' },
   MRU: { payerCountry: 'MR', paymentMethod: 'BANKILY_MR' },
@@ -144,7 +144,7 @@ export async function insertIdentityQuote(
       quotedAt,
       expiresAt: options.expiresAt ?? (ttl < booking.holdExpiresAt ? ttl : booking.holdExpiresAt),
       payerCountry: payer.payerCountry,
-      paymentMethod: payer.paymentMethod as 'CARD_CB',
+      paymentMethod: payer.paymentMethod as 'CARD',
       providerCandidate: 'SANDBOX',
     },
     select: { id: true, paymentMethod: true },

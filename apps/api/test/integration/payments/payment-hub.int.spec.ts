@@ -5,6 +5,7 @@ import {
   PaymentCapabilityRegistry,
 } from '../../../src/payments/payment-capability.registry.js';
 import {
+  methodSettlement,
   methodsForCountry,
   type PaymentMethodCode,
   type PaymentProviderCode,
@@ -50,6 +51,11 @@ function fakeProvider(name: PaymentProviderCode, methods: PaymentMethodCode[], p
     supportedMethods: methods,
     payerCountries: ['SN'],
     supportedCurrencies: ['XOF'],
+    // A synthetic adapter: no checkout window, no amount bounds of its own.
+    methodCountries: {},
+    amountLimits: {},
+    collectionWindowSeconds: null,
+    minimumHoldRemainingSeconds: 0,
     priority,
     active: true,
   };
@@ -145,10 +151,28 @@ describe('payment hub: options, quotes, initiation and routing (isolated databas
         methodsForCountry('SN').map((method) => method.code),
       );
       for (const method of methods) {
-        expect(Object.keys(method).sort()).toEqual(['available', 'code', 'group', 'label']);
+        expect(Object.keys(method).sort()).toEqual([
+          'acceptedNetworks',
+          'available',
+          'code',
+          'deviceWallets',
+          'group',
+          'label',
+        ]);
       }
-      // SANDBOX (CI) collects every method, and the synthetic rate converts EUR.
-      expect(methods.every((method) => method.available === true)).toBe(true);
+      // SANDBOX (CI) collects every method, and the synthetic rate converts EUR,
+      // except days-long ones (PAY-EU-1: they need a booking policy first).
+      for (const method of methods) {
+        expect(method.available, String(method.code)).toBe(
+          methodSettlement(method.code as PaymentMethodCode) !== 'ASYNC_LONG',
+        );
+      }
+      expect(methods.find((method) => method.code === 'BANK_TRANSFER')!.available).toBe(false);
+      // Card badges come from the provider that would collect the card.
+      expect(methods.find((method) => method.code === 'CARD')).toMatchObject({
+        acceptedNetworks: ['VISA', 'MASTERCARD'],
+        deviceWallets: [],
+      });
       expect(methods.find((method) => method.code === 'WAVE_SN')).toMatchObject({
         label: 'Wave',
         group: 'RECOMMENDED',
@@ -305,6 +329,8 @@ describe('payment hub: options, quotes, initiation and routing (isolated databas
         presentmentAmountMinor: BigInt(XOF_TOTAL),
         presentmentCurrencyCode: 'XOF',
         presentmentCurrencyMinorUnit: 0,
+        // SANDBOX has no checkout of its own to close.
+        expiresAt: null,
       });
       expect(response.body.payment).toMatchObject({
         status: 'PENDING',
@@ -499,14 +525,14 @@ describe('payment hub: options, quotes, initiation and routing (isolated databas
 
     it('never confirms from a provider redirect: only an authenticated event does', async () => {
       const reference = await hold(alice);
-      const quoted = await quote(alice, reference, 'FR', 'CARD_CB');
+      const quoted = await quote(alice, reference, 'FR', 'CARD');
       vi.spyOn(sandbox(), 'createPayment').mockResolvedValue({
         providerPaymentId: 'sbx_redirect_only_0001',
         redirectUrl: 'https://checkout.example.test/return?status=success',
       });
       const created = await pay(alice, reference, {
         quoteId: quoted.body.id,
-        paymentMethod: 'CARD_CB',
+        paymentMethod: 'CARD',
       });
       expect(created.status).toBe(201);
       expect(created.body.checkout.redirectUrl).toBe(
@@ -523,7 +549,7 @@ describe('payment hub: options, quotes, initiation and routing (isolated databas
     it('falls back to another provider of the same method, never to another method', async () => {
       const wave = fakeProvider('WAVE', ['WAVE_SN'], 10);
       const aggregator = fakeProvider('PAYDUNYA', ['WAVE_SN'], 30);
-      const cards = fakeProvider('STRIPE', ['CARD', 'CARD_VISA'], 1);
+      const cards = fakeProvider('STRIPE', ['CARD'], 1);
       useRegistry([wave.provider, aggregator.provider, cards.provider]);
 
       const reference = await hold(alice);
@@ -586,14 +612,14 @@ describe('payment hub: options, quotes, initiation and routing (isolated databas
 
     it('takes no payment at all while no provider is configured', async () => {
       const reference = await hold(alice);
-      const quoted = await quote(alice, reference, 'FR', 'CARD_CB');
+      const quoted = await quote(alice, reference, 'FR', 'CARD');
       useRegistry([]);
-      const noQuote = await quote(alice, reference, 'FR', 'CARD_CB');
+      const noQuote = await quote(alice, reference, 'FR', 'CARD');
       expect(noQuote.status).toBe(503);
       expect(noQuote.body.code).toBe('PAYMENT_PROVIDER_UNAVAILABLE');
       const noPayment = await pay(alice, reference, {
         quoteId: quoted.body.id,
-        paymentMethod: 'CARD_CB',
+        paymentMethod: 'CARD',
       });
       expect(noPayment.status).toBe(503);
       expect(noPayment.body.code).toBe('PAYMENT_PROVIDER_UNAVAILABLE');

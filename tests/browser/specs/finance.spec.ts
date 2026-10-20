@@ -206,6 +206,10 @@ test.describe('PR-22 operational finance', () => {
     await expect(
       workspace.getByRole('button', { name: 'Enregistrer le remboursement et l’avoir' }),
     ).toBeVisible();
+    // PAY-EU-1: recording a refund never pretends it was sent to the provider.
+    await expect(workspace.getByTestId(/^refund-not-sent-/).first()).toContainText(
+      'aucun ordre de remboursement n’est envoyé au prestataire de paiement',
+    );
     await expect(workspace).toContainText('ETCN-0123456789AB');
     await expect(workspace.getByRole('button', { name: 'Export CSV' })).toBeVisible();
     await expect(workspace.getByRole('button', { name: 'Export XLSX' })).toBeVisible();

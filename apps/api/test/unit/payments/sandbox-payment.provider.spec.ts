@@ -66,8 +66,12 @@ describe('SANDBOX provider', () => {
       requiresRedirect: false,
       supportedCurrencies: ['EUR', 'XOF', 'MAD', 'MRU'],
       payerCountries: ['FR', 'ES', 'MA', 'MR', 'SN'],
+      // No checkout of its own: no collection window, no hold requirement.
+      collectionWindowSeconds: null,
+      minimumHoldRemainingSeconds: 0,
     });
     expect(provider.capability.supportedMethods).toEqual([...PAYMENT_METHOD_CODES]);
+    expect('cancelPayment' in provider).toBe(false);
     expect(provider.testMode).toBe(true);
   });
 
@@ -80,6 +84,7 @@ describe('SANDBOX provider', () => {
       presentmentAmountMinor: 163_333n,
       presentmentCurrencyCode: 'XOF',
       presentmentCurrencyMinorUnit: 0,
+      expiresAt: null,
     } as const;
     const first = await provider.createPayment(base);
     const again = await provider.createPayment({ ...base, presentmentAmountMinor: 1n });
@@ -91,11 +96,12 @@ describe('SANDBOX provider', () => {
     const request = {
       paymentReference: 'ETP-000000000000',
       bookingReference: 'ETB-000000000000',
-      paymentMethod: 'CARD_CB',
+      paymentMethod: 'CARD',
       payerCountry: 'FR',
       presentmentAmountMinor: 24_690n,
       presentmentCurrencyCode: 'EUR',
       presentmentCurrencyMinorUnit: 2,
+      expiresAt: null,
     } as const;
     const checkout = await provider.createPayment(request);
     const replay = await provider.createPayment(request);

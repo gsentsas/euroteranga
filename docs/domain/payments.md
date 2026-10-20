@@ -1,9 +1,9 @@
 # Payment domain
 
 > Implemented in PR-10 and extended by PR-22 operational refunds: payment
-> attempts, provider events, booking confirmation and bounded refund facts. **NOT PRODUCTION DEPLOYED.** There is **no real payment service
-> provider (PSP)**: the only provider, **SANDBOX**, is a local simulation for
-> development, tests and CI. No real money is ever moved, and no card, security
+> attempts, provider events, booking confirmation and bounded refund facts. **NOT PRODUCTION DEPLOYED.** **No real payment service
+> provider (PSP) is configured**: the only active provider, **SANDBOX**, is a local simulation for
+> development, tests and CI (the Stripe adapter of PAY-EU-1 exists but is disabled). No real money is ever moved, and no card, security
 > code or IBAN is ever collected. Browser and integration tests use synthetic
 > data only.
 
@@ -13,6 +13,12 @@
 > `Payment.amountMinor` keeps its PR-10 meaning (the booking amount). No real
 > provider is activated. See [docs/payments](../payments/) (payment matrix,
 > provider routing, multi-currency, reconciliation, provider onboarding).
+
+> **PAY-EU-1** adds the first real adapter, **Stripe** (hosted Checkout,
+> France and Spain, EUR; `CARD`, `BIZUM` in Spain, `KLARNA`). It is
+> **disabled by default** (`PAYMENT_STRIPE_MODE=DISABLED`), refused on the
+> pilot, and never LIVE in this release. Refunds are still recorded facts,
+> not sent to Stripe. See [stripe-europe.md](../payments/stripe-europe.md).
 
 PR-10 lets the authenticated CUSTOMER who owns a HELD booking start a payment
 attempt. The attempt's result arrives later as a signed provider event. A
@@ -38,8 +44,9 @@ Included:
 
 Deferred:
 
-- **any real PSP** (Stripe, PayDunya, Wave, Orange Money, card acquiring…) and
-  PCI-scoped data collection;
+- **any real PSP** (PayDunya, Wave, Orange Money, card acquiring…; Stripe has
+  an adapter since PAY-EU-1, disabled by default) and PCI-scoped data
+  collection (Stripe collects card data on its own page);
 - **real provider-side refund execution**: PR-22 records the operational
   refund fact and matching credit memo, but SANDBOX moves no money and no
   production PSP refund API is selected;
@@ -250,7 +257,10 @@ of the same event then succeeds.
 PR-10 accepts a success only while the booking is still HELD when the event is
 processed. A late success fails the attempt (`BOOKING_EXPIRED`), the booking
 stays EXPIRED and its seats are not taken back. With SANDBOX, no customer can
-be charged. **A real PSP integration must add a provider-specific strategy for
+be charged. With Stripe (PAY-EU-1), an attempt only starts while the hold
+outlasts the Checkout session by five minutes, and the session expires before
+the hold; a late success can only come from a delayed event, is recorded,
+never confirms, and must be refunded. **A real PSP integration must add a provider-specific strategy for
 asynchronous payments and compensation:** void or refund a capture that
 arrives too late, a success on a cancelled attempt, or a mismatched amount.
 Until then these cases are recorded and refused, never applied.

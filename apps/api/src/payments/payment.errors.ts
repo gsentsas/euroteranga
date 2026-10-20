@@ -86,6 +86,12 @@ export const PaymentErrors = {
     ),
   alreadySucceeded: () =>
     new PublicApiError(409, 'PAYMENT_ALREADY_SUCCEEDED', 'Ce paiement a déjà réussi.'),
+  providerCompleting: () =>
+    new PublicApiError(
+      409,
+      'PAYMENT_PROVIDER_COMPLETING',
+      'Ce paiement est en cours de finalisation chez le prestataire : son résultat arrive sous peu.',
+    ),
   invalidTransition: () =>
     new PublicApiError(409, 'PAYMENT_INVALID_TRANSITION', 'Ce paiement est déjà terminé.'),
   idempotencyKeyInvalid: () =>

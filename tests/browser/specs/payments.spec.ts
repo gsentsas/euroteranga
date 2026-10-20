@@ -57,6 +57,12 @@ test('payment customer: SANDBOX payments confirm bookings, which keep their seat
   // PAY-HUB-1: a payer country and a method (France and a card by default),
   // then the exact amount quoted by the server, before anything starts.
   await expect(payment.getByLabel('Pays du payeur')).toHaveValue('FR');
+  // PAY-EU-1: one card choice; its networks are information, never choices.
+  await expect(payment.getByLabel('Moyen de paiement')).toHaveValue('CARD');
+  await expect(payment.getByTestId('payment-card-networks')).toHaveText(
+    'Cartes acceptées : CB, Visa, Mastercard, American Express.',
+  );
+  await expect(payment.getByRole('option', { name: /Carte CB|^Visa$/ })).toHaveCount(0);
   await payment.getByRole('button', { name: 'Continuer vers le paiement' }).click();
   await expect(payment.getByTestId('payment-quote-amount')).toHaveText('123,45 EUR');
   await payment

@@ -55,21 +55,38 @@ export const PAYER_COUNTRIES = ['FR', 'ES', 'MA', 'MR', 'SN'] as const;
 export type PayerCountry = (typeof PAYER_COUNTRIES)[number];
 export type PaymentMethodGroup = 'RECOMMENDED' | 'MOBILE_MONEY' | 'CARD_WALLET' | 'BANK' | 'AGENCY';
 
+/**
+ * When the provider's result is known (PAY-EU-1). INSTANT: the payer
+ * completes it on the spot (card, wallet, Bizum...). ASYNC_SHORT: a result
+ * within minutes, inside the hold (a mobile money push). ASYNC_LONG: days
+ * (SEPA debit, bank transfer, cash): a hold cannot wait for it, so such a
+ * method needs an explicit booking policy first and is unavailable until
+ * then (ASYNC_SETTLEMENT_REQUIRES_BOOKING_POLICY).
+ */
+export type PaymentSettlement = 'INSTANT' | 'ASYNC_SHORT' | 'ASYNC_LONG';
+
+/** Card networks a card provider accepts; shown as badges, never selectable. */
+export const CARD_NETWORKS = ['CB', 'VISA', 'MASTERCARD', 'AMEX'] as const;
+export type CardNetwork = (typeof CARD_NETWORKS)[number];
+
 export interface PaymentMethodDescriptor {
   code: PaymentMethodCode;
   label: string;
   group: Exclude<PaymentMethodGroup, 'RECOMMENDED'>;
+  /** Countries where the customer can choose it; empty for vocabulary-only codes. */
   countries: readonly PayerCountry[];
   recommendedCountries: readonly PayerCountry[];
+  settlement: PaymentSettlement;
 }
 
 const method = (
   code: PaymentMethodCode,
   label: string,
   group: Exclude<PaymentMethodGroup, 'RECOMMENDED'>,
+  settlement: PaymentSettlement,
   countries: readonly PayerCountry[],
   recommendedCountries: readonly PayerCountry[] = [],
-): PaymentMethodDescriptor => ({ code, label, group, countries, recommendedCountries });
+): PaymentMethodDescriptor => ({ code, label, group, countries, recommendedCountries, settlement });
 
 /**
  * Logical methods offered by country. This catalogue says what EURO TERANGA
@@ -77,37 +94,49 @@ const method = (
  * provider capability and an exact FX quote.
  */
 export const PAYMENT_METHODS: readonly PaymentMethodDescriptor[] = [
-  method('CARD', 'Carte bancaire', 'CARD_WALLET', ['SN']),
-  method('CARD_CB', 'Carte CB', 'CARD_WALLET', ['FR'], ['FR']),
-  method('CARD_VISA', 'Visa', 'CARD_WALLET', ['FR', 'ES', 'MA', 'MR']),
-  method('CARD_MASTERCARD', 'Mastercard', 'CARD_WALLET', ['FR', 'ES', 'MA', 'MR']),
-  method('CARD_AMEX', 'American Express', 'CARD_WALLET', ['FR', 'ES']),
-  method('APPLE_PAY', 'Apple Pay', 'CARD_WALLET', ['FR', 'ES']),
-  method('GOOGLE_PAY', 'Google Pay', 'CARD_WALLET', ['FR', 'ES']),
-  method('PAYPAL', 'PayPal', 'CARD_WALLET', ['FR', 'ES', 'SN']),
-  method('SEPA_CREDIT_TRANSFER', 'Virement SEPA', 'BANK', ['FR', 'ES']),
-  method('SEPA_DIRECT_DEBIT', 'Prélèvement SEPA', 'BANK', ['FR', 'ES']),
-  method('BIZUM', 'Bizum', 'BANK', ['FR', 'ES'], ['ES']),
-  method('WERO', 'Wero', 'BANK', ['FR']),
-  method('KLARNA', 'Klarna', 'CARD_WALLET', ['FR', 'ES']),
-  method('ALMA', 'Alma', 'CARD_WALLET', ['FR']),
-  method('WAVE_SN', 'Wave', 'MOBILE_MONEY', ['SN'], ['SN']),
-  method('ORANGE_MONEY_SN', 'Orange Money', 'MOBILE_MONEY', ['SN']),
-  method('FREE_MONEY_SN', 'Free Money', 'MOBILE_MONEY', ['SN']),
-  method('EXPRESSO_SN', 'Expresso', 'MOBILE_MONEY', ['SN']),
-  method('WIZALL_SN', 'Wizall', 'MOBILE_MONEY', ['SN']),
-  method('DJAMO_SN', 'Djamo', 'MOBILE_MONEY', ['SN']),
-  method('MAROCPAY', 'MarocPay', 'MOBILE_MONEY', ['MA']),
-  method('CMI_CARD', 'Carte CMI', 'CARD_WALLET', ['MA'], ['MA']),
-  method('MOROCCO_CASH_AGENCY', 'Paiement en agence', 'AGENCY', ['MA']),
-  method('BANKILY_MR', 'Bankily', 'MOBILE_MONEY', ['MR'], ['MR']),
-  method('MASRVI_MR', 'Masrvi', 'MOBILE_MONEY', ['MR']),
-  method('SEDAD_MR', 'Sedad', 'MOBILE_MONEY', ['MR']),
-  method('BIMBANK_MR', 'BimBank', 'MOBILE_MONEY', ['MR']),
-  method('CLICK_MR', 'Click', 'MOBILE_MONEY', ['MR']),
-  method('BCI_PAY_MR', 'BCI Pay', 'MOBILE_MONEY', ['MR']),
-  method('BANK_TRANSFER', 'Virement bancaire', 'BANK', ['MA', 'MR', 'SN']),
-  method('CASH_AT_AGENCY', 'Paiement en agence', 'AGENCY', ['MR', 'SN']),
+  // One card choice (PAY-EU-1): the network is decided by the card and, for a
+  // co-badged card, by the payer on the provider's page. The accepted networks
+  // are badges of the CARD option, never separate choices.
+  method(
+    'CARD',
+    'Carte bancaire',
+    'CARD_WALLET',
+    'INSTANT',
+    ['FR', 'ES', 'MA', 'MR', 'SN'],
+    ['FR'],
+  ),
+  // Vocabulary only (earlier attempts and reporting): never offered as a choice.
+  method('CARD_CB', 'Carte CB', 'CARD_WALLET', 'INSTANT', []),
+  method('CARD_VISA', 'Visa', 'CARD_WALLET', 'INSTANT', []),
+  method('CARD_MASTERCARD', 'Mastercard', 'CARD_WALLET', 'INSTANT', []),
+  method('CARD_AMEX', 'American Express', 'CARD_WALLET', 'INSTANT', []),
+  method('APPLE_PAY', 'Apple Pay', 'CARD_WALLET', 'INSTANT', ['FR', 'ES']),
+  method('GOOGLE_PAY', 'Google Pay', 'CARD_WALLET', 'INSTANT', ['FR', 'ES']),
+  method('PAYPAL', 'PayPal', 'CARD_WALLET', 'INSTANT', ['FR', 'ES', 'SN']),
+  method('SEPA_CREDIT_TRANSFER', 'Virement SEPA', 'BANK', 'ASYNC_LONG', ['FR', 'ES']),
+  method('SEPA_DIRECT_DEBIT', 'Prélèvement SEPA', 'BANK', 'ASYNC_LONG', ['FR', 'ES']),
+  // Bizum is a Spanish method (Spanish IBAN and phone number).
+  method('BIZUM', 'Bizum', 'BANK', 'INSTANT', ['ES'], ['ES']),
+  method('WERO', 'Wero', 'BANK', 'INSTANT', ['FR']),
+  method('KLARNA', 'Klarna', 'CARD_WALLET', 'INSTANT', ['FR', 'ES']),
+  method('ALMA', 'Alma', 'CARD_WALLET', 'INSTANT', ['FR', 'ES']),
+  method('WAVE_SN', 'Wave', 'MOBILE_MONEY', 'ASYNC_SHORT', ['SN'], ['SN']),
+  method('ORANGE_MONEY_SN', 'Orange Money', 'MOBILE_MONEY', 'ASYNC_SHORT', ['SN']),
+  method('FREE_MONEY_SN', 'Free Money', 'MOBILE_MONEY', 'ASYNC_SHORT', ['SN']),
+  method('EXPRESSO_SN', 'Expresso', 'MOBILE_MONEY', 'ASYNC_SHORT', ['SN']),
+  method('WIZALL_SN', 'Wizall', 'MOBILE_MONEY', 'ASYNC_SHORT', ['SN']),
+  method('DJAMO_SN', 'Djamo', 'MOBILE_MONEY', 'ASYNC_SHORT', ['SN']),
+  method('MAROCPAY', 'MarocPay', 'MOBILE_MONEY', 'ASYNC_SHORT', ['MA']),
+  method('CMI_CARD', 'Carte CMI', 'CARD_WALLET', 'INSTANT', ['MA'], ['MA']),
+  method('MOROCCO_CASH_AGENCY', 'Paiement en agence', 'AGENCY', 'ASYNC_LONG', ['MA']),
+  method('BANKILY_MR', 'Bankily', 'MOBILE_MONEY', 'ASYNC_SHORT', ['MR'], ['MR']),
+  method('MASRVI_MR', 'Masrvi', 'MOBILE_MONEY', 'ASYNC_SHORT', ['MR']),
+  method('SEDAD_MR', 'Sedad', 'MOBILE_MONEY', 'ASYNC_SHORT', ['MR']),
+  method('BIMBANK_MR', 'BimBank', 'MOBILE_MONEY', 'ASYNC_SHORT', ['MR']),
+  method('CLICK_MR', 'Click', 'MOBILE_MONEY', 'ASYNC_SHORT', ['MR']),
+  method('BCI_PAY_MR', 'BCI Pay', 'MOBILE_MONEY', 'ASYNC_SHORT', ['MR']),
+  method('BANK_TRANSFER', 'Virement bancaire', 'BANK', 'ASYNC_LONG', ['MA', 'MR', 'SN']),
+  method('CASH_AT_AGENCY', 'Paiement en agence', 'AGENCY', 'ASYNC_LONG', ['MR', 'SN']),
 ] as const;
 
 export const PAYMENT_METHOD_BY_CODE = new Map(
@@ -150,6 +179,13 @@ export function methodsForCountry(country: PayerCountry): PaymentMethodDescripto
 /** A method the catalogue offers in this country (not yet "available": see the registry). */
 export function methodOffered(method: PaymentMethodCode, country: PayerCountry): boolean {
   return PAYMENT_METHOD_BY_CODE.get(method)?.countries.includes(country) ?? false;
+}
+
+/** When a method's result is known; ASYNC_LONG methods need a booking policy first. */
+export function methodSettlement(code: PaymentMethodCode): PaymentSettlement {
+  const descriptor = PAYMENT_METHOD_BY_CODE.get(code);
+  if (!descriptor) throw new Error(`unknown payment method ${code}`);
+  return descriptor.settlement;
 }
 
 export function methodGroup(

@@ -58,6 +58,8 @@ function commerceUnavailable(env: ApiEnv, registry: PaymentCapabilityRegistry): 
     return `bookings need SANDBOX payments (local and CI only), APP_ENV=${env.APP_ENV}`;
   }
   if (!registry.provider('SANDBOX')) return 'PAYMENT_PROVIDER is not SANDBOX';
+  // A seed card payment would otherwise be routed to Stripe (PAY-EU-1).
+  if (registry.provider('STRIPE')) return 'PAYMENT_STRIPE_MODE must be DISABLED for the seed';
   return undefined;
 }
 const err = (line: string) => process.stderr.write(`${line}\n`);
