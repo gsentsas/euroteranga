@@ -45,11 +45,11 @@ const wave = {
   payerCountry: 'SN',
   currencyCode: 'XOF',
   presentmentAmountMinor: 163_333n,
-  holdRemainingSeconds: 900,
+  holdRemainingSeconds: 2100,
 } as const;
 
 describe('payment capability registry (PAY-HUB-1)', () => {
-  it('declares every provider once; only SANDBOX (test-only), STRIPE and PAYPAL have an adapter', () => {
+  it('declares every provider once; SANDBOX, Stripe, PayPal and Wave have adapters', () => {
     expect(PROVIDER_CAPABILITY_DECLARATIONS.map((item) => item.providerCode)).toEqual([
       ...PAYMENT_PROVIDER_CODES,
     ]);
@@ -57,7 +57,7 @@ describe('payment capability registry (PAY-HUB-1)', () => {
       PROVIDER_CAPABILITY_DECLARATIONS.filter((item) => item.implemented).map(
         (item) => item.providerCode,
       ),
-    ).toEqual(['SANDBOX', 'STRIPE', 'PAYPAL']);
+    ).toEqual(['SANDBOX', 'STRIPE', 'PAYPAL', 'WAVE']);
     expect(PROVIDER_CAPABILITY_DECLARATIONS.every((item) => item.active === false)).toBe(true);
     const sandbox = PROVIDER_CAPABILITY_DECLARATIONS.find(
       (item) => item.providerCode === 'SANDBOX',
@@ -104,55 +104,85 @@ describe('payment capability registry (PAY-HUB-1)', () => {
   });
 
   it('prefers the lowest priority, the quote candidate first, with a stable tie-break', () => {
-    const direct = syntheticProvider('WAVE', { supportedMethods: ['WAVE_SN'], priority: 10 });
-    const paydunya = syntheticProvider('PAYDUNYA', {
-      supportedMethods: ['WAVE_SN', 'ORANGE_MONEY_SN'],
+    const direct = syntheticProvider('CMI', {
+      supportedMethods: ['MAROCPAY'],
+      payerCountries: ['MA'],
+      supportedCurrencies: ['MAD'],
+      priority: 10,
+    });
+    const second = syntheticProvider('CHARIPAY', {
+      supportedMethods: ['MAROCPAY'],
+      payerCountries: ['MA'],
+      supportedCurrencies: ['MAD'],
       priority: 30,
     });
-    const paytech = syntheticProvider('PAYTECH', {
-      supportedMethods: ['WAVE_SN', 'ORANGE_MONEY_SN'],
+    const third = syntheticProvider('CASH', {
+      supportedMethods: ['MAROCPAY'],
+      payerCountries: ['MA'],
+      supportedCurrencies: ['MAD'],
       priority: 30,
     });
-    const registry = new PaymentCapabilityRegistry([paytech, paydunya, direct]);
-    expect(registry.candidates(wave).map((route) => route.provider.name)).toEqual([
-      'WAVE',
-      'PAYDUNYA',
-      'PAYTECH',
+    const marocPay = {
+      ...wave,
+      method: 'MAROCPAY' as const,
+      payerCountry: 'MA' as const,
+      currencyCode: 'MAD',
+    };
+    const registry = new PaymentCapabilityRegistry([third, second, direct]);
+    expect(registry.candidates(marocPay).map((route) => route.provider.name)).toEqual([
+      'CMI',
+      'CASH',
+      'CHARIPAY',
     ]);
-    expect(registry.route({ ...wave, preferredProvider: 'PAYTECH' })?.provider.name).toBe(
-      'PAYTECH',
+    expect(registry.route({ ...marocPay, preferredProvider: 'CHARIPAY' })?.provider.name).toBe(
+      'CHARIPAY',
     );
     expect(() => new PaymentCapabilityRegistry([direct, direct])).toThrow(/configured twice/);
   });
 
   it('falls back to another provider of the same method, never to another method', () => {
-    const direct = syntheticProvider('WAVE', {
-      supportedMethods: ['WAVE_SN'],
+    const direct = syntheticProvider('CMI', {
+      supportedMethods: ['MAROCPAY'],
+      payerCountries: ['MA'],
+      supportedCurrencies: ['MAD'],
       priority: 10,
       active: false,
     });
-    const aggregator = syntheticProvider('PAYDUNYA', {
-      supportedMethods: ['WAVE_SN'],
+    const alternative = syntheticProvider('CHARIPAY', {
+      supportedMethods: ['MAROCPAY'],
+      payerCountries: ['MA'],
+      supportedCurrencies: ['MAD'],
       priority: 30,
     });
-    const cards = syntheticProvider('PAYTECH', { supportedMethods: ['CARD'], priority: 1 });
-    // Wave direct is down: the aggregator collecting Wave takes over.
-    const withAggregator = new PaymentCapabilityRegistry([direct, aggregator, cards]);
-    expect(withAggregator.route({ ...wave, preferredProvider: 'WAVE' })?.provider.name).toBe(
-      'PAYDUNYA',
+    const cards = syntheticProvider('STRIPE', {
+      supportedMethods: ['CARD'],
+      payerCountries: ['MA'],
+      supportedCurrencies: ['MAD'],
+      minimumHoldRemainingSeconds: 0,
+      priority: 1,
+    });
+    const marocPay = {
+      ...wave,
+      method: 'MAROCPAY' as const,
+      payerCountry: 'MA' as const,
+      currencyCode: 'MAD',
+    };
+    const withAlternative = new PaymentCapabilityRegistry([direct, alternative, cards]);
+    expect(withAlternative.route({ ...marocPay, preferredProvider: 'CMI' })?.provider.name).toBe(
+      'CHARIPAY',
     );
-    // Nobody collects Wave: unavailable, even though a card provider is active.
+    // Nobody collects MarocPay: unavailable, even though a card provider is active.
     const cardsOnly = new PaymentCapabilityRegistry([direct, cards]);
     expect(cardsOnly.hasActiveProvider()).toBe(true);
-    expect(cardsOnly.route(wave)).toBeNull();
-    expect(cardsOnly.candidates(wave)).toEqual([]);
-    expect(cardsOnly.route({ ...wave, method: 'CARD' })?.provider.name).toBe('PAYTECH');
+    expect(cardsOnly.route(marocPay)).toBeNull();
+    expect(cardsOnly.candidates(marocPay)).toEqual([]);
+    expect(cardsOnly.route({ ...marocPay, method: 'CARD' })?.provider.name).toBe('STRIPE');
   });
 
   it('routes only within the declared countries and currencies', () => {
-    const aggregator = syntheticProvider('PAYDUNYA', { supportedMethods: ['WAVE_SN'] });
-    const registry = new PaymentCapabilityRegistry([aggregator]);
-    expect(registry.route(wave)?.provider.name).toBe('PAYDUNYA');
+    const direct = syntheticProvider('WAVE', { supportedMethods: ['WAVE_SN'] });
+    const registry = new PaymentCapabilityRegistry([direct]);
+    expect(registry.route(wave)?.provider.name).toBe('WAVE');
     expect(registry.route({ ...wave, payerCountry: 'FR' })).toBeNull();
     expect(registry.route({ ...wave, currencyCode: 'EUR' })).toBeNull();
     expect(registry.route({ ...wave, method: 'BANKILY_MR' })).toBeNull();

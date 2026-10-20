@@ -40,10 +40,25 @@ import { secretKey } from './auth-env.js';
  *   ever comes from this configuration, never from a request.
  *
  * All three must be unset while PayPal is DISABLED.
+ *
+ * Wave Senegal (PAY-SN-1A), independent as well:
+ *
+ * - PAYMENT_WAVE_MODE: DISABLED (default: no credential, no adapter, no
+ *   network call) or LIVE. Wave documents no sandbox; LIVE is refused in
+ *   this release.
+ * - PAYMENT_WAVE_API_KEY: server-side Business API key.
+ * - PAYMENT_WAVE_WEBHOOK_SECRET: dedicated webhook signing secret.
+ * - PAYMENT_WAVE_REQUEST_SIGNING_SECRET: dedicated API request-signing
+ *   secret. EURO TERANGA requires signing-enabled keys for its integration.
+ *
+ * Orange Money Senegal remains a product target but has no public merchant
+ * contract complete enough to implement safely. Its only accepted mode is
+ * therefore DISABLED and no credential variable is defined.
  */
 export const PAYMENT_PROVIDERS = ['SANDBOX', 'DISABLED'] as const;
 export const PAYMENT_STRIPE_MODES = ['DISABLED', 'TEST', 'LIVE'] as const;
 export const PAYMENT_PAYPAL_MODES = ['DISABLED', 'SANDBOX', 'LIVE'] as const;
+export const PAYMENT_WAVE_MODES = ['DISABLED', 'LIVE'] as const;
 
 /**
  * Release gate of PAYMENT_STRIPE_MODE=LIVE. The pilot takes no real money:
@@ -55,11 +70,18 @@ export const STRIPE_LIVE_MODE_ENABLED = false;
 /** Release gate of PAYMENT_PAYPAL_MODE=LIVE, closed for the same reasons. */
 export const PAYPAL_LIVE_MODE_ENABLED = false;
 
+/** Release gate of PAYMENT_WAVE_MODE=LIVE: PAY-SN-1A never moves real money. */
+export const WAVE_LIVE_MODE_ENABLED = false;
+
 const STRIPE_SECRET_KEY = /^(sk|rk)_(test|live)_[A-Za-z0-9]{16,240}$/;
 const STRIPE_WEBHOOK_SECRET = /^whsec_[A-Za-z0-9+/=]{16,240}$/;
 /** REST app credentials (opaque to us) and webhook ID (Webhooks API: `^[a-zA-Z0-9]+$`, 50 max). */
 const PAYPAL_CREDENTIAL = /^[A-Za-z0-9_-]{16,256}$/;
 const PAYPAL_WEBHOOK_ID = /^[A-Za-z0-9]{1,50}$/;
+/** Formats published by Wave; examples in tests are generated and synthetic. */
+const WAVE_API_KEY = /^wave_sn_prod_[A-Za-z0-9]{16,256}$/;
+const WAVE_WEBHOOK_SECRET = /^wave_sn_WHS_[A-Za-z0-9]{16,256}$/;
+const WAVE_REQUEST_SIGNING_SECRET = /^wave_sn_AKS_[A-Za-z0-9]{16,256}$/;
 
 /** An empty value (`NAME=` in an env file) is the same as an unset one. */
 const optionalSecret = (pattern: RegExp, message: string) =>
@@ -107,6 +129,22 @@ export const paymentEnvShape = {
     PAYPAL_WEBHOOK_ID,
     'must be a PayPal webhook ID (1-50 letters or digits)',
   ),
+  PAYMENT_WAVE_MODE: z
+    .enum(PAYMENT_WAVE_MODES, { error: 'must be DISABLED or LIVE' })
+    .default('DISABLED'),
+  PAYMENT_WAVE_API_KEY: optionalSecret(
+    WAVE_API_KEY,
+    'must be a Wave Senegal production API key (wave_sn_prod_)',
+  ),
+  PAYMENT_WAVE_WEBHOOK_SECRET: optionalSecret(
+    WAVE_WEBHOOK_SECRET,
+    'must be a Wave Senegal webhook signing secret (wave_sn_WHS_)',
+  ),
+  PAYMENT_WAVE_REQUEST_SIGNING_SECRET: optionalSecret(
+    WAVE_REQUEST_SIGNING_SECRET,
+    'must be a Wave Senegal API request-signing secret (wave_sn_AKS_)',
+  ),
+  PAYMENT_ORANGE_MONEY_MODE: z.literal('DISABLED').default('DISABLED'),
 };
 
 type PaymentEnvInput = z.infer<z.ZodObject<typeof paymentEnvShape>> & {
@@ -120,6 +158,7 @@ type PaymentEnvInput = z.infer<z.ZodObject<typeof paymentEnvShape>> & {
 export function refinePaymentEnv(env: PaymentEnvInput, ctx: z.RefinementCtx): void {
   refineStripeEnv(env, ctx);
   refinePayPalEnv(env, ctx);
+  refineWaveEnv(env, ctx);
   const issue = (path: string, message: string) =>
     ctx.addIssue({ code: 'custom', path: [path], message });
 
@@ -138,6 +177,42 @@ export function refinePaymentEnv(env: PaymentEnvInput, ctx: z.RefinementCtx): vo
   // One key per purpose: the webhook key never doubles as an auth key.
   if ([env.AUTH_CSRF_KEY, env.AUTH_HMAC_KEY, env.AUTH_TOTP_ENCRYPTION_KEY].includes(secret)) {
     issue('PAYMENT_SANDBOX_WEBHOOK_SECRET', 'must differ from the authentication keys');
+  }
+}
+
+const WAVE_VARIABLES = [
+  'PAYMENT_WAVE_API_KEY',
+  'PAYMENT_WAVE_WEBHOOK_SECRET',
+  'PAYMENT_WAVE_REQUEST_SIGNING_SECRET',
+] as const;
+
+/** Wave has no documented sandbox: disabled is empty and LIVE stays release-gated. */
+function refineWaveEnv(env: PaymentEnvInput, ctx: z.RefinementCtx): void {
+  const issue = (path: string, message: string) =>
+    ctx.addIssue({ code: 'custom', path: [path], message });
+  const mode = env.PAYMENT_WAVE_MODE;
+
+  if (mode === 'DISABLED') {
+    for (const name of WAVE_VARIABLES) {
+      if (env[name]) issue(name, 'must be unset when PAYMENT_WAVE_MODE=DISABLED');
+    }
+    return;
+  }
+  if (!WAVE_LIVE_MODE_ENABLED) {
+    issue(
+      'PAYMENT_WAVE_MODE',
+      'LIVE is not enabled in this release: the pilot takes no real money',
+    );
+  }
+  for (const name of WAVE_VARIABLES) {
+    if (!env[name]) issue(name, 'is required when PAYMENT_WAVE_MODE=LIVE');
+  }
+  const secrets = WAVE_VARIABLES.map((name) => env[name]).filter(Boolean);
+  if (new Set(secrets).size !== secrets.length) {
+    issue(
+      'PAYMENT_WAVE_REQUEST_SIGNING_SECRET',
+      'must differ from the Wave API and webhook secrets',
+    );
   }
 }
 

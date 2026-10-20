@@ -1,8 +1,8 @@
-# Provider routing (PAY-HUB-1, PAY-EU-1, PAY-PAYPAL-1)
+# Provider routing (PAY-HUB-1, PAY-EU-1, PAY-PAYPAL-1, PAY-SN-1A)
 
 A **method** is what the customer chooses (Wave, a CB card, Bankily). A
-**provider** is who collects it (Wave directly, an aggregator such as
-PayDunya or PayTech, a card acquirer). The two are kept apart everywhere:
+**provider** is who collects it (Wave directement, Stripe, PayPal, etc.). The
+two are kept apart everywhere:
 the catalogue lists methods (`payment-catalog.ts`), the capability registry
 lists providers (`payment-capability.registry.ts`), and the customer never
 sees a provider name.
@@ -40,7 +40,20 @@ A declaration alone never makes a provider routable: only an **injected,
 active adapter** is (`PAYMENT_PROVIDERS`). Adapters: SANDBOX (local and CI),
 STRIPE since PAY-EU-1 (only with `PAYMENT_STRIPE_MODE` TEST or LIVE) and
 PAYPAL since PAY-PAYPAL-1 (only with `PAYMENT_PAYPAL_MODE` SANDBOX or LIVE;
-France and Spain, EUR). Both real adapters are DISABLED by default.
+France and Spain, EUR), and WAVE since PAY-SN-1A (`WAVE_SN`, SN, XOF;
+`PAYMENT_WAVE_MODE=LIVE` remains release-gated). All real adapters are
+DISABLED by default. Orange Money is only a declared direct target and has no
+adapter until the official Senegal merchant contract is available.
+
+### Règle Sénégal absolue
+
+- `WAVE_SN` possède exactement un provider : `WAVE` direct.
+- `ORANGE_MONEY_SN` cible exactement `ORANGE_MONEY` direct, actuellement non
+  implémenté.
+- `PAYDUNYA` et `PAYTECH` conservent leurs codes historiques mais déclarent
+  `methods=[]`, `countries=[]`, `currencies=[]`, `implemented=false`.
+- Wave indisponible donne `PAYMENT_METHOD_UNAVAILABLE`; jamais Orange, carte
+  ou agrégateur. Orange indisponible donne la même erreur; jamais Wave.
 
 ### Providers with a capture step (PayPal)
 
@@ -86,14 +99,18 @@ amount).
 3. **Initiation.** `POST …/payments` routes again for **the quote's method**,
    the quote's candidate first:
    - candidate still active → it collects;
-   - candidate down → the next active provider **of the same method**
-     (Wave direct → PayDunya → PayTech, by priority, then code);
+   - candidate down → the next active provider **of the same method**, s'il
+     en existe un dans une autre intégration;
    - nobody collects that method → `PAYMENT_METHOD_UNAVAILABLE`, and nothing
      is created.
 
 There is **never a fallback to another method**: a Wave payment is never
 charged to a card, even when a card provider is active. The customer chooses
 another method, and gets a new quote.
+
+PAY-SN-1A va plus loin pour le Sénégal : aucune deuxième route du même moyen
+n'est déclarée. Il n'existe donc aucun fallback Wave ou Orange, même vers un
+provider du même moyen.
 
 ## Safety rules kept from PR-10
 
@@ -114,9 +131,13 @@ another method, and gets a new quote.
   nothing in MA, MR, SN or another currency; Wero, Alma, SEPA and wallets
   never), amounts, hold window, `ASYNC_LONG` (`stripe-payment.provider.spec.ts`,
   `stripe-payments.int.spec.ts`).
+- PAY-SN-1A : Wave uniquement pour `WAVE_SN/SN/XOF`, hold minimum 2100 s,
+  PayDunya/PayTech non routables, Orange indisponible, aucun fallback,
+  gateway fake et zéro réseau (`wave-payment.provider.spec.ts`,
+  `wave-payments.int.spec.ts`).
 
 - Unit: priority, candidate first, stable tie-break, same-method fallback, no
   cross-method fallback, countries and currencies (`payment-capability.registry.spec.ts`).
-- Integration: synthetic WAVE, PAYDUNYA and STRIPE adapters; Wave down after
-  the quote → PAYDUNYA collects the presentment amount; nobody left for Wave
-  → refused, the card provider never called (`payment-hub.int.spec.ts`).
+- Les anciens tests synthétiques du hub démontrent le mécanisme générique de
+  fallback de même méthode. Les déclarations PAY-SN-1A et leurs tests dédiés
+  ferment explicitement cette possibilité pour Wave et Orange Sénégal.

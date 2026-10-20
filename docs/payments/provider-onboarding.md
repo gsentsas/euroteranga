@@ -2,7 +2,9 @@
 
 > PAY-EU-1 followed these steps for Stripe and PAY-PAYPAL-1 for PayPal: see
 > [stripe-europe.md](stripe-europe.md) and [paypal.md](paypal.md), including
-> their checklists before CONFIGURED.
+> their checklists before CONFIGURED. PAY-SN-1A suit le même modèle pour
+> [Wave Sénégal direct](wave-senegal.md). Orange reste bloqué, voir
+> [orange-money-senegal.md](orange-money-senegal.md).
 
 PAY-HUB-1 activates no real provider: every real declaration is SUPPORTED
 only (see [payment-matrix.md](payment-matrix.md)). Each provider gets its own
@@ -63,14 +65,17 @@ unavailable outside local and CI.
   its refund, decided by the owner.
 - Settlement import for reconciliation ([reconciliation.md](reconciliation.md)).
 
-## Status at PAY-PAYPAL-1
+## Status at PAY-SN-1A
 
-| Provider                                                                                 | Adapter                                    | Configured                          | Live                     |
-| ---------------------------------------------------------------------------------------- | ------------------------------------------ | ----------------------------------- | ------------------------ |
-| SANDBOX                                                                                  | yes, test-only                             | local, CI only                      | never                    |
-| STRIPE                                                                                   | **yes** (FR, ES; EUR; CARD, BIZUM, KLARNA) | no (`PAYMENT_STRIPE_MODE=DISABLED`) | no (release gate closed) |
-| PAYPAL                                                                                   | **yes** (FR, ES; EUR; PAYPAL; never SN)    | no (`PAYMENT_PAYPAL_MODE=DISABLED`) | no (release gate closed) |
-| PAYDUNYA, PAYTECH, WAVE, ORANGE_MONEY, CMI, CHARIPAY, MOOSYL, MANUAL_BANK_TRANSFER, CASH | no                                         | no                                  | no                       |
+| Provider                                          | Adapter                                           | Configured                                | Live                     |
+| ------------------------------------------------- | ------------------------------------------------- | ----------------------------------------- | ------------------------ |
+| SANDBOX                                           | yes, test-only                                    | local, CI only                            | never                    |
+| STRIPE                                            | **yes** (FR, ES; EUR; CARD, BIZUM, KLARNA)        | no (`PAYMENT_STRIPE_MODE=DISABLED`)       | no (release gate closed) |
+| PAYPAL                                            | **yes** (FR, ES; EUR; PAYPAL; never SN)           | no (`PAYMENT_PAYPAL_MODE=DISABLED`)       | no (release gate closed) |
+| WAVE                                              | **yes** direct (SN; XOF; WAVE_SN)                 | no (`PAYMENT_WAVE_MODE=DISABLED`)         | no (release gate closed) |
+| ORANGE_MONEY                                      | **no — `BLOCKED_PENDING_OFFICIAL_MERCHANT_DOCS`** | no (`PAYMENT_ORANGE_MONEY_MODE=DISABLED`) | no                       |
+| PAYDUNYA, PAYTECH                                 | no; historiques et non routables                  | no                                        | no                       |
+| CMI, CHARIPAY, MOOSYL, MANUAL_BANK_TRANSFER, CASH | no                                                | no                                        | no                       |
 
 No adapter executes refunds at its provider yet: OPS refunds are recorded
 facts (`refundExecutionImplemented: false`).

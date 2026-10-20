@@ -126,6 +126,24 @@ export class PaymentWebhookController {
     return { received: true, outcome: result };
   }
 
+  /** Wave direct: only a signed, exact completed checkout can confirm payment. */
+  @Post('wave')
+  @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ description: 'Wave event authenticated and handled (or ignored).' })
+  @ApiNotFoundResponse({ type: ErrorBody, description: 'PAYMENT_NOT_FOUND' })
+  @ApiConflictResponse({ type: ErrorBody, description: 'PAYMENT_WEBHOOK_REPLAY' })
+  async wave(@Req() request: RawBodyRequest<Request>) {
+    const provider = this.registry.provider('WAVE');
+    if (!provider) throw new NotFoundException();
+    const raw = await provider.verifyWebhook(webhookRequest(request), Date.now());
+    const event = provider.parseWebhook(raw);
+    // Attempt failures may precede success at Wave and are non-terminal.
+    if (!event) return { received: true, outcome: 'IGNORED' };
+    if (event.type === 'PAYMENT_APPROVED') throw PaymentErrors.webhookInvalid(400);
+    return this.terminal(provider.name, event);
+  }
+
   /** A terminal event through the PAY-HUB-1 pipeline; identical redeliveries acknowledged. */
   private async terminal(provider: PaymentProviderName, event: ProviderEvent) {
     try {

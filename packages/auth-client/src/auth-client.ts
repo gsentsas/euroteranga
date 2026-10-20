@@ -890,7 +890,7 @@ export type PaymentMethodCode =
 /** Payer countries of the corridor. */
 export type PayerCountryCode = 'FR' | 'ES' | 'MA' | 'MR' | 'SN';
 
-/** Providers of the programme (only SANDBOX, test-only, has an adapter today). */
+/** Providers of the programme; real adapters remain disabled until configured and released. */
 export type PaymentProviderCode =
   | 'SANDBOX'
   | 'STRIPE'

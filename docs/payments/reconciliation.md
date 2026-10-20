@@ -1,4 +1,4 @@
-# Settlement and reconciliation (PAY-HUB-1, PAY-EU-1, PAY-PAYPAL-1)
+# Settlement and reconciliation (PAY-HUB-1, PAY-EU-1, PAY-PAYPAL-1, PAY-SN-1A)
 
 Three facts, at three moments, in three models:
 
@@ -78,3 +78,25 @@ is recorded and refused: it shows as a `PAYMENT_SUCCEEDED` event on an attempt
 that is not SUCCEEDED (the query above, with `p.provider = 'PAYPAL'`), and is
 refunded in the PayPal account, then recorded in OPS. See
 [paypal.md](paypal.md#refunds-and-reconciliation).
+
+## Wave Sénégal direct (PAY-SN-1A)
+
+Le `providerPaymentId` est l'id de Checkout Session `cos-…`; le
+`client_reference` est toujours `Payment.reference`. Avant de créer une
+session, et après tout timeout de création, l'adaptateur utilise la recherche
+officielle par `client_reference`. Un résultat exact est repris, zéro résultat
+permet la création, plusieurs résultats bloquent l'initiation. Un timeout
+reste `PENDING`, jamais `FAILED` automatiquement.
+
+Les cas à réconcilier sont : PENDING sans id après un résultat de création
+inconnu; événement succès après expiration du hold ou annulation; expiration
+Wave au résultat inconnu; montant, devise ou référence discordants; checkout
+`complete/succeeded` dont l'événement signé n'est pas encore arrivé. Ils ne
+doivent jamais être résolus depuis le retour navigateur.
+
+Wave documente un endpoint de remboursement, mais PAY-SN-1A ne l'appelle pas.
+Tout argent reçu sans réservation confirmée est traité manuellement dans le
+compte Wave puis enregistré dans OPS, en conservant l'événement et son hash
+comme preuve. Aucun frais, net, batch de règlement ou remboursement provider
+n'est inventé dans `payment_settlement`. Voir
+[wave-senegal.md](wave-senegal.md).

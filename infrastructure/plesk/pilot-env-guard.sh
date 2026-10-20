@@ -35,4 +35,27 @@ pilot_env_guard() {
     echo "Pilot deploy refuses PayPal credentials: PAYMENT_PAYPAL_CLIENT_ID, PAYMENT_PAYPAL_CLIENT_SECRET and PAYMENT_PAYPAL_WEBHOOK_ID must be unset" >&2
     return 1
   fi
+  # Wave has no documented sandbox. The pilot refuses LIVE and every Wave
+  # credential, including a signing secret, even when mode says DISABLED.
+  [ "${PAYMENT_WAVE_MODE-DISABLED}" = "DISABLED" ] || {
+    echo "Pilot deploy expects PAYMENT_WAVE_MODE=DISABLED (Wave LIVE is refused)" >&2
+    return 1
+  }
+  if [ -n "${PAYMENT_WAVE_API_KEY:-}" ] || [ -n "${PAYMENT_WAVE_WEBHOOK_SECRET:-}" ] ||
+    [ -n "${PAYMENT_WAVE_REQUEST_SIGNING_SECRET:-}" ]; then
+    echo "Pilot deploy refuses Wave credentials: PAYMENT_WAVE_API_KEY, PAYMENT_WAVE_WEBHOOK_SECRET and PAYMENT_WAVE_REQUEST_SIGNING_SECRET must be unset" >&2
+    return 1
+  fi
+  # Orange direct is blocked pending the private Senegal merchant contract.
+  # No credential names are invented: reject every non-empty variable in its
+  # namespace except the explicit fail-closed mode.
+  [ "${PAYMENT_ORANGE_MONEY_MODE-DISABLED}" = "DISABLED" ] || {
+    echo "Pilot deploy expects PAYMENT_ORANGE_MONEY_MODE=DISABLED" >&2
+    return 1
+  }
+  if env | grep -E '^PAYMENT_ORANGE_MONEY_[A-Za-z0-9_]+=.+$' |
+    cut -d= -f1 | grep -v '^PAYMENT_ORANGE_MONEY_MODE$' >/dev/null; then
+    echo "Pilot deploy refuses every Orange Money credential variable" >&2
+    return 1
+  fi
 }

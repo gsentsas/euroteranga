@@ -108,4 +108,45 @@ describe('pilot deploy guard', () => {
     expect(guard({ ...PILOT, PAYMENT_PROVIDER: 'SANDBOX' }).status).toBe(1);
     expect(guard({ APP_ENV: 'staging' }).status).toBe(1);
   });
+
+  it('accepts Wave and Orange only when explicitly or implicitly DISABLED', () => {
+    expect(guard({ ...PILOT, PAYMENT_WAVE_MODE: 'DISABLED' }).status).toBe(0);
+    expect(guard({ ...PILOT, PAYMENT_ORANGE_MONEY_MODE: 'DISABLED' }).status).toBe(0);
+  });
+
+  it.each(['LIVE', 'SANDBOX', ''])('refuses PAYMENT_WAVE_MODE=%s', (mode) => {
+    const result = guard({ ...PILOT, PAYMENT_WAVE_MODE: mode });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('PAYMENT_WAVE_MODE=DISABLED');
+  });
+
+  it.each([
+    'PAYMENT_WAVE_API_KEY',
+    'PAYMENT_WAVE_WEBHOOK_SECRET',
+    'PAYMENT_WAVE_REQUEST_SIGNING_SECRET',
+  ])('refuses a stale %s and never prints it', (name) => {
+    const value = `x${randomBytes(16).toString('hex')}`;
+    const result = guard({ ...PILOT, PAYMENT_WAVE_MODE: 'DISABLED', [name]: value });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('refuses Wave credentials');
+    expect(result.stderr).not.toContain(value);
+  });
+
+  it.each(['TEST', 'LIVE', ''])('refuses PAYMENT_ORANGE_MONEY_MODE=%s', (mode) => {
+    const result = guard({ ...PILOT, PAYMENT_ORANGE_MONEY_MODE: mode });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('PAYMENT_ORANGE_MONEY_MODE=DISABLED');
+  });
+
+  it('refuses any non-empty Orange credential namespace without printing its value', () => {
+    const value = `x${randomBytes(16).toString('hex')}`;
+    const result = guard({
+      ...PILOT,
+      PAYMENT_ORANGE_MONEY_MODE: 'DISABLED',
+      PAYMENT_ORANGE_MONEY_MERCHANT_CREDENTIAL: value,
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('refuses every Orange Money credential');
+    expect(result.stderr).not.toContain(value);
+  });
 });

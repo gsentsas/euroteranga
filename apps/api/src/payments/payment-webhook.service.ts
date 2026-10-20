@@ -243,6 +243,12 @@ export class PaymentWebhookService {
   ): Promise<WebhookOutcome> {
     const payment = await this.lockPayment(tx, provider, event.providerPaymentId);
     if (!payment) throw PaymentErrors.notFound();
+    // Some providers (Wave) echo our immutable reference. It must identify
+    // the same attempt as the provider id; either identifier alone is not
+    // sufficient when both are available.
+    if (event.paymentReference !== undefined && event.paymentReference !== payment.reference) {
+      throw PaymentErrors.webhookInvalid(422);
+    }
     // Events of one payment are serialized by its lock: this check is exact.
     const seen = await tx.paymentEvent.findUnique({
       where: { provider_providerEventId: { provider, providerEventId: event.providerEventId } },

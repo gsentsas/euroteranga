@@ -1,6 +1,7 @@
 import {
   PAYPAL_LIVE_MODE_ENABLED,
   STRIPE_LIVE_MODE_ENABLED,
+  WAVE_LIVE_MODE_ENABLED,
   type ApiEnv,
 } from '@euroteranga/config';
 import type { Logger } from '@euroteranga/logger';
@@ -33,33 +34,47 @@ import {
   StripeSdkGateway,
   type StripeGateway,
 } from './providers/stripe-payment.provider.js';
+import {
+  WaveHttpGateway,
+  WavePaymentProvider,
+  type WaveGateway,
+} from './providers/wave-payment.provider.js';
 
 /** Test-only replacement of the Stripe API calls (null: the official SDK). */
 export const STRIPE_GATEWAY = Symbol('STRIPE_GATEWAY');
 /** Test-only replacement of the PayPal API calls (null: the official SDK). */
 export const PAYPAL_GATEWAY = Symbol('PAYPAL_GATEWAY');
+/** Test-only replacement of Wave HTTP (null: native server-side fetch). */
+export const WAVE_GATEWAY = Symbol('WAVE_GATEWAY');
+const TEST_PAYMENT_PROVIDERS = Symbol('TEST_PAYMENT_PROVIDERS');
 
 export interface PaymentModuleOptions {
   /** Tests only: CI never reaches Stripe. Production passes nothing. */
   stripeGateway?: StripeGateway;
   /** Tests only: CI never reaches PayPal. Production passes nothing. */
   paypalGateway?: PayPalGateway;
+  /** Tests only: CI never reaches Wave. */
+  waveGateway?: WaveGateway;
+  /** Tests only: explicitly supplied adapters; production passes none. */
+  testPaymentProviders?: readonly PaymentProvider[];
 }
 
 /**
  * The configured adapters, side by side: SANDBOX (local and CI only, refused
- * by the configuration when deployed), STRIPE (PAY-EU-1, only when
- * PAYMENT_STRIPE_MODE is TEST or LIVE) and PAYPAL (PAY-PAYPAL-1, only when
- * PAYMENT_PAYPAL_MODE is SANDBOX or LIVE). DISABLED wires nothing: no key is
- * read, no client is built, no network call can happen.
+ * by the configuration when deployed), STRIPE (PAY-EU-1, TEST or LIVE),
+ * PAYPAL (PAY-PAYPAL-1, SANDBOX or LIVE) and WAVE (PAY-SN-1A, LIVE only).
+ * Every LIVE gate is false in this release. DISABLED wires nothing: no key is
+ * read, no client is built and no network call can happen.
  */
 export function paymentProvidersFactory(
   config: PaymentConfig,
   logger: Logger,
   stripeGateway: StripeGateway | null,
   paypalGateway: PayPalGateway | null = null,
+  waveGateway: WaveGateway | null = null,
+  testPaymentProviders: readonly PaymentProvider[] = [],
 ): PaymentProvider[] {
-  const providers: PaymentProvider[] = [];
+  const providers: PaymentProvider[] = [...testPaymentProviders];
   if (config.provider === 'SANDBOX' && config.sandboxWebhookKey) {
     providers.push(new SandboxPaymentProvider(config.sandboxWebhookKey));
   }
@@ -93,6 +108,20 @@ export function paymentProvidersFactory(
       }),
     );
   }
+  if (config.wave) {
+    if (config.wave.mode === 'LIVE' && !WAVE_LIVE_MODE_ENABLED) {
+      throw new Error('PAYMENT_WAVE_MODE=LIVE is not enabled in this release');
+    }
+    const { apiKey, webhookSecret, requestSigningSecret } = config.wave;
+    providers.push(
+      new WavePaymentProvider({
+        webhookSecret,
+        returnUrl: config.returnUrl,
+        gateway: waveGateway ?? new WaveHttpGateway(apiKey, requestSigningSecret),
+        logger,
+      }),
+    );
+  }
   return providers;
 }
 
@@ -121,10 +150,19 @@ export class PaymentModule {
         { provide: PAYMENT_CONFIG, useFactory: buildPaymentConfig, inject: [API_ENV] },
         { provide: STRIPE_GATEWAY, useValue: options.stripeGateway ?? null },
         { provide: PAYPAL_GATEWAY, useValue: options.paypalGateway ?? null },
+        { provide: WAVE_GATEWAY, useValue: options.waveGateway ?? null },
+        { provide: TEST_PAYMENT_PROVIDERS, useValue: options.testPaymentProviders ?? [] },
         {
           provide: PAYMENT_PROVIDERS,
           useFactory: paymentProvidersFactory,
-          inject: [PAYMENT_CONFIG, API_LOGGER, STRIPE_GATEWAY, PAYPAL_GATEWAY],
+          inject: [
+            PAYMENT_CONFIG,
+            API_LOGGER,
+            STRIPE_GATEWAY,
+            PAYPAL_GATEWAY,
+            WAVE_GATEWAY,
+            TEST_PAYMENT_PROVIDERS,
+          ],
         },
         { provide: FX_RATE_SOURCE, useFactory: fxRateSourceFactory, inject: [API_ENV] },
         PaymentCapabilityRegistry,

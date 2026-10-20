@@ -3,7 +3,7 @@
 > Implemented in PR-10 and extended by PR-22 operational refunds: payment
 > attempts, provider events, booking confirmation and bounded refund facts. **NOT PRODUCTION DEPLOYED.** **No real payment service
 > provider (PSP) is configured**: the only active provider, **SANDBOX**, is a local simulation for
-> development, tests and CI (the Stripe and PayPal adapters exist but are disabled). No real money is ever moved, and no card, security
+> development, tests and CI (the Stripe, PayPal and Wave direct adapters exist but are disabled). No real money is ever moved, and no card, security
 > code or IBAN is ever collected. Browser and integration tests use synthetic
 > data only.
 
@@ -27,6 +27,15 @@
 > (`PAYMENT_PAYPAL_MODE=DISABLED`), refused on the pilot, never LIVE in this
 > release; refunds are not sent to PayPal. See
 > [paypal.md](../payments/paypal.md).
+
+> **PAY-SN-1A** ajoute **Wave Sénégal direct** (`WAVE_SN`, SN, XOF), sans
+> téléphone par défaut, sans agrégateur et sans fallback. Le checkout Wave de
+> 30 minutes exige au moins 2100 secondes de hold; le hold par défaut de 900
+> secondes le rend donc indisponible. L'adaptateur et LIVE restent désactivés.
+> Orange Money direct est une cible déclarée mais son adaptateur est
+> `BLOCKED_PENDING_OFFICIAL_MERCHANT_DOCS`. Voir
+> [wave-senegal.md](../payments/wave-senegal.md) et
+> [orange-money-senegal.md](../payments/orange-money-senegal.md).
 
 PR-10 lets the authenticated CUSTOMER who owns a HELD booking start a payment
 attempt. The attempt's result arrives later as a signed provider event. A
@@ -52,9 +61,9 @@ Included:
 
 Deferred:
 
-- **any real PSP** (PayDunya, Wave, Orange Money, card acquiring…; Stripe has
-  an adapter since PAY-EU-1, disabled by default) and PCI-scoped data
-  collection (Stripe collects card data on its own page);
+- activation/configuration d'un PSP réel (Stripe, PayPal et Wave ont des
+  adaptateurs désactivés; Orange Money n'en a pas encore), et toute collecte
+  PCI (Stripe collecte les données carte sur sa propre page);
 - **real provider-side refund execution**: PR-22 records the operational
   refund fact and matching credit memo, but SANDBOX moves no money and no
   production PSP refund API is selected;
@@ -174,6 +183,12 @@ The business services only use the internal `PaymentProvider` interface:
 A provider never decides a business state directly. The result always arrives
 as an authenticated event, through the same pipeline a real PSP will use.
 
+Wave n'ayant pas de clé d'idempotence Create documentée, son adaptateur
+renforce le contrat générique par une recherche officielle du
+`client_reference` avant création et après résultat inconnu. Son événement
+porte aussi la référence : le pipeline exige qu'elle corresponde au même
+Payment que l'id provider. Voir la spécification Wave dédiée.
+
 `PAYMENT_PROVIDER` selects the provider:
 
 - `DISABLED` is the default: initiation answers `503 PAYMENT_PROVIDER_UNAVAILABLE`
@@ -219,6 +234,13 @@ where `v1` is the HMAC-SHA256 of `<t>.<raw body>` under the webhook key.
 `POST /v1/payments/webhooks/sandbox` (only when `PAYMENT_PROVIDER=SANDBOX`)
 has no user session and no CSRF token: it is authenticated by the provider
 signature over the **raw** request body. Nest keeps it as `request.rawBody`.
+
+Les routes Stripe, PayPal et Wave suivent le même principe avec leur contrat
+propre. Pour Wave, `POST /v1/payments/webhooks/wave` utilise
+`Wave-Signature`, HMAC-SHA256 du timestamp suivi du corps brut, accepte les
+signatures `v1` multiples de rotation, borne le passé à 5 minutes et le futur
+à 30 secondes, et n'accepte comme succès que
+`checkout.session.completed` + `complete` + `succeeded` exacts.
 
 | Check                                         | Failure                                         |
 | --------------------------------------------- | ----------------------------------------------- |
@@ -270,10 +292,16 @@ outlasts the Checkout session by five minutes, and the session expires before
 the hold; a late success can only come from a delayed event, is recorded,
 never confirms, and must be refunded. With PayPal (PAY-PAYPAL-1), a late
 approval is never captured, and a capture completing after the hold is
-recorded, never confirms, and must be refunded. **A real PSP integration must add a provider-specific strategy for
-asynchronous payments and compensation:** void or refund a capture that
-arrives too late, a success on a cancelled attempt, or a mismatched amount.
-Until then these cases are recorded and refused, never applied.
+recorded, never confirms, and must be refunded. Wave exige 35 minutes de hold
+restant : sa session de 30 minutes doit être
+expirée au provider avant toute annulation locale. Le défaut de 15 minutes ne
+route donc jamais Wave. Une réussite Wave tardive est enregistrée/refusée et
+nécessite réconciliation manuelle; l'endpoint refund officiel n'est pas encore
+exposé par l'interface générique. **A real PSP integration must add a
+provider-specific strategy for asynchronous payments and compensation:** void
+or refund a capture that arrives too late, a success on a cancelled attempt,
+or a mismatched amount. Until then these cases are recorded and refused, never
+applied.
 
 ## Idempotency
 
