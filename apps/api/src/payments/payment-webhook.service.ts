@@ -21,13 +21,46 @@ export type WebhookOutcome =
   | { outcome: 'PAYMENT_SUCCEEDED' | 'PAYMENT_FAILED'; error?: undefined }
   | { outcome: 'REJECTED'; error: PublicApiError };
 
-interface LockedPayment {
+export interface LockedPayment {
   id: string;
   reference: string;
   status: 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
   booking_id: string;
   amount_minor: bigint;
   currency_code: string;
+  currency_minor_unit: number;
+  quote_id: string | null;
+  quote_booking_amount_minor: bigint | null;
+  quote_booking_currency_code: string | null;
+  quote_booking_currency_minor_unit: number | null;
+  presentment_amount_minor: bigint | null;
+  presentment_currency_code: string | null;
+}
+
+/**
+ * What the provider must have collected. With a quote (PAY-HUB-1): its
+ * presentment amount and currency, the quote itself covering exactly the
+ * payment's booking amount. Without one (a PR-10 attempt): the payment amount.
+ */
+export function expectedProviderAmount(
+  payment: LockedPayment,
+): { amountMinor: bigint; currencyCode: string } | null {
+  if (payment.quote_id === null) {
+    return { amountMinor: payment.amount_minor, currencyCode: payment.currency_code };
+  }
+  if (
+    payment.presentment_amount_minor === null ||
+    payment.presentment_currency_code === null ||
+    payment.quote_booking_amount_minor !== payment.amount_minor ||
+    payment.quote_booking_currency_code !== payment.currency_code ||
+    payment.quote_booking_currency_minor_unit !== payment.currency_minor_unit
+  ) {
+    return null;
+  }
+  return {
+    amountMinor: payment.presentment_amount_minor,
+    currencyCode: payment.presentment_currency_code,
+  };
 }
 
 interface LockedBooking {
@@ -72,13 +105,19 @@ export class PaymentWebhookService {
     provider: PaymentProviderName,
     event: ProviderEvent,
   ): Promise<WebhookOutcome> {
+    // The quote is immutable (payment_quote_guard): read without a lock.
     const [payment] = await tx.$queryRaw<LockedPayment[]>`
-      SELECT "id", "reference", "status"::text AS "status", "booking_id", "amount_minor",
-        "currency_code"
-      FROM "payment"
-      WHERE "provider" = ${provider}::"payment_provider"
-        AND "provider_payment_id" = ${event.providerPaymentId}
-      FOR UPDATE
+      SELECT p."id", p."reference", p."status"::text AS "status", p."booking_id",
+        p."amount_minor", p."currency_code", p."currency_minor_unit", p."quote_id",
+        q."booking_amount_minor" AS "quote_booking_amount_minor",
+        q."booking_currency_code" AS "quote_booking_currency_code",
+        q."booking_currency_minor_unit" AS "quote_booking_currency_minor_unit",
+        q."presentment_amount_minor", q."presentment_currency_code"
+      FROM "payment" p
+      LEFT JOIN "payment_quote" q ON q."id" = p."quote_id"
+      WHERE p."provider" = ${provider}::"payment_provider"
+        AND p."provider_payment_id" = ${event.providerPaymentId}
+      FOR UPDATE OF p
     `;
     if (!payment) throw PaymentErrors.notFound();
     // Events of one payment are serialized by its lock: this check is exact.
@@ -109,10 +148,12 @@ export class PaymentWebhookService {
       return { outcome: 'REJECTED', error } as const;
     };
 
-    if (event.amountMinor !== payment.amount_minor) {
+    // Exactly the amount the payer was asked for, in that currency.
+    const expected = expectedProviderAmount(payment);
+    if (!expected || event.amountMinor !== expected.amountMinor) {
       return reject('AMOUNT_MISMATCH', PaymentErrors.webhookInvalid(422));
     }
-    if (event.currencyCode !== payment.currency_code) {
+    if (event.currencyCode !== expected.currencyCode) {
       return reject('CURRENCY_MISMATCH', PaymentErrors.webhookInvalid(422));
     }
     if (payment.status !== 'PENDING') {
@@ -174,6 +215,8 @@ export class PaymentWebhookService {
           succeededAt: now,
           amountMinor: amount,
           currencyCode: payment.currency_code,
+          collectedAmountMinor: amountToNumber(expected.amountMinor),
+          collectedCurrencyCode: expected.currencyCode,
         },
         metadata,
       },

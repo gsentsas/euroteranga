@@ -21,7 +21,7 @@ import {
   uploadDocument,
 } from '../../support/passenger-document-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
-import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
+import { CURRENT_MIGRATIONS, historical, withoutPaymentHub } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -111,7 +111,7 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
     storageRoot = mkdtempSync(join(tmpdir(), 'et-pr10-documents-'));
     const pr10 = join(workDir, 'migrations');
     for (const entry of readdirSync(MIGRATIONS)) {
-      if (entry <= PAYMENT_MIGRATION) {
+      if (historical(entry, PAYMENT_MIGRATION)) {
         cpSync(join(MIGRATIONS, entry), join(pr10, entry), { recursive: true });
       }
     }
@@ -126,7 +126,7 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
     );
     deploy(config, url);
     raw = createDatabaseClient({ databaseUrl: url });
-    expect(await applied()).toHaveLength(10);
+    expect(withoutPaymentHub(await applied())).toHaveLength(10);
 
     env = integrationEnv({ DATABASE_URL: url, OBJECT_STORAGE_LOCAL_ROOT: storageRoot });
     t = await startTestApp(env);
@@ -157,7 +157,7 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
     // Apply and measure exactly the PR-11 migration set first.
     const pr11 = join(workDir, 'pr11', 'migrations');
     for (const entry of readdirSync(MIGRATIONS)) {
-      if (entry <= PASSENGER_DOCUMENT_MIGRATION) {
+      if (historical(entry, PASSENGER_DOCUMENT_MIGRATION)) {
         cpSync(join(MIGRATIONS, entry), join(pr11, entry), { recursive: true });
       }
     }
@@ -193,8 +193,8 @@ describe('upgrade from a PR-10 database (isolated database)', () => {
   });
 
   it('applies only PR-11 and preserves every PR-10 booking/payment/seat value', async () => {
-    expect(afterPassengerDocuments).toHaveLength(11);
-    expect(afterPassengerDocuments.at(-1)).toBe(PASSENGER_DOCUMENT_MIGRATION);
+    expect(withoutPaymentHub(afterPassengerDocuments)).toHaveLength(11);
+    expect(withoutPaymentHub(afterPassengerDocuments).at(-1)).toBe(PASSENGER_DOCUMENT_MIGRATION);
     expect(afterPassengerSnapshot).toEqual(before);
     expect(afterPassengerCounts).toEqual([0, 0, 0]);
     const migrations = await applied();

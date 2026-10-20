@@ -13,7 +13,7 @@ import {
   type BookableFixture,
   type CustomerActor,
 } from '../../support/booking-helpers.js';
-import { shortHold, waitUntilExpired } from '../../support/payment-helpers.js';
+import { insertIdentityQuote, shortHold, waitUntilExpired } from '../../support/payment-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
 
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -88,7 +88,29 @@ describe('payment database invariants (isolated database)', () => {
     ...overrides,
   });
 
-  const insert = (data: Prisma.PaymentUncheckedCreateInput) => prisma().payment.create({ data });
+  /**
+   * PAY-HUB-1: a new attempt carries a quote. An unused quote of the booking
+   * is reused, or one is made while the hold can still be quoted; otherwise
+   * the attempt goes without one, and payment_guard reports the booking's
+   * state first, exactly as in PR-10.
+   */
+  const quoteFor = async (bookingId: string): Promise<string | null> => {
+    const unused = await prisma().paymentQuote.findFirst({
+      where: { bookingId, payment: null },
+      select: { id: true },
+    });
+    if (unused) return unused.id;
+    try {
+      return (await insertIdentityQuote(prisma(), bookingId)).id;
+    } catch {
+      return null;
+    }
+  };
+  const insert = async (data: Prisma.PaymentUncheckedCreateInput) => {
+    if (data.quoteId !== undefined) return prisma().payment.create({ data });
+    const quoteId = await quoteFor(data.bookingId);
+    return prisma().payment.create({ data: { ...data, ...(quoteId ? { quoteId } : {}) } });
+  };
 
   /** The webhook's writes, done directly: processed event, success, confirmation. */
   const succeed = (paymentId: string, bookingId: string) =>
@@ -364,17 +386,21 @@ describe('payment database invariants (isolated database)', () => {
       }
       const other = await heldBooking(f, 2, 3, ['2A']);
       const pending = await insert(paymentData(other, { providerPaymentId: null }));
+      // PAY-HUB-1: another quote of the same booking cannot be swapped in.
+      const anotherQuote = await insertIdentityQuote(prisma(), other.id);
       for (const [label, data] of [
         ['amount', { amountMinor: other.total + 1n }],
         ['booking', { bookingId: booking.id }],
         ['reference', { reference: paymentReference() }],
         ['customer', { customerIdentityId: bob.id }],
         ['idempotency key', { idempotencyKey: 'a-new-idempotency-key' }],
+        ['quote', { quoteId: anotherQuote.id }],
+        ['quote removed', { quoteId: null }],
       ] as const) {
         await expect(
           prisma().payment.update({ where: { id: pending.id }, data }),
           label,
-        ).rejects.toThrow(/identity, booking and amount are immutable/);
+        ).rejects.toThrow(/identity, quote, booking and amount are immutable/);
       }
       // The provider id can be learnt once, then never changes.
       await prisma().payment.update({

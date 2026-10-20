@@ -2,7 +2,6 @@ import {
   Controller,
   Header,
   HttpCode,
-  Inject,
   NotFoundException,
   Post,
   Req,
@@ -16,8 +15,8 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ErrorBody } from '../auth/dto/auth.dto.js';
+import { PaymentCapabilityRegistry } from './payment-capability.registry.js';
 import { PaymentWebhookService } from './payment-webhook.service.js';
-import { PAYMENT_PROVIDER, type PaymentProvider } from './providers/payment-provider.js';
 
 /**
  * Provider-to-server events. No user session and no CSRF: the request is
@@ -31,7 +30,7 @@ import { PAYMENT_PROVIDER, type PaymentProvider } from './providers/payment-prov
 export class PaymentWebhookController {
   constructor(
     private readonly webhooks: PaymentWebhookService,
-    @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider | null,
+    private readonly registry: PaymentCapabilityRegistry,
   ) {}
 
   @Post('sandbox')
@@ -41,8 +40,8 @@ export class PaymentWebhookController {
   @ApiNotFoundResponse({ type: ErrorBody, description: 'PAYMENT_NOT_FOUND' })
   @ApiConflictResponse({ type: ErrorBody, description: 'PAYMENT_WEBHOOK_REPLAY and refusals' })
   async sandbox(@Req() request: RawBodyRequest<Request>) {
-    const provider = this.provider;
-    if (provider?.name !== 'SANDBOX') throw new NotFoundException();
+    const provider = this.registry.provider('SANDBOX');
+    if (!provider) throw new NotFoundException();
     const raw = provider.verifyWebhook(
       {
         rawBody: request.rawBody,

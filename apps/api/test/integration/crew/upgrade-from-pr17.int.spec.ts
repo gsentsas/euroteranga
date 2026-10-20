@@ -14,7 +14,7 @@ import {
   staffCheckInApi,
 } from '../../support/check-in-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
-import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
+import { CURRENT_MIGRATIONS, historical, withoutPaymentHub } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -64,7 +64,7 @@ describe('upgrade from a real PR-17 database', () => {
     workDir = mkdtempSync(join(tmpdir(), 'et-pr17-upgrade-'));
     const historicalMigrations = join(workDir, 'migrations');
     for (const entry of readdirSync(MIGRATIONS)) {
-      if (entry <= PR17_MIGRATION) {
+      if (historical(entry, PR17_MIGRATION)) {
         cpSync(join(MIGRATIONS, entry), join(historicalMigrations, entry), { recursive: true });
       }
     }
@@ -79,8 +79,8 @@ describe('upgrade from a real PR-17 database', () => {
     );
     deploy(config, url);
     raw = createDatabaseClient({ databaseUrl: url });
-    expect(await applied()).toHaveLength(17);
-    expect((await applied()).at(-1)).toBe(PR17_MIGRATION);
+    expect(withoutPaymentHub(await applied())).toHaveLength(17);
+    expect(withoutPaymentHub(await applied()).at(-1)).toBe(PR17_MIGRATION);
 
     const env = integrationEnv({ DATABASE_URL: url });
     t = await startTestApp(env);

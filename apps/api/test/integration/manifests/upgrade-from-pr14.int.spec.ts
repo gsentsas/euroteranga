@@ -11,7 +11,7 @@ import { staffActor, type StaffActor } from '../../support/admin-helpers.js';
 import { customerActor, type CustomerActor } from '../../support/booking-helpers.js';
 import { compliantPassenger, staffCheckInApi } from '../../support/check-in-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
-import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
+import { CURRENT_MIGRATIONS, historical, withoutPaymentHub } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -95,7 +95,7 @@ describe('upgrade from a real PR-14 database', () => {
     workDir = mkdtempSync(join(tmpdir(), 'et-pr14-upgrade-'));
     const pr14 = join(workDir, 'migrations');
     for (const entry of readdirSync(MIGRATIONS)) {
-      if (entry <= PR14_MIGRATION)
+      if (historical(entry, PR14_MIGRATION))
         cpSync(join(MIGRATIONS, entry), join(pr14, entry), { recursive: true });
     }
     const config = join(workDir, 'prisma.config.mjs');
@@ -109,8 +109,8 @@ describe('upgrade from a real PR-14 database', () => {
     );
     deploy(config, url);
     raw = createDatabaseClient({ databaseUrl: url });
-    expect(await applied()).toHaveLength(14);
-    expect((await applied()).at(-1)).toBe(PR14_MIGRATION);
+    expect(withoutPaymentHub(await applied())).toHaveLength(14);
+    expect(withoutPaymentHub(await applied()).at(-1)).toBe(PR14_MIGRATION);
 
     env = integrationEnv({ DATABASE_URL: url });
     t = await startTestApp(env);

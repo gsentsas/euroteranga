@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
+import { declaredCapability } from '../payment-capability.registry.js';
 import { PaymentErrors } from '../payment.errors.js';
 import type { PaymentFailureCode } from '../payment-rules.js';
 import type {
@@ -62,6 +63,8 @@ const payloadSchema = z
 export class SandboxPaymentProvider implements PaymentProvider {
   readonly name = 'SANDBOX' as const;
   readonly testMode = true;
+  /** Every method, country and currency of the catalogue, in local and CI only. */
+  readonly capability = declaredCapability('SANDBOX');
 
   constructor(private readonly webhookKey: Buffer) {}
 

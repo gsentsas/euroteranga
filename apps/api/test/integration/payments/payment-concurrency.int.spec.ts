@@ -1,10 +1,8 @@
 import type { ApiEnv } from '@euroteranga/config';
 import { createDatabaseClient } from '@euroteranga/database';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import {
-  PAYMENT_PROVIDER,
-  type PaymentProvider,
-} from '../../../src/payments/providers/payment-provider.js';
+import { type PaymentProvider } from '../../../src/payments/providers/payment-provider.js';
+import { PaymentCapabilityRegistry } from '../../../src/payments/payment-capability.registry.js';
 import {
   adminApi,
   isolatedDatabase,
@@ -52,7 +50,7 @@ describe('payment concurrency (isolated database)', () => {
     database = await isolatedDatabase();
     env = integrationEnv({ DATABASE_URL: database.url });
     t = await startTestApp(env);
-    provider = t.app.get<PaymentProvider>(PAYMENT_PROVIDER);
+    provider = t.app.get(PaymentCapabilityRegistry).provider('SANDBOX')!;
     countryId = await syntheticCountry(t.app);
     [alice, bob, admin] = await Promise.all([
       customerActor(t.app),
@@ -543,10 +541,13 @@ describe('payment concurrency (isolated database)', () => {
       const f = await fixture();
       const hold = await bookingApi(alice).post('/bookings', holdBody(f, 1, 3, ['1A']));
       const [customerCsrf, staffCsrf] = await Promise.all([alice.csrf(), admin.csrf()]);
+      // The quote is ready: the race is the initiation itself.
+      const body = await paymentApi(alice).paymentBody(hold.body.reference as string);
       return {
         f,
         reference: hold.body.reference as string,
-        pay: () => paymentApi(alice).create(hold.body.reference as string, { csrf: customerCsrf }),
+        pay: () =>
+          paymentApi(alice).create(hold.body.reference as string, { csrf: customerCsrf, body }),
         cancel: () =>
           adminApi(admin).post(
             `/trips/${f.tripId}/cancel`,
@@ -611,9 +612,11 @@ describe('payment concurrency (isolated database)', () => {
       const hold = await bookingApi(alice).post('/bookings', holdBody(f, 1, 3, ['1B']));
       const reference = hold.body.reference as string;
       const [paymentCsrf, cancelCsrf] = await Promise.all([alice.csrf(), alice.csrf()]);
+      // The quote is ready: the race is the initiation itself.
+      const body = await paymentApi(alice).paymentBody(reference);
       return {
         reference,
-        pay: () => paymentApi(alice).create(reference, { csrf: paymentCsrf }),
+        pay: () => paymentApi(alice).create(reference, { csrf: paymentCsrf, body }),
         cancel: () =>
           bookingApi(alice).post(`/bookings/${reference}/cancel`, {}, { csrf: cancelCsrf }),
       };

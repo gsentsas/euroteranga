@@ -22,7 +22,7 @@ import {
 } from '../../support/passenger-document-helpers.js';
 import { paymentApi, settle } from '../../support/payment-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
-import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
+import { CURRENT_MIGRATIONS, historical, withoutPaymentHub } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -126,7 +126,7 @@ describe('upgrade from a PR-11 database (isolated database)', () => {
     storageRoot = mkdtempSync(join(tmpdir(), 'et-pr11-documents-'));
     const pr11 = join(workDir, 'migrations');
     for (const entry of readdirSync(MIGRATIONS)) {
-      if (entry <= PASSENGER_DOCUMENT_MIGRATION) {
+      if (historical(entry, PASSENGER_DOCUMENT_MIGRATION)) {
         cpSync(join(MIGRATIONS, entry), join(pr11, entry), { recursive: true });
       }
     }
@@ -141,7 +141,7 @@ describe('upgrade from a PR-11 database (isolated database)', () => {
     );
     deploy(config, url);
     raw = createDatabaseClient({ databaseUrl: url });
-    expect(await applied()).toHaveLength(11);
+    expect(withoutPaymentHub(await applied())).toHaveLength(11);
 
     env = integrationEnv({ DATABASE_URL: url, OBJECT_STORAGE_LOCAL_ROOT: storageRoot });
     t = await startTestApp(env);
@@ -175,7 +175,7 @@ describe('upgrade from a PR-11 database (isolated database)', () => {
     // and any later additive migration).
     const pr12 = join(workDir, 'migrations-pr12');
     for (const entry of readdirSync(MIGRATIONS)) {
-      if (entry <= COMPLIANCE_MIGRATION) {
+      if (historical(entry, COMPLIANCE_MIGRATION)) {
         cpSync(join(MIGRATIONS, entry), join(pr12, entry), { recursive: true });
       }
     }
@@ -208,8 +208,8 @@ describe('upgrade from a PR-11 database (isolated database)', () => {
   });
 
   it('applies only PR-12, keeps every PR-10/PR-11 row identical and backfills nothing', async () => {
-    expect(afterCompliance.applied).toHaveLength(12);
-    expect(afterCompliance.applied.at(-1)).toBe(COMPLIANCE_MIGRATION);
+    expect(withoutPaymentHub(afterCompliance.applied)).toHaveLength(12);
+    expect(withoutPaymentHub(afterCompliance.applied).at(-1)).toBe(COMPLIANCE_MIGRATION);
     expect(afterCompliance.snapshot).toEqual(before);
     expect(afterCompliance.counts).toEqual(COMPLIANCE_TABLES.map(() => 0));
     // Still true once the later migrations are applied.
