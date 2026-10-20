@@ -77,7 +77,9 @@ export function PaymentChoice({
             className="et-button"
             disabled={busy}
             aria-busy={busy || undefined}
-            aria-label={`Confirmer le paiement de ${bookingReference}`}
+            // The accessible name starts with the visible label (WCAG 2.5.3),
+            // then names the booking when a page lists several.
+            aria-label={`Confirmer le paiement de ${quote.amount} pour ${bookingReference}`}
             onClick={onPay}
           >
             Confirmer le paiement de {quote.amount}
