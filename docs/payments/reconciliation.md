@@ -1,4 +1,4 @@
-# Settlement and reconciliation (PAY-HUB-1)
+# Settlement and reconciliation (PAY-HUB-1, PAY-EU-1)
 
 Three facts, at three moments, in three models:
 
@@ -46,3 +46,20 @@ STAFF can already filter attempts by provider, method, payer country,
 presentment currency and creation period (`GET /v1/admin/payments`), and the
 staff view shows each attempt's quote (method, country, presented amount,
 rate).
+
+## Stripe (PAY-EU-1)
+
+Never confuse, for a Stripe attempt:
+
+1. `Payment` SUCCEEDED: a signed Checkout event said the session was paid;
+2. the Stripe charge (PaymentIntent) that collected it;
+3. its balance transaction (gross, Stripe fee, net), once Stripe knows it;
+4. the payout that later moves a batch of balance to the bank.
+
+None of 2-4 is imported yet: no fee, net or payout is invented, and
+`payment_settlement` stays empty for Stripe until a settlement import PR.
+
+Money collected without a confirmed booking (a success after the hold, or on
+a cancelled attempt) is visible as a `PAYMENT_SUCCEEDED` event on an attempt
+that is not SUCCEEDED; it is refunded from the Stripe Dashboard, then the
+refund is recorded in OPS. See [stripe-europe.md](stripe-europe.md#reconciliation).

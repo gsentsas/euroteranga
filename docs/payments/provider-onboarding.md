@@ -1,5 +1,8 @@
 # Onboarding a payment provider (after PAY-HUB-1)
 
+> PAY-EU-1 followed these steps for Stripe: see [stripe-europe.md](stripe-europe.md),
+> including its checklist before CONFIGURED.
+
 PAY-HUB-1 activates no real provider: every real declaration is SUPPORTED
 only (see [payment-matrix.md](payment-matrix.md)). Each provider gets its own
 reviewed PR, in this order, and stays disabled until the owner decides to go
@@ -26,7 +29,12 @@ live.
   - `verifyWebhook`: content type, size, timestamp tolerance, signature
     compared in constant time;
   - `parseWebhook`: normalized types and failure codes, never raw provider
-    text; the payload is hashed, not stored.
+    text; the payload is hashed, not stored. It returns null for an
+    authentic event without a payment result (acknowledged, not recorded);
+  - `cancelPayment` when the provider has a payable checkout of its own: it
+    is closed before EURO TERANGA cancels the attempt;
+  - its capability's collection window, hold requirement, amount bounds and
+    card networks, from the provider's documentation;
 - Its `capability` comes from the declaration (`declaredCapability`), and the
   declaration becomes `implemented: true`.
 - Configuration: its own variables, validated at startup, refused when
@@ -54,9 +62,13 @@ unavailable outside local and CI.
   its refund, decided by the owner.
 - Settlement import for reconciliation ([reconciliation.md](reconciliation.md)).
 
-## Status at PAY-HUB-1
+## Status at PAY-EU-1
 
-| Provider                                                                                                 | Adapter        | Configured     | Live  |
-| -------------------------------------------------------------------------------------------------------- | -------------- | -------------- | ----- |
-| SANDBOX                                                                                                  | yes, test-only | local, CI only | never |
-| STRIPE, PAYPAL, PAYDUNYA, PAYTECH, WAVE, ORANGE_MONEY, CMI, CHARIPAY, MOOSYL, MANUAL_BANK_TRANSFER, CASH | no             | no             | no    |
+| Provider                                                                                         | Adapter                                    | Configured                          | Live                     |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------ | ----------------------------------- | ------------------------ |
+| SANDBOX                                                                                          | yes, test-only                             | local, CI only                      | never                    |
+| STRIPE                                                                                           | **yes** (FR, ES; EUR; CARD, BIZUM, KLARNA) | no (`PAYMENT_STRIPE_MODE=DISABLED`) | no (release gate closed) |
+| PAYPAL, PAYDUNYA, PAYTECH, WAVE, ORANGE_MONEY, CMI, CHARIPAY, MOOSYL, MANUAL_BANK_TRANSFER, CASH | no                                         | no                                  | no                       |
+
+No adapter executes refunds at its provider yet: OPS refunds are recorded
+facts (`refundExecutionImplemented: false`).
