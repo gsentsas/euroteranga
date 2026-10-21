@@ -101,7 +101,9 @@ stays exact and a restore cannot silently show another image.
 **Usages** are the draft and published revisions that reference the id
 (`seo.socialMediaId`, section `mediaId`, gallery items). Archived content
 entries count too, because unarchiving one puts its published revision back
-online; they are flagged with `entryArchived`.
+online; they are flagged with `entryArchived`. Main and gallery photographs
+of vehicles also count (kind `VEHICLE`, key = vehicle code), for every vehicle
+status. An image cannot be archived until all these references are removed.
 
 ## Contents and the archive ↔ publication race
 
@@ -166,6 +168,9 @@ max-age=60`.
   - the usages, the replacement and the confirmed archive.
 - **Content editor:** image fields use a picker of active images (see
   `docs/domain/content.md`).
+- **OPS → Flotte:** the same picker assigns a main photograph and an ordered
+  six-image gallery. It needs `fleet.manage` + `media.read`, not
+  `media.manage`; there is no second upload path.
 
 ## Configuration (`apps/api`)
 

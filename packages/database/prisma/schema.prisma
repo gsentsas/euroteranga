@@ -120,6 +120,19 @@ enum VehicleAmenity {
   @@map("vehicle_amenity")
 }
 
+/// Optional traveller-facing classification of a vehicle gallery image.
+enum VehicleMediaKind {
+  EXTERIOR
+  INTERIOR
+  SEATS
+  LUGGAGE_HOLD
+  EQUIPMENT
+  CABIN
+  OTHER
+
+  @@map("vehicle_media_kind")
+}
+
 /// PR-19: the maximum tracking precision that may leave the authenticated
 /// operational boundary. GPS_RECEIVED never implies GPS_PUBLIC.
 enum TrackingVisibility {
@@ -1050,6 +1063,8 @@ model Vehicle {
   retiredAt             DateTime?        @map("retired_at") @db.Timestamptz(3)
   /// Physical seat map currently configured (a published version).
   seatMapVersionId      String?          @map("seat_map_version_id") @db.Uuid
+  /// Main public photograph, selected from MEDIA-1.
+  primaryMediaId        String?          @map("primary_media_id") @db.Uuid
   /// Equipment actually on board, maintained by the fleet team (distinct values).
   amenities             VehicleAmenity[] @default([])
   createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -1057,6 +1072,8 @@ model Vehicle {
 
   registrationCountry Country?           @relation(fields: [registrationCountryId], references: [id], onDelete: Restrict)
   seatMapVersion      SeatMapVersion?    @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
+  primaryMedia        PublicMediaAsset?  @relation("VehiclePrimaryMedia", fields: [primaryMediaId], references: [id], onDelete: Restrict)
+  mediaGallery        VehicleMedia[]
   trips               Trip[]
   regulatoryPermits   RegulatoryPermit[]
   trackingDevices     TrackingDevice[]
@@ -1065,7 +1082,26 @@ model Vehicle {
   @@unique([registrationCountryId, registrationPlate])
   @@index([status, id])
   @@index([seatMapVersionId])
+  @@index([primaryMediaId])
   @@map("vehicle")
+}
+
+/// Ordered public gallery of one vehicle. Every image comes from MEDIA-1.
+model VehicleMedia {
+  id        String            @id @default(uuid(7)) @db.Uuid
+  vehicleId String            @map("vehicle_id") @db.Uuid
+  mediaId   String            @map("media_id") @db.Uuid
+  kind      VehicleMediaKind?
+  position  Int
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  vehicle Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  media   PublicMediaAsset @relation("VehicleGalleryMedia", fields: [mediaId], references: [id], onDelete: Restrict)
+
+  @@unique([vehicleId, mediaId])
+  @@unique([vehicleId, position])
+  @@index([mediaId])
+  @@map("vehicle_media")
 }
 
 /// One planned occurrence of a published (historical) route version (PR-06).
@@ -2567,6 +2603,8 @@ model PublicMediaAsset {
   createdBy  AuthIdentity?          @relation("PublicMediaCreator", fields: [createdByIdentityId], references: [id], onDelete: Restrict)
   updatedBy  AuthIdentity?          @relation("PublicMediaUpdater", fields: [updatedByIdentityId], references: [id], onDelete: Restrict)
   archivedBy AuthIdentity?          @relation("PublicMediaArchiver", fields: [archivedByIdentityId], references: [id], onDelete: Restrict)
+  primaryForVehicles Vehicle[]      @relation("VehiclePrimaryMedia")
+  vehicleGallery     VehicleMedia[] @relation("VehicleGalleryMedia")
 
   @@index([status, createdAt])
   @@index([sourceSha256])

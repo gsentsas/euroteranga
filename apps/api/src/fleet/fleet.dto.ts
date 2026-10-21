@@ -18,6 +18,16 @@ export const VEHICLE_AMENITIES = [
   'WHEELCHAIR_ACCESS',
 ] as const;
 
+export const VEHICLE_MEDIA_KINDS = [
+  'EXTERIOR',
+  'INTERIOR',
+  'SEATS',
+  'LUGGAGE_HOLD',
+  'EQUIPMENT',
+  'CABIN',
+  'OTHER',
+] as const;
+
 /** Distinct values, stored in the canonical order. */
 const amenities = z
   .array(z.enum(VEHICLE_AMENITIES))
@@ -117,6 +127,44 @@ export const vehicleSeatMapSchema = z
   })
   .strict();
 
+/** Atomic replacement of the main photograph and the ordered gallery. */
+export const vehicleMediaSchema = z
+  .object({
+    primaryMediaId: uuid.nullable(),
+    gallery: z
+      .array(
+        z
+          .object({
+            mediaId: uuid,
+            kind: z.enum(VEHICLE_MEDIA_KINDS).nullable().optional(),
+          })
+          .strict(),
+      )
+      .max(6),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const seen = new Set<string>();
+    value.gallery.forEach((item, index) => {
+      const id = item.mediaId.toLowerCase();
+      if (id === value.primaryMediaId?.toLowerCase()) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['gallery', index, 'mediaId'],
+          message: 'primary image cannot also be in the gallery',
+        });
+      }
+      if (seen.has(id)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['gallery', index, 'mediaId'],
+          message: 'duplicate gallery image',
+        });
+      }
+      seen.add(id);
+    });
+  });
+
 // OpenAPI bodies. Runtime validation always uses the Zod schemas above.
 export class VehicleCreateBody {
   @ApiProperty({ maxLength: 32, example: 'BUS_A01' }) code!: string;
@@ -179,4 +227,15 @@ export class VehicleSeatMapBody {
   })
   seatMapVersionId!: string | null;
   @ApiPropertyOptional({ nullable: true, format: 'uuid' }) expectedSeatMapVersionId?: string | null;
+}
+
+export class VehicleMediaItemBody {
+  @ApiProperty({ format: 'uuid' }) mediaId!: string;
+  @ApiPropertyOptional({ enum: VEHICLE_MEDIA_KINDS, nullable: true })
+  kind?: (typeof VEHICLE_MEDIA_KINDS)[number] | null;
+}
+
+export class VehicleMediaBody {
+  @ApiProperty({ format: 'uuid', nullable: true }) primaryMediaId!: string | null;
+  @ApiProperty({ type: [VehicleMediaItemBody], maxItems: 6 }) gallery!: VehicleMediaItemBody[];
 }

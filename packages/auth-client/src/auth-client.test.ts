@@ -905,12 +905,34 @@ describe('admin client', () => {
     });
   });
 
+  it('replaces vehicle media through the dedicated CSRF mutation', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { csrfToken: 'v1.1.n.m' } },
+      { status: 200, body: { id: 'vehicle-id', mediaGallery: [] } },
+    ]);
+    const result = await createAuthClient('http://api.test').admin.fleet.assignVehicleMedia(
+      'vehicle/../id',
+      {
+        primaryMediaId: '01900000-0000-7000-8000-000000000001',
+        gallery: [{ mediaId: '01900000-0000-7000-8000-000000000002', kind: 'INTERIOR' }],
+      },
+    );
+    expect(result.ok).toBe(true);
+    expect(calls[1]?.url).toBe('http://api.test/v1/admin/fleet/vehicles/vehicle%2F..%2Fid/media');
+    expect(JSON.parse(String(calls[1]?.init.body))).toMatchObject({
+      gallery: [{ kind: 'INTERIOR' }],
+    });
+  });
+
   it('types fleet results and refuses PLANNED as a transition target', () => {
     const fleet = createAuthClient('http://api.test').admin.fleet;
     expectTypeOf(fleet.vehicle).returns.resolves.toEqualTypeOf<ApiResult<AdminVehicleDetail>>();
     expectTypeOf(fleet.createVehicle).returns.resolves.toEqualTypeOf<ApiResult<AdminVehicle>>();
     expectTypeOf(fleet.changeVehicleStatus).returns.resolves.toEqualTypeOf<
       ApiResult<AdminVehicle>
+    >();
+    expectTypeOf(fleet.assignVehicleMedia).returns.resolves.toEqualTypeOf<
+      ApiResult<AdminVehicleDetail>
     >();
     expectTypeOf(fleet.changeVehicleStatus)
       .parameter(1)

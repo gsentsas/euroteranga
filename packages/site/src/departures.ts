@@ -1,4 +1,5 @@
 import type { FromPrice } from './money.js';
+import type { SiteMedia } from './blocks.js';
 
 /**
  * UI-PUBLIC-1: next departures and the booking deep link. Everything here
@@ -25,6 +26,8 @@ export interface SiteDeparture {
   availableSeats: number;
   /** Exact fare of this journey (Pricing). */
   fare: FromPrice;
+  /** Main image of the coach actually assigned to this departure. */
+  vehiclePrimaryMedia?: SiteMedia | null;
 }
 
 /** Departures of one direction; null when the trip search could not answer. */

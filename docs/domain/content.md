@@ -52,7 +52,7 @@ the website:
   | `banner`     | Information banner                                                                                                             |
   | `sectionNav` | Tabs to the sections of the page, each by its anchor (UI-PUBLIC-2)                                                             |
   | `itinerary`  | Planned itinerary of the next bookable departure of a direction (UI-PUBLIC-2)                                                  |
-  | `fleet`      | The coaches in service, with editorial photos and texts (UI-PUBLIC-2)                                                          |
+  | `fleet`      | The coaches in service, with Fleet media and editorial text/fallback photos (UI-PUBLIC-2)                                      |
 
   Stops are named by their network code (`stopCodeSchema`, the same rule as
   the stop table: `^[A-Z0-9][A-Z0-9_-]{0,31}$`). A direction needs two
@@ -69,8 +69,8 @@ the website:
   - `fleet` shows every active coach (`selection: all`) or only the listed
     ones (`listed`, in the editor's order). Each item names a vehicle by its
     fleet code (`vehicleCodeSchema`, same rule as the vehicle table) and adds
-    a main photo, a description and up to 6 interior photos. A code is
-    presented once.
+    a description. Legacy CMS main/gallery images remain a fallback until the
+    vehicle is configured in Fleet. A code is presented once.
 
 - **Rich text:** paragraphs, level-2 and level-3 headings and lists of spans,
   with bold, italic and link marks. No HTML.
@@ -247,7 +247,12 @@ editors preview exactly what visitors get.
     `docs/domain/fleet.md`) gives the name, model, year, seats (from the
     current seat map) and equipment of each active coach; several coaches
     get anchor tabs. A listed coach that is not active is left out. Unknown
-    equipment values are ignored, never shown raw.
+    equipment values are ignored, never shown raw. Main and gallery photos
+    come first from the vehicle's MEDIA-1 references; CMS vehicle photos are
+    only a backward-compatible fallback.
+  - **Departure cards:** the image is the main MEDIA-1 photograph of the
+    vehicle actually assigned to that trip; otherwise the route field labelled
+    “Photo par défaut du trajet” in OPS; otherwise the existing placeholder.
   - Itineraries are cached 60 s, the fleet 300 s.
 - **Prices:** "from" prices come from the public search API (Pricing),
   never from the CMS:

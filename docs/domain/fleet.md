@@ -1,6 +1,7 @@
 # Fleet domain
 
 > Implemented in PR-05 for administration through the Core API and OPS.
+> FLEET-MEDIA-1 adds MEDIA-1 photographs directly to the vehicle.
 > **NOT PRODUCTION DEPLOYED.** The repository contains no real vehicle, VIN
 > or registration plate.
 
@@ -41,6 +42,12 @@ maintenance record.
 | `statusChangedAt`       | Last status change (null until the first one).                                                   |
 | `retiredAt`             | Set if and only if `status = RETIRED`.                                                           |
 | `amenities`             | On-board equipment (UI-PUBLIC-2): a distinct list of `vehicle_amenity` values, empty by default. |
+| `primaryMediaId`        | Optional FK to an active MEDIA-1 asset; the main public photograph.                              |
+
+`VehicleMedia` (`vehicle_media`) is the ordered gallery: at most six distinct
+MEDIA-1 ids per vehicle, positions 0–5, with an optional `VehicleMediaKind`
+(`EXTERIOR`, `INTERIOR`, `SEATS`, `LUGGAGE_HOLD`, `EQUIPMENT`, `CABIN`,
+`OTHER`). It stores no upload and no URL.
 
 **VIN.** The check is an application-level shape check: 17 characters from
 the VIN alphabet (digits and letters except I, O and Q). The check digit and
@@ -97,6 +104,10 @@ writer, including direct Prisma or SQL access:
   `DELETE` refused;
 - trigger `vehicle_no_truncate`: `TRUNCATE` refused.
 
+Migration `20261021090000_vehicle_media` is additive. Its triggers also refuse
+an archived asset, any gallery change on a retired vehicle, and archiving an
+asset still referenced as a main or gallery photograph.
+
 ### Status transition
 
 One transaction:
@@ -120,14 +131,15 @@ All endpoints are below `/v1/admin/fleet`. They require a STAFF session and
 `ops.access`. Reads also require `fleet.read`; mutations require
 `fleet.manage` and a session-bound CSRF token.
 
-| Method | Path                     | Purpose                                                      |
-| ------ | ------------------------ | ------------------------------------------------------------ |
-| GET    | `/vehicles`              | Keyset pagination (`limit` 1–100, `cursor`), `status` filter |
-| GET    | `/vehicles/:id`          | Vehicle with its status history                              |
-| POST   | `/vehicles`              | Register a vehicle (always `PLANNED`)                        |
-| POST   | `/vehicles/:id`          | Update administrative data (not the status)                  |
-| POST   | `/vehicles/:id/status`   | Status transition with reason and optional `expectedStatus`  |
-| POST   | `/vehicles/:id/seat-map` | Current seat map (PR-07): `fleet.manage` + `seatmap.read`    |
+| Method | Path                     | Purpose                                                       |
+| ------ | ------------------------ | ------------------------------------------------------------- |
+| GET    | `/vehicles`              | Keyset pagination (`limit` 1–100, `cursor`), `status` filter  |
+| GET    | `/vehicles/:id`          | Vehicle with its status history                               |
+| POST   | `/vehicles`              | Register a vehicle (always `PLANNED`)                         |
+| POST   | `/vehicles/:id`          | Update administrative data (not the status)                   |
+| POST   | `/vehicles/:id/status`   | Status transition with reason and optional `expectedStatus`   |
+| POST   | `/vehicles/:id/seat-map` | Current seat map (PR-07): `fleet.manage` + `seatmap.read`     |
+| POST   | `/vehicles/:id/media`    | Replace main photo and gallery: `fleet.manage` + `media.read` |
 
 There is no delete endpoint. Errors:
 
@@ -141,6 +153,7 @@ There is no delete endpoint. Errors:
 | `VEHICLE_STATUS_TRANSITION_INVALID` | 409  | transition not in the matrix                        |
 | `VEHICLE_STATUS_CONFLICT`           | 409  | `expectedStatus` differs from the current status    |
 | `VEHICLE_REGISTRATION_INCOMPLETE`   | 422  | plate without country, or country without plate     |
+| `VEHICLE_MEDIA_UNAVAILABLE`         | 422  | unknown or archived MEDIA-1 id                      |
 
 ## Public fleet read (UI-PUBLIC-2)
 
@@ -158,7 +171,9 @@ the "Nos bus" page and the coach of a trip page:
       "model": "…",
       "modelYear": 2024,
       "amenities": ["AIR_CONDITIONING"],
-      "seatCount": 53
+      "seatCount": 53,
+      "primaryMedia": { "id": "…", "renditions": [] },
+      "gallery": []
     }
   ]
 }
@@ -168,6 +183,12 @@ the "Nos bus" page and the coach of a trip page:
 without one). The VIN, the registration, the status and the seat-map
 identifiers are never returned. A planned, out-of-service or retired
 vehicle is absent.
+
+The public media shapes contain only MEDIA-1 presentation fields and WebP
+rendition paths—never source hashes, storage keys or staff identities. The
+bookable-trip search similarly returns `vehiclePrimaryMedia` for the actually
+assigned active vehicle, so a departure card uses vehicle photo, then its CMS
+journey fallback, then the existing placeholder.
 
 ## Seat map (PR-07)
 
@@ -204,12 +225,16 @@ wildcard. OPS hides the **Flotte** navigation without `fleet.read` and all
 mutation controls without `fleet.manage`. This is display only: the API
 re-checks every call.
 
+Selecting vehicle media additionally needs `media.read`. `OPS_MANAGER` gets
+that read-only library grant; upload/edit/archive still need `media.manage`.
+
 ## Audit
 
 The domain reuses the PR-03 append-only audit trail, in the same transaction
 as each change: `VEHICLE_CREATED`, `VEHICLE_UPDATED` (before/after) and
 `VEHICLE_STATUS_CHANGED` (before/after status, reason in `metadata`). The
 request id is kept, and snapshots go through the existing redaction.
+`VEHICLE_MEDIA_CHANGED` records the main id and ordered gallery before/after.
 
 ## Tests
 

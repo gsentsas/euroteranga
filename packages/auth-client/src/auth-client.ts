@@ -309,6 +309,18 @@ export type VehicleAmenity =
   | 'ENTERTAINMENT'
   | 'WHEELCHAIR_ACCESS';
 
+export type VehicleMediaKind =
+  'EXTERIOR' | 'INTERIOR' | 'SEATS' | 'LUGGAGE_HOLD' | 'EQUIPMENT' | 'CABIN' | 'OTHER';
+
+export interface VehicleGalleryMedia {
+  id: string;
+  mediaId: string;
+  kind: VehicleMediaKind | null;
+  position: number;
+  createdAt: string;
+  media: PublicMedia;
+}
+
 export interface AdminVehicle {
   id: string;
   code: string;
@@ -329,6 +341,8 @@ export interface AdminVehicle {
   modelYear: number | null;
   /** Distinct, in the canonical order of VehicleAmenity. */
   amenities: VehicleAmenity[];
+  /** Active MEDIA-1 image selected for public presentation. */
+  primaryMedia: PublicMedia | null;
   status: VehicleStatus;
   statusChangedAt: string | null;
   retiredAt: string | null;
@@ -349,6 +363,7 @@ export interface VehicleStatusHistoryEntry {
 
 export interface AdminVehicleDetail extends AdminVehicle {
   statusHistory: VehicleStatusHistoryEntry[];
+  mediaGallery: VehicleGalleryMedia[];
 }
 
 export interface VehicleListOptions {
@@ -378,6 +393,11 @@ export interface VehicleStatusTransitionInput {
   reason: string;
   /** Status the decision was based on; the API refuses the change if it moved. */
   expectedStatus?: VehicleStatus;
+}
+
+export interface VehicleMediaInput {
+  primaryMediaId: string | null;
+  gallery: Array<{ mediaId: string; kind?: VehicleMediaKind | null }>;
 }
 
 export type TripStatus = 'DRAFT' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
@@ -764,6 +784,8 @@ export interface BookingSearchResult {
   fare: BookingFare;
   seatCount: number;
   availableSeatCount: number;
+  /** Main MEDIA-1 image of the actually assigned active vehicle, when any. */
+  vehiclePrimaryMedia: PublicMedia | null;
 }
 
 /** An active vehicle as shown on the website: no VIN, plate or status. */
@@ -776,6 +798,8 @@ export interface PublicVehicle {
   amenities: VehicleAmenity[];
   /** SEAT cells of its current seat map; null without one. */
   seatCount: number | null;
+  primaryMedia: PublicMedia | null;
+  gallery: Array<PublicMedia & { kind: VehicleMediaKind | null; position: number }>;
 }
 
 /** One waypoint of a bookable trip, in route order (planned UTC instants). */
@@ -2184,9 +2208,9 @@ export interface PublicMedia {
 }
 
 export interface MediaUsage {
-  kind: ContentKind;
+  kind: ContentKind | 'VEHICLE';
   key: string;
-  status: 'DRAFT' | 'PUBLISHED';
+  status: 'DRAFT' | 'PUBLISHED' | VehicleStatus;
   /** The content entry is archived (not served) but could be unarchived. */
   entryArchived: boolean;
 }
@@ -2838,8 +2862,9 @@ function errorDetails(value: unknown): { details?: ApiErrorDetails } {
           usage !== null &&
           typeof (usage as MediaUsage).kind === 'string' &&
           typeof (usage as MediaUsage).key === 'string' &&
-          ((usage as MediaUsage).status === 'DRAFT' ||
-            (usage as MediaUsage).status === 'PUBLISHED'),
+          ['DRAFT', 'PUBLISHED', 'PLANNED', 'ACTIVE', 'OUT_OF_SERVICE', 'RETIRED'].includes(
+            (usage as MediaUsage).status,
+          ),
       )
       .slice(0, 50)
       .map(({ kind, key, status, entryArchived }) => ({
@@ -3469,6 +3494,12 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<AdminVehicle>(
             'staff',
             `/v1/admin/fleet/vehicles/${encodeURIComponent(vehicleId)}/seat-map`,
+            input,
+          ),
+        assignVehicleMedia: (vehicleId: string, input: VehicleMediaInput) =>
+          withCsrf<AdminVehicleDetail>(
+            'staff',
+            `/v1/admin/fleet/vehicles/${encodeURIComponent(vehicleId)}/media`,
             input,
           ),
       },

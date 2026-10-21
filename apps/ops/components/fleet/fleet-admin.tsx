@@ -26,6 +26,7 @@ import {
   VehicleFields,
   type VehicleFormValues,
 } from './vehicle-fields';
+import { VehicleMediaForm } from './vehicle-media-form';
 
 type Run = ReturnType<typeof useAdminFeedback>['run'];
 
@@ -260,6 +261,7 @@ function VehicleDetail({
   countries,
   canManage,
   canAssignSeatMap,
+  canManageMedia,
   seatMapOptions,
   run,
   busy,
@@ -270,6 +272,8 @@ function VehicleDetail({
   canManage: boolean;
   /** fleet.manage + seatmap.read. */
   canAssignSeatMap: boolean;
+  /** fleet.manage + media.read. */
+  canManageMedia: boolean;
   seatMapOptions: readonly PublishedVersionOption[];
   run: Run;
   busy: boolean;
@@ -326,6 +330,14 @@ function VehicleDetail({
         <p>Aucun changement de statut depuis l’enregistrement.</p>
       )}
 
+      <VehicleMediaForm
+        vehicle={vehicle}
+        canManage={canManageMedia}
+        run={run}
+        busy={busy}
+        onSaved={onReload}
+      />
+
       {canAssignSeatMap && vehicle.status !== 'RETIRED' ? (
         <SeatMapAssignmentForm
           formLabel={`Plan de sièges du véhicule ${vehicle.code}`}
@@ -370,6 +382,7 @@ export function FleetAdmin() {
   const canManage = useCan('fleet.manage');
   const canReadNetwork = useCan('network.read');
   const canAssignSeatMap = useCan('fleet.manage', 'seatmap.read');
+  const canManageMedia = useCan('fleet.manage', 'media.read');
   const seatMapOptions = usePublishedSeatMapVersions(canAssignSeatMap);
   const { run, busy, feedback, setError } = useAdminFeedback();
   const [vehicles, setVehicles] = useState<AdminVehicle[] | null>(null);
@@ -514,6 +527,7 @@ export function FleetAdmin() {
             countries={countries}
             canManage={canManage}
             canAssignSeatMap={canAssignSeatMap}
+            canManageMedia={canManageMedia}
             seatMapOptions={seatMapOptions}
             run={run}
             busy={busy}

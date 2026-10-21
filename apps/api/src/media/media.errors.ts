@@ -3,7 +3,7 @@ import { PublicApiError } from '../auth/http/public-api-error.js';
 export interface MediaUsage {
   kind: string;
   key: string;
-  status: 'DRAFT' | 'PUBLISHED';
+  status: string;
   /** The content entry is archived (not served) but can be unarchived. */
   entryArchived: boolean;
 }
@@ -15,7 +15,7 @@ class MediaInUseError extends PublicApiError {
     super(
       409,
       'MEDIA_IN_USE',
-      'Cette image est utilisée par un contenu publié ou en brouillon : retirez-la d’abord de ces contenus.',
+      'Cette image est utilisée par un contenu ou un véhicule : retirez-la d’abord de tous ses usages.',
     );
     this.publicDetails = { usages: usages.slice(0, 50) };
   }

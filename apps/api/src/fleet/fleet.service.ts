@@ -6,6 +6,11 @@ import type { Actor } from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import {
+  publicMediaSelect,
+  publicMediaView,
+  type PublicMediaRow,
+} from '../media/public-media-view.js';
+import {
   lockAssignableSeatMapVersion,
   seatMapLabel,
   seatMapVersionSummarySelect,
@@ -15,6 +20,7 @@ import type {
   vehicleCreateSchema,
   vehicleListQuerySchema,
   vehicleSeatMapSchema,
+  vehicleMediaSchema,
   vehicleStatusSchema,
   vehicleUpdateSchema,
 } from './fleet.dto.js';
@@ -26,19 +32,67 @@ type VehicleCreate = z.infer<typeof vehicleCreateSchema>;
 type VehicleUpdate = z.infer<typeof vehicleUpdateSchema>;
 type VehicleStatusChange = z.infer<typeof vehicleStatusSchema>;
 type VehicleSeatMap = z.infer<typeof vehicleSeatMapSchema>;
+type VehicleMedia = z.infer<typeof vehicleMediaSchema>;
 
 const STATUS_CHANGED = 'VEHICLE_STATUS_CHANGED';
 
 const vehicleInclude = {
   registrationCountry: { select: { id: true, iso2: true, iso3: true, name: true, active: true } },
   seatMapVersion: { select: seatMapVersionSummarySelect },
+  primaryMedia: { select: publicMediaSelect },
 } as const;
 
+const mediaGallery = {
+  orderBy: { position: 'asc' },
+  select: {
+    id: true,
+    mediaId: true,
+    kind: true,
+    position: true,
+    createdAt: true,
+    media: { select: publicMediaSelect },
+  },
+} as const;
+
+const vehicleDetailInclude = { ...vehicleInclude, mediaGallery } as const;
+
 /** Public view: the seat map summary carries its computed capacity. */
-function vehicleView<T extends { seatMapVersion: { _count: { cells: number } } | null }>(
-  vehicle: T,
-) {
-  return { ...vehicle, seatMapVersion: seatMapVersionView(vehicle.seatMapVersion) };
+function vehicleView<
+  T extends {
+    seatMapVersion: { _count: { cells: number } } | null;
+    primaryMedia: PublicMediaRow | null;
+  },
+>(vehicle: T) {
+  const { primaryMedia, ...rest } = vehicle;
+  return {
+    ...rest,
+    primaryMedia: publicMediaView(primaryMedia),
+    seatMapVersion: seatMapVersionView(vehicle.seatMapVersion),
+  };
+}
+
+function vehicleDetailView<
+  T extends {
+    seatMapVersion: { _count: { cells: number } } | null;
+    primaryMedia: PublicMediaRow | null;
+    mediaGallery: Array<{
+      id: string;
+      mediaId: string;
+      kind: string | null;
+      position: number;
+      createdAt: Date;
+      media: PublicMediaRow;
+    }>;
+  },
+>(vehicle: T) {
+  const viewed = vehicleView(vehicle);
+  return {
+    ...viewed,
+    mediaGallery: vehicle.mediaGallery.flatMap(({ media, ...item }) => {
+      const publicMedia = publicMediaView(media);
+      return publicMedia ? [{ ...item, media: publicMedia }] : [];
+    }),
+  };
 }
 
 export interface VehicleStatusHistoryEntry {
@@ -85,6 +139,17 @@ async function assertCountryExists(tx: DatabaseTransaction, countryId: string): 
   if (!country) throw FleetErrors.countryNotFound();
 }
 
+/** Lock order is vehicle first, then canonical media ids, matching every fleet write. */
+async function lockActiveMedia(tx: DatabaseTransaction, ids: readonly string[]): Promise<void> {
+  for (const id of [...new Set(ids.map((value) => value.toLowerCase()))].sort()) {
+    const rows = await tx.$queryRaw<Array<{ status: string }>>`
+      SELECT "status"::text AS "status" FROM "public_media_asset"
+      WHERE "id" = ${id}::uuid FOR SHARE
+    `;
+    if (rows[0]?.status !== 'ACTIVE') throw FleetErrors.mediaUnavailable();
+  }
+}
+
 function textOf(value: unknown, key: string): string | null {
   if (value && typeof value === 'object' && key in value) {
     const field = (value as Record<string, unknown>)[key];
@@ -122,7 +187,7 @@ export class FleetService {
   async vehicle(id: string) {
     const vehicle = await this.database.client.vehicle.findUnique({
       where: { id },
-      include: vehicleInclude,
+      include: vehicleDetailInclude,
     });
     if (!vehicle) throw FleetErrors.vehicleNotFound();
     const events = await this.database.client.auditEvent.findMany({
@@ -137,7 +202,7 @@ export class FleetService {
       to: textOf(event.after, 'status'),
       reason: textOf(event.metadata, 'reason'),
     }));
-    return { ...vehicleView(vehicle), statusHistory };
+    return { ...vehicleDetailView(vehicle), statusHistory };
   }
 
   /**
@@ -157,12 +222,19 @@ export class FleetService {
         model: true,
         modelYear: true,
         amenities: true,
+        primaryMedia: { select: publicMediaSelect },
+        mediaGallery,
         seatMapVersion: { select: { _count: { select: { cells: { where: { kind: 'SEAT' } } } } } },
       },
     });
     return {
-      items: vehicles.map(({ seatMapVersion, ...vehicle }) => ({
+      items: vehicles.map(({ seatMapVersion, primaryMedia, mediaGallery, ...vehicle }) => ({
         ...vehicle,
+        primaryMedia: publicMediaView(primaryMedia),
+        gallery: mediaGallery.flatMap(({ media, kind, position }) => {
+          const view = publicMediaView(media);
+          return view ? [{ ...view, kind, position }] : [];
+        }),
         seatCount: seatMapVersion?._count.cells ?? null,
       })),
     };
@@ -357,6 +429,72 @@ export class FleetService {
         }
         return vehicleView(
           await tx.vehicle.findUniqueOrThrow({ where: { id }, include: vehicleInclude }),
+        );
+      }),
+    );
+  }
+
+  /**
+   * Replace the complete public media presentation of a vehicle. IDs are
+   * MEDIA-1 assets only; locking them prevents a concurrent archive from
+   * slipping between validation and assignment.
+   */
+  assignMedia(id: string, input: VehicleMedia, actor: Actor) {
+    return mutation(() =>
+      this.database.client.$transaction(async (tx) => {
+        const locked = await lockVehicle(tx, id);
+        if (locked.status === 'RETIRED') throw FleetErrors.vehicleRetired();
+        const beforeVehicle = await tx.vehicle.findUniqueOrThrow({
+          where: { id },
+          select: {
+            primaryMediaId: true,
+            mediaGallery: {
+              orderBy: { position: 'asc' },
+              select: { mediaId: true, kind: true, position: true },
+            },
+          },
+        });
+        await lockActiveMedia(tx, [
+          ...(input.primaryMediaId ? [input.primaryMediaId] : []),
+          ...input.gallery.map((item) => item.mediaId),
+        ]);
+        const afterSnapshot = {
+          primaryMediaId: input.primaryMediaId,
+          mediaGallery: input.gallery.map((item, position) => ({
+            mediaId: item.mediaId,
+            kind: item.kind ?? null,
+            position,
+          })),
+        };
+        const beforeSnapshot = {
+          primaryMediaId: beforeVehicle.primaryMediaId,
+          mediaGallery: beforeVehicle.mediaGallery,
+        };
+        if (JSON.stringify(beforeSnapshot) !== JSON.stringify(afterSnapshot)) {
+          await tx.vehicle.update({
+            where: { id },
+            data: { primaryMediaId: input.primaryMediaId },
+          });
+          await tx.vehicleMedia.deleteMany({ where: { vehicleId: id } });
+          if (afterSnapshot.mediaGallery.length > 0) {
+            await tx.vehicleMedia.createMany({
+              data: afterSnapshot.mediaGallery.map((item) => ({ ...item, vehicleId: id })),
+            });
+          }
+          await this.audit.record(
+            {
+              actor,
+              action: 'VEHICLE_MEDIA_CHANGED',
+              resourceType: 'vehicle',
+              resourceId: id,
+              before: beforeSnapshot,
+              after: afterSnapshot,
+            },
+            tx,
+          );
+        }
+        return vehicleDetailView(
+          await tx.vehicle.findUniqueOrThrow({ where: { id }, include: vehicleDetailInclude }),
         );
       }),
     );

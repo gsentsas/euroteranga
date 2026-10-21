@@ -131,6 +131,11 @@ maps, maintenance, documents and tracking are deferred. See
 [`docs/domain/fleet.md`](../domain/fleet.md) and
 [ADR-022](../adr/ADR-022-vehicle-lifecycle.md).
 
+FLEET-MEDIA-1 links an active MEDIA-1 main photograph and ordered gallery to
+the vehicle. Fleet and bookable-trip public reads expose only safe media
+presentation fields; OPS reuses the media picker under `fleet.manage` +
+`media.read`, and every replacement is audited atomically.
+
 ## Trips (PR-06)
 
 `apps/api/src/trips` (TripModule): a trip is one planned occurrence of a

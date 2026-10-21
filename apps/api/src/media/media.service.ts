@@ -23,6 +23,8 @@ import {
   type PublicMediaConfig,
 } from './media.config.js';
 import { MediaErrors, type MediaUsage } from './media.errors.js';
+import { renditionPath } from './media-path.js';
+import { publicMediaView } from './public-media-view.js';
 
 const RESOURCE = 'public_media_asset';
 
@@ -37,10 +39,6 @@ const assetInclude = {
 } satisfies Prisma.PublicMediaAssetInclude;
 
 type AssetRow = Prisma.PublicMediaAssetGetPayload<{ include: typeof assetInclude }>;
-
-export function renditionPath(assetId: string, width: number): string {
-  return `/v1/media/files/${assetId}/${width}.webp`;
-}
 
 export function renditionStorageKey(sha256: string): string {
   return `public-media/${sha256.slice(0, 2)}/${sha256}`;
@@ -80,13 +78,25 @@ export async function mediaUsages(
   assetId: string,
 ): Promise<MediaUsage[]> {
   return tx.$queryRaw<MediaUsage[]>`
-    SELECT e."kind"::text AS "kind", e."key", r."status"::text AS "status",
-      (e."archived_at" IS NOT NULL) AS "entryArchived"
-    FROM "content_revision" r
-    JOIN "content_entry" e ON e."id" = r."entry_id"
-    WHERE r."status" IN ('DRAFT', 'PUBLISHED')
-      AND strpos(r."document"::text, ${assetId}) > 0
-    ORDER BY e."key", r."status"
+    SELECT usage."kind", usage."key", usage."status", usage."entryArchived"
+    FROM (
+      SELECT e."kind"::text AS "kind", e."key", r."status"::text AS "status",
+        (e."archived_at" IS NOT NULL) AS "entryArchived"
+      FROM "content_revision" r
+      JOIN "content_entry" e ON e."id" = r."entry_id"
+      WHERE r."status" IN ('DRAFT', 'PUBLISHED')
+        AND strpos(r."document"::text, ${assetId}) > 0
+      UNION ALL
+      SELECT 'VEHICLE' AS "kind", v."code" AS "key", v."status"::text AS "status",
+        false AS "entryArchived"
+      FROM "vehicle" v
+      WHERE v."primary_media_id" = ${assetId}::uuid
+         OR EXISTS (
+           SELECT 1 FROM "vehicle_media" vm
+           WHERE vm."vehicle_id" = v."id" AND vm."media_id" = ${assetId}::uuid
+         )
+    ) usage
+    ORDER BY usage."kind", usage."key", usage."status"
     LIMIT 50`;
 }
 
@@ -404,21 +414,10 @@ export class MediaService {
       include: { renditions: { orderBy: { width: 'asc' } } },
     });
     return {
-      items: rows.map((asset) => ({
-        id: asset.id,
-        altText: asset.altText,
-        caption: asset.caption,
-        credit: asset.credit,
-        width: asset.width,
-        height: asset.height,
-        focalX: asset.focalX,
-        focalY: asset.focalY,
-        renditions: asset.renditions.map((rendition) => ({
-          width: rendition.width,
-          height: rendition.height,
-          path: renditionPath(asset.id, rendition.width),
-        })),
-      })),
+      items: rows.flatMap((asset) => {
+        const view = publicMediaView(asset);
+        return view ? [view] : [];
+      }),
     };
   }
 

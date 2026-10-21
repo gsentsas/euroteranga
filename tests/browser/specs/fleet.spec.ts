@@ -57,6 +57,10 @@ test('ops fleet: SUPER_ADMIN registers, edits and moves a synthetic vehicle thro
   await expect(detail.getByTestId('vehicle-name')).toHaveText(`Teranga E2E ${runId}`);
   // Stored in the canonical order, whatever the order of the clicks.
   await expect(detail.getByTestId('vehicle-amenities')).toHaveText('Climatisation, Wi-Fi');
+  const mediaForm = detail.getByRole('form', { name: `Médias du véhicule ${code}` });
+  await expect(mediaForm.getByRole('group', { name: 'Photo principale' })).toBeVisible();
+  await expect(mediaForm.getByRole('group', { name: 'Galerie' })).toBeVisible();
+  await expect(mediaForm.getByRole('button', { name: '+ Ajouter une photo' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: code })).toContainText('Planifié');
 
   // Administrative edit (never the status).
@@ -129,6 +133,7 @@ test('ops fleet: fleet.read consults without any mutation control; the API refus
   const detail = page.getByRole('region', { name: `Véhicule ${code}` });
   await expect(detail.getByTestId('vehicle-status')).toHaveText('Planifié');
   await expect(detail.getByRole('form')).toHaveCount(0);
+  await expect(detail.getByRole('region', { name: `Médias du véhicule ${code}` })).toBeVisible();
   await expect(page.getByRole('button', { name: /^(Enregistrer|Appliquer)/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Retour à la liste' }).click();
   await expect(page.locator('#vehicle-detail-panel')).toHaveCount(0);

@@ -47,9 +47,9 @@ const paymentReference = () =>
 
 /**
  * Upgrade of a database holding PR-10 SANDBOX attempts (PENDING, SUCCEEDED
- * with its confirmed booking, FAILED) to PAY-HUB-1: no payment, event or
- * booking changes, no quote is invented, the legacy attempts keep working,
- * and every new attempt needs a quote.
+ * with its confirmed booking, FAILED) through PAY-HUB-1 and the current
+ * schema: no payment, event or booking changes, no quote is invented, the
+ * legacy attempts keep working, and every new attempt needs a quote.
  */
 describe('upgrade to PAY-HUB-1 with PR-10 payments (isolated database)', () => {
   let t: TestApp;
@@ -189,7 +189,9 @@ describe('upgrade to PAY-HUB-1 with PR-10 payments (isolated database)', () => {
     legacyPayments.failed = await legacyPayment(bookings.failed, 'FAILED');
     before = await snapshot();
 
-    // Upgrade: the PAY-HUB-1 migration (and nothing else is pending).
+    // Upgrade through PAY-HUB-1 and every later migration currently
+    // present in the repository. Later unrelated migrations must not mutate
+    // historical payment, event or booking data.
     deploy(null, url);
     after = await snapshot();
 
@@ -228,10 +230,10 @@ describe('upgrade to PAY-HUB-1 with PR-10 payments (isolated database)', () => {
       )
     )[0]!.reference;
 
-  it('applies only PAY-HUB-1 and changes no payment, event or booking', async () => {
+  it('applies PAY-HUB-1 and later migrations without changing payment, event or booking', async () => {
     expect(appliedBefore).toEqual(CURRENT_MIGRATIONS.filter((entry) => entry < PAY_HUB_MIGRATION));
     expect(await appliedMigrations()).toEqual(CURRENT_MIGRATIONS);
-    expect(CURRENT_MIGRATIONS.at(-1)).toBe(PAY_HUB_MIGRATION);
+    expect(CURRENT_MIGRATIONS).toContain(PAY_HUB_MIGRATION);
     expect(after).toEqual(before);
     expect(JSON.parse(before.payments!)).toHaveLength(3);
     // No quote invented for the PR-10 attempts, no settlement either.

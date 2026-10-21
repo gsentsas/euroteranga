@@ -32,11 +32,13 @@ import { PERMISSIONS } from '../authorization/permissions.js';
 import {
   VehicleCreateBody,
   VehicleSeatMapBody,
+  VehicleMediaBody,
   VehicleStatusBody,
   VehicleUpdateBody,
   vehicleCreateSchema,
   vehicleListQuerySchema,
   vehicleSeatMapSchema,
+  vehicleMediaSchema,
   vehicleStatusSchema,
   vehicleUpdateSchema,
 } from './fleet.dto.js';
@@ -162,5 +164,24 @@ export class AdminFleetController {
     @Body(new ZodValidationPipe(vehicleSeatMapSchema)) body: z.infer<typeof vehicleSeatMapSchema>,
   ) {
     return this.fleet.assignSeatMap(id, body, principal);
+  }
+
+  @Post('vehicles/:id/media')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.FLEET_MANAGE, PERMISSIONS.MEDIA_READ)
+  @ApiOkResponse({ description: 'Main photograph and ordered gallery replaced and audited.' })
+  @ApiConflictResponse({ type: ErrorBody, description: 'VEHICLE_RETIRED' })
+  @ApiUnprocessableEntityResponse({
+    type: ErrorBody,
+    description: 'VEHICLE_MEDIA_UNAVAILABLE',
+  })
+  @ApiBody({ type: VehicleMediaBody })
+  assignMedia(
+    @Param('id', uuidV7) id: string,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body(new ZodValidationPipe(vehicleMediaSchema)) body: z.infer<typeof vehicleMediaSchema>,
+  ) {
+    return this.fleet.assignMedia(id, body, principal);
   }
 }

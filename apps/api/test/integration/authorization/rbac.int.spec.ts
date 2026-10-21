@@ -171,6 +171,7 @@ const EXPECTED_MATRIX: Record<
       'manifest.export',
       'manifest.generate',
       'manifest.read',
+      'media.read',
       'network.manage',
       'network.read',
       'ops.access',
@@ -389,6 +390,7 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['POST', '/v1/admin/fleet/vehicles'],
   ['POST', '/v1/admin/fleet/vehicles/01900000-0000-7000-8000-000000000000'],
   ['POST', '/v1/admin/fleet/vehicles/01900000-0000-7000-8000-000000000000/status'],
+  ['POST', '/v1/admin/fleet/vehicles/01900000-0000-7000-8000-000000000000/media'],
   ['GET', '/v1/admin/trips'],
   ['GET', '/v1/admin/trips/01900000-0000-7000-8000-000000000000'],
   ['POST', '/v1/admin/trips'],
@@ -613,6 +615,14 @@ describe('server-side RBAC', () => {
         allowed('network.read') ? 200 : 403,
       );
       expect((await api.get('/fleet/vehicles')).status).toBe(allowed('fleet.read') ? 200 : 403);
+      expect(
+        (
+          await api.post('/fleet/vehicles/01900000-0000-7000-8000-000000000000/media', {
+            primaryMediaId: null,
+            gallery: [],
+          })
+        ).status,
+      ).toBe(allowed('fleet.manage') && allowed('media.read') ? 404 : 403);
       expect((await api.get('/trips')).status).toBe(allowed('trip.read') ? 200 : 403);
       expect((await api.get('/seat-maps')).status).toBe(allowed('seatmap.read') ? 200 : 403);
       expect((await api.get('/pricing/fare-tables')).status).toBe(

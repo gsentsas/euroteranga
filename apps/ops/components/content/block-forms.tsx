@@ -451,7 +451,7 @@ function BlockFields({ block, path }: { block: ContentBlock; path: DocumentPath 
                   <StopCodeField path={[...itemPath, 'fromCode']} label="Départ" />
                   <StopCodeField path={[...itemPath, 'toCode']} label="Arrivée" />
                 </div>
-                <MediaField path={[...itemPath, 'mediaId']} label="Photo de la destination" />
+                <MediaField path={[...itemPath, 'mediaId']} label="Photo par défaut du trajet" />
               </>
             )}
           />

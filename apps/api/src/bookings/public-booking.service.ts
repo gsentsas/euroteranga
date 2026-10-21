@@ -1,6 +1,7 @@
 import { Prisma } from '@euroteranga/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
+import { publicMediaSelect, publicMediaView } from '../media/public-media-view.js';
 import { findTripFare } from '../pricing/fare-resolution.service.js';
 import { BOOKING_CONFIG, type BookingConfig } from './booking.config.js';
 import { encodeSearchCursor, type BookingSearchQuery } from './booking.dto.js';
@@ -24,12 +25,14 @@ interface SearchRow {
   currency_minor_unit: number;
   seat_count: number;
   occupied: number;
+  vehicle_id: string | null;
 }
 
 /**
  * Public, unauthenticated reads: stops, bookable trips for an
  * origin/destination and seat availability. They return only what a traveller
- * needs to choose a trip and a seat (no vehicle, no customer, no catalogue).
+ * needs to choose a trip and a seat (only the assigned coach's public main
+ * image is included for presentation; no vehicle identifiers or catalogue).
  */
 @Injectable()
 export class PublicBookingService {
@@ -184,6 +187,7 @@ export class PublicBookingService {
       WITH candidates AS (
         SELECT
           t."id" AS "trip_id", t."reference" AS "trip_reference",
+          t."vehicle_id",
           r."code" AS "route_code", r."name" AS "route_name",
           o."id" AS "origin_id", d."id" AS "destination_id",
           o."stop_id" AS "origin_stop_id", d."stop_id" AS "destination_stop_id",
@@ -247,6 +251,17 @@ export class PublicBookingService {
         })
       ).map((stop) => [stop.id, stop]),
     );
+    const vehicleIds = [
+      ...new Set(page.flatMap((row) => (row.vehicle_id ? [row.vehicle_id] : []))),
+    ];
+    const vehicleMedia = new Map(
+      (
+        await this.database.client.vehicle.findMany({
+          where: { id: { in: vehicleIds }, status: 'ACTIVE' },
+          select: { id: true, primaryMedia: { select: publicMediaSelect } },
+        })
+      ).map((vehicle) => [vehicle.id, publicMediaView(vehicle.primaryMedia)]),
+    );
     const last = page.at(-1);
     return {
       items: page.map((row) => ({
@@ -270,6 +285,7 @@ export class PublicBookingService {
         },
         seatCount: row.seat_count,
         availableSeatCount: Math.max(0, row.seat_count - row.occupied),
+        vehiclePrimaryMedia: row.vehicle_id ? (vehicleMedia.get(row.vehicle_id) ?? null) : null,
       })),
       nextCursor:
         rows.length > query.limit && last

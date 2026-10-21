@@ -516,7 +516,7 @@ function MediaDetail({
           </span>
           {usages.length > 0 ? (
             <span className="ops-content-badge">
-              Utilisée par {usages.length} contenu{usages.length > 1 ? 's' : ''}
+              Utilisée à {usages.length} endroit{usages.length > 1 ? 's' : ''}
             </span>
           ) : null}
         </div>
@@ -573,7 +573,7 @@ function MediaDetail({
       <section aria-labelledby={`${idPrefix}-usages`}>
         <h3 id={`${idPrefix}-usages`}>Utilisation</h3>
         {usages.length === 0 ? (
-          <p className="et-hint">Aucun brouillon ni aucune page en ligne n’affiche cette image.</p>
+          <p className="et-hint">Aucun contenu ni véhicule n’utilise cette image.</p>
         ) : (
           <>
             <ul>
@@ -582,7 +582,8 @@ function MediaDetail({
               ))}
             </ul>
             <p>
-              <Link href="/contenus">Ouvrir les contenus du site</Link>
+              <Link href="/contenus">Ouvrir les contenus du site</Link> ·{' '}
+              <Link href="/fleet">Ouvrir la flotte</Link>
             </p>
           </>
         )}
@@ -630,8 +631,8 @@ function MediaDetail({
           <h3>Archiver</h3>
           {usages.length > 0 ? (
             <p className="et-hint">
-              Retirez d’abord l’image des contenus ci-dessus (brouillons compris) : une image
-              affichée ne peut pas être archivée.
+              Retirez d’abord l’image des contenus ou véhicules ci-dessus : une image utilisée ne
+              peut pas être archivée.
             </p>
           ) : (
             <>

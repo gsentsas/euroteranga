@@ -129,6 +129,13 @@ interface PublicJourney {
   };
   availableSeatCount: number;
   fare: FromPrice;
+  vehiclePrimaryMedia: (PublicMediaRecord & { id: string }) | null;
+}
+
+interface PublicFleetVehicle extends Omit<SiteVehicle, 'amenities' | 'primaryMedia' | 'gallery'> {
+  amenities: string[];
+  primaryMedia: (PublicMediaRecord & { id: string }) | null;
+  gallery: Array<PublicMediaRecord & { id: string; kind: string | null; position: number }>;
 }
 
 const siteStopOf = (stop: PublicStop): SiteStop => ({
@@ -224,6 +231,9 @@ function departuresOf(
                 departureAt: item.origin.plannedDepartureAt,
                 availableSeats: item.availableSeatCount,
                 fare: item.fare,
+                vehiclePrimaryMedia: item.vehiclePrimaryMedia
+                  ? siteMediaOf(item.vehiclePrimaryMedia, publicApiUrl)
+                  : null,
               },
             ]
           : [],
@@ -273,7 +283,7 @@ async function loadItineraries(
 
 /** Active public fleet facts; operational identifiers never leave the API. */
 async function loadFleet(): Promise<SiteVehicle[] | null> {
-  const result = await read<{ items: SiteVehicle[] }>(
+  const result = await read<{ items: PublicFleetVehicle[] }>(
     '/v1/booking/fleet',
     FLEET_REVALIDATE_SECONDS,
   );
@@ -281,6 +291,13 @@ async function loadFleet(): Promise<SiteVehicle[] | null> {
   return result.data.items.map((vehicle) => ({
     ...vehicle,
     amenities: knownAmenities(vehicle.amenities),
+    primaryMedia: vehicle.primaryMedia ? siteMediaOf(vehicle.primaryMedia, publicApiUrl) : null,
+    gallery: vehicle.gallery.map(({ kind, position, ...media }) => ({
+      id: media.id,
+      media: siteMediaOf(media, publicApiUrl),
+      kind,
+      position,
+    })),
   }));
 }
 

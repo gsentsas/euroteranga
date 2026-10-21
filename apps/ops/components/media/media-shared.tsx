@@ -63,19 +63,24 @@ export function MediaThumb({
 const USAGE_STATUS: Record<MediaUsage['status'], string> = {
   DRAFT: 'brouillon',
   PUBLISHED: 'en ligne',
+  PLANNED: 'planifié',
+  ACTIVE: 'en service',
+  OUT_OF_SERVICE: 'hors service',
+  RETIRED: 'retiré',
 };
 
 const KIND: Record<MediaUsage['kind'], string> = {
   PAGE: 'Page',
   SITE_SETTINGS: 'Paramètres du site',
   NAVIGATION: 'Navigation',
+  VEHICLE: 'Véhicule',
 };
 
 export function usageLabel(usage: MediaUsage): string {
   const state = usage.entryArchived
     ? `${USAGE_STATUS[usage.status]}, contenu archivé`
     : USAGE_STATUS[usage.status];
-  return `${KIND[usage.kind] ?? usage.kind} ${usage.kind === 'PAGE' ? usage.key : ''} (${state})`.replace(
+  return `${KIND[usage.kind] ?? usage.kind} ${usage.kind === 'PAGE' || usage.kind === 'VEHICLE' ? usage.key : ''} (${state})`.replace(
     /\s+/g,
     ' ',
   );
