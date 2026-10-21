@@ -39,7 +39,7 @@ maintenance record.
 | `registrationCountryId` | Optional FK to the PR-04 `Country` (`ON DELETE RESTRICT`).                                       |
 | `manufacturer`, `model` | Required, trimmed, 1–80 characters.                                                              |
 | `modelYear`             | Optional. Database: 1950–2100. API: 1950 to next year.                                           |
-| `role`                  | `PASSENGER_COACH`, `CARGO_SUPPORT` or `MIXED`; existing vehicles migrate as passenger coaches. |
+| `role`                  | `PASSENGER_COACH`, `CARGO_SUPPORT` or `MIXED`; existing vehicles migrate as passenger coaches.   |
 | `payloadCapacityKg`     | Optional useful baggage/freight load in whole kg; configured as a pair with volume.              |
 | `cargoVolumeLiters`     | Optional useful baggage/freight volume in exact litres (1000 L = 1 m³); configured as a pair.    |
 | `status`                | `PLANNED`, `ACTIVE`, `OUT_OF_SERVICE`, `RETIRED`.                                                |
