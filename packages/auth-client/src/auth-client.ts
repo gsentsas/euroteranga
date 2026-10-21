@@ -299,6 +299,8 @@ export interface AssignedSeatMapVersion {
 
 export type VehicleStatus = 'PLANNED' | 'ACTIVE' | 'OUT_OF_SERVICE' | 'RETIRED';
 
+export type VehicleRole = 'PASSENGER_COACH' | 'CARGO_SUPPORT' | 'MIXED';
+
 /** On-board equipment, maintained by the fleet team and shown on the website. */
 export type VehicleAmenity =
   | 'AIR_CONDITIONING'
@@ -339,6 +341,12 @@ export interface AdminVehicle {
   manufacturer: string;
   model: string;
   modelYear: number | null;
+  /** Operational purpose. CARGO_SUPPORT is excluded from the public coach catalogue. */
+  role: VehicleRole;
+  /** Useful baggage/freight load; null together with cargoVolumeLiters when unconfigured. */
+  payloadCapacityKg: number | null;
+  /** Exact useful volume in litres (1000 L = 1 m³). */
+  cargoVolumeLiters: number | null;
   /** Distinct, in the canonical order of VehicleAmenity. */
   amenities: VehicleAmenity[];
   /** Active MEDIA-1 image selected for public presentation. */
@@ -381,6 +389,11 @@ export interface VehicleCreateInput {
   manufacturer: string;
   model: string;
   modelYear?: number | null;
+  role?: VehicleRole;
+  /** Must be sent together with cargoVolumeLiters when changed. */
+  payloadCapacityKg?: number | null;
+  /** Must be sent together with payloadCapacityKg when changed. */
+  cargoVolumeLiters?: number | null;
   /** Replaces the whole list; duplicates are ignored. */
   amenities?: VehicleAmenity[];
 }

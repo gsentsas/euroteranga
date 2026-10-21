@@ -93,6 +93,7 @@ export class PublicBookingService {
             model: true,
             modelYear: true,
             status: true,
+            role: true,
             amenities: true,
           },
         },
@@ -100,12 +101,18 @@ export class PublicBookingService {
     });
     if (!trip) throw BookingErrors.tripNotBookable();
     const timings = new Map(trip.timings.map((timing) => [timing.routeWaypointId, timing]));
-    const { status: vehicleStatus, ...vehicle } = trip.vehicle ?? { status: null };
+    const { status: vehicleStatus, role: vehicleRole, ...vehicle } = trip.vehicle ?? {
+      status: null,
+      role: null,
+    };
     return {
       tripId: trip.id,
       tripReference: trip.reference,
       route: trip.routeVersion.route,
-      vehicle: trip.vehicle && vehicleStatus === 'ACTIVE' ? vehicle : null,
+      vehicle:
+        trip.vehicle && vehicleStatus === 'ACTIVE' && vehicleRole !== 'CARGO_SUPPORT'
+          ? vehicle
+          : null,
       // Technical checkpoints (fuel, rest, crew change) stay internal: only
       // stops, borders and crossings are public.
       waypoints: trip.routeVersion.waypoints
@@ -257,7 +264,11 @@ export class PublicBookingService {
     const vehicleMedia = new Map(
       (
         await this.database.client.vehicle.findMany({
-          where: { id: { in: vehicleIds }, status: 'ACTIVE' },
+          where: {
+            id: { in: vehicleIds },
+            status: 'ACTIVE',
+            role: { in: ['PASSENGER_COACH', 'MIXED'] },
+          },
           select: { id: true, primaryMedia: { select: publicMediaSelect } },
         })
       ).map((vehicle) => [vehicle.id, publicMediaView(vehicle.primaryMedia)]),

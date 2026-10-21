@@ -134,7 +134,44 @@ describe('public fleet and itinerary (isolated database)', () => {
     ).rejects.toThrow();
   });
 
-  it('lists active vehicles with public facts only', async () => {
+  it('stores the operational role and requires weight and volume together', async () => {
+    const support = await vehicle({
+      name: 'Fourgon fret',
+      role: 'CARGO_SUPPORT',
+      payloadCapacityKg: 3_500,
+      cargoVolumeLiters: 20_000,
+    });
+    expect(support).toMatchObject({
+      role: 'CARGO_SUPPORT',
+      payloadCapacityKg: 3_500,
+      cargoVolumeLiters: 20_000,
+    });
+
+    expect(
+      (
+        await adminApi(manager).post('/fleet/vehicles', {
+          code: code(),
+          manufacturer: 'Constructeur synthétique',
+          model: 'Volume seul',
+          cargoVolumeLiters: 20_000,
+        })
+      ).status,
+    ).toBe(400);
+
+    const updated = await adminApi(manager).post(`/fleet/vehicles/${support.id}`, {
+      role: 'MIXED',
+      payloadCapacityKg: 4_000,
+      cargoVolumeLiters: 22_000,
+    });
+    expect(updated.status).toBe(200);
+    expect(updated.body).toMatchObject({
+      role: 'MIXED',
+      payloadCapacityKg: 4_000,
+      cargoVolumeLiters: 22_000,
+    });
+  });
+
+  it('lists active passenger-capable vehicles with public facts only', async () => {
     const fixture = await bookableFixture(t.app);
     const shown = await vehicle({
       name: 'Teranga Test 01',
@@ -147,6 +184,13 @@ describe('public fleet and itinerary (isolated database)', () => {
     });
     await activate(shown.id);
     const planned = await vehicle({ name: 'Pas encore en service' });
+    const cargoSupport = await vehicle({
+      name: 'Fourgon technique',
+      role: 'CARGO_SUPPORT',
+      payloadCapacityKg: 3_500,
+      cargoVolumeLiters: 20_000,
+    });
+    await activate(cargoSupport.id);
 
     const response = await publicGet('/booking/fleet');
     expect(response.status).toBe(200);
@@ -166,8 +210,11 @@ describe('public fleet and itinerary (isolated database)', () => {
       gallery: [],
     });
     expect(response.text).not.toContain(planned.code);
+    expect(response.text).not.toContain(cargoSupport.code);
     expect(response.text).not.toContain('ZZZ00000000000001');
-    expect(response.text).not.toMatch(/registration|vin|status|seatMap/i);
+    expect(response.text).not.toMatch(
+      /registration|vin|status|seatMap|payloadCapacity|cargoVolume|CARGO_SUPPORT/i,
+    );
   });
 
   it('attaches MEDIA-1 images atomically, audits them and protects every usage', async () => {

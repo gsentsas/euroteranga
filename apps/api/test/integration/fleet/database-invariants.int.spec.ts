@@ -101,6 +101,35 @@ describe('fleet database invariants (isolated database)', () => {
     await expect(vehicle({ model: '' })).rejects.toThrow(/vehicle_model_normalized/);
   });
 
+  it('keeps role and baggage/freight capacity physically coherent', async () => {
+    const defaults = await vehicle();
+    expect(defaults).toMatchObject({
+      role: 'PASSENGER_COACH',
+      payloadCapacityKg: null,
+      cargoVolumeLiters: null,
+    });
+
+    await expect(
+      vehicle({ role: 'CARGO_SUPPORT', payloadCapacityKg: 3_500, cargoVolumeLiters: 20_000 }),
+    ).resolves.toMatchObject({
+      role: 'CARGO_SUPPORT',
+      payloadCapacityKg: 3_500,
+      cargoVolumeLiters: 20_000,
+    });
+    await expect(vehicle({ payloadCapacityKg: 3_500 })).rejects.toThrow(
+      /vehicle_load_capacity_pair/,
+    );
+    await expect(vehicle({ cargoVolumeLiters: 20_000 })).rejects.toThrow(
+      /vehicle_load_capacity_pair/,
+    );
+    await expect(
+      vehicle({ payloadCapacityKg: 0, cargoVolumeLiters: 20_000 }),
+    ).rejects.toThrow(/vehicle_load_capacity_pair/);
+    await expect(
+      vehicle({ payloadCapacityKg: 3_500, cargoVolumeLiters: 0 }),
+    ).rejects.toThrow(/vehicle_load_capacity_pair/);
+  });
+
   it('creates vehicles as PLANNED only, and ties retiredAt to RETIRED', async () => {
     await expect(vehicle({ status: 'ACTIVE' })).rejects.toThrow(/must be created as PLANNED/);
     await expect(vehicle({ retiredAt: new Date() })).rejects.toThrow(

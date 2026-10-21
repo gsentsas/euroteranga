@@ -2,6 +2,7 @@
 
 > Implemented in PR-05 for administration through the Core API and OPS.
 > FLEET-MEDIA-1 adds MEDIA-1 photographs directly to the vehicle.
+> FLEET-CAPACITY-1 adds its operational role and dual baggage/freight capacity.
 > **NOT PRODUCTION DEPLOYED.** The repository contains no real vehicle, VIN
 > or registration plate.
 
@@ -38,6 +39,9 @@ maintenance record.
 | `registrationCountryId` | Optional FK to the PR-04 `Country` (`ON DELETE RESTRICT`).                                       |
 | `manufacturer`, `model` | Required, trimmed, 1–80 characters.                                                              |
 | `modelYear`             | Optional. Database: 1950–2100. API: 1950 to next year.                                           |
+| `role`                  | `PASSENGER_COACH`, `CARGO_SUPPORT` or `MIXED`; existing vehicles migrate as passenger coaches. |
+| `payloadCapacityKg`     | Optional useful baggage/freight load in whole kg; configured as a pair with volume.              |
+| `cargoVolumeLiters`     | Optional useful baggage/freight volume in exact litres (1000 L = 1 m³); configured as a pair.    |
 | `status`                | `PLANNED`, `ACTIVE`, `OUT_OF_SERVICE`, `RETIRED`.                                                |
 | `statusChangedAt`       | Last status change (null until the first one).                                                   |
 | `retiredAt`             | Set if and only if `status = RETIRED`.                                                           |
@@ -58,6 +62,23 @@ verified.
 scripts. There is no worldwide pattern. A plate is only meaningful with its
 country: both are set together or both are empty. The pair
 (country, plate) is unique, so the same plate may exist in two countries.
+
+**Capacity (FLEET-CAPACITY-1).** Seat capacity remains the number of `SEAT`
+cells of the current SeatMap and is never duplicated on `Vehicle`. Baggage
+and freight capacity is a second physical constraint made of two values:
+`payloadCapacityKg` and `cargoVolumeLiters`. They are either both absent or
+both strictly positive. Volume is stored as whole litres so future allocation
+can subtract it exactly while OPS displays m³. A 20 m³ vehicle therefore has a
+20,000 L volume ceiling **and** its own independent kg ceiling; neither value
+implies the other. CARGO-1/BAGGAGE-PLUS-1 will consume both remaining limits
+and the first exhausted limit will block further loading.
+
+`role` distinguishes passenger coaches, cargo-support vehicles and mixed-use
+vehicles. The public “Nos bus” catalogue and passenger-trip presentation only
+show `PASSENGER_COACH` and `MIXED`; a `CARGO_SUPPORT` vehicle remains an
+internal operational asset for future convoy/freight workflows. This PR does
+not dispatch cargo vehicles, reserve capacity, calculate residual load or
+decide when a support vehicle should depart.
 
 **On-board equipment (UI-PUBLIC-2).** `AIR_CONDITIONING`,
 `RECLINING_SEATS`, `USB_CHARGING`, `WIFI`, `TOILET`, `ENTERTAINMENT`,
@@ -107,6 +128,11 @@ writer, including direct Prisma or SQL access:
 Migration `20261021090000_vehicle_media` is additive. Its triggers also refuse
 an archived asset, any gallery change on a retired vehicle, and archiving an
 asset still referenced as a main or gallery photograph.
+
+Migration `20261021210000_vehicle_capacity` is additive: it creates
+`vehicle_role`, defaults every existing row to `PASSENGER_COACH`, adds the
+nullable kg/litre pair and a PostgreSQL CHECK that rejects incomplete or
+non-positive capacity even for direct SQL writers.
 
 ### Status transition
 
@@ -158,7 +184,8 @@ There is no delete endpoint. Errors:
 ## Public fleet read (UI-PUBLIC-2)
 
 `GET /v1/booking/fleet` (no session, `Cache-Control: public, max-age=300`)
-lists the **active** vehicles, ordered by name then code (at most 50), for
+lists the **active passenger-capable** vehicles (`PASSENGER_COACH` or `MIXED`),
+ordered by name then code (at most 50), for
 the "Nos bus" page and the coach of a trip page:
 
 ```json
@@ -180,8 +207,8 @@ the "Nos bus" page and the coach of a trip page:
 ```
 
 `seatCount` is the number of SEAT cells of the current seat map (null
-without one). The VIN, the registration, the status and the seat-map
-identifiers are never returned. A planned, out-of-service or retired
+without one). The VIN, the registration, the status, the operational role, kg/litre
+capacity and seat-map identifiers are never returned. A planned, out-of-service or retired
 vehicle is absent.
 
 The public media shapes contain only MEDIA-1 presentation fields and WebP

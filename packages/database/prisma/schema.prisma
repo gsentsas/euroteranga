@@ -107,6 +107,15 @@ enum VehicleStatus {
   @@map("vehicle_status")
 }
 
+/// Operational purpose. CARGO_SUPPORT vehicles are not passenger-facing buses.
+enum VehicleRole {
+  PASSENGER_COACH
+  CARGO_SUPPORT
+  MIXED
+
+  @@map("vehicle_role")
+}
+
 /// On-board equipment of a vehicle (UI-PUBLIC-2), shown on the public website.
 enum VehicleAmenity {
   AIR_CONDITIONING
@@ -1058,6 +1067,12 @@ model Vehicle {
   manufacturer          String           @db.VarChar(80)
   model                 String           @db.VarChar(80)
   modelYear             Int?             @map("model_year")
+  /// Operational use of the vehicle. Existing rows migrate as passenger coaches.
+  role                  VehicleRole      @default(PASSENGER_COACH)
+  /// Maximum useful load reserved for baggage/freight, in whole kilograms.
+  payloadCapacityKg     Int?             @map("payload_capacity_kg")
+  /// Maximum useful baggage/freight volume, stored exactly in litres (1000 L = 1 m³).
+  cargoVolumeLiters    Int?             @map("cargo_volume_liters")
   status                VehicleStatus    @default(PLANNED)
   statusChangedAt       DateTime?        @map("status_changed_at") @db.Timestamptz(3)
   retiredAt             DateTime?        @map("retired_at") @db.Timestamptz(3)
