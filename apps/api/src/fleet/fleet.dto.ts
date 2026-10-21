@@ -113,7 +113,7 @@ function validateCapacityPair(
   if (
     hasKg &&
     hasVolume &&
-    ((value.payloadCapacityKg === null) !== (value.cargoVolumeLiters === null))
+    (value.payloadCapacityKg === null) !== (value.cargoVolumeLiters === null)
   ) {
     ctx.addIssue({
       code: 'custom',
