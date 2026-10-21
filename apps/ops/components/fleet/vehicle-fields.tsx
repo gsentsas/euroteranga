@@ -169,9 +169,7 @@ export function VehicleFields({
             id={roleId}
             className="et-select"
             value={values.role}
-            onChange={(event) =>
-              onChange({ ...values, role: event.target.value as VehicleRole })
-            }
+            onChange={(event) => onChange({ ...values, role: event.target.value as VehicleRole })}
           >
             {VEHICLE_ROLES.map((role) => (
               <option key={role} value={role}>
