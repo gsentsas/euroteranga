@@ -275,6 +275,7 @@ export {
   type VehicleGalleryMedia,
   type VehicleMediaInput,
   type VehicleMediaKind,
+  type VehicleRole,
   type VehicleStatus,
   type VehicleStatusHistoryEntry,
   type VehicleStatusTransitionInput,
