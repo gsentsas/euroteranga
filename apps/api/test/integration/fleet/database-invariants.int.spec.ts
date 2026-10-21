@@ -122,12 +122,12 @@ describe('fleet database invariants (isolated database)', () => {
     await expect(vehicle({ cargoVolumeLiters: 20_000 })).rejects.toThrow(
       /vehicle_load_capacity_pair/,
     );
-    await expect(
-      vehicle({ payloadCapacityKg: 0, cargoVolumeLiters: 20_000 }),
-    ).rejects.toThrow(/vehicle_load_capacity_pair/);
-    await expect(
-      vehicle({ payloadCapacityKg: 3_500, cargoVolumeLiters: 0 }),
-    ).rejects.toThrow(/vehicle_load_capacity_pair/);
+    await expect(vehicle({ payloadCapacityKg: 0, cargoVolumeLiters: 20_000 })).rejects.toThrow(
+      /vehicle_load_capacity_pair/,
+    );
+    await expect(vehicle({ payloadCapacityKg: 3_500, cargoVolumeLiters: 0 })).rejects.toThrow(
+      /vehicle_load_capacity_pair/,
+    );
   });
 
   it('creates vehicles as PLANNED only, and ties retiredAt to RETIRED', async () => {
