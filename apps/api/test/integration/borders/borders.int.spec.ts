@@ -251,6 +251,8 @@ describe('PR-20 operational border crossings', () => {
           name: 'Deuxième frontière',
           countryId: (await tx.country.findUniqueOrThrow({ where: { iso2: 'SN' } })).id,
           type: 'BORDER',
+          terangaKind: 'BORDER',
+          travellerVisible: true,
           locality: 'Frontière 2',
           latitude: 14.7,
           longitude: -16.0,
