@@ -43,7 +43,7 @@ runuser -u "$APP_USER" -- git --git-dir="$MIRROR" merge-base --is-ancestor \
 
 RELEASE="$RELEASES/$SHA"
 if [ ! -d "$RELEASE" ]; then
-  TMP="$RELEASES/.${SHA}.tmp.$"
+  TMP="$RELEASES/.${SHA}.tmp.${BASHPID}"
   rm -rf "$TMP"
   trap 'rm -rf -- "$TMP"' EXIT
   install -d -m 0750 -o "$APP_USER" -g psacln "$TMP"
