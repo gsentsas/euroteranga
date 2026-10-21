@@ -69,9 +69,7 @@ export function toVehicleInput(values: VehicleFormValues): VehicleCreateInput {
     model: values.model,
     modelYear: values.modelYear.trim() ? Number(values.modelYear) : null,
     role: values.role,
-    payloadCapacityKg: values.payloadCapacityKg.trim()
-      ? Number(values.payloadCapacityKg)
-      : null,
+    payloadCapacityKg: values.payloadCapacityKg.trim() ? Number(values.payloadCapacityKg) : null,
     cargoVolumeLiters: values.cargoVolumeM3.trim()
       ? Math.round(Number(values.cargoVolumeM3) * 1000)
       : null,
