@@ -203,13 +203,10 @@ describe('public fleet and itinerary (isolated database)', () => {
     const auditCount = await db(t.app).auditEvent.count({
       where: { action: 'VEHICLE_MEDIA_CHANGED', resourceId: coach.id },
     });
-    const sameMediaUppercase = await adminApi(manager).post(
-      `/fleet/vehicles/${coach.id}/media`,
-      {
-        primaryMediaId: primary.id.toUpperCase(),
-        gallery: [{ mediaId: interior.id.toUpperCase(), kind: 'INTERIOR' }],
-      },
-    );
+    const sameMediaUppercase = await adminApi(manager).post(`/fleet/vehicles/${coach.id}/media`, {
+      primaryMediaId: primary.id.toUpperCase(),
+      gallery: [{ mediaId: interior.id.toUpperCase(), kind: 'INTERIOR' }],
+    });
     expect(sameMediaUppercase.status).toBe(200);
     expect(sameMediaUppercase.body.primaryMedia.id).toBe(primary.id);
     expect(sameMediaUppercase.body.mediaGallery[0].mediaId).toBe(interior.id);
