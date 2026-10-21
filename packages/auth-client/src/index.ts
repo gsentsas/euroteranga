@@ -231,6 +231,8 @@ export {
   type NetworkCheckpointInput,
   type NetworkCheckpointType,
   type NetworkCheckpointUpdate,
+  type NetworkTerangaFacility,
+  type NetworkTerangaStopKind,
   type NetworkCountry,
   type NetworkCountryInput,
   type NetworkCountryUpdate,

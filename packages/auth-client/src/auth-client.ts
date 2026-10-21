@@ -851,8 +851,12 @@ export interface BookingItineraryWaypoint {
   locality: string;
   timezone: string;
   country: { iso2: string; name: string };
-  /** Checkpoints only: BORDER, FERRY_TERMINAL or PORT (technical ones stay internal). */
+  /** Structural checkpoint type; null for passenger stops. */
   checkpointType: string | null;
+  /** Traveller-facing Teranga Stop purpose; null for passenger stops. */
+  terangaStopKind: string | null;
+  /** Services explicitly verified by OPS for a traveller-visible checkpoint. */
+  facilities: string[];
   boardingAllowed: boolean;
   alightingAllowed: boolean;
   plannedArrivalAt: string | null;
