@@ -101,7 +101,11 @@ export class PublicBookingService {
     });
     if (!trip) throw BookingErrors.tripNotBookable();
     const timings = new Map(trip.timings.map((timing) => [timing.routeWaypointId, timing]));
-    const { status: vehicleStatus, role: vehicleRole, ...vehicle } = trip.vehicle ?? {
+    const {
+      status: vehicleStatus,
+      role: vehicleRole,
+      ...vehicle
+    } = trip.vehicle ?? {
       status: null,
       role: null,
     };

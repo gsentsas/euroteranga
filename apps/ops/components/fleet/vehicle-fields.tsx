@@ -158,8 +158,8 @@ export function VehicleFields({
       <fieldset className="et-field" aria-describedby={capacityHintId}>
         <legend>{`Capacité opérationnelle ${context}`}</legend>
         <p id={capacityHintId} className="et-hint">
-          Les places viennent du plan de sièges. Pour les bagages et le fret, renseignez ensemble
-          la charge utile et le volume utile : les deux limites s’appliquent simultanément.
+          Les places viennent du plan de sièges. Pour les bagages et le fret, renseignez ensemble la
+          charge utile et le volume utile : les deux limites s’appliquent simultanément.
         </p>
         <div className="et-field">
           <label htmlFor={roleId}>{`Usage ${context}`}</label>
