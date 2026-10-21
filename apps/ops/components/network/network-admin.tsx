@@ -144,21 +144,6 @@ function CountryForm({ run, busy, onDone }: { run: Run; busy: boolean; onDone: (
   const [iso2, setIso2] = useState('');
   const [iso3, setIso3] = useState('');
   const [name, setName] = useState('');
-  const toggleFacility = (facility: NetworkTerangaFacility) => {
-    setFacilities((current) =>
-      current.includes(facility)
-        ? current.filter((candidate) => candidate !== facility)
-        : [...current, facility],
-    );
-  };
-
-  const changeType = (nextType: NetworkCheckpointType) => {
-    setType(nextType);
-    const allowed = checkpointKinds(nextType);
-    setTerangaKind((current) => (allowed.includes(current) ? current : allowed[0]!));
-    if (nextType !== 'TECHNICAL') setTravellerVisible(true);
-  };
-
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (busy) return;
@@ -247,11 +232,6 @@ function StopForm({
     if (ok) {
       setCode('');
       setName('');
-      setType('TECHNICAL');
-      setTerangaKind('TECHNICAL');
-      setTravellerVisible(false);
-      setSuggestedDwellMinutes('');
-      setFacilities([]);
       setLocality('');
       setLatitude('');
       setLongitude('');
@@ -350,6 +330,22 @@ function CheckpointForm({
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [timezone, setTimezone] = useState('Etc/UTC');
+
+  const toggleFacility = (facility: NetworkTerangaFacility) => {
+    setFacilities((current) =>
+      current.includes(facility)
+        ? current.filter((candidate) => candidate !== facility)
+        : [...current, facility],
+    );
+  };
+
+  const changeType = (nextType: NetworkCheckpointType) => {
+    setType(nextType);
+    const allowed = checkpointKinds(nextType);
+    setTerangaKind((current) => (allowed.includes(current) ? current : allowed[0]!));
+    if (nextType !== 'TECHNICAL') setTravellerVisible(true);
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (busy) return;
@@ -377,6 +373,11 @@ function CheckpointForm({
     if (ok) {
       setCode('');
       setName('');
+      setType('TECHNICAL');
+      setTerangaKind('TECHNICAL');
+      setTravellerVisible(false);
+      setSuggestedDwellMinutes('');
+      setFacilities([]);
       setLocality('');
       setLatitude('');
       setLongitude('');
