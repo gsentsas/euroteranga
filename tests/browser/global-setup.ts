@@ -1268,6 +1268,8 @@ async function seedPublicPagesData(db: ReturnType<typeof createDatabaseClient>):
         name,
         countryId: via!.id,
         type,
+        terangaKind: type === 'BORDER' ? 'BORDER' : 'TECHNICAL',
+        travellerVisible: type === 'BORDER',
         locality: `Frontière ${run}`,
         latitude: 1,
         longitude: 1,
