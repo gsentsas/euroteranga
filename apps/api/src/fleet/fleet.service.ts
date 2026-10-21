@@ -459,9 +459,9 @@ export class FleetService {
           ...input.gallery.map((item) => item.mediaId),
         ]);
         const afterSnapshot = {
-          primaryMediaId: input.primaryMediaId,
+          primaryMediaId: input.primaryMediaId?.toLowerCase() ?? null,
           mediaGallery: input.gallery.map((item, position) => ({
-            mediaId: item.mediaId,
+            mediaId: item.mediaId.toLowerCase(),
             kind: item.kind ?? null,
             position,
           })),
@@ -473,7 +473,7 @@ export class FleetService {
         if (JSON.stringify(beforeSnapshot) !== JSON.stringify(afterSnapshot)) {
           await tx.vehicle.update({
             where: { id },
-            data: { primaryMediaId: input.primaryMediaId },
+            data: { primaryMediaId: afterSnapshot.primaryMediaId },
           });
           await tx.vehicleMedia.deleteMany({ where: { vehicleId: id } });
           if (afterSnapshot.mediaGallery.length > 0) {

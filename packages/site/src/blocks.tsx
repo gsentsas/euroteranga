@@ -1099,8 +1099,9 @@ function Fleet({
               const media = ctx.media?.(id) ?? null;
               return media ? [{ id, media }] : [];
             });
-            const gallery =
-              (vehicle.gallery?.length ?? 0) > 0 ? (vehicle.gallery ?? []) : cmsGallery;
+            const hasFleetMedia =
+              Boolean(vehicle.primaryMedia) || (vehicle.gallery?.length ?? 0) > 0;
+            const gallery = hasFleetMedia ? (vehicle.gallery ?? []) : cmsGallery;
             const facts = vehicle.seatCount !== null || vehicle.amenities.length > 0;
             return (
               <article

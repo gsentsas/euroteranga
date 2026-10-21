@@ -199,6 +199,26 @@ describe('public fleet and itinerary (isolated database)', () => {
       mediaGallery: [{ mediaId: interior.id, kind: 'INTERIOR', position: 0 }],
     });
 
+    // UUID text case is not a semantic change: no rewrite and no duplicate audit.
+    const auditCount = await db(t.app).auditEvent.count({
+      where: { action: 'VEHICLE_MEDIA_CHANGED', resourceId: coach.id },
+    });
+    const sameMediaUppercase = await adminApi(manager).post(
+      `/fleet/vehicles/${coach.id}/media`,
+      {
+        primaryMediaId: primary.id.toUpperCase(),
+        gallery: [{ mediaId: interior.id.toUpperCase(), kind: 'INTERIOR' }],
+      },
+    );
+    expect(sameMediaUppercase.status).toBe(200);
+    expect(sameMediaUppercase.body.primaryMedia.id).toBe(primary.id);
+    expect(sameMediaUppercase.body.mediaGallery[0].mediaId).toBe(interior.id);
+    expect(
+      await db(t.app).auditEvent.count({
+        where: { action: 'VEHICLE_MEDIA_CHANGED', resourceId: coach.id },
+      }),
+    ).toBe(auditCount);
+
     // fleet.manage alone is insufficient: selecting library images needs media.read.
     expect(
       (

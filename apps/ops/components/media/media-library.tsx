@@ -398,12 +398,14 @@ function MediaUploadForm({
 function MediaDetail({
   id,
   canManage,
+  canReadFleet,
   onChanged,
   onReplace,
   onClose,
 }: {
   id: string;
   canManage: boolean;
+  canReadFleet: boolean;
   onChanged: (asset: MediaAsset) => void;
   onReplace: (asset: MediaAsset) => void;
   onClose: () => void;
@@ -582,8 +584,13 @@ function MediaDetail({
               ))}
             </ul>
             <p>
-              <Link href="/contenus">Ouvrir les contenus du site</Link> ·{' '}
-              <Link href="/fleet">Ouvrir la flotte</Link>
+              <Link href="/contenus">Ouvrir les contenus du site</Link>
+              {canReadFleet ? (
+                <>
+                  {' · '}
+                  <Link href="/fleet">Ouvrir la flotte</Link>
+                </>
+              ) : null}
             </p>
           </>
         )}
@@ -672,6 +679,7 @@ function MediaDetail({
 /** MEDIA-1 public media library (media.read; changes need media.manage). */
 export function MediaLibrary() {
   const canManage = useCan('media.manage');
+  const canReadFleet = useCan('fleet.read');
   const [status, setStatus] = useState<MediaStatus>('ACTIVE');
   const [items, setItems] = useState<MediaAsset[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -889,6 +897,7 @@ export function MediaLibrary() {
             <MediaDetail
               id={selected}
               canManage={canManage}
+              canReadFleet={canReadFleet}
               onChanged={replaceInList}
               onReplace={(asset) => {
                 setNotice(null);
