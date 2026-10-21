@@ -109,12 +109,29 @@ export interface NetworkStop {
 
 export type NetworkCheckpointType = 'BORDER' | 'FERRY_TERMINAL' | 'PORT' | 'TECHNICAL';
 
+export type NetworkTerangaStopKind =
+  | 'BREAK'
+  | 'MEAL'
+  | 'SHOWER'
+  | 'REST'
+  | 'OVERNIGHT'
+  | 'FUEL'
+  | 'BORDER'
+  | 'FERRY'
+  | 'TECHNICAL';
+
+export type NetworkTerangaFacility = 'RESTROOM' | 'SHOWER' | 'FOOD' | 'SECURE_PARKING' | 'FUEL';
+
 export interface NetworkCheckpoint {
   id: string;
   code: string;
   name: string;
   countryId: string;
   type: NetworkCheckpointType;
+  terangaKind: NetworkTerangaStopKind;
+  travellerVisible: boolean;
+  suggestedDwellMinutes: number | null;
+  facilities: NetworkTerangaFacility[];
   locality: string;
   latitude: number;
   longitude: number;
@@ -216,10 +233,18 @@ export interface NetworkPlaceUpdate {
 
 export interface NetworkCheckpointInput extends NetworkPlaceInput {
   type: NetworkCheckpointType;
+  terangaKind?: NetworkTerangaStopKind;
+  travellerVisible?: boolean;
+  suggestedDwellMinutes?: number | null;
+  facilities?: NetworkTerangaFacility[];
 }
 
 export interface NetworkCheckpointUpdate extends NetworkPlaceUpdate {
   type?: NetworkCheckpointType;
+  terangaKind?: NetworkTerangaStopKind;
+  travellerVisible?: boolean;
+  suggestedDwellMinutes?: number | null;
+  facilities?: NetworkTerangaFacility[];
 }
 
 export interface NetworkRouteInput {

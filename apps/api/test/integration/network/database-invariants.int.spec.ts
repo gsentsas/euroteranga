@@ -71,18 +71,38 @@ describe('network database invariants (isolated database)', () => {
     overrides: {
       code?: string;
       type?: 'BORDER' | 'FERRY_TERMINAL' | 'PORT' | 'TECHNICAL';
+      terangaKind?:
+        | 'BREAK'
+        | 'MEAL'
+        | 'SHOWER'
+        | 'REST'
+        | 'OVERNIGHT'
+        | 'FUEL'
+        | 'BORDER'
+        | 'FERRY'
+        | 'TECHNICAL';
+      travellerVisible?: boolean;
+      suggestedDwellMinutes?: number | null;
+      facilities?: Array<'RESTROOM' | 'SHOWER' | 'FOOD' | 'SECURE_PARKING' | 'FUEL'>;
       latitude?: number;
       longitude?: number;
       active?: boolean;
     } = {},
   ) {
     const sequence = fixtureSequence++;
+    const type = overrides.type ?? 'BORDER';
+    const defaultKind =
+      type === 'BORDER' ? 'BORDER' : type === 'FERRY_TERMINAL' || type === 'PORT' ? 'FERRY' : 'TECHNICAL';
     return db(t.app).checkpoint.create({
       data: {
         code: overrides.code ?? `CHECK_${sequence}`,
         name: `Synthetic checkpoint ${sequence}`,
         countryId,
-        type: overrides.type ?? 'BORDER',
+        type,
+        terangaKind: overrides.terangaKind ?? defaultKind,
+        travellerVisible: overrides.travellerVisible ?? type !== 'TECHNICAL',
+        suggestedDwellMinutes: overrides.suggestedDwellMinutes ?? null,
+        facilities: overrides.facilities ?? [],
         locality: `Locality ${sequence}`,
         latitude: overrides.latitude ?? 12.345678,
         longitude: overrides.longitude ?? -12.345678,
@@ -124,6 +144,28 @@ describe('network database invariants (isolated database)', () => {
     );
     await expect(stop(nation.id, { latitude: 90, longitude: -180 })).resolves.toBeDefined();
     await expect(checkpoint(nation.id, { latitude: -90, longitude: 180 })).resolves.toBeDefined();
+  });
+
+  it('enforces Teranga Stop kind, duration and distinct facilities', async () => {
+    const nation = await country();
+    await expect(
+      checkpoint(nation.id, { type: 'BORDER', terangaKind: 'REST' }),
+    ).rejects.toThrow(/checkpoint_teranga_kind_compatible/);
+    await expect(
+      checkpoint(nation.id, { type: 'PORT', terangaKind: 'BORDER' }),
+    ).rejects.toThrow(/checkpoint_teranga_kind_compatible/);
+    await expect(
+      checkpoint(nation.id, { type: 'TECHNICAL', terangaKind: 'MEAL' }),
+    ).resolves.toMatchObject({ terangaKind: 'MEAL' });
+    await expect(checkpoint(nation.id, { suggestedDwellMinutes: 4 })).rejects.toThrow(
+      /checkpoint_suggested_dwell_range/,
+    );
+    await expect(checkpoint(nation.id, { suggestedDwellMinutes: 1441 })).rejects.toThrow(
+      /checkpoint_suggested_dwell_range/,
+    );
+    await expect(
+      checkpoint(nation.id, { facilities: ['SHOWER', 'SHOWER'] }),
+    ).rejects.toThrow(/checkpoint_teranga_facilities_distinct/);
   });
 
   it('requires normalized unique codes for stops, checkpoints and routes', async () => {

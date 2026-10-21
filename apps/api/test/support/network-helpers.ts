@@ -68,7 +68,24 @@ export async function createCheckpoint(
     ...overrides,
   });
   if (response.status !== 201) throw new Error(`checkpoint: ${response.status} ${response.text}`);
-  return response.body as { id: string; code: string };
+  return response.body as {
+    id: string;
+    code: string;
+    type: 'BORDER' | 'FERRY_TERMINAL' | 'PORT' | 'TECHNICAL';
+    terangaKind:
+      | 'BREAK'
+      | 'MEAL'
+      | 'SHOWER'
+      | 'REST'
+      | 'OVERNIGHT'
+      | 'FUEL'
+      | 'BORDER'
+      | 'FERRY'
+      | 'TECHNICAL';
+    travellerVisible: boolean;
+    suggestedDwellMinutes: number | null;
+    facilities: Array<'RESTROOM' | 'SHOWER' | 'FOOD' | 'SECURE_PARKING' | 'FUEL'>;
+  };
 }
 
 export async function createRoute(api: Api) {

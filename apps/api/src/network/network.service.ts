@@ -26,6 +26,8 @@ type StopCreate = z.infer<typeof stopCreateSchema>;
 type StopUpdate = z.infer<typeof stopUpdateSchema>;
 type CheckpointCreate = z.infer<typeof checkpointCreateSchema>;
 type CheckpointUpdate = z.infer<typeof checkpointUpdateSchema>;
+type CheckpointType = CheckpointCreate['type'];
+type TerangaStopKind = NonNullable<CheckpointCreate['terangaKind']>;
 type RouteCreate = z.infer<typeof routeCreateSchema>;
 type RouteUpdate = z.infer<typeof routeUpdateSchema>;
 type ReplaceWaypoints = z.infer<typeof replaceWaypointsSchema>;
@@ -53,6 +55,22 @@ const locationView = <T extends LocatedRecord>(record: T) => ({
   latitude: Number(record.latitude),
   longitude: Number(record.longitude),
 });
+
+function defaultTerangaKind(type: CheckpointType): TerangaStopKind {
+  if (type === 'BORDER') return 'BORDER';
+  if (type === 'FERRY_TERMINAL' || type === 'PORT') return 'FERRY';
+  return 'TECHNICAL';
+}
+
+function terangaKindCompatible(type: CheckpointType, kind: TerangaStopKind): boolean {
+  if (type === 'BORDER') return kind === 'BORDER';
+  if (type === 'FERRY_TERMINAL' || type === 'PORT') return kind === 'FERRY';
+  return ['BREAK', 'MEAL', 'SHOWER', 'REST', 'OVERNIGHT', 'FUEL', 'TECHNICAL'].includes(kind);
+}
+
+function assertTerangaKind(type: CheckpointType, kind: TerangaStopKind): void {
+  if (!terangaKindCompatible(type, kind)) throw NetworkErrors.invariantViolation();
+}
 
 const waypointView = (waypoint: WaypointRecord) => ({
   ...waypoint,
@@ -265,7 +283,18 @@ export class NetworkService {
         ) {
           throw NetworkErrors.countryNotFound();
         }
-        const checkpoint = await tx.checkpoint.create({ data: input, include: { country: true } });
+        const terangaKind = input.terangaKind ?? defaultTerangaKind(input.type);
+        assertTerangaKind(input.type, terangaKind);
+        const checkpoint = await tx.checkpoint.create({
+          data: {
+            ...input,
+            terangaKind,
+            travellerVisible: input.travellerVisible ?? input.type !== 'TECHNICAL',
+            suggestedDwellMinutes: input.suggestedDwellMinutes ?? null,
+            facilities: input.facilities ?? [],
+          },
+          include: { country: true },
+        });
         const after = locationView(checkpoint);
         await this.audit.record(
           {
@@ -296,6 +325,11 @@ export class NetworkService {
         ) {
           throw NetworkErrors.countryNotFound();
         }
+        const nextType = input.type ?? existing.type;
+        const nextTerangaKind =
+          input.terangaKind ??
+          (input.type !== undefined ? defaultTerangaKind(input.type) : existing.terangaKind);
+        assertTerangaKind(nextType, nextTerangaKind);
         const checkpoint = await tx.checkpoint.update({
           where: { id },
           data: {
@@ -308,6 +342,16 @@ export class NetworkService {
             ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
             ...(input.active !== undefined ? { active: input.active } : {}),
             ...(input.type !== undefined ? { type: input.type } : {}),
+            ...(input.type !== undefined || input.terangaKind !== undefined
+              ? { terangaKind: nextTerangaKind }
+              : {}),
+            ...(input.travellerVisible !== undefined
+              ? { travellerVisible: input.travellerVisible }
+              : {}),
+            ...(input.suggestedDwellMinutes !== undefined
+              ? { suggestedDwellMinutes: input.suggestedDwellMinutes }
+              : {}),
+            ...(input.facilities !== undefined ? { facilities: input.facilities } : {}),
           },
           include: { country: true },
         });

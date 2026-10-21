@@ -4,6 +4,8 @@ import type {
   NetworkCheckpoint,
   NetworkCheckpointType,
   NetworkCountry,
+  NetworkTerangaFacility,
+  NetworkTerangaStopKind,
   NetworkRoute,
   NetworkRouteDetail,
   NetworkStop,
@@ -31,6 +33,42 @@ const CHECKPOINT_LABELS: Record<NetworkCheckpointType, string> = {
   PORT: 'Port',
   TECHNICAL: 'Technique',
 };
+
+const TERANGA_STOP_LABELS: Record<NetworkTerangaStopKind, string> = {
+  BREAK: 'Pause',
+  MEAL: 'Pause repas',
+  SHOWER: 'Pause douche',
+  REST: 'Repos',
+  OVERNIGHT: 'Étape nuit',
+  FUEL: 'Ravitaillement',
+  BORDER: 'Frontière',
+  FERRY: 'Ferry',
+  TECHNICAL: 'Technique',
+};
+
+const TERANGA_FACILITY_LABELS: Record<NetworkTerangaFacility, string> = {
+  RESTROOM: 'Toilettes',
+  SHOWER: 'Douche',
+  FOOD: 'Repas',
+  SECURE_PARKING: 'Parking sécurisé',
+  FUEL: 'Carburant',
+};
+
+const TECHNICAL_TERANGA_KINDS: NetworkTerangaStopKind[] = [
+  'BREAK',
+  'MEAL',
+  'SHOWER',
+  'REST',
+  'OVERNIGHT',
+  'FUEL',
+  'TECHNICAL',
+];
+
+function checkpointKinds(type: NetworkCheckpointType): NetworkTerangaStopKind[] {
+  if (type === 'BORDER') return ['BORDER'];
+  if (type === 'FERRY_TERMINAL' || type === 'PORT') return ['FERRY'];
+  return TECHNICAL_TERANGA_KINDS;
+}
 
 function NumberField({
   label,
@@ -106,6 +144,21 @@ function CountryForm({ run, busy, onDone }: { run: Run; busy: boolean; onDone: (
   const [iso2, setIso2] = useState('');
   const [iso3, setIso3] = useState('');
   const [name, setName] = useState('');
+  const toggleFacility = (facility: NetworkTerangaFacility) => {
+    setFacilities((current) =>
+      current.includes(facility)
+        ? current.filter((candidate) => candidate !== facility)
+        : [...current, facility],
+    );
+  };
+
+  const changeType = (nextType: NetworkCheckpointType) => {
+    setType(nextType);
+    const allowed = checkpointKinds(nextType);
+    setTerangaKind((current) => (allowed.includes(current) ? current : allowed[0]!));
+    if (nextType !== 'TECHNICAL') setTravellerVisible(true);
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (busy) return;
@@ -194,6 +247,11 @@ function StopForm({
     if (ok) {
       setCode('');
       setName('');
+      setType('TECHNICAL');
+      setTerangaKind('TECHNICAL');
+      setTravellerVisible(false);
+      setSuggestedDwellMinutes('');
+      setFacilities([]);
       setLocality('');
       setLatitude('');
       setLongitude('');
@@ -276,10 +334,18 @@ function CheckpointForm({
   onDone: () => void;
 }) {
   const typeId = useId();
+  const kindId = useId();
+  const dwellId = useId();
+  const visibleId = useId();
+  const facilitiesId = useId();
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [countryId, setCountryId] = useState('');
   const [type, setType] = useState<NetworkCheckpointType>('TECHNICAL');
+  const [terangaKind, setTerangaKind] = useState<NetworkTerangaStopKind>('TECHNICAL');
+  const [travellerVisible, setTravellerVisible] = useState(false);
+  const [suggestedDwellMinutes, setSuggestedDwellMinutes] = useState('');
+  const [facilities, setFacilities] = useState<NetworkTerangaFacility[]>([]);
   const [locality, setLocality] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
@@ -294,6 +360,12 @@ function CheckpointForm({
           name,
           countryId,
           type,
+          terangaKind,
+          travellerVisible,
+          suggestedDwellMinutes: suggestedDwellMinutes
+            ? Number(suggestedDwellMinutes)
+            : null,
+          facilities,
           locality,
           latitude: Number(latitude),
           longitude: Number(longitude),
@@ -342,7 +414,7 @@ function CheckpointForm({
           id={typeId}
           className="et-select"
           value={type}
-          onChange={(event) => setType(event.target.value as NetworkCheckpointType)}
+          onChange={(event) => changeType(event.target.value as NetworkCheckpointType)}
         >
           {Object.entries(CHECKPOINT_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
@@ -351,6 +423,58 @@ function CheckpointForm({
           ))}
         </select>
       </div>
+      <div className="et-field">
+        <label htmlFor={kindId}>Nature Teranga Stop</label>
+        <select
+          id={kindId}
+          className="et-select"
+          value={terangaKind}
+          onChange={(event) => setTerangaKind(event.target.value as NetworkTerangaStopKind)}
+        >
+          {checkpointKinds(type).map((kind) => (
+            <option key={kind} value={kind}>
+              {TERANGA_STOP_LABELS[kind]}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="et-field">
+        <label htmlFor={dwellId}>Durée indicative (minutes, facultatif)</label>
+        <input
+          id={dwellId}
+          className="et-input"
+          name="suggestedDwellMinutes"
+          type="number"
+          min={5}
+          max={1440}
+          step={5}
+          value={suggestedDwellMinutes}
+          onChange={(event) => setSuggestedDwellMinutes(event.target.value)}
+        />
+        <p className="et-hint">Indication de planification uniquement, sans règle légale de conduite.</p>
+      </div>
+      <label className="et-checkbox" htmlFor={visibleId}>
+        <input
+          id={visibleId}
+          type="checkbox"
+          checked={travellerVisible}
+          onChange={(event) => setTravellerVisible(event.target.checked)}
+        />{' '}
+        Visible aux voyageurs
+      </label>
+      <fieldset className="et-field" id={facilitiesId}>
+        <legend>Services vérifiés sur place</legend>
+        {Object.entries(TERANGA_FACILITY_LABELS).map(([facility, label]) => (
+          <label key={facility} className="et-checkbox">
+            <input
+              type="checkbox"
+              checked={facilities.includes(facility as NetworkTerangaFacility)}
+              onChange={() => toggleFacility(facility as NetworkTerangaFacility)}
+            />{' '}
+            {label}
+          </label>
+        ))}
+      </fieldset>
       <TextField
         label="Localité du checkpoint"
         name="checkpointLocality"
@@ -636,6 +760,9 @@ export function NetworkAdmin() {
                 <th scope="col">Code</th>
                 <th scope="col">Nom</th>
                 <th scope="col">Type</th>
+                <th scope="col">Teranga Stop</th>
+                <th scope="col">Services</th>
+                <th scope="col">Voyageur</th>
                 <th scope="col">État</th>
                 {canManage ? <th scope="col">Action</th> : null}
               </tr>
@@ -648,6 +775,20 @@ export function NetworkAdmin() {
                   </th>
                   <td>{checkpoint.name}</td>
                   <td>{CHECKPOINT_LABELS[checkpoint.type]}</td>
+                  <td>
+                    {TERANGA_STOP_LABELS[checkpoint.terangaKind]}
+                    {checkpoint.suggestedDwellMinutes
+                      ? ` · ${checkpoint.suggestedDwellMinutes} min`
+                      : ''}
+                  </td>
+                  <td>
+                    {checkpoint.facilities.length
+                      ? checkpoint.facilities
+                          .map((facility) => TERANGA_FACILITY_LABELS[facility])
+                          .join(', ')
+                      : '—'}
+                  </td>
+                  <td>{checkpoint.travellerVisible ? 'Visible' : 'Interne'}</td>
                   <td>
                     <ActiveState active={checkpoint.active} />
                   </td>

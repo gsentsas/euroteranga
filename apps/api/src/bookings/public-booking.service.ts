@@ -73,6 +73,9 @@ export class PublicBookingService {
                   select: {
                     name: true,
                     type: true,
+                    terangaKind: true,
+                    travellerVisible: true,
+                    facilities: true,
                     locality: true,
                     timezone: true,
                     country: { select: { iso2: true, name: true } },
@@ -117,10 +120,10 @@ export class PublicBookingService {
         trip.vehicle && vehicleStatus === 'ACTIVE' && vehicleRole !== 'CARGO_SUPPORT'
           ? vehicle
           : null,
-      // Technical checkpoints (fuel, rest, crew change) stay internal: only
-      // stops, borders and crossings are public.
+      // Passenger stops are public. Operational checkpoints are public only
+      // when OPS explicitly marks them traveller-visible.
       waypoints: trip.routeVersion.waypoints
-        .filter((waypoint) => waypoint.checkpoint?.type !== 'TECHNICAL')
+        .filter((waypoint) => Boolean(waypoint.stop) || waypoint.checkpoint?.travellerVisible === true)
         .map((waypoint) => {
           const timing = timings.get(waypoint.id);
           const place = waypoint.stop ?? waypoint.checkpoint;
@@ -134,6 +137,8 @@ export class PublicBookingService {
             timezone: place?.timezone ?? null,
             country: place?.country ?? null,
             checkpointType: waypoint.checkpoint?.type ?? null,
+            terangaStopKind: waypoint.checkpoint?.terangaKind ?? null,
+            facilities: waypoint.checkpoint?.facilities ?? [],
             boardingAllowed: waypoint.boardingAllowed,
             alightingAllowed: waypoint.alightingAllowed,
             plannedArrivalAt: timing?.plannedArrivalAt ?? null,

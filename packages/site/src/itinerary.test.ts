@@ -4,6 +4,7 @@ import {
   durationLabel,
   journeyItinerary,
   placeKindLabel,
+  terangaFacilityLabels,
   type PublicItinerary,
   type SitePlace,
 } from './itinerary.js';
@@ -23,6 +24,8 @@ const stop = (
   timezone: 'Etc/UTC',
   country,
   checkpointType: null,
+  terangaStopKind: null,
+  facilities: [],
   plannedArrivalAt: null,
   plannedDepartureAt: null,
   ...overrides,
@@ -41,6 +44,8 @@ const checkpoint = (
   timezone: 'Etc/UTC',
   country,
   checkpointType,
+  terangaStopKind: checkpointType === 'BORDER' ? 'BORDER' : 'FERRY',
+  facilities: [],
   plannedArrivalAt: null,
   plannedDepartureAt: null,
 });
@@ -80,6 +85,8 @@ const place = (overrides: Partial<SitePlace> = {}): SitePlace => ({
   timezone: 'Europe/Paris',
   country: countries.france,
   checkpointType: null,
+  terangaStopKind: null,
+  facilities: [],
   arrivalAt: null,
   departureAt: null,
   ...overrides,
@@ -203,11 +210,39 @@ describe('itinerary time and label helpers (UI-PUBLIC-2)', () => {
     ).toBe(1);
   });
 
-  it('labels stops, borders and other public crossings', () => {
+  it('labels traveller-visible Teranga Stops from their operational purpose', () => {
     expect(placeKindLabel(place())).toBe('Arrêt');
-    expect(placeKindLabel(place({ kind: 'CHECKPOINT', checkpointType: 'BORDER' }))).toBe(
-      'Passage de frontière',
-    );
-    expect(placeKindLabel(place({ kind: 'CHECKPOINT', checkpointType: 'PORT' }))).toBe('Traversée');
+    expect(
+      placeKindLabel(
+        place({
+          kind: 'CHECKPOINT',
+          checkpointType: 'BORDER',
+          terangaStopKind: 'BORDER',
+        }),
+      ),
+    ).toBe('Passage de frontière');
+    expect(
+      placeKindLabel(
+        place({
+          kind: 'CHECKPOINT',
+          checkpointType: 'TECHNICAL',
+          terangaStopKind: 'REST',
+        }),
+      ),
+    ).toBe('Repos');
+    expect(
+      placeKindLabel(
+        place({
+          kind: 'CHECKPOINT',
+          checkpointType: 'FERRY_TERMINAL',
+          terangaStopKind: 'FERRY',
+        }),
+      ),
+    ).toBe('Traversée ferry');
+    expect(terangaFacilityLabels(['RESTROOM', 'SHOWER', 'UNKNOWN', 'FUEL'])).toEqual([
+      'toilettes',
+      'douche',
+      'carburant',
+    ]);
   });
 });

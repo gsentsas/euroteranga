@@ -59,6 +59,33 @@ enum CheckpointType {
   @@map("checkpoint_type")
 }
 
+/// Operational purpose of a checkpoint on the Europe–Africa corridor.
+/// This is descriptive only and carries no driver-hours or legal conclusion.
+enum TerangaStopKind {
+  BREAK
+  MEAL
+  SHOWER
+  REST
+  OVERNIGHT
+  FUEL
+  BORDER
+  FERRY
+  TECHNICAL
+
+  @@map("teranga_stop_kind")
+}
+
+/// Services that OPS has explicitly verified at a Teranga Stop.
+enum TerangaFacility {
+  RESTROOM
+  SHOWER
+  FOOD
+  SECURE_PARKING
+  FUEL
+
+  @@map("teranga_facility")
+}
+
 enum FareTableVersionStatus {
   DRAFT
   PUBLISHED
@@ -964,12 +991,20 @@ model Checkpoint {
   code      String         @unique @db.VarChar(32)
   name      String         @db.VarChar(160)
   countryId String         @map("country_id") @db.Uuid
-  type      CheckpointType
-  locality  String         @db.VarChar(128)
-  latitude  Decimal        @db.Decimal(9, 6)
-  longitude Decimal        @db.Decimal(9, 6)
-  timezone  String         @db.VarChar(64)
-  active    Boolean        @default(true)
+  type                  CheckpointType
+  /// Operational purpose; constrained to remain compatible with `type`.
+  terangaKind           TerangaStopKind  @default(TECHNICAL) @map("teranga_kind")
+  /// Explicit traveller-facing visibility. Technical checkpoints stay hidden unless OPS opts in.
+  travellerVisible      Boolean          @default(false) @map("traveller_visible")
+  /// Non-binding planning hint only; actual trip times remain in TripWaypointTiming.
+  suggestedDwellMinutes Int?             @map("suggested_dwell_minutes")
+  /// Services explicitly verified by OPS; empty means unknown/not confirmed.
+  facilities            TerangaFacility[] @default([])
+  locality              String           @db.VarChar(128)
+  latitude              Decimal          @db.Decimal(9, 6)
+  longitude             Decimal          @db.Decimal(9, 6)
+  timezone              String           @db.VarChar(64)
+  active                Boolean          @default(true)
   createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -978,6 +1013,8 @@ model Checkpoint {
 
   @@index([countryId])
   @@index([type])
+  @@index([terangaKind])
+  @@index([travellerVisible, active, id])
   @@index([active, id])
   @@map("checkpoint")
 }
