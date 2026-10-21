@@ -18,7 +18,9 @@ ALTER TABLE "vehicle" ADD CONSTRAINT "vehicle_load_capacity_pair"
       AND "cargo_volume_liters" IS NULL
     )
     OR (
-      "payload_capacity_kg" > 0
+      "payload_capacity_kg" IS NOT NULL
+      AND "cargo_volume_liters" IS NOT NULL
+      AND "payload_capacity_kg" > 0
       AND "cargo_volume_liters" > 0
     )
   );
