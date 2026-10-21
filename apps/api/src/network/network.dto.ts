@@ -77,13 +77,7 @@ export const TERANGA_STOP_KINDS = [
   'FERRY',
   'TECHNICAL',
 ] as const;
-export const TERANGA_FACILITIES = [
-  'RESTROOM',
-  'SHOWER',
-  'FOOD',
-  'SECURE_PARKING',
-  'FUEL',
-] as const;
+export const TERANGA_FACILITIES = ['RESTROOM', 'SHOWER', 'FOOD', 'SECURE_PARKING', 'FUEL'] as const;
 
 const facilities = z
   .array(z.enum(TERANGA_FACILITIES))

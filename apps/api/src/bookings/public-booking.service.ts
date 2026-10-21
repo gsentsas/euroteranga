@@ -123,7 +123,9 @@ export class PublicBookingService {
       // Passenger stops are public. Operational checkpoints are public only
       // when OPS explicitly marks them traveller-visible.
       waypoints: trip.routeVersion.waypoints
-        .filter((waypoint) => Boolean(waypoint.stop) || waypoint.checkpoint?.travellerVisible === true)
+        .filter(
+          (waypoint) => Boolean(waypoint.stop) || waypoint.checkpoint?.travellerVisible === true,
+        )
         .map((waypoint) => {
           const timing = timings.get(waypoint.id);
           const place = waypoint.stop ?? waypoint.checkpoint;

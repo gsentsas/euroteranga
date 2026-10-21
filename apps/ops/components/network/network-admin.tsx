@@ -358,9 +358,7 @@ function CheckpointForm({
           type,
           terangaKind,
           travellerVisible,
-          suggestedDwellMinutes: suggestedDwellMinutes
-            ? Number(suggestedDwellMinutes)
-            : null,
+          suggestedDwellMinutes: suggestedDwellMinutes ? Number(suggestedDwellMinutes) : null,
           facilities,
           locality,
           latitude: Number(latitude),
@@ -452,7 +450,9 @@ function CheckpointForm({
           value={suggestedDwellMinutes}
           onChange={(event) => setSuggestedDwellMinutes(event.target.value)}
         />
-        <p className="et-hint">Indication de planification uniquement, sans règle légale de conduite.</p>
+        <p className="et-hint">
+          Indication de planification uniquement, sans règle légale de conduite.
+        </p>
       </div>
       <label className="et-checkbox" htmlFor={visibleId}>
         <input

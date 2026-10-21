@@ -92,7 +92,11 @@ describe('network database invariants (isolated database)', () => {
     const sequence = fixtureSequence++;
     const type = overrides.type ?? 'BORDER';
     const defaultKind =
-      type === 'BORDER' ? 'BORDER' : type === 'FERRY_TERMINAL' || type === 'PORT' ? 'FERRY' : 'TECHNICAL';
+      type === 'BORDER'
+        ? 'BORDER'
+        : type === 'FERRY_TERMINAL' || type === 'PORT'
+          ? 'FERRY'
+          : 'TECHNICAL';
     return db(t.app).checkpoint.create({
       data: {
         code: overrides.code ?? `CHECK_${sequence}`,
@@ -148,12 +152,12 @@ describe('network database invariants (isolated database)', () => {
 
   it('enforces Teranga Stop kind, duration and distinct facilities', async () => {
     const nation = await country();
-    await expect(
-      checkpoint(nation.id, { type: 'BORDER', terangaKind: 'REST' }),
-    ).rejects.toThrow(/checkpoint_teranga_kind_compatible/);
-    await expect(
-      checkpoint(nation.id, { type: 'PORT', terangaKind: 'BORDER' }),
-    ).rejects.toThrow(/checkpoint_teranga_kind_compatible/);
+    await expect(checkpoint(nation.id, { type: 'BORDER', terangaKind: 'REST' })).rejects.toThrow(
+      /checkpoint_teranga_kind_compatible/,
+    );
+    await expect(checkpoint(nation.id, { type: 'PORT', terangaKind: 'BORDER' })).rejects.toThrow(
+      /checkpoint_teranga_kind_compatible/,
+    );
     await expect(
       checkpoint(nation.id, { type: 'TECHNICAL', terangaKind: 'MEAL' }),
     ).resolves.toMatchObject({ terangaKind: 'MEAL' });
@@ -163,9 +167,9 @@ describe('network database invariants (isolated database)', () => {
     await expect(checkpoint(nation.id, { suggestedDwellMinutes: 1441 })).rejects.toThrow(
       /checkpoint_suggested_dwell_range/,
     );
-    await expect(
-      checkpoint(nation.id, { facilities: ['SHOWER', 'SHOWER'] }),
-    ).rejects.toThrow(/checkpoint_teranga_facilities_distinct/);
+    await expect(checkpoint(nation.id, { facilities: ['SHOWER', 'SHOWER'] })).rejects.toThrow(
+      /checkpoint_teranga_facilities_distinct/,
+    );
   });
 
   it('requires normalized unique codes for stops, checkpoints and routes', async () => {

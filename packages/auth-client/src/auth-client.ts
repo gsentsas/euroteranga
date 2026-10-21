@@ -110,15 +110,7 @@ export interface NetworkStop {
 export type NetworkCheckpointType = 'BORDER' | 'FERRY_TERMINAL' | 'PORT' | 'TECHNICAL';
 
 export type NetworkTerangaStopKind =
-  | 'BREAK'
-  | 'MEAL'
-  | 'SHOWER'
-  | 'REST'
-  | 'OVERNIGHT'
-  | 'FUEL'
-  | 'BORDER'
-  | 'FERRY'
-  | 'TECHNICAL';
+  'BREAK' | 'MEAL' | 'SHOWER' | 'REST' | 'OVERNIGHT' | 'FUEL' | 'BORDER' | 'FERRY' | 'TECHNICAL';
 
 export type NetworkTerangaFacility = 'RESTROOM' | 'SHOWER' | 'FOOD' | 'SECURE_PARKING' | 'FUEL';
 
