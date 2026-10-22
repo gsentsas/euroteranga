@@ -13,6 +13,7 @@ CREATE TABLE "road_freight_public_token" (
   "revocation_reason" VARCHAR(255),
   CONSTRAINT "road_freight_public_token_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "road_freight_public_token_token_hash_key" UNIQUE ("token_hash"),
+  CONSTRAINT "road_freight_public_token_hash_shape" CHECK (octet_length("token_hash") = 32),
   CONSTRAINT "road_freight_public_token_expiry_shape" CHECK (
     "expires_at" IS NULL OR "expires_at" > "created_at"
   ),
