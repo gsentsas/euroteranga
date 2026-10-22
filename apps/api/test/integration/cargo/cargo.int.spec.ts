@@ -260,10 +260,29 @@ describe('CARGO-1 road freight, RBAC, capacity and history', () => {
     ).toBe(200);
     expect((await staffCargoApi(manager).event(reference, { type: 'LOADED' })).status).toBe(201);
 
-    await db(t.app).trip.update({
-      where: { id: running.tripId },
-      data: { status: 'IN_PROGRESS' },
-    });
+    const manifest = await adminApi(manager).post(
+      `/manifests/trips/${running.tripReference}`,
+    );
+    expect(manifest.status, manifest.text).toBe(201);
+
+    const policy = await adminApi(manager).post(
+      `/departure/trips/${running.tripReference}/permit-policy`,
+      { requirements: [] },
+    );
+    expect(policy.status, policy.text).toBe(201);
+
+    const authorization = await adminApi(manager).post(
+      `/departure/trips/${running.tripReference}/authorize`,
+      {},
+    );
+    expect(authorization.status, authorization.text).toBe(200);
+
+    const departed = await adminApi(manager).post(
+      `/departure/trips/${running.tripReference}/depart`,
+      {},
+    );
+    expect(departed.status, departed.text).toBe(200);
+    expect(departed.body.trip.status).toBe('IN_PROGRESS');
 
     for (const type of ['DEPARTED', 'IN_TRANSIT', 'ARRIVED', 'AVAILABLE', 'DELIVERED']) {
       const response = await staffCargoApi(manager).event(reference, { type });
