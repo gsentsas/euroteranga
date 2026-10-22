@@ -13,6 +13,7 @@ import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useCan } from '../staff-access';
 import { CargoQuotePanel } from './cargo-quote-panel';
+import { CargoTrackingPanel } from './cargo-tracking-panel';
 
 const DIRECTION_LABELS: Record<RoadFreightDirection, string> = {
   PAR_DKR: 'Paris → Dakar',
@@ -272,6 +273,12 @@ function CargoDetail({
 
       <FormAlert message={error} />
 
+      <CargoTrackingPanel
+        key={`tracking-${shipment.reference}`}
+        shipmentReference={shipment.reference}
+        canManage={canManage}
+      />
+
       <CargoQuotePanel
         key={shipment.reference}
         shipmentReference={shipment.reference}
@@ -429,6 +436,7 @@ export function CargoAdmin() {
 
   const [create, setCreate] = useState(EMPTY_CREATE);
   const [reference, setReference] = useState('');
+  const [qrPayload, setQrPayload] = useState('');
   const [tripReference, setTripReference] = useState('');
   const [vehicleCode, setVehicleCode] = useState('');
   const [direction, setDirection] = useState<RoadFreightDirection | ''>('');
@@ -533,6 +541,19 @@ export function CargoAdmin() {
     });
   };
 
+  const resolveQr = async (event: FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    const result = await auth.admin.cargo.resolveQr(qrPayload.trim());
+    if (!result.ok) {
+      setError(result.error.message);
+      return;
+    }
+    setDetail(result.data);
+    setQrPayload('');
+    setNotice(`Fret ${result.data.reference} identifié par QR.`);
+  };
+
   return (
     <div className="et-network" data-testid="cargo-workspace">
       <p>
@@ -545,6 +566,20 @@ export function CargoAdmin() {
           <p>{notice}</p>
         </FormStatus>
       ) : null}
+
+      <form className="et-form et-network-form" aria-label="Résoudre un QR fret" onSubmit={resolveQr}>
+        <TextField
+          label="Code QR fret"
+          name="cargoQrPayload"
+          value={qrPayload}
+          onChange={setQrPayload}
+          autoComplete="off"
+          maxLength={64}
+        />
+        <button type="submit" className="et-button et-button--secondary">
+          Rechercher le fret
+        </button>
+      </form>
 
       {canManage ? (
         <form
