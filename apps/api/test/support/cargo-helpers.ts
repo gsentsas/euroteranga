@@ -23,11 +23,8 @@ export function staffCargoApi(actor: StaffActor) {
     quotes: (reference: string) => api.get(`/cargo/${reference}/quotes`),
     quote: (reference: string, quoteReference: string) =>
       api.get(`/cargo/${reference}/quotes/${quoteReference}`),
-    createQuote: (
-      reference: string,
-      body: unknown,
-      options: { csrf?: string | null } = {},
-    ) => api.post(`/cargo/${reference}/quotes`, body, options),
+    createQuote: (reference: string, body: unknown, options: { csrf?: string | null } = {}) =>
+      api.post(`/cargo/${reference}/quotes`, body, options),
     replaceQuoteLines: (
       reference: string,
       quoteReference: string,
