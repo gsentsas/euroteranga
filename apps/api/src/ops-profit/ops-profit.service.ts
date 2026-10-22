@@ -197,7 +197,15 @@ export class OpsProfitService {
     }
 
     const convoyVehicles = [trip.vehicle, trip.supportVehicle].filter(
-      (vehicle): vehicle is NonNullable<typeof vehicle> => vehicle !== null,
+      (
+        vehicle,
+      ): vehicle is NonNullable<typeof vehicle> & {
+        payloadCapacityKg: number;
+        cargoVolumeLiters: number;
+      } =>
+        vehicle !== null &&
+        vehicle.payloadCapacityKg !== null &&
+        vehicle.cargoVolumeLiters !== null,
     );
     const payloadCapacityKg = convoyVehicles.reduce(
       (total, vehicle) => total + BigInt(vehicle.payloadCapacityKg ?? 0),
