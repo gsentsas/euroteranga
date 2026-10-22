@@ -1,7 +1,9 @@
 import { createHash, randomInt } from 'node:crypto';
+import { renderSVG } from 'uqr';
 import { BOOKING_REFERENCE_ALPHABET } from '../bookings/booking-rules.js';
 
 export const CARGO_REFERENCE_PATTERN = /^ETC-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{12}$/;
+export const CARGO_QR_PATTERN = /^ETC1:(ETC-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{12})$/;
 export const CARGO_WEIGHT_PATTERN = /^(?:0|[1-9][0-9]{0,4})(?:\.[0-9]{1,3})?$/;
 
 export type CargoLifecycle =
@@ -45,6 +47,30 @@ export function generateCargoReference(
 export function normalizeCargoReference(value: string): string | null {
   const reference = value.trim().toUpperCase();
   return CARGO_REFERENCE_PATTERN.test(reference) ? reference : null;
+}
+
+/** Versioned, PII-free operational identifier. It is never an authorization. */
+export function cargoQrPayload(reference: string): string {
+  const normalized = normalizeCargoReference(reference);
+  if (!normalized) throw new Error('invalid cargo reference');
+  return `ETC1:${normalized}`;
+}
+
+export function parseCargoQrPayload(value: string): string | null {
+  return value.trim().toUpperCase().match(CARGO_QR_PATTERN)?.[1] ?? null;
+}
+
+export const CARGO_QR_RENDER_OPTIONS = {
+  ecc: 'M',
+  boostEcc: true,
+  border: 4,
+  pixelSize: 6,
+  blackColor: '#111827',
+  whiteColor: '#ffffff',
+} as const;
+
+export function renderCargoQrSvg(reference: string): string {
+  return renderSVG(cargoQrPayload(reference), CARGO_QR_RENDER_OPTIONS);
 }
 
 /** Exact kilograms with three decimal places; no Number conversion. */
