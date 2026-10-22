@@ -188,19 +188,19 @@ Audit dédié :
 
 Toutes les routes sont sous `/v1/admin/cargo`.
 
-| Méthode | Route                    | Permission   |
-| ------- | ------------------------ | ------------ |
-| GET     | `/`                      | cargo.read   |
-| GET     | `/:reference`            | cargo.read   |
-| POST    | `/`                      | cargo.manage |
-| POST    | `/:reference/details`    | cargo.manage |
-| POST    | `/:reference/assignment` | cargo.manage |
-| POST    | `/:reference/events`     | cargo.manage |
-| GET     | `/:reference/quotes` | cargo.read + pricing.read |
-| GET     | `/:reference/quotes/:quoteReference` | cargo.read + pricing.read |
-| POST    | `/:reference/quotes` | cargo.manage + pricing.manage |
-| POST    | `/:reference/quotes/:quoteReference` | cargo.manage + pricing.manage |
-| POST    | `/:reference/quotes/:quoteReference/issue` | cargo.manage + pricing.manage |
+| Méthode | Route                                       | Permission                    |
+| ------- | ------------------------------------------- | ----------------------------- |
+| GET     | `/`                                         | cargo.read                    |
+| GET     | `/:reference`                               | cargo.read                    |
+| POST    | `/`                                         | cargo.manage                  |
+| POST    | `/:reference/details`                       | cargo.manage                  |
+| POST    | `/:reference/assignment`                    | cargo.manage                  |
+| POST    | `/:reference/events`                        | cargo.manage                  |
+| GET     | `/:reference/quotes`                        | cargo.read + pricing.read     |
+| GET     | `/:reference/quotes/:quoteReference`        | cargo.read + pricing.read     |
+| POST    | `/:reference/quotes`                        | cargo.manage + pricing.manage |
+| POST    | `/:reference/quotes/:quoteReference`        | cargo.manage + pricing.manage |
+| POST    | `/:reference/quotes/:quoteReference/issue`  | cargo.manage + pricing.manage |
 | POST    | `/:reference/quotes/:quoteReference/accept` | cargo.manage + pricing.manage |
 | POST    | `/:reference/quotes/:quoteReference/cancel` | cargo.manage + pricing.manage |
 
