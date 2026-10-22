@@ -60,6 +60,13 @@ const EVENT_LABELS: Record<RoadFreightOperationalEventType, string> = {
 
 const OPERATIONAL_EVENTS = Object.keys(EVENT_LABELS) as RoadFreightOperationalEventType[];
 
+const CREATE_FLAG_OPTIONS = [
+  ['fragile', 'Fragile'],
+  ['professional', 'Professionnel'],
+  ['pickupRequired', 'Collecte demandée'],
+  ['deliveryRequired', 'Livraison demandée'],
+] as const;
+
 const formatAt = (value: string) =>
   new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }).format(
     new Date(value),
@@ -593,16 +600,11 @@ export function CargoAdmin() {
             />
           </div>
           <div className="et-actions">
-            {[
-              ['fragile', 'Fragile'],
-              ['professional', 'Professionnel'],
-              ['pickupRequired', 'Collecte demandée'],
-              ['deliveryRequired', 'Livraison demandée'],
-            ].map(([key, label]) => (
+            {CREATE_FLAG_OPTIONS.map(([key, label]) => (
               <label key={key}>
                 <input
                   type="checkbox"
-                  checked={create[key as keyof typeof create] as boolean}
+                  checked={create[key]}
                   onChange={(event) =>
                     setCreate((state) => ({ ...state, [key]: event.target.checked }))
                   }
