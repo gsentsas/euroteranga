@@ -51,7 +51,13 @@ const WARNING_LABELS: Record<string, string> = {
     'Les devis Cargo acceptés restent des valeurs commerciales non reconnues comme revenus Finance.',
 };
 
-export function ProfitabilityPanel({ tripReference }: { tripReference: string }) {
+export function ProfitabilityPanel({
+  tripReference,
+  refreshKey,
+}: {
+  tripReference: string;
+  refreshKey?: unknown;
+}) {
   const canReadTrip = useCan('trip.read');
   const [projection, setProjection] = useState<OpsProfitTripProjection | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +82,7 @@ export function ProfitabilityPanel({ tripReference }: { tripReference: string })
     return () => {
       active = false;
     };
-  }, [canReadTrip, tripReference]);
+  }, [canReadTrip, tripReference, refreshKey]);
 
   if (!canReadTrip) return null;
 
