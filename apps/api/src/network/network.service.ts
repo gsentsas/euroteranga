@@ -329,7 +329,7 @@ export class NetworkService {
         const typeChanged = input.type !== undefined && input.type !== existing.type;
         const nextTerangaKind =
           input.terangaKind ??
-          (typeChanged ? defaultTerangaKind(input.type) : existing.terangaKind);
+          (typeChanged ? defaultTerangaKind(nextType) : existing.terangaKind);
         assertTerangaKind(nextType, nextTerangaKind);
         const checkpoint = await tx.checkpoint.update({
           where: { id },
