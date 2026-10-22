@@ -811,7 +811,11 @@ export function FinanceAdmin() {
       {summary ? (
         <>
           <Summary summary={summary} />
-          <ProfitabilityPanel tripReference={activeReference} />
+          <ProfitabilityPanel
+            key={activeReference}
+            tripReference={activeReference}
+            refreshKey={summary}
+          />
           <div className="et-actions">
             <button
               type="button"
