@@ -16,8 +16,7 @@ export const CargoQuoteErrors = {
       'CARGO_QUOTE_CONFLICT',
       'Le devis a été modifié depuis l’ouverture de la fiche.',
     ),
-  frozen: () =>
-    new PublicApiError(409, 'CARGO_QUOTE_FROZEN', 'Ce devis n’est plus modifiable.'),
+  frozen: () => new PublicApiError(409, 'CARGO_QUOTE_FROZEN', 'Ce devis n’est plus modifiable.'),
   invalidTransition: () =>
     new PublicApiError(
       409,
