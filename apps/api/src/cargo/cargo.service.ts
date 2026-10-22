@@ -62,6 +62,7 @@ function databaseDomainError(error: unknown): never {
     throw CargoErrors.invalidTransition();
   }
   if (message.includes('road freight event waypoint')) throw CargoErrors.invalidLocation();
+  if (message.includes('road freight event occurred_at')) throw CargoErrors.invalidTimestamp();
   throw error;
 }
 

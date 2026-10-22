@@ -388,6 +388,7 @@ DECLARE
   expected_next "road_freight_lifecycle_status";
   actor_realm "auth_realm";
   actor_status "auth_identity_status";
+  now_at TIMESTAMPTZ := clock_timestamp();
 BEGIN
   IF TG_OP <> 'INSERT' THEN
     RAISE EXCEPTION 'road freight event history is append-only'
@@ -408,6 +409,13 @@ BEGIN
     RAISE EXCEPTION 'only active STAFF may record road freight events'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
+
+  IF NEW."occurred_at" < GREATEST(current."created_at", now_at - interval '30 days')
+     OR NEW."occurred_at" > now_at + interval '5 minutes' THEN
+    RAISE EXCEPTION 'road freight event occurred_at is outside the accepted window'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  NEW."recorded_at" := now_at;
 
   SELECT max(e."sequence") INTO previous_sequence
   FROM "road_freight_shipment_event" e
