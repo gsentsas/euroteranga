@@ -319,9 +319,16 @@ export class CargoService {
         const changedFields = Object.keys(input).filter((key) => key !== 'expectedUpdatedAt');
         if (
           changedFields.length > 0 &&
-          ['LOADED', 'DEPARTED', 'IN_TRANSIT', 'ARRIVED', 'AVAILABLE', 'DELIVERED', 'REFUSED', 'CANCELLED'].includes(
-            before.lifecycleStatus,
-          )
+          [
+            'LOADED',
+            'DEPARTED',
+            'IN_TRANSIT',
+            'ARRIVED',
+            'AVAILABLE',
+            'DELIVERED',
+            'REFUSED',
+            'CANCELLED',
+          ].includes(before.lifecycleStatus)
         ) {
           throw CargoErrors.frozen();
         }
