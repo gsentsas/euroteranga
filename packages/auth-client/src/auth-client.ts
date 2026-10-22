@@ -1752,6 +1752,80 @@ export interface RoadFreightListOptions {
   createdTo?: string;
 }
 
+export type RoadFreightQuoteStatus =
+  | 'DRAFT'
+  | 'ISSUED'
+  | 'ACCEPTED'
+  | 'SUPERSEDED'
+  | 'CANCELLED';
+export type RoadFreightQuoteLineKind = 'CHARGE' | 'DISCOUNT';
+
+export interface RoadFreightQuoteLine {
+  id: string;
+  kind: RoadFreightQuoteLineKind;
+  label: string;
+  amountMinor: string;
+  notes: string | null;
+  position: number;
+}
+
+export interface RoadFreightQuote {
+  reference: string;
+  version: number;
+  status: RoadFreightQuoteStatus;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  totalMinor: string;
+  snapshot: {
+    direction: RoadFreightDirection;
+    weightKg: string;
+    volumeLiters: number;
+    packageCount: number;
+    fragile: boolean;
+    professional: boolean;
+    pickupRequired: boolean;
+    deliveryRequired: boolean;
+    shipmentUpdatedAt: string;
+  };
+  lines: RoadFreightQuoteLine[];
+  createdBy: { id: string; email: string };
+  issuedBy: { id: string; email: string } | null;
+  acceptedBy: { id: string; email: string } | null;
+  cancelledBy: { id: string; email: string } | null;
+  issuedAt: string | null;
+  acceptedAt: string | null;
+  cancelledAt: string | null;
+  supersededAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoadFreightQuoteLineInput {
+  kind: RoadFreightQuoteLineKind;
+  label: string;
+  amountMinor: string;
+  notes?: string;
+}
+
+export interface RoadFreightQuoteCreateInput {
+  currencyCode: string;
+  currencyMinorUnit: number;
+  lines: RoadFreightQuoteLineInput[];
+}
+
+export interface RoadFreightQuoteLinesInput {
+  lines: RoadFreightQuoteLineInput[];
+  expectedUpdatedAt?: string;
+}
+
+export interface RoadFreightQuoteTransitionInput {
+  expectedUpdatedAt?: string;
+}
+
+export interface RoadFreightQuoteCancelInput extends RoadFreightQuoteTransitionInput {
+  reason: string;
+}
+
 /** PR-14: the six server-derived check-in gates of one BookingPassenger. */
 export type CheckInGate = 'BOOKING' | 'PAYMENT' | 'DOCUMENTS' | 'COMPLIANCE' | 'SEAT' | 'BAGGAGE';
 export type CheckInGateStatus = 'PASS' | 'BLOCKED' | 'PENDING_REVIEW';
@@ -4237,6 +4311,62 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<RoadFreightEventResult>(
             'staff',
             `/v1/admin/cargo/${encodeURIComponent(reference)}/events`,
+            input,
+          ),
+        quotes: (reference: string) =>
+          call<{ items: RoadFreightQuote[] }>(
+            'GET',
+            `/v1/admin/cargo/${encodeURIComponent(reference)}/quotes`,
+          ),
+        quote: (reference: string, quoteReference: string) =>
+          call<RoadFreightQuote>(
+            'GET',
+            `/v1/admin/cargo/${encodeURIComponent(reference)}/quotes/${encodeURIComponent(quoteReference)}`,
+          ),
+        createQuote: (reference: string, input: RoadFreightQuoteCreateInput) =>
+          withCsrf<RoadFreightQuote>(
+            'staff',
+            `/v1/admin/cargo/${encodeURIComponent(reference)}/quotes`,
+            input,
+          ),
+        replaceQuoteLines: (
+          reference: string,
+          quoteReference: string,
+          input: RoadFreightQuoteLinesInput,
+        ) =>
+          withCsrf<RoadFreightQuote>(
+            'staff',
+            `/v1/admin/cargo/${encodeURIComponent(reference)}/quotes/${encodeURIComponent(quoteReference)}`,
+            input,
+          ),
+        issueQuote: (
+          reference: string,
+          quoteReference: string,
+          input: RoadFreightQuoteTransitionInput = {},
+        ) =>
+          withCsrf<RoadFreightQuote>(
+            'staff',
+            `/v1/admin/cargo/${encodeURIComponent(reference)}/quotes/${encodeURIComponent(quoteReference)}/issue`,
+            input,
+          ),
+        acceptQuote: (
+          reference: string,
+          quoteReference: string,
+          input: RoadFreightQuoteTransitionInput = {},
+        ) =>
+          withCsrf<RoadFreightQuote>(
+            'staff',
+            `/v1/admin/cargo/${encodeURIComponent(reference)}/quotes/${encodeURIComponent(quoteReference)}/accept`,
+            input,
+          ),
+        cancelQuote: (
+          reference: string,
+          quoteReference: string,
+          input: RoadFreightQuoteCancelInput,
+        ) =>
+          withCsrf<RoadFreightQuote>(
+            'staff',
+            `/v1/admin/cargo/${encodeURIComponent(reference)}/quotes/${encodeURIComponent(quoteReference)}/cancel`,
             input,
           ),
       },
