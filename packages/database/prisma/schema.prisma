@@ -125,6 +125,37 @@ enum TripStatus {
   @@map("trip_status")
 }
 
+/// Maturity of the internal operational cost plan. LOCKED is terminal.
+enum TripCostStatus {
+  DRAFT
+  ESTIMATED
+  LOCKED
+
+  @@map("trip_cost_status")
+}
+
+/// Strict, traveller-independent classification of one planned trip cost.
+enum TripCostCategory {
+  FUEL
+  TOLLS
+  FERRY
+  BORDER_FEES
+  PERMITS
+  DRIVERS
+  ACCOMMODATION
+  MEALS_ALLOWANCES
+  MAINTENANCE
+  INSURANCE
+  CLEANING_PREPARATION
+  PARKING
+  STOP_COST
+  SUPPORT_VEHICLE
+  CONTINGENCY
+  OTHER
+
+  @@map("trip_cost_category")
+}
+
 enum VehicleStatus {
   PLANNED
   ACTIVE
@@ -1126,7 +1157,8 @@ model Vehicle {
   seatMapVersion      SeatMapVersion?    @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
   primaryMedia        PublicMediaAsset?  @relation("VehiclePrimaryMedia", fields: [primaryMediaId], references: [id], onDelete: Restrict)
   mediaGallery        VehicleMedia[]
-  trips               Trip[]
+  trips               Trip[]             @relation("TripPrimaryVehicle")
+  supportTrips        Trip[]             @relation("TripSupportVehicle")
   regulatoryPermits   RegulatoryPermit[]
   trackingDevices     TrackingDevice[]
   incidents           Incident[]
@@ -1166,6 +1198,8 @@ model Trip {
   reference                String     @unique @db.VarChar(32)
   routeVersionId           String     @map("route_version_id") @db.Uuid
   vehicleId                String?    @map("vehicle_id") @db.Uuid
+  /// Optional operational cargo-support vehicle travelling with the main coach.
+  supportVehicleId         String?    @map("support_vehicle_id") @db.Uuid
   /// Historical seat map of this trip; frozen once SCHEDULED.
   seatMapVersionId         String?    @map("seat_map_version_id") @db.Uuid
   /// Historical pricing of this trip; frozen once SCHEDULED.
@@ -1187,7 +1221,8 @@ model Trip {
   updatedAt                DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   routeVersion            RouteVersion             @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
-  vehicle                 Vehicle?                 @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  vehicle                 Vehicle?                 @relation("TripPrimaryVehicle", fields: [vehicleId], references: [id], onDelete: Restrict)
+  supportVehicle          Vehicle?                 @relation("TripSupportVehicle", fields: [supportVehicleId], references: [id], onDelete: Restrict)
   seatMapVersion          SeatMapVersion?          @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
   fareTableVersion        FareTableVersion?        @relation(fields: [fareTableVersionId], references: [id], onDelete: Restrict)
   timings                 TripWaypointTiming[]
@@ -1206,16 +1241,55 @@ model Trip {
   incidents               Incident[]
   financeRevenues         TripRevenue[]
   financeExpenses         TripExpense[]
+  costPlan                TripCostPlan?
 
   @@index([status, id])
   @@index([routeVersionId, id])
   @@index([plannedDepartureAt, id])
   @@index([vehicleId])
+  @@index([supportVehicleId])
   @@index([seatMapVersionId])
   @@index([fareTableVersionId])
   @@index([actualDepartureAt, id])
   @@index([actualArrivalAt, id])
   @@map("trip")
+}
+
+/// Internal pre-departure cost plan. It is distinct from incurred expenses,
+/// ticket pricing, revenue and profitability.
+model TripCostPlan {
+  id                String         @id @default(uuid(7)) @db.Uuid
+  tripId            String         @unique @map("trip_id") @db.Uuid
+  status            TripCostStatus @default(DRAFT)
+  currencyCode      String         @default("EUR") @map("currency_code") @db.VarChar(3)
+  currencyMinorUnit Int            @default(2) @map("currency_minor_unit")
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip  Trip           @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  items TripCostItem[]
+
+  @@index([status, updatedAt])
+  @@map("trip_cost_plan")
+}
+
+/// One ordered component of a trip cost plan. Amounts are integer minor units.
+model TripCostItem {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  planId      String           @map("plan_id") @db.Uuid
+  category    TripCostCategory
+  label       String           @db.VarChar(160)
+  amountMinor BigInt           @map("amount_minor")
+  notes       String?          @db.VarChar(500)
+  position    Int
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  plan TripCostPlan @relation(fields: [planId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([planId, position])
+  @@index([planId, category])
+  @@map("trip_cost_item")
 }
 
 /// Planned time at one waypoint of the trip's route version (UTC). Editable

@@ -9,6 +9,7 @@ import { TripPricingPanel } from '../pricing/trip-pricing-panel';
 import { assignedLabel } from '../seat-maps/seat-map-format';
 import { SeatMapAssignmentForm } from '../seat-maps/seat-map-assignment-form';
 import type { PublishedVersionOption } from '../seat-maps/use-published-versions';
+import { TripCostPanel } from './trip-cost-panel';
 import {
   formatLocal,
   formatUtc,
@@ -18,6 +19,7 @@ import {
   TRIP_ACTION_LABELS,
   TRIP_STATUS_LABELS,
   vehicleIdentity,
+  formatCargoVolume,
 } from './trip-format';
 
 type Run = ReturnType<typeof useAdminFeedback>['run'];
@@ -253,6 +255,100 @@ function VehicleForm({
   );
 }
 
+function SupportVehicleForm({
+  trip,
+  vehicles,
+  run,
+  busy,
+  onSaved,
+}: {
+  trip: AdminTrip;
+  vehicles: readonly AdminVehicle[];
+  run: Run;
+  busy: boolean;
+  onSaved: () => Promise<void>;
+}) {
+  const selectId = useId();
+  const reasonId = useId();
+  const [vehicleId, setVehicleId] = useState('');
+  const [reason, setReason] = useState('');
+  useEffect(() => {
+    setVehicleId(trip.supportVehicleId ?? '');
+    setReason('');
+  }, [trip.supportVehicleId]);
+
+  const reasonRequired = trip.status === 'SCHEDULED';
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (busy) return;
+    const next = vehicleId || null;
+    const label = next ? (vehicles.find((vehicle) => vehicle.id === next)?.code ?? next) : 'aucun';
+    const ok = await run(
+      () =>
+        auth.admin.trips.assignTripSupportVehicle(trip.id, {
+          supportVehicleId: next,
+          expectedSupportVehicleId: trip.supportVehicleId,
+          ...(reason.trim() ? { reason } : {}),
+        }),
+      `Véhicule d’appoint du voyage ${trip.reference} : ${label}.`,
+    );
+    if (ok) await onSaved();
+  };
+
+  return (
+    <form
+      className="et-form et-network-form"
+      aria-label={`Véhicule d’appoint du voyage ${trip.reference}`}
+      onSubmit={submit}
+    >
+      <h3>Véhicule d’appoint</h3>
+      <div className="et-field">
+        <label htmlFor={selectId}>Véhicule CARGO_SUPPORT à affecter</label>
+        <select
+          id={selectId}
+          className="et-select"
+          value={vehicleId}
+          onChange={(event) => setVehicleId(event.target.value)}
+        >
+          <option value="">Aucun véhicule d’appoint</option>
+          {trip.supportVehicle &&
+          !vehicles.some((vehicle) => vehicle.id === trip.supportVehicle?.id) ? (
+            <option value={trip.supportVehicle.id}>{`${trip.supportVehicle.code} (actuel)`}</option>
+          ) : null}
+          {vehicles.map((vehicle) => (
+            <option key={vehicle.id} value={vehicle.id}>
+              {`${vehicleIdentity(vehicle)} — ${vehicle.manufacturer} ${vehicle.model} · ${vehicle.payloadCapacityKg ?? '—'} kg · ${formatCargoVolume(vehicle.cargoVolumeLiters)}`}
+            </option>
+          ))}
+        </select>
+        <p className="et-hint">
+          Seuls les véhicules CARGO_SUPPORT actifs avec capacité configurée sont proposés.
+        </p>
+      </div>
+      <div className="et-field">
+        <label htmlFor={reasonId}>
+          {reasonRequired
+            ? 'Motif du changement de véhicule d’appoint'
+            : 'Motif du changement de véhicule d’appoint (facultatif)'}
+        </label>
+        <textarea
+          id={reasonId}
+          className="et-input"
+          rows={2}
+          minLength={3}
+          maxLength={500}
+          required={reasonRequired}
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+        />
+      </div>
+      <button className="et-button" type="submit" disabled={busy}>
+        Enregistrer le véhicule d’appoint
+      </button>
+    </form>
+  );
+}
+
 function CancelForm({
   trip,
   run,
@@ -391,6 +487,7 @@ function TripSeatMapPanel({
 export function TripDetail({
   trip,
   vehicles,
+  supportVehicles,
   canManage,
   canAssignSeatMap,
   seatMapOptions,
@@ -402,6 +499,7 @@ export function TripDetail({
 }: {
   trip: AdminTrip;
   vehicles: readonly AdminVehicle[];
+  supportVehicles: readonly AdminVehicle[];
   canManage: boolean;
   /** trip.manage + seatmap.read. */
   canAssignSeatMap: boolean;
@@ -442,11 +540,17 @@ export function TripDetail({
         <dd>{formatUtc(trip.plannedDepartureAt)}</dd>
         <dt>Arrivée prévue</dt>
         <dd>{formatUtc(trip.plannedArrivalAt)}</dd>
-        <dt>Véhicule</dt>
+        <dt>Véhicule principal</dt>
         <dd data-testid="trip-vehicle">
           {trip.vehicle
             ? `${vehicleIdentity(trip.vehicle)} — ${trip.vehicle.manufacturer} ${trip.vehicle.model}`
             : 'Aucun'}
+        </dd>
+        <dt>Véhicule d’appoint</dt>
+        <dd data-testid="trip-support-vehicle">
+          {trip.supportVehicle
+            ? `${vehicleIdentity(trip.supportVehicle)} — ${trip.supportVehicle.manufacturer} ${trip.supportVehicle.model} · ${trip.supportVehicle.payloadCapacityKg ?? '—'} kg · ${formatCargoVolume(trip.supportVehicle.cargoVolumeLiters)}`
+            : 'Aucun véhicule d’appoint'}
         </dd>
       </dl>
 
@@ -503,8 +607,26 @@ export function TripDetail({
         />
       ) : null}
 
-      {canManage && trip.status !== 'CANCELLED' ? (
-        <VehicleForm trip={trip} vehicles={vehicles} run={run} busy={busy} onSaved={onReload} />
+      <TripCostPanel
+        tripId={trip.id}
+        tripReference={trip.reference}
+        canManage={canManage && trip.status !== 'CANCELLED'}
+        run={run}
+        busy={busy}
+        onSaved={onReload}
+      />
+
+      {canManage && (trip.status === 'DRAFT' || trip.status === 'SCHEDULED') ? (
+        <>
+          <VehicleForm trip={trip} vehicles={vehicles} run={run} busy={busy} onSaved={onReload} />
+          <SupportVehicleForm
+            trip={trip}
+            vehicles={supportVehicles}
+            run={run}
+            busy={busy}
+            onSaved={onReload}
+          />
+        </>
       ) : null}
       {editable ? (
         <div className="et-actions">
@@ -537,6 +659,9 @@ export function TripDetail({
               : ''}
             {entry.action === 'TRIP_VEHICLE_CHANGED'
               ? ` (${entry.fromVehicleCode ?? 'aucun'} → ${entry.toVehicleCode ?? 'aucun'})`
+              : ''}
+            {entry.action === 'TRIP_SUPPORT_VEHICLE_CHANGED'
+              ? ` (${entry.fromSupportVehicleCode ?? 'aucun'} → ${entry.toSupportVehicleCode ?? 'aucun'})`
               : ''}
             {entry.action === 'TRIP_FARE_TABLE_CHANGED'
               ? ` (${entry.fromFareTable ?? 'aucune'} → ${entry.toFareTable ?? 'aucune'})`

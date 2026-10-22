@@ -324,6 +324,8 @@ export function tripSeed() {
     routeName: `Route voyages ${run}`,
     vehicleCode: `VH_TRIP_${run}`,
     vehicleLabel: 'Constructeur synthétique Autocar voyages',
+    supportVehicleCode: `VH_SUPPORT_${run}`,
+    supportVehicleLabel: 'Constructeur synthétique Fourgon support',
     seededTripReference: `ET-TEST-SEED-${run}`,
     departureTripReference: `ET-TEST-DEP-${run}`,
   };

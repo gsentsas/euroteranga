@@ -210,6 +210,15 @@ export class DepartureReadinessService {
         vehicle: {
           select: { code: true, status: true, seatMapVersionId: true },
         },
+        supportVehicle: {
+          select: {
+            code: true,
+            status: true,
+            role: true,
+            payloadCapacityKg: true,
+            cargoVolumeLiters: true,
+          },
+        },
       },
     });
     if (!trip) throw DepartureReadinessErrors.tripNotFound();
@@ -378,6 +387,15 @@ export class DepartureReadinessService {
             seatMapCompatible:
               trip.seatMapVersionId === null ||
               trip.vehicle.seatMapVersionId === trip.seatMapVersionId,
+          }
+        : null,
+      supportVehicle: trip.supportVehicle
+        ? {
+            code: trip.supportVehicle.code,
+            active: trip.supportVehicle.status === 'ACTIVE',
+            role: trip.supportVehicle.role,
+            payloadCapacityKg: trip.supportVehicle.payloadCapacityKg,
+            cargoVolumeLiters: trip.supportVehicle.cargoVolumeLiters,
           }
         : null,
       passengers: passengerFacts,

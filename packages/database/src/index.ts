@@ -22,6 +22,7 @@ export {
   SeatMapCellKind,
   SeatMapVersionStatus,
   TripStatus,
+  VehicleRole,
   VehicleStatus,
   TrackingObservationSource,
   TrackingProviderStatus,

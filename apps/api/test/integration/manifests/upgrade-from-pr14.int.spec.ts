@@ -73,7 +73,7 @@ describe('upgrade from a real PR-14 database', () => {
     for (const table of HISTORICAL_TABLES) {
       const historicalJson =
         table === 'trip'
-          ? "to_jsonb(x) - ARRAY['actual_departure_at', 'actual_arrival_at', 'departure_authorization_id']"
+          ? "to_jsonb(x) - ARRAY['actual_departure_at', 'actual_arrival_at', 'departure_authorization_id', 'support_vehicle_id']"
           : 'to_jsonb(x)';
       const [row] = await raw.$queryRawUnsafe<Array<{ value: string | null }>>(
         `SELECT jsonb_agg(${historicalJson} ORDER BY ${historicalJson})::text AS value FROM (SELECT * FROM "${table}") x`,

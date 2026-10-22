@@ -957,6 +957,20 @@ async function seedTripData(db: ReturnType<typeof createDatabaseClient>): Promis
     },
   });
   await db.vehicle.update({ where: { id: vehicle.id }, data: { status: 'ACTIVE' } });
+  const supportVehicle = await db.vehicle.create({
+    data: {
+      code: seed.supportVehicleCode,
+      manufacturer: 'Constructeur synthétique',
+      model: 'Fourgon support',
+      role: 'CARGO_SUPPORT',
+      payloadCapacityKg: 1200,
+      cargoVolumeLiters: 20000,
+    },
+  });
+  await db.vehicle.update({
+    where: { id: supportVehicle.id },
+    data: { status: 'ACTIVE' },
+  });
   await db.trip.create({
     data: { reference: seed.seededTripReference, routeVersionId: version.id },
   });
