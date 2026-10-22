@@ -74,6 +74,7 @@ export class AdminCargoController {
   }
 
   @Post('resolve-qr')
+  @HttpCode(200)
   @UseGuards(CsrfGuard)
   @Header('Cache-Control', 'no-store')
   @ApiOkResponse({ description: 'Authenticated lookup of a versioned, PII-free Cargo QR.' })
