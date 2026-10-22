@@ -31,7 +31,11 @@ import type {
 } from './finance.dto.js';
 import { FinanceErrors } from './finance.errors.js';
 import { parseFinanceReceiptUpload } from './finance-receipt-upload.js';
-import { exactMinorAmount, financeReceiptObjectKey, generateFinanceReference } from './finance-rules.js';
+import {
+  exactMinorAmount,
+  financeReceiptObjectKey,
+  generateFinanceReference,
+} from './finance-rules.js';
 import { buildFinanceCurrencySummary } from './finance-summary.js';
 
 type RevenueInput = z.infer<typeof revenueCreateSchema>;
