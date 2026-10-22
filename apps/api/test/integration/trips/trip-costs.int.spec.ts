@@ -248,6 +248,58 @@ describe('trip operational costs (isolated database)', () => {
     expect(await audits()).toBe(2);
   });
 
+  it('keeps an exact no-op idempotent but rejects cost changes after trip cancellation', async () => {
+    const sourceTrip = await db(t.app).trip.findUniqueOrThrow({
+      where: { id: tripId },
+      select: { routeVersionId: true },
+    });
+    const suffix = randomBytes(4).toString('hex').toUpperCase();
+    const cancelledTrip = await db(t.app).trip.create({
+      data: {
+        reference: `ET-COST-CANCEL-${suffix}`,
+        routeVersionId: sourceTrip.routeVersionId,
+      },
+    });
+    const initialBody = body('ESTIMATED', [{ ...lines[0], position: 0 }]);
+    const initial = await adminApi(manager).post(
+      `/trips/${cancelledTrip.id}/costs`,
+      initialBody,
+    );
+    expect(initial.status).toBe(200);
+
+    const cancelled = await adminApi(manager).post(`/trips/${cancelledTrip.id}/cancel`, {
+      reason: 'Annulation synthétique des coûts',
+    });
+    expect(cancelled.status).toBe(200);
+    expect(cancelled.body.status).toBe('CANCELLED');
+
+    const auditCount = () =>
+      db(t.app).auditEvent.count({
+        where: { action: 'TRIP_COST_UPDATED', resourceId: cancelledTrip.id },
+      });
+    expect(await auditCount()).toBe(1);
+
+    const exactNoOp = await adminApi(manager).post(
+      `/trips/${cancelledTrip.id}/costs`,
+      initialBody,
+    );
+    expect(exactNoOp.status).toBe(200);
+    expect(exactNoOp.body.updatedAt).toBe(initial.body.updatedAt);
+    expect(await auditCount()).toBe(1);
+
+    const changed = await adminApi(manager).post(
+      `/trips/${cancelledTrip.id}/costs`,
+      body('ESTIMATED', [{ ...lines[0], amountMinor: '420001', position: 0 }]),
+    );
+    expect(changed.status).toBe(409);
+    expect(changed.body.code).toBe('TRIP_CANCELLED');
+    expect(await auditCount()).toBe(1);
+
+    const persisted = await adminApi(manager).get(`/trips/${cancelledTrip.id}/costs`);
+    expect(persisted.status).toBe(200);
+    expect(persisted.body.totalCostMinor).toBe('420000');
+  });
+
   it('enforces database ranges and makes LOCKED a terminal immutable snapshot', async () => {
     const plan = await db(t.app).tripCostPlan.findUniqueOrThrow({ where: { tripId } });
     await expect(

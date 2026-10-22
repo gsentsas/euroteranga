@@ -1,4 +1,4 @@
-import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
+import { Prisma, type DatabaseTransaction, type TripStatus } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
 import type { z } from 'zod';
 import type { Actor } from '../auth/session/auth-principal.js';
@@ -76,11 +76,13 @@ function semanticPlan(view: ReturnType<typeof planView>) {
 }
 
 /** Serialize all trip mutations on the same row, matching TripService's lock order. */
-async function lockTrip(tx: DatabaseTransaction, tripId: string): Promise<void> {
-  const rows = await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT "id" FROM "trip" WHERE "id" = ${tripId}::uuid FOR UPDATE
+async function lockTrip(tx: DatabaseTransaction, tripId: string): Promise<TripStatus> {
+  const rows = await tx.$queryRaw<Array<{ id: string; status: TripStatus }>>`
+    SELECT "id", "status" FROM "trip" WHERE "id" = ${tripId}::uuid FOR UPDATE
   `;
-  if (!rows[0]) throw TripErrors.tripNotFound();
+  const row = rows[0];
+  if (!row) throw TripErrors.tripNotFound();
+  return row.status;
 }
 
 /** Internal operational cost plan; never used by public or customer APIs. */
@@ -107,7 +109,7 @@ export class TripCostService {
    */
   replaceCostPlan(tripId: string, input: TripCostReplace, actor: Actor) {
     return this.database.client.$transaction(async (tx) => {
-      await lockTrip(tx, tripId);
+      const tripStatus = await lockTrip(tx, tripId);
       const stored = await tx.tripCostPlan.findUnique({
         where: { tripId },
         select: planSelect,
@@ -127,6 +129,7 @@ export class TripCostService {
           })),
       };
       if (JSON.stringify(semanticPlan(before)) === JSON.stringify(requested)) return before;
+      if (tripStatus === 'CANCELLED') throw TripErrors.cancelled();
       if (stored?.status === 'LOCKED') throw TripErrors.costPlanLocked();
 
       const plan = stored

@@ -97,7 +97,17 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
     .getByLabel('Montant (EUR)', { exact: true })
     .fill('2000');
   await persistedCosts.getByRole('button', { name: 'Enregistrer les coûts' }).click();
-  await expect(persistedCosts.getByTestId('trip-cost-total')).toHaveText(/6\s?200,00 €/u);
+  await expect(
+    notice(page, `Coûts prévisionnels du voyage ${reference} enregistrés.`),
+  ).toBeVisible();
+
+  // Reload again so 6 200 € is proven to come from the server, not just local form state.
+  await page.reload();
+  await page.getByRole('button', { name: `Consulter le voyage ${reference}` }).click();
+  const reloadedCosts = detail.getByRole('form', {
+    name: `Coûts prévisionnels du voyage ${reference}`,
+  });
+  await expect(reloadedCosts.getByTestId('trip-cost-total')).toHaveText(/6\s?200,00 €/u);
 
   await detail.getByRole('button', { name: 'Planifier le voyage' }).click();
   await expect(notice(page, `Voyage ${reference} planifié.`)).toBeVisible();
