@@ -273,6 +273,7 @@ function CargoDetail({
       <FormAlert message={error} />
 
       <CargoQuotePanel
+        key={shipment.reference}
         shipmentReference={shipment.reference}
         canRead={canReadPricing}
         canManage={canManage && canManagePricing}
