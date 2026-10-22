@@ -615,7 +615,7 @@ CREATE TRIGGER "road_freight_event_no_truncate"
 -- the trip convoy. This trigger is the direct-SQL/concurrency backstop; the
 -- TripService performs the same check to return a stable public 409.
 CREATE FUNCTION "road_freight_trip_convoy_guard"() RETURNS trigger
-LANGUAGE plpgsql AS $
+LANGUAGE plpgsql AS $cargo$
 DECLARE
   conflicting_id UUID;
 BEGIN
@@ -641,7 +641,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$cargo$;
 
 CREATE TRIGGER "road_freight_trip_convoy_guard"
   BEFORE UPDATE OF "vehicle_id", "support_vehicle_id" ON "trip"
