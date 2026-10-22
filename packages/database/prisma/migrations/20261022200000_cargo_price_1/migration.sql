@@ -44,7 +44,7 @@ CREATE TABLE "road_freight_quote" (
 
   CONSTRAINT "road_freight_quote_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "road_freight_quote_reference_key" UNIQUE ("reference"),
-  CONSTRAINT "road_freight_quote_shipment_version_key" UNIQUE ("shipment_id", "version"),
+  CONSTRAINT "road_freight_quote_shipment_id_version_key" UNIQUE ("shipment_id", "version"),
   CONSTRAINT "road_freight_quote_reference_shape" CHECK (
     "reference" ~ '^ETCQ-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{12}$'
   ),
@@ -71,7 +71,7 @@ CREATE TABLE "road_freight_quote_line" (
   "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   CONSTRAINT "road_freight_quote_line_pkey" PRIMARY KEY ("id"),
-  CONSTRAINT "road_freight_quote_line_quote_position_key" UNIQUE ("quote_id", "position"),
+  CONSTRAINT "road_freight_quote_line_quote_id_position_key" UNIQUE ("quote_id", "position"),
   CONSTRAINT "road_freight_quote_line_amount_range" CHECK (
     "amount_minor" BETWEEN 1 AND 999999999999999999
   ),
@@ -85,11 +85,11 @@ CREATE TABLE "road_freight_quote_line" (
   )
 );
 
-CREATE INDEX "road_freight_quote_shipment_status_version_idx"
+CREATE INDEX "road_freight_quote_shipment_id_status_version_idx"
   ON "road_freight_quote" ("shipment_id", "status", "version");
 CREATE INDEX "road_freight_quote_created_at_id_idx"
   ON "road_freight_quote" ("created_at", "id");
-CREATE INDEX "road_freight_quote_line_quote_kind_idx"
+CREATE INDEX "road_freight_quote_line_quote_id_kind_idx"
   ON "road_freight_quote_line" ("quote_id", "kind");
 
 CREATE UNIQUE INDEX "road_freight_quote_one_draft_per_shipment"
