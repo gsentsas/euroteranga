@@ -7,7 +7,7 @@ import {
   staffActor,
   type StaffActor,
 } from '../../support/admin-helpers.js';
-import { db } from '../../support/auth-helpers.js';
+import { createIdentity, db } from '../../support/auth-helpers.js';
 import { cargoCreateBody, cargoTripFixture, staffCargoApi } from '../../support/cargo-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
 
@@ -51,7 +51,11 @@ describe('CARGO-1 road freight, RBAC, capacity and history', () => {
     const triggers = await db(t.app).$queryRaw<Array<{ name: string }>>`
       SELECT tgname AS name FROM pg_trigger
       WHERE NOT tgisinternal
-        AND tgrelid IN ('road_freight_shipment'::regclass, 'road_freight_shipment_event'::regclass)`;
+        AND tgrelid IN (
+          'road_freight_shipment'::regclass,
+          'road_freight_shipment_event'::regclass,
+          'vehicle'::regclass
+        )`;
     expect(triggers.map((row) => row.name)).toEqual(
       expect.arrayContaining([
         'road_freight_shipment_guard',
@@ -59,6 +63,7 @@ describe('CARGO-1 road freight, RBAC, capacity and history', () => {
         'road_freight_event_guard',
         'road_freight_shipment_projection_guard',
         'road_freight_event_projection_guard',
+        'road_freight_vehicle_capacity_guard',
       ]),
     );
 
@@ -88,6 +93,21 @@ describe('CARGO-1 road freight, RBAC, capacity and history', () => {
     expect(
       (await staffCargoApi(manager).event(reference, { type: 'BOOKED' }, { csrf: null })).status,
     ).toBe(403);
+  });
+
+  it('links an existing CUSTOMER directly and rejects a STAFF identity as customer', async () => {
+    const customer = await createIdentity(t.app, { realm: 'customer' });
+    const linked = await staffCargoApi(manager).create(
+      cargoCreateBody({ customerIdentityId: customer.id }),
+    );
+    expect(linked.status, linked.text).toBe(201);
+    expect(linked.body.customer).toEqual({ id: customer.id, email: customer.email });
+
+    const invalid = await staffCargoApi(manager).create(
+      cargoCreateBody({ customerIdentityId: manager.id }),
+    );
+    expect(invalid.status).toBe(404);
+    expect(invalid.body.code).toBe('CARGO_CUSTOMER_NOT_FOUND');
   });
 
   it('progresses, assigns to the convoy and refuses kg/L oversubscription', async () => {
@@ -139,6 +159,47 @@ describe('CARGO-1 road freight, RBAC, capacity and history', () => {
         data: { vehicleId: replacementVehicleId },
       }),
     ).rejects.toThrow(/active road freight would be orphaned/);
+
+    const reduceKg = await adminApi(manager).post(`/fleet/vehicles/${fixture.vehicleId}`, {
+      payloadCapacityKg: 600,
+      cargoVolumeLiters: 1600,
+    });
+    expect(reduceKg.status).toBe(409);
+    expect(reduceKg.body.code).toBe('VEHICLE_CARGO_ASSIGNMENT_CONFLICT');
+
+    const reduceVolume = await adminApi(manager).post(`/fleet/vehicles/${fixture.vehicleId}`, {
+      payloadCapacityKg: 800,
+      cargoVolumeLiters: 1400,
+    });
+    expect(reduceVolume.status).toBe(409);
+    expect(reduceVolume.body.code).toBe('VEHICLE_CARGO_ASSIGNMENT_CONFLICT');
+
+    const removeCapacity = await adminApi(manager).post(`/fleet/vehicles/${fixture.vehicleId}`, {
+      payloadCapacityKg: null,
+      cargoVolumeLiters: null,
+    });
+    expect(removeCapacity.status).toBe(409);
+    expect(removeCapacity.body.code).toBe('VEHICLE_CARGO_ASSIGNMENT_CONFLICT');
+
+    const disableVehicle = await adminApi(manager).post(
+      `/fleet/vehicles/${fixture.vehicleId}/status`,
+      { status: 'OUT_OF_SERVICE', reason: 'Test fret actif' },
+    );
+    expect(disableVehicle.status).toBe(409);
+    expect(disableVehicle.body.code).toBe('VEHICLE_CARGO_ASSIGNMENT_CONFLICT');
+
+    const validReduction = await adminApi(manager).post(`/fleet/vehicles/${fixture.vehicleId}`, {
+      payloadCapacityKg: 800,
+      cargoVolumeLiters: 1600,
+    });
+    expect(validReduction.status, validReduction.text).toBe(200);
+
+    await expect(
+      db(t.app).vehicle.update({
+        where: { id: fixture.vehicleId },
+        data: { payloadCapacityKg: 600, cargoVolumeLiters: 1600 },
+      }),
+    ).rejects.toThrow(/active road freight conflicts with vehicle capacity or status/);
 
     const second = await staffCargoApi(manager).create(
       cargoCreateBody({ weightKg: '400.000', volumeLiters: 600 }),
