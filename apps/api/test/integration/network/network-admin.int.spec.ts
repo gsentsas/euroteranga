@@ -236,6 +236,17 @@ describe('network administration API (isolated database)', () => {
       expect(invalidKind.status).toBe(422);
       expect(invalidKind.body.code).toBe('NETWORK_INVARIANT_VIOLATION');
 
+      const sameType = await api.post(`/network/checkpoints/${checkpoint.id}`, {
+        type: 'TECHNICAL',
+        name: 'Repos renommé',
+      });
+      expect(sameType.status).toBe(200);
+      expect(sameType.body).toMatchObject({
+        type: 'TECHNICAL',
+        terangaKind: 'REST',
+        name: 'Repos renommé',
+      });
+
       const updated = await api.post(`/network/checkpoints/${checkpoint.id}`, {
         type: 'PORT',
         name: 'Port synthétique',

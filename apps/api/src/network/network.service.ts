@@ -326,9 +326,10 @@ export class NetworkService {
           throw NetworkErrors.countryNotFound();
         }
         const nextType = input.type ?? existing.type;
+        const typeChanged = input.type !== undefined && input.type !== existing.type;
         const nextTerangaKind =
           input.terangaKind ??
-          (input.type !== undefined ? defaultTerangaKind(input.type) : existing.terangaKind);
+          (typeChanged ? defaultTerangaKind(input.type) : existing.terangaKind);
         assertTerangaKind(nextType, nextTerangaKind);
         const checkpoint = await tx.checkpoint.update({
           where: { id },
@@ -342,7 +343,7 @@ export class NetworkService {
             ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
             ...(input.active !== undefined ? { active: input.active } : {}),
             ...(input.type !== undefined ? { type: input.type } : {}),
-            ...(input.type !== undefined || input.terangaKind !== undefined
+            ...(typeChanged || input.terangaKind !== undefined
               ? { terangaKind: nextTerangaKind }
               : {}),
             ...(input.travellerVisible !== undefined
