@@ -139,8 +139,7 @@ export class OpsProfitService {
       (currency) => currency.currencyCode === 'EUR' && currency.currencyMinorUnit === 2,
     );
     const actualExpenseMinor = BigInt(actualEur?.expenseMinor ?? '0');
-    const varianceMinor =
-      plannedCostMinor === null ? null : actualExpenseMinor - plannedCostMinor;
+    const varianceMinor = plannedCostMinor === null ? null : actualExpenseMinor - plannedCostMinor;
     const remainingBudgetMinor =
       plannedCostMinor === null ? null : plannedCostMinor - actualExpenseMinor;
     const varianceBasisPoints =
