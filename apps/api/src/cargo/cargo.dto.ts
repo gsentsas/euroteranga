@@ -141,6 +141,14 @@ export const cargoEventSchema = idempotentEventFields
   .safeExtend({ type: z.enum(CARGO_OPERATIONAL_EVENTS) })
   .strict();
 
+export const cargoQrResolveSchema = z
+  .object({ qrPayload: z.string().trim().min(1).max(64) })
+  .strict();
+
+export const cargoScanSchema = cargoEventSchema
+  .safeExtend({ qrPayload: z.string().trim().min(1).max(64) })
+  .strict();
+
 export const cargoAssignmentSchema = z
   .object({
     tripReference,
@@ -179,5 +187,6 @@ export const cargoListQuerySchema = z
 export type CargoCreateInput = z.infer<typeof cargoCreateSchema>;
 export type CargoUpdateInput = z.infer<typeof cargoUpdateSchema>;
 export type CargoEventInput = z.infer<typeof cargoEventSchema>;
+export type CargoScanInput = z.infer<typeof cargoScanSchema>;
 export type CargoAssignmentInput = z.infer<typeof cargoAssignmentSchema>;
 export type CargoListQuery = z.infer<typeof cargoListQuerySchema>;
