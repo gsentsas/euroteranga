@@ -26,15 +26,17 @@ describe('OPS-PROFIT-1 trip profitability projection', () => {
   let manager: StaffActor;
   let reader: StaffActor;
   let denied: StaffActor;
+  let financeOnly: StaffActor;
 
   beforeAll(async () => {
     database = await isolatedDatabase();
     env = integrationEnv({ DATABASE_URL: database.url });
     t = await startTestApp(env);
-    [manager, reader, denied] = await Promise.all([
+    [manager, reader, denied, financeOnly] = await Promise.all([
       staffActor(t.app, ['SUPER_ADMIN']),
       staffActor(t.app, ['OPS_MANAGER']),
       staffActor(t.app, ['DISPATCHER']),
+      staffActor(t.app, ['FINANCE']),
     ]);
   }, 60_000);
 
@@ -151,6 +153,7 @@ describe('OPS-PROFIT-1 trip profitability projection', () => {
     });
 
     expect((await profit(denied, fixture.tripReference)).status).toBe(403);
+    expect((await profit(financeOnly, fixture.tripReference)).status).toBe(403);
     const response = await profit(reader, fixture.tripReference);
     expect(response.status, response.text).toBe(200);
     expect(response.body).toMatchObject({
