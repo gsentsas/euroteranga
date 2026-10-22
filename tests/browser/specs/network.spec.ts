@@ -80,14 +80,22 @@ test('ops network: SUPER_ADMIN creates and publishes a synthetic versioned route
     .getByLabel('Pays du checkpoint')
     .selectOption({ label: `${codes.iso2} — ${countryName}` });
   await checkpointForm.getByLabel('Type de checkpoint').selectOption('TECHNICAL');
+  await checkpointForm.getByLabel('Nature Teranga Stop').selectOption('REST');
+  await checkpointForm.getByLabel('Durée indicative (minutes, facultatif)').fill('45');
+  await checkpointForm.getByLabel('Visible aux voyageurs').check();
+  await checkpointForm.getByLabel('Toilettes').check();
+  await checkpointForm.getByLabel('Douche').check();
+  await checkpointForm.getByLabel('Parking sécurisé').check();
   await checkpointForm.getByLabel('Localité du checkpoint').fill(`Localité ${codes.runId}`);
   await checkpointForm.getByLabel('Latitude du checkpoint').fill('10.75');
   await checkpointForm.getByLabel('Longitude du checkpoint').fill('-1.20');
   await checkpointForm.getByLabel('Fuseau horaire du checkpoint').fill('Etc/UTC');
   await checkpointForm.getByRole('button', { name: 'Créer le checkpoint' }).click();
-  await expect(page.getByRole('row').filter({ hasText: checkpointCode })).toContainText(
-    checkpointName,
-  );
+  const checkpointRow = page.getByRole('row').filter({ hasText: checkpointCode });
+  await expect(checkpointRow).toContainText(checkpointName);
+  await expect(checkpointRow).toContainText('Repos · 45 min');
+  await expect(checkpointRow).toContainText('Toilettes, Douche, Parking sécurisé');
+  await expect(checkpointRow).toContainText('Visible');
 
   const routeForm = page.getByRole('form', { name: 'Créer une route' });
   await routeForm.getByLabel('Code de la route').fill(routeCode);

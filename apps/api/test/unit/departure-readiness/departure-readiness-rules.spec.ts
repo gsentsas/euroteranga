@@ -28,6 +28,7 @@ function readyFacts(): DepartureReadinessFacts {
   return {
     trip: { reference: 'ET-TEST-2030-0001', status: 'SCHEDULED' },
     vehicle: { code: 'BUS-01', active: true, seatMapCompatible: true },
+    supportVehicle: null,
     passengers: [
       {
         passengerReference: 'ETV-222222222222',

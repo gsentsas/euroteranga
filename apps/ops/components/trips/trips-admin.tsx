@@ -184,9 +184,22 @@ export function TripsAdmin() {
     void auth.admin.network.routes({ limit: 100 }).then((result) => {
       if (result.ok) setVersions(publishedVersions(result.data.items));
     });
-    void auth.admin.fleet.vehicles({ status: 'ACTIVE', limit: 100 }).then((result) => {
-      if (result.ok) setVehicles(result.data.items);
-    });
+    const loadVehicles = async () => {
+      const items: AdminVehicle[] = [];
+      let cursor: string | undefined;
+      do {
+        const result = await auth.admin.fleet.vehicles({
+          status: 'ACTIVE',
+          limit: 100,
+          ...(cursor ? { cursor } : {}),
+        });
+        if (!result.ok) return;
+        items.push(...result.data.items);
+        cursor = result.data.nextCursor ?? undefined;
+      } while (cursor);
+      setVehicles(items);
+    };
+    void loadVehicles();
   }, [canManage]);
 
   useEffect(() => {
@@ -202,6 +215,14 @@ export function TripsAdmin() {
     if (selectedId) await loadDetail(selectedId);
   };
 
+  const primaryVehicles = vehicles.filter((vehicle) => vehicle.role !== 'CARGO_SUPPORT');
+  const supportVehicles = vehicles.filter(
+    (vehicle) =>
+      vehicle.role === 'CARGO_SUPPORT' &&
+      vehicle.payloadCapacityKg !== null &&
+      vehicle.cargoVolumeLiters !== null,
+  );
+
   return (
     <div className="et-network" data-testid="trips-workspace">
       <p>
@@ -212,7 +233,7 @@ export function TripsAdmin() {
       {canManage ? (
         <CreateTripForm
           versions={versions}
-          vehicles={vehicles}
+          vehicles={primaryVehicles}
           run={run}
           busy={busy}
           onCreated={(tripId) => {
@@ -336,7 +357,8 @@ export function TripsAdmin() {
         >
           <TripDetail
             trip={detail}
-            vehicles={vehicles}
+            vehicles={primaryVehicles}
+            supportVehicles={supportVehicles}
             canManage={canManage}
             canAssignSeatMap={canAssignSeatMap}
             seatMapOptions={seatMapOptions}

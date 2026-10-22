@@ -86,6 +86,8 @@ const waypoint = (
   timezone: 'Etc/UTC',
   country: place,
   checkpointType: null,
+  terangaStopKind: null,
+  facilities: [],
   plannedArrivalAt: null,
   plannedDepartureAt: null,
   ...overrides,
@@ -106,6 +108,8 @@ const publicItinerary = (vehicle: PublicItinerary['vehicle']): PublicItinerary =
       kind: 'CHECKPOINT',
       name: 'Poste frontière',
       checkpointType: 'BORDER',
+      terangaStopKind: 'BORDER',
+      facilities: ['RESTROOM'],
       plannedArrivalAt: '2030-11-13T20:00:00.000Z',
     }),
     waypoint('w4', 'Dakar', country('SN', 'Sénégal'), {
@@ -300,6 +304,45 @@ describe('fleet page (UI-PUBLIC-2)', () => {
     );
     // No seat map and no equipment yet: said honestly, nothing invented.
     expect(html).toContain('Les équipements de cet autocar seront précisés prochainement.');
+  });
+
+  it('stops using CMS photos as soon as Fleet media is configured', () => {
+    const listed = pageDocumentSchema.parse({
+      ...page,
+      blocks: page.blocks.map((block) =>
+        block.type === 'fleet'
+          ? {
+              ...block,
+              selection: 'listed',
+              items: [
+                {
+                  vehicleCode: 'BUS_02',
+                  mediaId: '01900000-0000-7000-8000-000000000001',
+                  gallery: ['01900000-0000-7000-8000-000000000002'],
+                },
+              ],
+            }
+          : block,
+      ),
+    });
+    const fleetPrimary = photo('fleet-primary');
+    const html = render(
+      listed,
+      ctx({
+        fleet: [
+          coach('BUS_02', {
+            name: 'Coach 02',
+            primaryMedia: fleetPrimary,
+            gallery: [],
+          }),
+        ],
+        media: (id) => photo(id),
+      }),
+    );
+    expect(html).toContain('alt="Photo fleet-primary"');
+    expect(html).not.toContain('Photo 01900000-0000-7000-8000-000000000001');
+    expect(html).not.toContain('Photo 01900000-0000-7000-8000-000000000002');
+    expect(html).not.toContain('class="public-vehicle__gallery"');
   });
 
   it('distinguishes an empty fleet from a fleet that cannot be read', () => {

@@ -17,6 +17,12 @@ export const FleetErrors = {
     ),
   vehicleRetired: () =>
     new PublicApiError(409, 'VEHICLE_RETIRED', 'Un véhicule retiré ne peut plus être modifié.'),
+  mediaUnavailable: () =>
+    new PublicApiError(
+      422,
+      'VEHICLE_MEDIA_UNAVAILABLE',
+      'Une image est introuvable ou archivée dans la médiathèque.',
+    ),
   invalidTransition: () =>
     new PublicApiError(
       409,

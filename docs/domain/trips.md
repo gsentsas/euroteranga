@@ -187,6 +187,15 @@ cancelled trip.
 Trip history itself remains independent of the booking list. See
 [bookings.md](bookings.md).
 
+## Operational cost plan (TRIP-COST-1)
+
+Each trip may have one internal, ordered operational cost plan. Its exact EUR
+minor-unit total is derived from detailed lines on the server. `trip.read`
+reads it, `trip.manage` replaces it atomically, and `LOCKED` is a terminal
+database-enforced snapshot. It is distinct from ticket pricing, incurred
+finance expenses, revenue and profitability, and is never included in public
+trip or booking projections. See [trip-costs.md](trip-costs.md).
+
 ## Payments and confirmed bookings (PR-10)
 
 A booking becomes CONFIRMED when its payment succeeds. Refunds do not exist
@@ -335,3 +344,7 @@ those are proven by the database tests and their mutation checks.
 ## Dispatch lifecycle (PR-17)
 
 PR-17 extends the lifecycle with `SCHEDULED -> IN_PROGRESS -> COMPLETED`. Actual departure requires current server-derived readiness plus a matching immutable departure authorization; actual departure and arrival clocks are database-owned. From `IN_PROGRESS` onward the vehicle and the historical trip configuration are frozen, and cancellation is refused. See [departure-readiness.md](departure-readiness.md).
+
+## CONVOY-1 — véhicule d’appoint
+
+Le véhicule principal reste `Trip.vehicleId`. `Trip.supportVehicleId` référence au plus un véhicule `CARGO_SUPPORT` optionnel. Les deux véhicules participent à la même règle de disponibilité ; le support peut être modifié uniquement avant le départ, avec motif une fois le voyage planifié.

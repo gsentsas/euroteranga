@@ -131,6 +131,11 @@ maps, maintenance, documents and tracking are deferred. See
 [`docs/domain/fleet.md`](../domain/fleet.md) and
 [ADR-022](../adr/ADR-022-vehicle-lifecycle.md).
 
+FLEET-MEDIA-1 links an active MEDIA-1 main photograph and ordered gallery to
+the vehicle. Fleet and bookable-trip public reads expose only safe media
+presentation fields; OPS reuses the media picker under `fleet.manage` +
+`media.read`, and every replacement is audited atomically.
+
 ## Trips (PR-06)
 
 `apps/api/src/trips` (TripModule): a trip is one planned occurrence of a
@@ -150,6 +155,14 @@ per waypoint, and an optional `ACTIVE` vehicle. Lifecycle:
 
 See [`docs/domain/trips.md`](../domain/trips.md) and
 [ADR-023](../adr/ADR-023-trip-lifecycle.md).
+
+TRIP-COST-1 extends that same Trip aggregate with one internal cost plan and
+ordered exact minor-unit lines. `GET/POST /v1/admin/trips/:id/costs` reuse
+`trip.read`/`trip.manage`; a replacement locks the trip, replaces every line
+and appends its audit event in one transaction. The server derives the total,
+semantic no-ops write nothing, and `LOCKED` is terminal in both API and
+PostgreSQL. Public and customer projections do not access these tables. See
+[`docs/domain/trip-costs.md`](../domain/trip-costs.md).
 
 ## Seat maps (PR-07)
 
@@ -484,3 +497,7 @@ exports. Contribution is calculated per currency with no implicit FX. A
 confirmed booking becomes cancellable only after full refund. This is not a
 general ledger, statutory invoicing or FEC implementation. See
 [finance.md](../domain/finance.md) and ADR-033.
+
+## CONVOY-1 — composition opérationnelle d’un voyage
+
+Le domaine Trip conserve `vehicleId` comme véhicule principal voyageurs et ajoute `supportVehicleId` comme véhicule `CARGO_SUPPORT` optionnel. Les deux affectations partagent la même exclusivité temporelle entre voyages actifs. Le véhicule support reste une donnée interne OPS : il n’est pas injecté dans les contrats publics de recherche, réservation, portail client ou tracking.

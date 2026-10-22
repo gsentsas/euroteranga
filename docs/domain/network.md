@@ -1,6 +1,7 @@
 # Network domain
 
 > Implemented in PR-04 for administration through the Core API and OPS.
+> TERANGA-STOPS-1 enriches checkpoints with verified rest/service metadata.
 > **NOT PRODUCTION DEPLOYED.** The repository contains no real corridor,
 > border, port or regulatory data.
 
@@ -16,9 +17,13 @@ passengers, baggage, dispatch and tracking remain outside PR-04.
 - **Stop** is a place where boarding or alighting may be allowed. It belongs to
   a country and carries a normalized unique code, locality, coordinates,
   timezone and active state.
-- **Checkpoint** is a passage point, not a passenger stop. Its type is
-  `BORDER`, `FERRY_TERMINAL`, `PORT` or `TECHNICAL`. It deliberately carries no
-  customs or regulatory rule.
+- **Checkpoint** is a passage point, not a passenger stop. Its structural type
+  remains `BORDER`, `FERRY_TERMINAL`, `PORT` or `TECHNICAL`. TERANGA-STOPS-1
+  adds an operational purpose (`BREAK`, `MEAL`, `SHOWER`, `REST`,
+  `OVERNIGHT`, `FUEL`, `BORDER`, `FERRY`, `TECHNICAL`), an explicit
+  traveller-visible flag, an optional 5–1440 minute **planning hint**, and a
+  list of services OPS has verified: restroom, shower, food, secure parking,
+  fuel. None of these fields is a customs, regulatory or driver-hours rule.
 - **Route** is the stable commercial identity (code, name and active state).
   Its geography is held only by versions.
 - **RouteVersion** is a numbered snapshot in `DRAFT`, `PUBLISHED` or `RETIRED`
@@ -40,6 +45,9 @@ PostgreSQL enforces the rules that must also survive direct database access:
 - positive waypoint sequences, unique within a version;
 - exactly one of `stop_id` and `checkpoint_id` per waypoint;
 - no boarding or alighting at a checkpoint;
+- checkpoint structural type and Teranga Stop purpose stay compatible
+  (`BORDER→BORDER`, port/ferry→`FERRY`, pause purposes only on `TECHNICAL`);
+- suggested dwell is null or 5–1440 minutes and checkpoint facilities are distinct;
 - at most one active draft and one active published version per route;
 - published and retired waypoints cannot be inserted, updated or deleted;
 - published history cannot be physically deleted through its protected
@@ -73,6 +81,22 @@ audit events (`ROUTE_VERSION_RETIRED`, `ROUTE_VERSION_PUBLISHED`). An audit fail
 triggers then protect the published or retired geometry even if code bypasses
 the domain service. See
 [ADR-021](../adr/ADR-021-route-versioning.md).
+
+## Traveller visibility
+
+Passenger stops remain traveller-facing. Checkpoints are returned by the public
+trip itinerary only when `travellerVisible=true`. The migration preserves the
+previous behaviour: existing borders, ports and ferry terminals become visible;
+existing `TECHNICAL` checkpoints stay internal. OPS may explicitly expose a
+verified technical pause such as `REST`, `MEAL` or `SHOWER`.
+
+The public projection includes only the Teranga Stop purpose and the verified
+facility list. `suggestedDwellMinutes` stays internal because the trip timetable
+is the authority for actual planned arrival/departure times.
+
+No rule in this domain calculates mandatory driver breaks or legal working
+hours. Those require jurisdiction-specific verification and remain outside
+TERANGA-STOPS-1.
 
 ## Administration API
 
@@ -152,5 +176,5 @@ data require a separate documented verification and loading process.
 
 Deactivation is supported; the HTTP API offers no physical delete. Changing a
 country or place after a route publication does not rewrite its historical
-waypoint order. Time estimates and regulatory-rule versioning are explicitly
-deferred.
+waypoint order. Mandatory driver-hours calculations and regulatory-rule versioning are explicitly
+deferred. The optional dwell hint is operational planning metadata only.

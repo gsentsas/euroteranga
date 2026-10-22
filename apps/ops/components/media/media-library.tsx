@@ -398,12 +398,14 @@ function MediaUploadForm({
 function MediaDetail({
   id,
   canManage,
+  canReadFleet,
   onChanged,
   onReplace,
   onClose,
 }: {
   id: string;
   canManage: boolean;
+  canReadFleet: boolean;
   onChanged: (asset: MediaAsset) => void;
   onReplace: (asset: MediaAsset) => void;
   onClose: () => void;
@@ -516,7 +518,7 @@ function MediaDetail({
           </span>
           {usages.length > 0 ? (
             <span className="ops-content-badge">
-              Utilisée par {usages.length} contenu{usages.length > 1 ? 's' : ''}
+              Utilisée à {usages.length} endroit{usages.length > 1 ? 's' : ''}
             </span>
           ) : null}
         </div>
@@ -573,7 +575,7 @@ function MediaDetail({
       <section aria-labelledby={`${idPrefix}-usages`}>
         <h3 id={`${idPrefix}-usages`}>Utilisation</h3>
         {usages.length === 0 ? (
-          <p className="et-hint">Aucun brouillon ni aucune page en ligne n’affiche cette image.</p>
+          <p className="et-hint">Aucun contenu ni véhicule n’utilise cette image.</p>
         ) : (
           <>
             <ul>
@@ -583,6 +585,12 @@ function MediaDetail({
             </ul>
             <p>
               <Link href="/contenus">Ouvrir les contenus du site</Link>
+              {canReadFleet ? (
+                <>
+                  {' · '}
+                  <Link href="/fleet">Ouvrir la flotte</Link>
+                </>
+              ) : null}
             </p>
           </>
         )}
@@ -630,8 +638,8 @@ function MediaDetail({
           <h3>Archiver</h3>
           {usages.length > 0 ? (
             <p className="et-hint">
-              Retirez d’abord l’image des contenus ci-dessus (brouillons compris) : une image
-              affichée ne peut pas être archivée.
+              Retirez d’abord l’image des contenus ou véhicules ci-dessus : une image utilisée ne
+              peut pas être archivée.
             </p>
           ) : (
             <>
@@ -671,6 +679,7 @@ function MediaDetail({
 /** MEDIA-1 public media library (media.read; changes need media.manage). */
 export function MediaLibrary() {
   const canManage = useCan('media.manage');
+  const canReadFleet = useCan('fleet.read');
   const [status, setStatus] = useState<MediaStatus>('ACTIVE');
   const [items, setItems] = useState<MediaAsset[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -888,6 +897,7 @@ export function MediaLibrary() {
             <MediaDetail
               id={selected}
               canManage={canManage}
+              canReadFleet={canReadFleet}
               onChanged={replaceInList}
               onReplace={(asset) => {
                 setNotice(null);

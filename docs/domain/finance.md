@@ -14,6 +14,10 @@ statutory VAT/tax rules, bank reconciliation, foreign-exchange policy, or a
 real PSP refund API. A `CreditNote` is an operational credit memo paired with
 a refund; it is not presented as a statutory tax invoice.
 
+The editable pre-departure estimate in [trip-costs.md](trip-costs.md) is also a
+separate source: a planned `TripCostItem` is not an incurred `TripExpense` and
+is never included in contribution or settlement.
+
 ## Sources of truth
 
 Ticket revenue is never duplicated: it is derived from existing

@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 import { BOOKING_REFERENCE_ALPHABET } from '../bookings/booking-rules.js';
 import { fingerprint, type CanonicalValue } from '../compliance/canonical-json.js';
 
-export const DEPARTURE_READINESS_ENGINE_VERSION = 'departure-readiness/1';
+export const DEPARTURE_READINESS_ENGINE_VERSION = 'departure-readiness/2';
 export const DEPARTURE_PERMIT_POLICY_SCHEMA_VERSION = 'departure-permit-policy/1';
 export const DEPARTURE_AUTHORIZATION_REFERENCE_PATTERN = /^ETDA-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{12}$/;
 
@@ -20,6 +20,9 @@ export type DepartureBlockerCode =
   | 'VEHICLE_NOT_ASSIGNED'
   | 'VEHICLE_NOT_ACTIVE'
   | 'VEHICLE_SEAT_MAP_MISMATCH'
+  | 'SUPPORT_VEHICLE_NOT_ACTIVE'
+  | 'SUPPORT_VEHICLE_ROLE_INVALID'
+  | 'SUPPORT_VEHICLE_CAPACITY_MISSING'
   | 'PASSENGER_NOT_CHECKED_IN'
   | 'PASSENGER_NOT_BOARDED'
   | 'PASSENGER_READINESS_STALE'
@@ -65,6 +68,13 @@ export interface DeparturePermitRequirementFact {
 export interface DepartureReadinessFacts {
   trip: { reference: string; status: TripOperationalStatus };
   vehicle: null | { code: string; active: boolean; seatMapCompatible: boolean };
+  supportVehicle: null | {
+    code: string;
+    active: boolean;
+    role: 'PASSENGER_COACH' | 'CARGO_SUPPORT' | 'MIXED';
+    payloadCapacityKg: number | null;
+    cargoVolumeLiters: number | null;
+  };
   passengers: DeparturePassengerFact[];
   manifest: null | {
     reference: string;
@@ -99,6 +109,7 @@ export interface DepartureReadinessSnapshot {
   status: 'READY' | 'BLOCKED';
   trip: { reference: string; status: TripOperationalStatus };
   vehicle: null | { code: string; active: boolean; seatMapCompatible: boolean };
+  supportVehicle: DepartureReadinessFacts['supportVehicle'];
   passengers: {
     total: number;
     checkedIn: number;
@@ -159,6 +170,21 @@ export function deriveDepartureReadiness(facts: DepartureReadinessFacts): Depart
     if (!facts.vehicle.active) blockers.push(blocker('VEHICLE', 'VEHICLE_NOT_ACTIVE'));
     if (!facts.vehicle.seatMapCompatible) {
       blockers.push(blocker('VEHICLE', 'VEHICLE_SEAT_MAP_MISMATCH'));
+    }
+  }
+
+  if (facts.supportVehicle) {
+    if (!facts.supportVehicle.active) {
+      blockers.push(blocker('VEHICLE', 'SUPPORT_VEHICLE_NOT_ACTIVE'));
+    }
+    if (facts.supportVehicle.role !== 'CARGO_SUPPORT') {
+      blockers.push(blocker('VEHICLE', 'SUPPORT_VEHICLE_ROLE_INVALID'));
+    }
+    if (
+      facts.supportVehicle.payloadCapacityKg === null ||
+      facts.supportVehicle.cargoVolumeLiters === null
+    ) {
+      blockers.push(blocker('VEHICLE', 'SUPPORT_VEHICLE_CAPACITY_MISSING'));
     }
   }
 
@@ -260,6 +286,7 @@ export function departureReadinessSnapshot(
     status: readiness.status,
     trip: { ...facts.trip },
     vehicle: facts.vehicle ? { ...facts.vehicle } : null,
+    supportVehicle: facts.supportVehicle ? { ...facts.supportVehicle } : null,
     passengers: {
       total: passengers.length,
       checkedIn: passengers.filter((item) => item.checkedIn).length,

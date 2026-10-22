@@ -193,6 +193,9 @@ test.describe('ops public media library', () => {
     await page.goto(appUrl(ops, '/mediatheque'));
     await page.getByRole('list', { name: 'Images' }).getByRole('button', { name: alt }).click();
     await expect(detail.getByText(`Page ${path} (en ligne)`)).toBeVisible();
+    await expect(detail.getByRole('link', { name: 'Ouvrir les contenus du site' })).toBeVisible();
+    // CONTENT_EDITOR has media access but no fleet.read: do not advertise a forbidden target.
+    await expect(detail.getByRole('link', { name: 'Ouvrir la flotte' })).toHaveCount(0);
     await expect(detail.getByText('Retirez d’abord l’image des contenus')).toBeVisible();
     await expect(detail.getByRole('button', { name: 'Archiver l’image' })).toHaveCount(0);
     const api = directAdminApi(page.request);

@@ -1,6 +1,7 @@
 import { Prisma } from '@euroteranga/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
+import { publicMediaSelect, publicMediaView } from '../media/public-media-view.js';
 import { findTripFare } from '../pricing/fare-resolution.service.js';
 import { BOOKING_CONFIG, type BookingConfig } from './booking.config.js';
 import { encodeSearchCursor, type BookingSearchQuery } from './booking.dto.js';
@@ -24,12 +25,14 @@ interface SearchRow {
   currency_minor_unit: number;
   seat_count: number;
   occupied: number;
+  vehicle_id: string | null;
 }
 
 /**
  * Public, unauthenticated reads: stops, bookable trips for an
  * origin/destination and seat availability. They return only what a traveller
- * needs to choose a trip and a seat (no vehicle, no customer, no catalogue).
+ * needs to choose a trip and a seat (only the assigned coach's public main
+ * image is included for presentation; no vehicle identifiers or catalogue).
  */
 @Injectable()
 export class PublicBookingService {
@@ -70,6 +73,9 @@ export class PublicBookingService {
                   select: {
                     name: true,
                     type: true,
+                    terangaKind: true,
+                    travellerVisible: true,
+                    facilities: true,
                     locality: true,
                     timezone: true,
                     country: { select: { iso2: true, name: true } },
@@ -90,6 +96,7 @@ export class PublicBookingService {
             model: true,
             modelYear: true,
             status: true,
+            role: true,
             amenities: true,
           },
         },
@@ -97,16 +104,28 @@ export class PublicBookingService {
     });
     if (!trip) throw BookingErrors.tripNotBookable();
     const timings = new Map(trip.timings.map((timing) => [timing.routeWaypointId, timing]));
-    const { status: vehicleStatus, ...vehicle } = trip.vehicle ?? { status: null };
+    const {
+      status: vehicleStatus,
+      role: vehicleRole,
+      ...vehicle
+    } = trip.vehicle ?? {
+      status: null,
+      role: null,
+    };
     return {
       tripId: trip.id,
       tripReference: trip.reference,
       route: trip.routeVersion.route,
-      vehicle: trip.vehicle && vehicleStatus === 'ACTIVE' ? vehicle : null,
-      // Technical checkpoints (fuel, rest, crew change) stay internal: only
-      // stops, borders and crossings are public.
+      vehicle:
+        trip.vehicle && vehicleStatus === 'ACTIVE' && vehicleRole !== 'CARGO_SUPPORT'
+          ? vehicle
+          : null,
+      // Passenger stops are public. Operational checkpoints are public only
+      // when OPS explicitly marks them traveller-visible.
       waypoints: trip.routeVersion.waypoints
-        .filter((waypoint) => waypoint.checkpoint?.type !== 'TECHNICAL')
+        .filter(
+          (waypoint) => Boolean(waypoint.stop) || waypoint.checkpoint?.travellerVisible === true,
+        )
         .map((waypoint) => {
           const timing = timings.get(waypoint.id);
           const place = waypoint.stop ?? waypoint.checkpoint;
@@ -120,6 +139,8 @@ export class PublicBookingService {
             timezone: place?.timezone ?? null,
             country: place?.country ?? null,
             checkpointType: waypoint.checkpoint?.type ?? null,
+            terangaStopKind: waypoint.checkpoint?.terangaKind ?? null,
+            facilities: waypoint.checkpoint?.facilities ?? [],
             boardingAllowed: waypoint.boardingAllowed,
             alightingAllowed: waypoint.alightingAllowed,
             plannedArrivalAt: timing?.plannedArrivalAt ?? null,
@@ -184,6 +205,7 @@ export class PublicBookingService {
       WITH candidates AS (
         SELECT
           t."id" AS "trip_id", t."reference" AS "trip_reference",
+          t."vehicle_id",
           r."code" AS "route_code", r."name" AS "route_name",
           o."id" AS "origin_id", d."id" AS "destination_id",
           o."stop_id" AS "origin_stop_id", d."stop_id" AS "destination_stop_id",
@@ -247,6 +269,21 @@ export class PublicBookingService {
         })
       ).map((stop) => [stop.id, stop]),
     );
+    const vehicleIds = [
+      ...new Set(page.flatMap((row) => (row.vehicle_id ? [row.vehicle_id] : []))),
+    ];
+    const vehicleMedia = new Map(
+      (
+        await this.database.client.vehicle.findMany({
+          where: {
+            id: { in: vehicleIds },
+            status: 'ACTIVE',
+            role: { in: ['PASSENGER_COACH', 'MIXED'] },
+          },
+          select: { id: true, primaryMedia: { select: publicMediaSelect } },
+        })
+      ).map((vehicle) => [vehicle.id, publicMediaView(vehicle.primaryMedia)]),
+    );
     const last = page.at(-1);
     return {
       items: page.map((row) => ({
@@ -270,6 +307,7 @@ export class PublicBookingService {
         },
         seatCount: row.seat_count,
         availableSeatCount: Math.max(0, row.seat_count - row.occupied),
+        vehiclePrimaryMedia: row.vehicle_id ? (vehicleMedia.get(row.vehicle_id) ?? null) : null,
       })),
       nextCursor:
         rows.length > query.limit && last

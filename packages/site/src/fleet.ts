@@ -1,4 +1,5 @@
 import type { AmenityIconName } from './icons.js';
+import type { SiteMedia } from './blocks.js';
 
 /**
  * UI-PUBLIC-2: the coaches as the public fleet read describes them (Fleet).
@@ -41,6 +42,13 @@ export interface SiteVehicle {
   amenities: SiteAmenity[];
   /** Seats of its current seat map; null without one. */
   seatCount: number | null;
+  primaryMedia?: SiteMedia | null;
+  gallery?: ReadonlyArray<{
+    id: string;
+    media: SiteMedia;
+    kind: string | null;
+    position: number;
+  }>;
 }
 
 /** Active vehicles; null when the fleet read could not answer. */

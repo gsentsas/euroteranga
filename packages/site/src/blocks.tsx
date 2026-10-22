@@ -33,6 +33,7 @@ import {
   dayOffset,
   durationLabel,
   placeKindLabel,
+  terangaFacilityLabels,
   type ItineraryLookup,
   type SitePlace,
 } from './itinerary.js';
@@ -586,7 +587,8 @@ function Departures({
         <ul className="public-departures">
           {items.map((departure) => {
             const label = departureLabel(departure.departureAt, departure.from.timezone);
-            const photo = photoOf(departure.from.code, departure.to.code);
+            const photo =
+              departure.vehiclePrimaryMedia ?? photoOf(departure.from.code, departure.to.code);
             const route = `${departure.from.locality} → ${departure.to.locality}`;
             return (
               <li key={`${departure.tripId}:${departure.from.code}`} className="public-departure">
@@ -975,6 +977,9 @@ function Itinerary({
                             {placeKindLabel(place)} : {place.locality}
                             {place.name !== place.locality ? ` — ${place.name}` : ''} (
                             {place.country.name})
+                            {terangaFacilityLabels(place.facilities).length
+                              ? ` · ${terangaFacilityLabels(place.facilities).join(', ')}`
+                              : ''}
                           </span>
                         </li>
                       );
@@ -1089,13 +1094,18 @@ function Fleet({
           {vehicles.map(({ vehicle, presentation }) => {
             const anchor = vehicleAnchor(vehicle.code);
             const title = vehicleTitle(vehicle);
-            const photo = presentation?.mediaId
-              ? (ctx.media?.(presentation.mediaId) ?? null)
-              : null;
-            const gallery = (presentation?.gallery ?? []).flatMap((id) => {
+            // Vehicle media is authoritative. CMS photographs remain a
+            // backward-compatible fallback for vehicles not configured yet.
+            const photo =
+              vehicle.primaryMedia ??
+              (presentation?.mediaId ? (ctx.media?.(presentation.mediaId) ?? null) : null);
+            const cmsGallery = (presentation?.gallery ?? []).flatMap((id) => {
               const media = ctx.media?.(id) ?? null;
               return media ? [{ id, media }] : [];
             });
+            const hasFleetMedia =
+              Boolean(vehicle.primaryMedia) || (vehicle.gallery?.length ?? 0) > 0;
+            const gallery = hasFleetMedia ? (vehicle.gallery ?? []) : cmsGallery;
             const facts = vehicle.seatCount !== null || vehicle.amenities.length > 0;
             return (
               <article

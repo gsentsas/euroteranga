@@ -7,6 +7,8 @@ const pageLimit = z.coerce.number().int().min(1).max(100).default(50);
 const STATUSES = ['PLANNED', 'ACTIVE', 'OUT_OF_SERVICE', 'RETIRED'] as const;
 const TARGET_STATUSES = ['ACTIVE', 'OUT_OF_SERVICE', 'RETIRED'] as const;
 
+export const VEHICLE_ROLES = ['PASSENGER_COACH', 'CARGO_SUPPORT', 'MIXED'] as const;
+
 /** On-board equipment (UI-PUBLIC-2), in the order the website lists them. */
 export const VEHICLE_AMENITIES = [
   'AIR_CONDITIONING',
@@ -16,6 +18,16 @@ export const VEHICLE_AMENITIES = [
   'TOILET',
   'ENTERTAINMENT',
   'WHEELCHAIR_ACCESS',
+] as const;
+
+export const VEHICLE_MEDIA_KINDS = [
+  'EXTERIOR',
+  'INTERIOR',
+  'SEATS',
+  'LUGGAGE_HOLD',
+  'EQUIPMENT',
+  'CABIN',
+  'OTHER',
 ] as const;
 
 /** Distinct values, stored in the canonical order. */
@@ -75,28 +87,74 @@ const modelYear = z
   .refine((year) => year <= new Date().getUTCFullYear() + 1, { message: 'model year too late' });
 
 export const vehicleListQuerySchema = z
-  .object({ limit: pageLimit, cursor: uuid.optional(), status: z.enum(STATUSES).optional() })
-  .strict();
-
-export const vehicleCreateSchema = z
   .object({
-    code,
-    name: operationalName.nullable().optional(),
-    vin: vin.nullable().optional(),
-    registrationPlate: registrationPlate.nullable().optional(),
-    registrationCountryId: uuid.nullable().optional(),
-    manufacturer: label,
-    model: label,
-    modelYear: modelYear.nullable().optional(),
-    amenities: amenities.optional(),
+    limit: pageLimit,
+    cursor: uuid.optional(),
+    status: z.enum(STATUSES).optional(),
+    role: z.enum(VEHICLE_ROLES).optional(),
   })
   .strict();
 
+const payloadCapacityKg = z.number().int().min(1).max(100_000);
+const cargoVolumeLiters = z.number().int().min(1).max(500_000);
+
+function validateCapacityPair(
+  value: {
+    payloadCapacityKg?: number | null | undefined;
+    cargoVolumeLiters?: number | null | undefined;
+  },
+  ctx: z.RefinementCtx,
+) {
+  const hasKg = Object.prototype.hasOwnProperty.call(value, 'payloadCapacityKg');
+  const hasVolume = Object.prototype.hasOwnProperty.call(value, 'cargoVolumeLiters');
+  if (hasKg !== hasVolume) {
+    ctx.addIssue({
+      code: 'custom',
+      path: [hasKg ? 'cargoVolumeLiters' : 'payloadCapacityKg'],
+      message: 'payloadCapacityKg and cargoVolumeLiters must be provided together',
+    });
+    return;
+  }
+  if (
+    hasKg &&
+    hasVolume &&
+    (value.payloadCapacityKg === null) !== (value.cargoVolumeLiters === null)
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['payloadCapacityKg'],
+      message: 'payload and volume must both be set or both be null',
+    });
+  }
+}
+
+const vehicleCreateFields = {
+  code,
+  name: operationalName.nullable().optional(),
+  vin: vin.nullable().optional(),
+  registrationPlate: registrationPlate.nullable().optional(),
+  registrationCountryId: uuid.nullable().optional(),
+  manufacturer: label,
+  model: label,
+  modelYear: modelYear.nullable().optional(),
+  role: z.enum(VEHICLE_ROLES).optional(),
+  payloadCapacityKg: payloadCapacityKg.nullable().optional(),
+  cargoVolumeLiters: cargoVolumeLiters.nullable().optional(),
+  amenities: amenities.optional(),
+};
+
+export const vehicleCreateSchema = z
+  .object(vehicleCreateFields)
+  .strict()
+  .superRefine(validateCapacityPair);
+
 // status and retiredAt are deliberately absent: they change only through
-// POST /vehicles/:id/status. `.strict()` rejects them with 400.
-export const vehicleUpdateSchema = vehicleCreateSchema
+// POST /vehicles/:id/status. Capacity fields must be sent together when changed.
+export const vehicleUpdateSchema = z
+  .object(vehicleCreateFields)
   .partial()
   .strict()
+  .superRefine(validateCapacityPair)
   .refine((value) => Object.keys(value).length > 0, { message: 'empty update' });
 
 export const vehicleStatusSchema = z
@@ -116,6 +174,44 @@ export const vehicleSeatMapSchema = z
     expectedSeatMapVersionId: uuid.nullable().optional(),
   })
   .strict();
+
+/** Atomic replacement of the main photograph and the ordered gallery. */
+export const vehicleMediaSchema = z
+  .object({
+    primaryMediaId: uuid.nullable(),
+    gallery: z
+      .array(
+        z
+          .object({
+            mediaId: uuid,
+            kind: z.enum(VEHICLE_MEDIA_KINDS).nullable().optional(),
+          })
+          .strict(),
+      )
+      .max(6),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const seen = new Set<string>();
+    value.gallery.forEach((item, index) => {
+      const id = item.mediaId.toLowerCase();
+      if (id === value.primaryMediaId?.toLowerCase()) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['gallery', index, 'mediaId'],
+          message: 'primary image cannot also be in the gallery',
+        });
+      }
+      if (seen.has(id)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['gallery', index, 'mediaId'],
+          message: 'duplicate gallery image',
+        });
+      }
+      seen.add(id);
+    });
+  });
 
 // OpenAPI bodies. Runtime validation always uses the Zod schemas above.
 export class VehicleCreateBody {
@@ -145,6 +241,26 @@ export class VehicleCreateBody {
   @ApiProperty({ maxLength: 80 }) model!: string;
   @ApiPropertyOptional({ nullable: true, minimum: 1950 }) modelYear?: number | null;
   @ApiPropertyOptional({
+    enum: VEHICLE_ROLES,
+    default: 'PASSENGER_COACH',
+    description: 'Passenger coach, cargo support vehicle or mixed-use vehicle.',
+  })
+  role?: (typeof VEHICLE_ROLES)[number];
+  @ApiPropertyOptional({
+    nullable: true,
+    minimum: 1,
+    maximum: 100000,
+    description: 'Useful baggage/freight payload in kg; set together with cargoVolumeLiters.',
+  })
+  payloadCapacityKg?: number | null;
+  @ApiPropertyOptional({
+    nullable: true,
+    minimum: 1,
+    maximum: 500000,
+    description: 'Useful baggage/freight volume in litres; 1000 L = 1 m³.',
+  })
+  cargoVolumeLiters?: number | null;
+  @ApiPropertyOptional({
     enum: VEHICLE_AMENITIES,
     isArray: true,
     description: 'Equipment actually on board, shown on the public website.',
@@ -161,6 +277,12 @@ export class VehicleUpdateBody {
   @ApiPropertyOptional({ maxLength: 80 }) manufacturer?: string;
   @ApiPropertyOptional({ maxLength: 80 }) model?: string;
   @ApiPropertyOptional({ nullable: true, minimum: 1950 }) modelYear?: number | null;
+  @ApiPropertyOptional({ enum: VEHICLE_ROLES })
+  role?: (typeof VEHICLE_ROLES)[number];
+  @ApiPropertyOptional({ nullable: true, minimum: 1, maximum: 100000 })
+  payloadCapacityKg?: number | null;
+  @ApiPropertyOptional({ nullable: true, minimum: 1, maximum: 500000 })
+  cargoVolumeLiters?: number | null;
   @ApiPropertyOptional({ enum: VEHICLE_AMENITIES, isArray: true })
   amenities?: Array<(typeof VEHICLE_AMENITIES)[number]>;
 }
@@ -179,4 +301,15 @@ export class VehicleSeatMapBody {
   })
   seatMapVersionId!: string | null;
   @ApiPropertyOptional({ nullable: true, format: 'uuid' }) expectedSeatMapVersionId?: string | null;
+}
+
+export class VehicleMediaItemBody {
+  @ApiProperty({ format: 'uuid' }) mediaId!: string;
+  @ApiPropertyOptional({ enum: VEHICLE_MEDIA_KINDS, nullable: true })
+  kind?: (typeof VEHICLE_MEDIA_KINDS)[number] | null;
+}
+
+export class VehicleMediaBody {
+  @ApiProperty({ format: 'uuid', nullable: true }) primaryMediaId!: string | null;
+  @ApiProperty({ type: [VehicleMediaItemBody], maxItems: 6 }) gallery!: VehicleMediaItemBody[];
 }

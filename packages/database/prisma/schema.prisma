@@ -59,6 +59,33 @@ enum CheckpointType {
   @@map("checkpoint_type")
 }
 
+/// Operational purpose of a checkpoint on the Europe–Africa corridor.
+/// This is descriptive only and carries no driver-hours or legal conclusion.
+enum TerangaStopKind {
+  BREAK
+  MEAL
+  SHOWER
+  REST
+  OVERNIGHT
+  FUEL
+  BORDER
+  FERRY
+  TECHNICAL
+
+  @@map("teranga_stop_kind")
+}
+
+/// Services that OPS has explicitly verified at a Teranga Stop.
+enum TerangaFacility {
+  RESTROOM
+  SHOWER
+  FOOD
+  SECURE_PARKING
+  FUEL
+
+  @@map("teranga_facility")
+}
+
 enum FareTableVersionStatus {
   DRAFT
   PUBLISHED
@@ -98,6 +125,37 @@ enum TripStatus {
   @@map("trip_status")
 }
 
+/// Maturity of the internal operational cost plan. LOCKED is terminal.
+enum TripCostStatus {
+  DRAFT
+  ESTIMATED
+  LOCKED
+
+  @@map("trip_cost_status")
+}
+
+/// Strict, traveller-independent classification of one planned trip cost.
+enum TripCostCategory {
+  FUEL
+  TOLLS
+  FERRY
+  BORDER_FEES
+  PERMITS
+  DRIVERS
+  ACCOMMODATION
+  MEALS_ALLOWANCES
+  MAINTENANCE
+  INSURANCE
+  CLEANING_PREPARATION
+  PARKING
+  STOP_COST
+  SUPPORT_VEHICLE
+  CONTINGENCY
+  OTHER
+
+  @@map("trip_cost_category")
+}
+
 enum VehicleStatus {
   PLANNED
   ACTIVE
@@ -105,6 +163,15 @@ enum VehicleStatus {
   RETIRED
 
   @@map("vehicle_status")
+}
+
+/// Operational purpose. CARGO_SUPPORT vehicles are not passenger-facing buses.
+enum VehicleRole {
+  PASSENGER_COACH
+  CARGO_SUPPORT
+  MIXED
+
+  @@map("vehicle_role")
 }
 
 /// On-board equipment of a vehicle (UI-PUBLIC-2), shown on the public website.
@@ -118,6 +185,19 @@ enum VehicleAmenity {
   WHEELCHAIR_ACCESS
 
   @@map("vehicle_amenity")
+}
+
+/// Optional traveller-facing classification of a vehicle gallery image.
+enum VehicleMediaKind {
+  EXTERIOR
+  INTERIOR
+  SEATS
+  LUGGAGE_HOLD
+  EQUIPMENT
+  CABIN
+  OTHER
+
+  @@map("vehicle_media_kind")
 }
 
 /// PR-19: the maximum tracking precision that may leave the authenticated
@@ -942,12 +1022,20 @@ model Checkpoint {
   code      String         @unique @db.VarChar(32)
   name      String         @db.VarChar(160)
   countryId String         @map("country_id") @db.Uuid
-  type      CheckpointType
-  locality  String         @db.VarChar(128)
-  latitude  Decimal        @db.Decimal(9, 6)
-  longitude Decimal        @db.Decimal(9, 6)
-  timezone  String         @db.VarChar(64)
-  active    Boolean        @default(true)
+  type                  CheckpointType
+  /// Operational purpose; constrained to remain compatible with `type`.
+  terangaKind           TerangaStopKind  @default(TECHNICAL) @map("teranga_kind")
+  /// Explicit traveller-facing visibility. Technical checkpoints stay hidden unless OPS opts in.
+  travellerVisible      Boolean          @default(false) @map("traveller_visible")
+  /// Non-binding planning hint only; actual trip times remain in TripWaypointTiming.
+  suggestedDwellMinutes Int?             @map("suggested_dwell_minutes")
+  /// Services explicitly verified by OPS; empty means unknown/not confirmed.
+  facilities            TerangaFacility[] @default([])
+  locality              String           @db.VarChar(128)
+  latitude              Decimal          @db.Decimal(9, 6)
+  longitude             Decimal          @db.Decimal(9, 6)
+  timezone              String           @db.VarChar(64)
+  active                Boolean          @default(true)
   createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -956,6 +1044,8 @@ model Checkpoint {
 
   @@index([countryId])
   @@index([type])
+  @@index([terangaKind])
+  @@index([travellerVisible, active, id])
   @@index([active, id])
   @@map("checkpoint")
 }
@@ -1045,11 +1135,19 @@ model Vehicle {
   manufacturer          String           @db.VarChar(80)
   model                 String           @db.VarChar(80)
   modelYear             Int?             @map("model_year")
+  /// Operational use of the vehicle. Existing rows migrate as passenger coaches.
+  role                  VehicleRole      @default(PASSENGER_COACH)
+  /// Maximum useful load reserved for baggage/freight, in whole kilograms.
+  payloadCapacityKg     Int?             @map("payload_capacity_kg")
+  /// Maximum useful baggage/freight volume, stored exactly in litres (1000 L = 1 m³).
+  cargoVolumeLiters    Int?             @map("cargo_volume_liters")
   status                VehicleStatus    @default(PLANNED)
   statusChangedAt       DateTime?        @map("status_changed_at") @db.Timestamptz(3)
   retiredAt             DateTime?        @map("retired_at") @db.Timestamptz(3)
   /// Physical seat map currently configured (a published version).
   seatMapVersionId      String?          @map("seat_map_version_id") @db.Uuid
+  /// Main public photograph, selected from MEDIA-1.
+  primaryMediaId        String?          @map("primary_media_id") @db.Uuid
   /// Equipment actually on board, maintained by the fleet team (distinct values).
   amenities             VehicleAmenity[] @default([])
   createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -1057,7 +1155,10 @@ model Vehicle {
 
   registrationCountry Country?           @relation(fields: [registrationCountryId], references: [id], onDelete: Restrict)
   seatMapVersion      SeatMapVersion?    @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
-  trips               Trip[]
+  primaryMedia        PublicMediaAsset?  @relation("VehiclePrimaryMedia", fields: [primaryMediaId], references: [id], onDelete: Restrict)
+  mediaGallery        VehicleMedia[]
+  trips               Trip[]             @relation("TripPrimaryVehicle")
+  supportTrips        Trip[]             @relation("TripSupportVehicle")
   regulatoryPermits   RegulatoryPermit[]
   trackingDevices     TrackingDevice[]
   incidents           Incident[]
@@ -1065,7 +1166,26 @@ model Vehicle {
   @@unique([registrationCountryId, registrationPlate])
   @@index([status, id])
   @@index([seatMapVersionId])
+  @@index([primaryMediaId])
   @@map("vehicle")
+}
+
+/// Ordered public gallery of one vehicle. Every image comes from MEDIA-1.
+model VehicleMedia {
+  id        String            @id @default(uuid(7)) @db.Uuid
+  vehicleId String            @map("vehicle_id") @db.Uuid
+  mediaId   String            @map("media_id") @db.Uuid
+  kind      VehicleMediaKind?
+  position  Int
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  vehicle Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  media   PublicMediaAsset @relation("VehicleGalleryMedia", fields: [mediaId], references: [id], onDelete: Restrict)
+
+  @@unique([vehicleId, mediaId])
+  @@unique([vehicleId, position])
+  @@index([mediaId])
+  @@map("vehicle_media")
 }
 
 /// One planned occurrence of a published (historical) route version (PR-06).
@@ -1078,6 +1198,8 @@ model Trip {
   reference                String     @unique @db.VarChar(32)
   routeVersionId           String     @map("route_version_id") @db.Uuid
   vehicleId                String?    @map("vehicle_id") @db.Uuid
+  /// Optional operational cargo-support vehicle travelling with the main coach.
+  supportVehicleId         String?    @map("support_vehicle_id") @db.Uuid
   /// Historical seat map of this trip; frozen once SCHEDULED.
   seatMapVersionId         String?    @map("seat_map_version_id") @db.Uuid
   /// Historical pricing of this trip; frozen once SCHEDULED.
@@ -1099,7 +1221,8 @@ model Trip {
   updatedAt                DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   routeVersion            RouteVersion             @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
-  vehicle                 Vehicle?                 @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  vehicle                 Vehicle?                 @relation("TripPrimaryVehicle", fields: [vehicleId], references: [id], onDelete: Restrict)
+  supportVehicle          Vehicle?                 @relation("TripSupportVehicle", fields: [supportVehicleId], references: [id], onDelete: Restrict)
   seatMapVersion          SeatMapVersion?          @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
   fareTableVersion        FareTableVersion?        @relation(fields: [fareTableVersionId], references: [id], onDelete: Restrict)
   timings                 TripWaypointTiming[]
@@ -1118,16 +1241,55 @@ model Trip {
   incidents               Incident[]
   financeRevenues         TripRevenue[]
   financeExpenses         TripExpense[]
+  costPlan                TripCostPlan?
 
   @@index([status, id])
   @@index([routeVersionId, id])
   @@index([plannedDepartureAt, id])
   @@index([vehicleId])
+  @@index([supportVehicleId])
   @@index([seatMapVersionId])
   @@index([fareTableVersionId])
   @@index([actualDepartureAt, id])
   @@index([actualArrivalAt, id])
   @@map("trip")
+}
+
+/// Internal pre-departure cost plan. It is distinct from incurred expenses,
+/// ticket pricing, revenue and profitability.
+model TripCostPlan {
+  id                String         @id @default(uuid(7)) @db.Uuid
+  tripId            String         @unique @map("trip_id") @db.Uuid
+  status            TripCostStatus @default(DRAFT)
+  currencyCode      String         @default("EUR") @map("currency_code") @db.VarChar(3)
+  currencyMinorUnit Int            @default(2) @map("currency_minor_unit")
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip  Trip           @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  items TripCostItem[]
+
+  @@index([status, updatedAt])
+  @@map("trip_cost_plan")
+}
+
+/// One ordered component of a trip cost plan. Amounts are integer minor units.
+model TripCostItem {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  planId      String           @map("plan_id") @db.Uuid
+  category    TripCostCategory
+  label       String           @db.VarChar(160)
+  amountMinor BigInt           @map("amount_minor")
+  notes       String?          @db.VarChar(500)
+  position    Int
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  plan TripCostPlan @relation(fields: [planId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([planId, position])
+  @@index([planId, category])
+  @@map("trip_cost_item")
 }
 
 /// Planned time at one waypoint of the trip's route version (UTC). Editable
@@ -2567,6 +2729,8 @@ model PublicMediaAsset {
   createdBy  AuthIdentity?          @relation("PublicMediaCreator", fields: [createdByIdentityId], references: [id], onDelete: Restrict)
   updatedBy  AuthIdentity?          @relation("PublicMediaUpdater", fields: [updatedByIdentityId], references: [id], onDelete: Restrict)
   archivedBy AuthIdentity?          @relation("PublicMediaArchiver", fields: [archivedByIdentityId], references: [id], onDelete: Restrict)
+  primaryForVehicles Vehicle[]      @relation("VehiclePrimaryMedia")
+  vehicleGallery     VehicleMedia[] @relation("VehicleGalleryMedia")
 
   @@index([status, createdAt])
   @@index([sourceSha256])

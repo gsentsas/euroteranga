@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module.js';
 import { PricingModule } from '../pricing/pricing.module.js';
 import { AdminTripController } from './admin-trip.controller.js';
+import { TripCostService } from './trip-cost.service.js';
 import { TripService } from './trip.service.js';
 
 /**
@@ -11,7 +12,7 @@ import { TripService } from './trip.service.js';
 @Module({
   imports: [DatabaseModule, PricingModule],
   controllers: [AdminTripController],
-  providers: [TripService],
+  providers: [TripService, TripCostService],
   exports: [TripService],
 })
 export class TripModule {}

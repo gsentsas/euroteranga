@@ -109,12 +109,21 @@ export interface NetworkStop {
 
 export type NetworkCheckpointType = 'BORDER' | 'FERRY_TERMINAL' | 'PORT' | 'TECHNICAL';
 
+export type NetworkTerangaStopKind =
+  'BREAK' | 'MEAL' | 'SHOWER' | 'REST' | 'OVERNIGHT' | 'FUEL' | 'BORDER' | 'FERRY' | 'TECHNICAL';
+
+export type NetworkTerangaFacility = 'RESTROOM' | 'SHOWER' | 'FOOD' | 'SECURE_PARKING' | 'FUEL';
+
 export interface NetworkCheckpoint {
   id: string;
   code: string;
   name: string;
   countryId: string;
   type: NetworkCheckpointType;
+  terangaKind: NetworkTerangaStopKind;
+  travellerVisible: boolean;
+  suggestedDwellMinutes: number | null;
+  facilities: NetworkTerangaFacility[];
   locality: string;
   latitude: number;
   longitude: number;
@@ -216,10 +225,18 @@ export interface NetworkPlaceUpdate {
 
 export interface NetworkCheckpointInput extends NetworkPlaceInput {
   type: NetworkCheckpointType;
+  terangaKind?: NetworkTerangaStopKind;
+  travellerVisible?: boolean;
+  suggestedDwellMinutes?: number | null;
+  facilities?: NetworkTerangaFacility[];
 }
 
 export interface NetworkCheckpointUpdate extends NetworkPlaceUpdate {
   type?: NetworkCheckpointType;
+  terangaKind?: NetworkTerangaStopKind;
+  travellerVisible?: boolean;
+  suggestedDwellMinutes?: number | null;
+  facilities?: NetworkTerangaFacility[];
 }
 
 export interface NetworkRouteInput {
@@ -299,6 +316,8 @@ export interface AssignedSeatMapVersion {
 
 export type VehicleStatus = 'PLANNED' | 'ACTIVE' | 'OUT_OF_SERVICE' | 'RETIRED';
 
+export type VehicleRole = 'PASSENGER_COACH' | 'CARGO_SUPPORT' | 'MIXED';
+
 /** On-board equipment, maintained by the fleet team and shown on the website. */
 export type VehicleAmenity =
   | 'AIR_CONDITIONING'
@@ -308,6 +327,18 @@ export type VehicleAmenity =
   | 'TOILET'
   | 'ENTERTAINMENT'
   | 'WHEELCHAIR_ACCESS';
+
+export type VehicleMediaKind =
+  'EXTERIOR' | 'INTERIOR' | 'SEATS' | 'LUGGAGE_HOLD' | 'EQUIPMENT' | 'CABIN' | 'OTHER';
+
+export interface VehicleGalleryMedia {
+  id: string;
+  mediaId: string;
+  kind: VehicleMediaKind | null;
+  position: number;
+  createdAt: string;
+  media: PublicMedia;
+}
 
 export interface AdminVehicle {
   id: string;
@@ -327,8 +358,16 @@ export interface AdminVehicle {
   manufacturer: string;
   model: string;
   modelYear: number | null;
+  /** Operational purpose. CARGO_SUPPORT is excluded from the public coach catalogue. */
+  role: VehicleRole;
+  /** Useful baggage/freight load; null together with cargoVolumeLiters when unconfigured. */
+  payloadCapacityKg: number | null;
+  /** Exact useful volume in litres (1000 L = 1 m³). */
+  cargoVolumeLiters: number | null;
   /** Distinct, in the canonical order of VehicleAmenity. */
   amenities: VehicleAmenity[];
+  /** Active MEDIA-1 image selected for public presentation. */
+  primaryMedia: PublicMedia | null;
   status: VehicleStatus;
   statusChangedAt: string | null;
   retiredAt: string | null;
@@ -349,12 +388,14 @@ export interface VehicleStatusHistoryEntry {
 
 export interface AdminVehicleDetail extends AdminVehicle {
   statusHistory: VehicleStatusHistoryEntry[];
+  mediaGallery: VehicleGalleryMedia[];
 }
 
 export interface VehicleListOptions {
   cursor?: string;
   limit?: number;
   status?: VehicleStatus;
+  role?: VehicleRole;
 }
 
 export interface VehicleCreateInput {
@@ -366,6 +407,11 @@ export interface VehicleCreateInput {
   manufacturer: string;
   model: string;
   modelYear?: number | null;
+  role?: VehicleRole;
+  /** Must be sent together with cargoVolumeLiters when changed. */
+  payloadCapacityKg?: number | null;
+  /** Must be sent together with payloadCapacityKg when changed. */
+  cargoVolumeLiters?: number | null;
   /** Replaces the whole list; duplicates are ignored. */
   amenities?: VehicleAmenity[];
 }
@@ -380,6 +426,11 @@ export interface VehicleStatusTransitionInput {
   expectedStatus?: VehicleStatus;
 }
 
+export interface VehicleMediaInput {
+  primaryMediaId: string | null;
+  gallery: Array<{ mediaId: string; kind?: VehicleMediaKind | null }>;
+}
+
 export type TripStatus = 'DRAFT' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 
 export interface AdminTripSummary {
@@ -387,6 +438,7 @@ export interface AdminTripSummary {
   reference: string;
   routeVersionId: string;
   vehicleId: string | null;
+  supportVehicleId: string | null;
   status: TripStatus;
   /** UTC instants (ISO 8601). */
   plannedDepartureAt: string | null;
@@ -415,6 +467,17 @@ export interface AdminTripSummary {
     model: string;
     /** The vehicle's current configuration (may differ from the trip's later). */
     seatMapVersion: AssignedSeatMapVersion | null;
+  } | null;
+  supportVehicle: {
+    id: string;
+    code: string;
+    name: string | null;
+    status: VehicleStatus;
+    manufacturer: string;
+    model: string;
+    role: VehicleRole;
+    payloadCapacityKg: number | null;
+    cargoVolumeLiters: number | null;
   } | null;
   /** Historical seat map of the trip; frozen once SCHEDULED. */
   seatMapVersionId: string | null;
@@ -459,6 +522,8 @@ export interface TripHistoryEntry {
   toStatus: TripStatus | null;
   fromVehicleCode: string | null;
   toVehicleCode: string | null;
+  fromSupportVehicleCode: string | null;
+  toSupportVehicleCode: string | null;
   fromSeatMap: string | null;
   toSeatMap: string | null;
   fromFareTable: string | null;
@@ -497,6 +562,62 @@ export interface TripTimetableInput {
   }>;
 }
 
+export type TripCostStatus = 'DRAFT' | 'ESTIMATED' | 'LOCKED';
+export type TripCostCategory =
+  | 'FUEL'
+  | 'TOLLS'
+  | 'FERRY'
+  | 'BORDER_FEES'
+  | 'PERMITS'
+  | 'DRIVERS'
+  | 'ACCOMMODATION'
+  | 'MEALS_ALLOWANCES'
+  | 'MAINTENANCE'
+  | 'INSURANCE'
+  | 'CLEANING_PREPARATION'
+  | 'PARKING'
+  | 'STOP_COST'
+  | 'SUPPORT_VEHICLE'
+  | 'CONTINGENCY'
+  | 'OTHER';
+
+export interface TripCostItem {
+  id: string;
+  category: TripCostCategory;
+  label: string;
+  /** Exact integer minor units, represented as a string for BIGINT safety. */
+  amountMinor: string;
+  notes: string | null;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TripCostPlan {
+  /** null until the first mutation; reads still expose the implied empty draft. */
+  id: string | null;
+  tripId: string;
+  status: TripCostStatus;
+  currencyCode: 'EUR';
+  currencyMinorUnit: 2;
+  totalCostMinor: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  items: TripCostItem[];
+}
+
+export interface TripCostReplaceInput {
+  status: TripCostStatus;
+  currencyCode: 'EUR';
+  items: Array<{
+    category: TripCostCategory;
+    label: string;
+    amountMinor: string;
+    notes?: string;
+    position: number;
+  }>;
+}
+
 export interface TripCancelInput {
   reason: string;
   expectedStatus?: TripStatus;
@@ -508,6 +629,12 @@ export interface TripVehicleInput {
   /** Vehicle the decision was based on (null: none); refused if it moved. */
   expectedVehicleId?: string | null;
   /** Required once the trip is SCHEDULED. */
+  reason?: string;
+}
+
+export interface TripSupportVehicleInput {
+  supportVehicleId: string | null;
+  expectedSupportVehicleId?: string | null;
   reason?: string;
 }
 
@@ -764,6 +891,8 @@ export interface BookingSearchResult {
   fare: BookingFare;
   seatCount: number;
   availableSeatCount: number;
+  /** Main MEDIA-1 image of the actually assigned active vehicle, when any. */
+  vehiclePrimaryMedia: PublicMedia | null;
 }
 
 /** An active vehicle as shown on the website: no VIN, plate or status. */
@@ -776,6 +905,8 @@ export interface PublicVehicle {
   amenities: VehicleAmenity[];
   /** SEAT cells of its current seat map; null without one. */
   seatCount: number | null;
+  primaryMedia: PublicMedia | null;
+  gallery: Array<PublicMedia & { kind: VehicleMediaKind | null; position: number }>;
 }
 
 /** One waypoint of a bookable trip, in route order (planned UTC instants). */
@@ -789,8 +920,12 @@ export interface BookingItineraryWaypoint {
   locality: string;
   timezone: string;
   country: { iso2: string; name: string };
-  /** Checkpoints only: BORDER, FERRY_TERMINAL or PORT (technical ones stay internal). */
+  /** Structural checkpoint type; null for passenger stops. */
   checkpointType: string | null;
+  /** Traveller-facing Teranga Stop purpose; null for passenger stops. */
+  terangaStopKind: string | null;
+  /** Services explicitly verified by OPS for a traveller-visible checkpoint. */
+  facilities: string[];
   boardingAllowed: boolean;
   alightingAllowed: boolean;
   plannedArrivalAt: string | null;
@@ -2184,9 +2319,9 @@ export interface PublicMedia {
 }
 
 export interface MediaUsage {
-  kind: ContentKind;
+  kind: ContentKind | 'VEHICLE';
   key: string;
-  status: 'DRAFT' | 'PUBLISHED';
+  status: 'DRAFT' | 'PUBLISHED' | VehicleStatus;
   /** The content entry is archived (not served) but could be unarchived. */
   entryArchived: boolean;
 }
@@ -2349,6 +2484,9 @@ export type DepartureBlockerCode =
   | 'VEHICLE_NOT_ASSIGNED'
   | 'VEHICLE_NOT_ACTIVE'
   | 'VEHICLE_SEAT_MAP_MISMATCH'
+  | 'SUPPORT_VEHICLE_NOT_ACTIVE'
+  | 'SUPPORT_VEHICLE_ROLE_INVALID'
+  | 'SUPPORT_VEHICLE_CAPACITY_MISSING'
   | 'PASSENGER_NOT_CHECKED_IN'
   | 'PASSENGER_NOT_BOARDED'
   | 'PASSENGER_READINESS_STALE'
@@ -2388,10 +2526,17 @@ export interface DeparturePermitPolicy {
 }
 
 export interface DepartureReadinessSnapshot {
-  engineVersion: 'departure-readiness/1';
+  engineVersion: 'departure-readiness/2';
   status: 'READY' | 'BLOCKED';
   trip: { reference: string; status: TripStatus };
   vehicle: { code: string; active: boolean; seatMapCompatible: boolean } | null;
+  supportVehicle: {
+    code: string;
+    active: boolean;
+    role: VehicleRole;
+    payloadCapacityKg: number | null;
+    cargoVolumeLiters: number | null;
+  } | null;
   passengers: {
     total: number;
     checkedIn: number;
@@ -2425,7 +2570,7 @@ export interface DepartureReadinessSnapshot {
 export interface DepartureAuthorization {
   reference: string;
   version: number;
-  engineVersion: 'departure-readiness/1';
+  engineVersion: 'departure-readiness/2';
   readinessFingerprint: string;
   authorizedAt: string;
 }
@@ -2838,8 +2983,9 @@ function errorDetails(value: unknown): { details?: ApiErrorDetails } {
           usage !== null &&
           typeof (usage as MediaUsage).kind === 'string' &&
           typeof (usage as MediaUsage).key === 'string' &&
-          ((usage as MediaUsage).status === 'DRAFT' ||
-            (usage as MediaUsage).status === 'PUBLISHED'),
+          ['DRAFT', 'PUBLISHED', 'PLANNED', 'ACTIVE', 'OUT_OF_SERVICE', 'RETIRED'].includes(
+            (usage as MediaUsage).status,
+          ),
       )
       .slice(0, 50)
       .map(({ kind, key, status, entryArchived }) => ({
@@ -3444,7 +3590,12 @@ export function createAuthClient(baseUrl: string) {
         vehicles: (options: VehicleListOptions = {}) =>
           call<Page<AdminVehicle>>(
             'GET',
-            `/v1/admin/fleet/vehicles?${query({ cursor: options.cursor, limit: options.limit, status: options.status })}`,
+            `/v1/admin/fleet/vehicles?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              status: options.status,
+              role: options.role,
+            })}`,
           ),
         vehicle: (vehicleId: string) =>
           call<AdminVehicleDetail>(
@@ -3471,6 +3622,12 @@ export function createAuthClient(baseUrl: string) {
             `/v1/admin/fleet/vehicles/${encodeURIComponent(vehicleId)}/seat-map`,
             input,
           ),
+        assignVehicleMedia: (vehicleId: string, input: VehicleMediaInput) =>
+          withCsrf<AdminVehicleDetail>(
+            'staff',
+            `/v1/admin/fleet/vehicles/${encodeURIComponent(vehicleId)}/media`,
+            input,
+          ),
       },
       trips: {
         trips: (options: TripListOptions = {}) =>
@@ -3488,6 +3645,14 @@ export function createAuthClient(baseUrl: string) {
           ),
         trip: (tripId: string) =>
           call<AdminTrip>('GET', `/v1/admin/trips/${encodeURIComponent(tripId)}`),
+        tripCosts: (tripId: string) =>
+          call<TripCostPlan>('GET', `/v1/admin/trips/${encodeURIComponent(tripId)}/costs`),
+        replaceTripCosts: (tripId: string, input: TripCostReplaceInput) =>
+          withCsrf<TripCostPlan>(
+            'staff',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/costs`,
+            input,
+          ),
         createTrip: (input: TripCreateInput) =>
           withCsrf<AdminTrip>('staff', '/v1/admin/trips', input),
         replaceTimetable: (tripId: string, input: TripTimetableInput) =>
@@ -3508,6 +3673,12 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<AdminTrip>(
             'staff',
             `/v1/admin/trips/${encodeURIComponent(tripId)}/vehicle`,
+            input,
+          ),
+        assignTripSupportVehicle: (tripId: string, input: TripSupportVehicleInput) =>
+          withCsrf<AdminTrip>(
+            'staff',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/support-vehicle`,
             input,
           ),
         assignTripSeatMap: (tripId: string, input: TripSeatMapInput) =>

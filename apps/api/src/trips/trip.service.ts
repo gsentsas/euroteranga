@@ -2,6 +2,7 @@ import {
   Prisma,
   type DatabaseTransaction,
   type TripStatus,
+  type VehicleRole,
   type VehicleStatus,
 } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
@@ -32,6 +33,7 @@ import type {
   tripFareTableSchema,
   tripListQuerySchema,
   tripSeatMapSchema,
+  tripSupportVehicleSchema,
   tripTimetableSchema,
   tripVehicleSchema,
 } from './trip.dto.js';
@@ -42,6 +44,7 @@ type TripCreate = z.infer<typeof tripCreateSchema>;
 type TripTimetable = z.infer<typeof tripTimetableSchema>;
 type TripCancel = z.infer<typeof tripCancelSchema>;
 type TripVehicle = z.infer<typeof tripVehicleSchema>;
+type TripSupportVehicle = z.infer<typeof tripSupportVehicleSchema>;
 type TripSeatMap = z.infer<typeof tripSeatMapSchema>;
 type TripFareTable = z.infer<typeof tripFareTableSchema>;
 
@@ -67,6 +70,19 @@ const tripSummaryInclude = {
       manufacturer: true,
       model: true,
       seatMapVersion: { select: seatMapVersionSummarySelect },
+    },
+  },
+  supportVehicle: {
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      status: true,
+      manufacturer: true,
+      model: true,
+      role: true,
+      payloadCapacityKg: true,
+      cargoVolumeLiters: true,
     },
   },
   seatMapVersion: { select: seatMapVersionSummarySelect },
@@ -111,6 +127,8 @@ export interface TripHistoryEntry {
   toStatus: string | null;
   fromVehicleCode: string | null;
   toVehicleCode: string | null;
+  fromSupportVehicleCode: string | null;
+  toSupportVehicleCode: string | null;
   fromSeatMap: string | null;
   toSeatMap: string | null;
   fromFareTable: string | null;
@@ -122,6 +140,7 @@ interface LockedTrip {
   status: TripStatus;
   routeVersionId: string;
   vehicleId: string | null;
+  supportVehicleId: string | null;
   seatMapVersionId: string | null;
   fareTableVersionId: string | null;
 }
@@ -156,12 +175,13 @@ async function lockTrip(tx: DatabaseTransaction, id: string): Promise<LockedTrip
       status: TripStatus;
       route_version_id: string;
       vehicle_id: string | null;
+      support_vehicle_id: string | null;
       seat_map_version_id: string | null;
       fare_table_version_id: string | null;
     }>
   >`
-    SELECT "id", "status", "route_version_id", "vehicle_id", "seat_map_version_id",
-      "fare_table_version_id"
+    SELECT "id", "status", "route_version_id", "vehicle_id", "support_vehicle_id",
+      "seat_map_version_id", "fare_table_version_id"
     FROM "trip" WHERE "id" = ${id}::uuid FOR UPDATE
   `;
   const row = rows[0];
@@ -171,20 +191,37 @@ async function lockTrip(tx: DatabaseTransaction, id: string): Promise<LockedTrip
     status: row.status,
     routeVersionId: row.route_version_id,
     vehicleId: row.vehicle_id,
+    supportVehicleId: row.support_vehicle_id,
     seatMapVersionId: row.seat_map_version_id,
     fareTableVersionId: row.fare_table_version_id,
   };
 }
 
-/** The vehicle must exist and be ACTIVE; FOR SHARE blocks a concurrent status change. */
-async function lockVehicle(
-  tx: DatabaseTransaction,
-  id: string,
-): Promise<{ id: string; code: string; status: VehicleStatus; seatMapVersionId: string | null }> {
+interface LockedVehicle {
+  id: string;
+  code: string;
+  status: VehicleStatus;
+  role: VehicleRole;
+  seatMapVersionId: string | null;
+  payloadCapacityKg: number | null;
+  cargoVolumeLiters: number | null;
+}
+
+/** The vehicle must exist; FOR SHARE blocks a concurrent status change. */
+async function lockVehicle(tx: DatabaseTransaction, id: string): Promise<LockedVehicle> {
   const rows = await tx.$queryRaw<
-    Array<{ id: string; code: string; status: VehicleStatus; seat_map_version_id: string | null }>
+    Array<{
+      id: string;
+      code: string;
+      status: VehicleStatus;
+      role: VehicleRole;
+      seat_map_version_id: string | null;
+      payload_capacity_kg: number | null;
+      cargo_volume_liters: number | null;
+    }>
   >`
-    SELECT "id", "code", "status", "seat_map_version_id"
+    SELECT "id", "code", "status", "role", "seat_map_version_id",
+      "payload_capacity_kg", "cargo_volume_liters"
     FROM "vehicle" WHERE "id" = ${id}::uuid FOR SHARE
   `;
   const row = rows[0];
@@ -193,43 +230,97 @@ async function lockVehicle(
     id: row.id,
     code: row.code,
     status: row.status,
+    role: row.role,
     seatMapVersionId: row.seat_map_version_id,
+    payloadCapacityKg: row.payload_capacity_kg,
+    cargoVolumeLiters: row.cargo_volume_liters,
   };
 }
 
-async function lockActiveVehicle(tx: DatabaseTransaction, id: string) {
+async function lockActiveVehicle(tx: DatabaseTransaction, id: string): Promise<LockedVehicle> {
   const vehicle = await lockVehicle(tx, id);
   if (vehicle.status !== 'ACTIVE') throw TripErrors.vehicleUnavailable();
   return vehicle;
 }
 
-/**
- * FLEET-1: a vehicle never serves two SCHEDULED or IN_PROGRESS trips whose
- * planned windows overlap (half-open, so back-to-back trips are allowed).
- * The advisory lock serializes availability decisions for one vehicle; the
- * PostgreSQL trigger takes the same lock and repeats the check.
- */
-async function assertVehicleAvailable(
+function assertPrimaryVehicleRole(vehicle: LockedVehicle): void {
+  if (vehicle.role === 'CARGO_SUPPORT') throw TripErrors.primaryVehicleRoleInvalid();
+}
+
+function assertSupportVehicleShape(vehicle: LockedVehicle): void {
+  if (vehicle.role !== 'CARGO_SUPPORT') throw TripErrors.supportVehicleRoleInvalid();
+  if (vehicle.payloadCapacityKg === null || vehicle.cargoVolumeLiters === null) {
+    throw TripErrors.supportVehicleCapacityMissing();
+  }
+}
+
+async function lockActivePrimaryVehicle(
   tx: DatabaseTransaction,
-  vehicleId: string,
+  id: string,
+): Promise<LockedVehicle> {
+  const vehicle = await lockActiveVehicle(tx, id);
+  assertPrimaryVehicleRole(vehicle);
+  return vehicle;
+}
+
+async function lockActiveSupportVehicle(
+  tx: DatabaseTransaction,
+  id: string,
+): Promise<LockedVehicle> {
+  const vehicle = await lockActiveVehicle(tx, id);
+  assertSupportVehicleShape(vehicle);
+  return vehicle;
+}
+
+async function lockScheduledVehicles(
+  tx: DatabaseTransaction,
+  primaryId: string | null,
+  supportId: string | null,
+): Promise<{ primary: LockedVehicle | null; support: LockedVehicle | null }> {
+  if (primaryId && supportId && primaryId === supportId) {
+    throw TripErrors.supportVehicleSameAsPrimary();
+  }
+  const ids = [...new Set([primaryId, supportId].filter((id): id is string => Boolean(id)))].sort();
+  const locked = new Map<string, LockedVehicle>();
+  for (const id of ids) locked.set(id, await lockActiveVehicle(tx, id));
+  const primary = primaryId ? (locked.get(primaryId) ?? null) : null;
+  const support = supportId ? (locked.get(supportId) ?? null) : null;
+  if (primary) assertPrimaryVehicleRole(primary);
+  if (support) assertSupportVehicleShape(support);
+  return { primary, support };
+}
+
+/**
+ * FLEET-1 / CONVOY-1: one physical vehicle never serves overlapping active
+ * trips, whether it is the primary or support vehicle. Advisory locks are
+ * always acquired in canonical UUID order, matching the database trigger.
+ */
+async function assertVehiclesAvailable(
+  tx: DatabaseTransaction,
+  vehicleIds: readonly string[],
   tripId: string,
   window: { plannedDepartureAt: Date; plannedArrivalAt: Date },
 ): Promise<void> {
-  await tx.$executeRaw`
-    SELECT pg_advisory_xact_lock(hashtextextended(${'trip-vehicle:' + vehicleId}, 0))
-  `;
-  const conflicts = await tx.$queryRaw<Array<{ reference: string }>>`
-    SELECT "reference" FROM "trip"
-    WHERE "vehicle_id" = ${vehicleId}::uuid
-      AND "id" <> ${tripId}::uuid
-      AND "status" IN ('SCHEDULED', 'IN_PROGRESS')
-      AND "planned_departure_at" < ${window.plannedArrivalAt}
-      AND "planned_arrival_at" > ${window.plannedDepartureAt}
-    ORDER BY "planned_departure_at", "id"
-    LIMIT 1
-  `;
-  const conflict = conflicts[0];
-  if (conflict) throw TripErrors.vehicleOverlap(conflict.reference);
+  const ids = [...new Set(vehicleIds)].sort();
+  for (const vehicleId of ids) {
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtextextended(${'trip-vehicle:' + vehicleId}, 0))
+    `;
+  }
+  for (const vehicleId of ids) {
+    const conflicts = await tx.$queryRaw<Array<{ reference: string }>>`
+      SELECT "reference" FROM "trip"
+      WHERE ("vehicle_id" = ${vehicleId}::uuid OR "support_vehicle_id" = ${vehicleId}::uuid)
+        AND "id" <> ${tripId}::uuid
+        AND "status" IN ('SCHEDULED', 'IN_PROGRESS')
+        AND "planned_departure_at" < ${window.plannedArrivalAt}
+        AND "planned_arrival_at" > ${window.plannedDepartureAt}
+      ORDER BY "planned_departure_at", "id"
+      LIMIT 1
+    `;
+    const conflict = conflicts[0];
+    if (conflict) throw TripErrors.vehicleOverlap(conflict.reference);
+  }
 }
 
 /**
@@ -365,6 +456,8 @@ export class TripService {
       toStatus: fieldOf(event.after, 'status'),
       fromVehicleCode: fieldOf(event.before, 'vehicleCode'),
       toVehicleCode: fieldOf(event.after, 'vehicleCode'),
+      fromSupportVehicleCode: fieldOf(event.before, 'supportVehicleCode'),
+      toSupportVehicleCode: fieldOf(event.after, 'supportVehicleCode'),
       fromSeatMap: fieldOf(event.before, 'seatMap'),
       toSeatMap: fieldOf(event.after, 'seatMap'),
       fromFareTable: fieldOf(event.before, 'fareTable'),
@@ -384,7 +477,9 @@ export class TripService {
         if (!version) throw TripErrors.routeVersionNotFound();
         if (version.publishedAt === null) throw TripErrors.routeVersionNotPublished();
         if (version.status === 'RETIRED') throw TripErrors.routeVersionRetired();
-        const vehicle = input.vehicleId ? await lockActiveVehicle(tx, input.vehicleId) : null;
+        const vehicle = input.vehicleId
+          ? await lockActivePrimaryVehicle(tx, input.vehicleId)
+          : null;
         const trip = await tx.trip.create({
           data: {
             reference: input.reference,
@@ -485,9 +580,18 @@ export class TripService {
         });
         const check = checkTimetable(await routeWaypoints(tx, trip.routeVersionId), stored);
         if (!check.ok) throw TripErrors.timetableInvalid(check.message);
-        const vehicle = trip.vehicleId ? await lockActiveVehicle(tx, trip.vehicleId) : null;
+        const { primary: vehicle, support } = await lockScheduledVehicles(
+          tx,
+          trip.vehicleId,
+          trip.supportVehicleId,
+        );
         assertCompatible(trip.seatMapVersionId, vehicle);
-        if (vehicle) await assertVehicleAvailable(tx, vehicle.id, id, check);
+        await assertVehiclesAvailable(
+          tx,
+          [vehicle?.id, support?.id].filter((candidate): candidate is string => Boolean(candidate)),
+          id,
+          check,
+        );
 
         const scheduledAt = new Date();
         await tx.trip.update({
@@ -583,8 +687,11 @@ export class TripService {
         }
         if (trip.status === 'SCHEDULED' && !input.reason) throw TripErrors.reasonRequired();
         if (input.vehicleId === trip.vehicleId) return;
+        if (input.vehicleId && input.vehicleId === trip.supportVehicleId) {
+          throw TripErrors.supportVehicleSameAsPrimary();
+        }
 
-        const next = input.vehicleId ? await lockActiveVehicle(tx, input.vehicleId) : null;
+        const next = input.vehicleId ? await lockActivePrimaryVehicle(tx, input.vehicleId) : null;
         assertCompatible(trip.seatMapVersionId, next);
         if (next && trip.status === 'SCHEDULED') {
           const window = await tx.trip.findUniqueOrThrow({
@@ -592,10 +699,17 @@ export class TripService {
             select: { plannedDepartureAt: true, plannedArrivalAt: true },
           });
           if (window.plannedDepartureAt && window.plannedArrivalAt) {
-            await assertVehicleAvailable(tx, next.id, id, {
-              plannedDepartureAt: window.plannedDepartureAt,
-              plannedArrivalAt: window.plannedArrivalAt,
-            });
+            await assertVehiclesAvailable(
+              tx,
+              [next.id, trip.supportVehicleId].filter((candidate): candidate is string =>
+                Boolean(candidate),
+              ),
+              id,
+              {
+                plannedDepartureAt: window.plannedDepartureAt,
+                plannedArrivalAt: window.plannedArrivalAt,
+              },
+            );
           }
         }
         const previousCode = await vehicleCode(tx, trip.vehicleId);
@@ -608,6 +722,81 @@ export class TripService {
             resourceId: id,
             before: { vehicleId: trip.vehicleId, vehicleCode: previousCode },
             after: { vehicleId: next?.id ?? null, vehicleCode: next?.code ?? null },
+            ...(input.reason ? { metadata: { reason: input.reason } } : {}),
+          },
+          tx,
+        );
+      }),
+    );
+    return this.trip(id);
+  }
+
+  /**
+   * Assign, change or remove the optional CARGO_SUPPORT vehicle. The primary
+   * vehicle remains Trip.vehicleId; no dispatch decision is automated here.
+   */
+  async assignSupportVehicle(id: string, input: TripSupportVehicle, actor: Actor) {
+    await mutation(() =>
+      this.database.client.$transaction(async (tx) => {
+        const trip = await lockTrip(tx, id);
+        if (trip.status === 'CANCELLED') throw TripErrors.cancelled();
+        if (trip.status === 'IN_PROGRESS' || trip.status === 'COMPLETED') {
+          throw TripErrors.dispatchStarted();
+        }
+        if (
+          input.expectedSupportVehicleId !== undefined &&
+          input.expectedSupportVehicleId !== trip.supportVehicleId
+        ) {
+          throw TripErrors.supportVehicleConflict();
+        }
+        if (trip.status === 'SCHEDULED' && !input.reason) throw TripErrors.reasonRequired();
+        if (input.supportVehicleId === trip.supportVehicleId) return;
+        if (input.supportVehicleId && input.supportVehicleId === trip.vehicleId) {
+          throw TripErrors.supportVehicleSameAsPrimary();
+        }
+
+        const next = input.supportVehicleId
+          ? await lockActiveSupportVehicle(tx, input.supportVehicleId)
+          : null;
+        if (next && trip.status === 'SCHEDULED') {
+          const window = await tx.trip.findUniqueOrThrow({
+            where: { id },
+            select: { plannedDepartureAt: true, plannedArrivalAt: true },
+          });
+          if (window.plannedDepartureAt && window.plannedArrivalAt) {
+            await assertVehiclesAvailable(
+              tx,
+              [trip.vehicleId, next.id].filter((candidate): candidate is string =>
+                Boolean(candidate),
+              ),
+              id,
+              {
+                plannedDepartureAt: window.plannedDepartureAt,
+                plannedArrivalAt: window.plannedArrivalAt,
+              },
+            );
+          }
+        }
+
+        const previousCode = await vehicleCode(tx, trip.supportVehicleId);
+        await tx.trip.update({
+          where: { id },
+          data: { supportVehicleId: next?.id ?? null },
+        });
+        await this.audit.record(
+          {
+            actor,
+            action: 'TRIP_SUPPORT_VEHICLE_CHANGED',
+            resourceType: 'trip',
+            resourceId: id,
+            before: {
+              supportVehicleId: trip.supportVehicleId,
+              supportVehicleCode: previousCode,
+            },
+            after: {
+              supportVehicleId: next?.id ?? null,
+              supportVehicleCode: next?.code ?? null,
+            },
             ...(input.reason ? { metadata: { reason: input.reason } } : {}),
           },
           tx,

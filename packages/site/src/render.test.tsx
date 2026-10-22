@@ -335,6 +335,65 @@ describe('homepage blocks (UI-PUBLIC-1)', () => {
     );
   });
 
+  it('uses the assigned coach image before the CMS journey fallback and the placeholder', () => {
+    const routeMediaId = '01900000-0000-7000-8000-000000000021';
+    const page = pageDocumentSchema.parse({
+      title: 'Départs illustrés',
+      seo: { description: 'Description.' },
+      blocks: [
+        {
+          type: 'departures',
+          title: 'Prochains départs',
+          routes: [{ fromCode: 'PAR', toCode: 'DKR', mediaId: routeMediaId }],
+          limit: 1,
+        },
+      ],
+    });
+    const journey = {
+      ...departures['PAR>DKR']![0]!,
+      vehiclePrimaryMedia: {
+        src: '/vehicle.webp',
+        alt: 'Autocar affecté',
+        width: 1_200,
+        height: 800,
+      },
+    };
+    const routeMedia = {
+      src: '/route.webp',
+      alt: 'Route Paris Dakar',
+      width: 1_200,
+      height: 800,
+    };
+    const vehicleFirst = render(
+      page,
+      ctx({
+        departures: () => [journey],
+        media: (id) => (id === routeMediaId ? routeMedia : null),
+      }),
+    );
+    expect(vehicleFirst).toContain('src="/vehicle.webp"');
+    expect(vehicleFirst).not.toContain('src="/route.webp"');
+
+    const routeFallback = render(
+      page,
+      ctx({
+        departures: () => [{ ...journey, vehiclePrimaryMedia: null }],
+        media: () => routeMedia,
+      }),
+    );
+    expect(routeFallback).toContain('src="/route.webp"');
+    expect(routeFallback).not.toContain('public-departure__placeholder');
+
+    const placeholder = render(
+      page,
+      ctx({
+        departures: () => [{ ...journey, vehiclePrimaryMedia: null }],
+        media: () => null,
+      }),
+    );
+    expect(placeholder).toContain('public-departure__placeholder');
+  });
+
   it('says so when no departure is open, or when the trip search cannot answer', () => {
     expect(render(home, ctx({ departures: () => [] }))).toContain(
       'Les prochains départs seront affichés ici dès leur ouverture à la réservation.',

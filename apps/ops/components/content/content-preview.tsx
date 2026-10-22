@@ -240,6 +240,9 @@ async function loadPreviewData(key: string, needs: PreviewNeeds): Promise<Previe
                 departureAt: item.origin.plannedDepartureAt,
                 availableSeats: item.availableSeatCount,
                 fare: item.fare,
+                vehiclePrimaryMedia: item.vehiclePrimaryMedia
+                  ? siteMediaOf(item.vehiclePrimaryMedia, auth.media.url)
+                  : null,
               },
             ]
           : [],
@@ -264,6 +267,15 @@ async function loadPreviewData(key: string, needs: PreviewNeeds): Promise<Previe
       ? fleet.data.items.map((vehicle) => ({
           ...vehicle,
           amenities: knownAmenities(vehicle.amenities),
+          primaryMedia: vehicle.primaryMedia
+            ? siteMediaOf(vehicle.primaryMedia, auth.media.url)
+            : null,
+          gallery: vehicle.gallery.map(({ kind, position, ...media }) => ({
+            id: media.id,
+            media: siteMediaOf(media, auth.media.url),
+            kind,
+            position,
+          })),
         }))
       : null,
   };

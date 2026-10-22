@@ -25,6 +25,7 @@ const RESULT_KEYS = [
   'seatCount',
   'tripId',
   'tripReference',
+  'vehiclePrimaryMedia',
 ];
 
 /** Public reads (no session): stops, search and availability. */
@@ -97,7 +98,10 @@ describe('public booking reads (isolated database)', () => {
         availableSeatCount: 4,
       });
       expect(JSON.stringify(response.body)).not.toMatch(
-        /vin|registration|vehicle|email|customer|fareEntry|fareTable|seatMapVersion|audit/i,
+        /vin|registration|vehicleId|vehicleCode|vehicleName|email|customer|fareEntry|fareTable|seatMapVersion|audit/i,
+      );
+      expect(JSON.stringify(response.body)).not.toMatch(
+        /costPlan|costItems|totalCostMinor|STOP_COST|supportVehicleId|supportVehicle|CARGO_SUPPORT|cargoVolumeLiters|payloadCapacityKg/,
       );
       await bookingApi(customer).post('/bookings', holdBody(f, 2, 4, ['1A', '1B']));
       expect((await search(f, 1, 3)).body.items[0].availableSeatCount).toBe(2);

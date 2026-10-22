@@ -319,7 +319,7 @@ export const departuresBlockSchema = z
         z
           .object({
             ...directionSchema,
-            /** Photograph of the destination (media library). */
+            /** Default journey photograph when the assigned vehicle has none. */
             mediaId: uuid.optional(),
           })
           .strict()

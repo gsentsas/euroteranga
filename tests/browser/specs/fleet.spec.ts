@@ -45,6 +45,9 @@ test('ops fleet: SUPER_ADMIN registers, edits and moves a synthetic vehicle thro
     .fill('Constructeur synthétique');
   await create.getByLabel('Modèle du nouveau véhicule', { exact: true }).fill('Autocar test');
   await create.getByLabel('Année modèle du nouveau véhicule (facultatif)').fill('2022');
+  await create.getByLabel('Usage du nouveau véhicule').selectOption('PASSENGER_COACH');
+  await create.getByLabel('Charge utile bagages/fret du nouveau véhicule (kg)').fill('2500');
+  await create.getByLabel('Volume utile bagages/fret du nouveau véhicule (m³)').fill('12.5');
   await create.getByLabel('VIN du nouveau véhicule (facultatif)').fill(vin);
   const equipment = create.getByRole('group', { name: 'Équipements à bord du nouveau véhicule' });
   await equipment.getByLabel('Wi-Fi').check();
@@ -55,13 +58,23 @@ test('ops fleet: SUPER_ADMIN registers, edits and moves a synthetic vehicle thro
   const detail = page.getByRole('region', { name: `Véhicule ${code}` });
   await expect(detail.getByTestId('vehicle-status')).toHaveText('Planifié');
   await expect(detail.getByTestId('vehicle-name')).toHaveText(`Teranga E2E ${runId}`);
+  await expect(detail.getByTestId('vehicle-role')).toHaveText('Autocar voyageurs');
+  await expect(detail.getByTestId('vehicle-payload-capacity')).toHaveText('2500 kg');
+  await expect(detail.getByTestId('vehicle-volume-capacity')).toHaveText('12,5 m³');
   // Stored in the canonical order, whatever the order of the clicks.
   await expect(detail.getByTestId('vehicle-amenities')).toHaveText('Climatisation, Wi-Fi');
+  const mediaForm = detail.getByRole('form', { name: `Médias du véhicule ${code}` });
+  await expect(mediaForm.getByRole('group', { name: 'Photo principale' })).toBeVisible();
+  await expect(mediaForm.getByRole('group', { name: 'Galerie' })).toBeVisible();
+  await expect(mediaForm.getByRole('button', { name: '+ Ajouter une photo' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: code })).toContainText('Planifié');
 
   // Administrative edit (never the status).
   const edit = detail.getByRole('form', { name: `Modifier le véhicule ${code}` });
   await edit.getByLabel('Modèle du véhicule', { exact: true }).fill('Autocar test révisé');
+  await edit.getByLabel('Usage du véhicule').selectOption('MIXED');
+  await edit.getByLabel('Charge utile bagages/fret du véhicule (kg)').fill('3000');
+  await edit.getByLabel('Volume utile bagages/fret du véhicule (m³)').fill('14');
   const editEquipment = edit.getByRole('group', { name: 'Équipements à bord du véhicule' });
   await expect(editEquipment.getByLabel('Wi-Fi')).toBeChecked();
   await editEquipment.getByLabel('Wi-Fi').uncheck();
@@ -69,6 +82,9 @@ test('ops fleet: SUPER_ADMIN registers, edits and moves a synthetic vehicle thro
   await edit.getByRole('button', { name: 'Enregistrer les modifications' }).click();
   await expect(notice(page, `Véhicule ${code} modifié.`)).toBeVisible();
   await expect(detail.getByTestId('vehicle-detail')).toContainText('Autocar test révisé');
+  await expect(detail.getByTestId('vehicle-role')).toHaveText('Véhicule mixte voyageurs + fret');
+  await expect(detail.getByTestId('vehicle-payload-capacity')).toHaveText('3000 kg');
+  await expect(detail.getByTestId('vehicle-volume-capacity')).toHaveText('14 m³');
   await expect(detail.getByTestId('vehicle-amenities')).toHaveText('Climatisation, Toilettes');
 
   const changeStatus = async (label: string, reason: string) => {
@@ -129,6 +145,7 @@ test('ops fleet: fleet.read consults without any mutation control; the API refus
   const detail = page.getByRole('region', { name: `Véhicule ${code}` });
   await expect(detail.getByTestId('vehicle-status')).toHaveText('Planifié');
   await expect(detail.getByRole('form')).toHaveCount(0);
+  await expect(detail.getByRole('region', { name: `Médias du véhicule ${code}` })).toBeVisible();
   await expect(page.getByRole('button', { name: /^(Enregistrer|Appliquer)/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Retour à la liste' }).click();
   await expect(page.locator('#vehicle-detail-panel')).toHaveCount(0);
