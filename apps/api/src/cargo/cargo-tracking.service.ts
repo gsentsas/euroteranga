@@ -238,6 +238,9 @@ export class CargoTrackingService {
       where: {
         shipment: { reference: shipment.reference },
         routeWaypointId: { not: null },
+        routeWaypoint: {
+          OR: [{ stopId: { not: null } }, { checkpoint: { travellerVisible: true } }],
+        },
       },
       orderBy: { sequence: 'desc' },
       select: {
