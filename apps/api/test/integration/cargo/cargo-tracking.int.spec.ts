@@ -65,7 +65,7 @@ describe('CARGO-TRACK-1 QR scans and public freight tracking', () => {
     expect(qr.body.svg).not.toContain('Destinataire Test');
 
     const resolved = await staffCargoApi(reader).resolveQr(`ETC1:${reference}`);
-    expect(resolved.status, resolved.text).toBe(201);
+    expect(resolved.status, resolved.text).toBe(200);
     expect(resolved.body.reference).toBe(reference);
     expect((await staffCargoApi(reader).resolveQr(reference)).status).toBe(404);
     expect((await staffCargoApi(reader).resolveQr(`ETC2:${reference}`)).status).toBe(404);
@@ -242,13 +242,27 @@ describe('CARGO-TRACK-1 QR scans and public freight tracking', () => {
       /token history cannot be truncated/,
     );
 
-    const revoked = await staffCargoApi(manager).revokeTrackingToken(
-      reference,
-      issued.body.id as string,
-      { reason: 'Fin du partage public de test' },
-    );
-    expect(revoked.status, revoked.text).toBe(200);
-    expect(revoked.body.revokedAt).toEqual(expect.any(String));
+    const [revokedA, revokedB] = await Promise.all([
+      staffCargoApi(manager).revokeTrackingToken(reference, issued.body.id as string, {
+        reason: 'Fin du partage public de test',
+      }),
+      staffCargoApi(manager).revokeTrackingToken(reference, issued.body.id as string, {
+        reason: 'Fin du partage public de test',
+      }),
+    ]);
+    for (const revoked of [revokedA, revokedB]) {
+      expect(revoked.status, revoked.text).toBe(200);
+      expect(revoked.body.revokedAt).toEqual(expect.any(String));
+      expect(revoked.body.revocationReason).toBe('Fin du partage public de test');
+    }
+    expect(
+      await db(t.app).auditEvent.count({
+        where: {
+          action: 'ROAD_FREIGHT_TRACKING_TOKEN_REVOKED',
+          resourceId: issued.body.id as string,
+        },
+      }),
+    ).toBe(1);
     expect((await publicHttp.get(publicPath)).status).toBe(404);
 
     const replayRevoke = await staffCargoApi(manager).revokeTrackingToken(
