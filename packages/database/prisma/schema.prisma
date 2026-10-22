@@ -1157,7 +1157,8 @@ model Vehicle {
   seatMapVersion      SeatMapVersion?    @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
   primaryMedia        PublicMediaAsset?  @relation("VehiclePrimaryMedia", fields: [primaryMediaId], references: [id], onDelete: Restrict)
   mediaGallery        VehicleMedia[]
-  trips               Trip[]
+  trips               Trip[]             @relation("TripPrimaryVehicle")
+  supportTrips        Trip[]             @relation("TripSupportVehicle")
   regulatoryPermits   RegulatoryPermit[]
   trackingDevices     TrackingDevice[]
   incidents           Incident[]
@@ -1197,6 +1198,8 @@ model Trip {
   reference                String     @unique @db.VarChar(32)
   routeVersionId           String     @map("route_version_id") @db.Uuid
   vehicleId                String?    @map("vehicle_id") @db.Uuid
+  /// Optional operational cargo-support vehicle travelling with the main coach.
+  supportVehicleId         String?    @map("support_vehicle_id") @db.Uuid
   /// Historical seat map of this trip; frozen once SCHEDULED.
   seatMapVersionId         String?    @map("seat_map_version_id") @db.Uuid
   /// Historical pricing of this trip; frozen once SCHEDULED.
@@ -1218,7 +1221,8 @@ model Trip {
   updatedAt                DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   routeVersion            RouteVersion             @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
-  vehicle                 Vehicle?                 @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  vehicle                 Vehicle?                 @relation("TripPrimaryVehicle", fields: [vehicleId], references: [id], onDelete: Restrict)
+  supportVehicle          Vehicle?                 @relation("TripSupportVehicle", fields: [supportVehicleId], references: [id], onDelete: Restrict)
   seatMapVersion          SeatMapVersion?          @relation(fields: [seatMapVersionId], references: [id], onDelete: Restrict)
   fareTableVersion        FareTableVersion?        @relation(fields: [fareTableVersionId], references: [id], onDelete: Restrict)
   timings                 TripWaypointTiming[]
@@ -1243,6 +1247,7 @@ model Trip {
   @@index([routeVersionId, id])
   @@index([plannedDepartureAt, id])
   @@index([vehicleId])
+  @@index([supportVehicleId])
   @@index([seatMapVersionId])
   @@index([fareTableVersionId])
   @@index([actualDepartureAt, id])

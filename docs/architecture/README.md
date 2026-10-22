@@ -497,3 +497,7 @@ exports. Contribution is calculated per currency with no implicit FX. A
 confirmed booking becomes cancellable only after full refund. This is not a
 general ledger, statutory invoicing or FEC implementation. See
 [finance.md](../domain/finance.md) and ADR-033.
+
+## CONVOY-1 — composition opérationnelle d’un voyage
+
+Le domaine Trip conserve `vehicleId` comme véhicule principal voyageurs et ajoute `supportVehicleId` comme véhicule `CARGO_SUPPORT` optionnel. Les deux affectations partagent la même exclusivité temporelle entre voyages actifs. Le véhicule support reste une donnée interne OPS : il n’est pas injecté dans les contrats publics de recherche, réservation, portail client ou tracking.

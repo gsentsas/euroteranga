@@ -172,6 +172,7 @@ export class FleetService {
       where: {
         ...(query.cursor ? { id: { lt: query.cursor } } : {}),
         ...(query.status ? { status: query.status } : {}),
+        ...(query.role ? { role: query.role } : {}),
       },
       orderBy: { id: 'desc' },
       include: vehicleInclude,
