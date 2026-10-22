@@ -39,6 +39,8 @@ export const PERMISSIONS = {
   COMPLIANCE_RULE_MANAGE: 'compliance.rule.manage',
   BAGGAGE_READ: 'baggage.read',
   BAGGAGE_MANAGE: 'baggage.manage',
+  CARGO_READ: 'cargo.read',
+  CARGO_MANAGE: 'cargo.manage',
   CHECKIN_READ: 'checkin.read',
   CHECKIN_MANAGE: 'checkin.manage',
   BOARDING_READ: 'boarding.read',
