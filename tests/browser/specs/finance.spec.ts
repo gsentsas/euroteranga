@@ -267,8 +267,10 @@ test.describe('PR-22 operational finance', () => {
     const cargoCommercial = opsProfit.getByRole('table', {
       name: 'Valeur commerciale acceptée, hors revenu Finance',
     });
-    const cargoRow = cargoCommercial.getByRole('row').filter({ hasText: 'EUR' });
-    await expect(cargoRow).toHaveCount(1);
+    const cargoRow = cargoCommercial.getByRole('row', {
+      name: /^EUR\s+1\s+130,00 EUR\s+0,00 EUR$/u,
+    });
+    await expect(cargoRow).toBeVisible();
     await expect(cargoRow.getByRole('cell').last()).toHaveText('0,00 EUR');
     await expect(opsProfit).toContainText('150.250 kg / 1000 kg');
     await expect(opsProfit).toContainText('750 L / 2000 L');
