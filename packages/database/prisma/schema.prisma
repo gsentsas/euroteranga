@@ -556,6 +556,64 @@ enum BaggageEventType {
 
 /// PR-16: administrative lifecycle of one operational regulatory permit.
 /// Expiration is derived from the validity dates and is never persisted.
+
+/// CARGO-1 fixed corridor direction; route assignment is checked against it.
+enum RoadFreightDirection {
+  PAR_DKR
+  DKR_PAR
+
+  @@map("road_freight_direction")
+}
+
+enum RoadFreightLifecycleStatus {
+  QUOTE
+  BOOKED
+  RECEIVED
+  INSPECTED
+  ASSIGNED
+  LOADED
+  DEPARTED
+  IN_TRANSIT
+  ARRIVED
+  AVAILABLE
+  DELIVERED
+  REFUSED
+  CANCELLED
+
+  @@map("road_freight_lifecycle_status")
+}
+
+enum RoadFreightExceptionStatus {
+  HELD
+  CUSTOMS_HOLD
+  DAMAGED
+
+  @@map("road_freight_exception_status")
+}
+
+enum RoadFreightEventType {
+  QUOTE
+  BOOKED
+  RECEIVED
+  INSPECTED
+  ASSIGNED
+  LOADED
+  DEPARTED
+  IN_TRANSIT
+  ARRIVED
+  AVAILABLE
+  DELIVERED
+  REFUSED
+  CANCELLED
+  HELD
+  CUSTOMS_HOLD
+  DAMAGED
+  EXCEPTION_RESOLVED
+  ASSIGNMENT_UPDATED
+
+  @@map("road_freight_event_type")
+}
+
 enum RegulatoryPermitStatus {
   DRAFT
   ACTIVE
@@ -661,6 +719,8 @@ model AuthIdentity {
   complianceEvaluations            ComplianceEvaluation[]   @relation("ComplianceEvaluationActor")
   complianceReviews                ComplianceReview[]       @relation("ComplianceReviewer")
   baggageEvents                    BaggageEvent[]           @relation("BaggageEventActor")
+  roadFreightShipments              RoadFreightShipment[]    @relation("RoadFreightCustomer")
+  roadFreightEvents                 RoadFreightShipmentEvent[] @relation("RoadFreightEventActor")
   seatAssignments                  BookingPassengerSeat[]   @relation("BookingPassengerSeatAssigner")
   passengerCheckIns                PassengerCheckIn[]       @relation("PassengerCheckInActor")
   passengerBoardings               PassengerBoarding[]      @relation("PassengerBoardingActor")
@@ -1109,6 +1169,7 @@ model RouteWaypoint {
   bookingsFrom         Booking[]             @relation("BookingOrigin")
   bookingsTo           Booking[]             @relation("BookingDestination")
   baggageEvents        BaggageEvent[]
+  roadFreightEvents     RoadFreightShipmentEvent[]
   trackingObservations TrackingObservation[]
   borderEvents         BorderEvent[]
   incidents            Incident[]
@@ -1162,6 +1223,8 @@ model Vehicle {
   regulatoryPermits   RegulatoryPermit[]
   trackingDevices     TrackingDevice[]
   incidents           Incident[]
+  roadFreightShipments RoadFreightShipment[]
+  roadFreightEvents    RoadFreightShipmentEvent[] @relation("RoadFreightEventVehicle")
 
   @@unique([registrationCountryId, registrationPlate])
   @@index([status, id])
@@ -1242,6 +1305,8 @@ model Trip {
   financeRevenues         TripRevenue[]
   financeExpenses         TripExpense[]
   costPlan                TripCostPlan?
+  roadFreightShipments    RoadFreightShipment[]
+  roadFreightEvents       RoadFreightShipmentEvent[] @relation("RoadFreightEventTrip")
 
   @@index([status, id])
   @@index([routeVersionId, id])
@@ -1479,6 +1544,7 @@ model Booking {
   payments                 Payment[]
   paymentQuotes            PaymentQuote[]
   passengers               BookingPassenger[]
+  roadFreightShipments     RoadFreightShipment[]
 
   @@index([customerIdentityId, id])
   @@index([tripId, id])
@@ -1595,6 +1661,85 @@ model BaggageEvent {
   @@index([routeWaypointId])
   @@index([type, recordedAt])
   @@map("baggage_event")
+}
+
+/// CARGO-1: one road-freight consignment, independent from passenger baggage.
+/// Pricing and payment snapshots are deliberately absent until CARGO-PRICE-1.
+model RoadFreightShipment {
+  id                             String                      @id @default(uuid(7)) @db.Uuid
+  reference                      String                      @unique @db.VarChar(16)
+  direction                      RoadFreightDirection
+  bookingId                      String?                     @map("booking_id") @db.Uuid
+  customerIdentityId             String?                     @map("customer_identity_id") @db.Uuid
+  tripId                         String?                     @map("trip_id") @db.Uuid
+  vehicleId                      String?                     @map("vehicle_id") @db.Uuid
+  senderName                     String                      @map("sender_name") @db.VarChar(160)
+  senderContact                  String                      @map("sender_contact") @db.VarChar(200)
+  recipientName                  String                      @map("recipient_name") @db.VarChar(160)
+  recipientContact               String                      @map("recipient_contact") @db.VarChar(200)
+  weightKg                       Decimal                     @map("weight_kg") @db.Decimal(8, 3)
+  volumeLiters                   Int                         @map("volume_liters")
+  packageCount                   Int                         @map("package_count")
+  lengthCm                       Int?                        @map("length_cm")
+  widthCm                        Int?                        @map("width_cm")
+  heightCm                       Int?                        @map("height_cm")
+  declaredContents               String                      @map("declared_contents") @db.VarChar(500)
+  declaredValueMinor             BigInt?                     @map("declared_value_minor")
+  declaredValueCurrencyCode      String?                     @map("declared_value_currency_code") @db.VarChar(3)
+  declaredValueCurrencyMinorUnit Int?                        @map("declared_value_currency_minor_unit")
+  fragile                        Boolean                     @default(false)
+  professional                   Boolean                     @default(false)
+  pickupRequired                 Boolean                     @default(false) @map("pickup_required")
+  deliveryRequired               Boolean                     @default(false) @map("delivery_required")
+  lifecycleStatus                RoadFreightLifecycleStatus  @default(QUOTE) @map("lifecycle_status")
+  exceptionStatus                RoadFreightExceptionStatus? @map("exception_status")
+  createdAt                      DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                      DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  booking          Booking?                   @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  customerIdentity AuthIdentity?              @relation("RoadFreightCustomer", fields: [customerIdentityId], references: [id], onDelete: Restrict)
+  trip             Trip?                      @relation(fields: [tripId], references: [id], onDelete: Restrict)
+  vehicle          Vehicle?                   @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  events           RoadFreightShipmentEvent[]
+
+  @@index([direction, lifecycleStatus, id])
+  @@index([exceptionStatus, id])
+  @@index([bookingId])
+  @@index([customerIdentityId])
+  @@index([tripId, vehicleId, id])
+  @@index([createdAt, id])
+  @@map("road_freight_shipment")
+}
+
+/// CARGO-1 append-only operational event stream. Assignment ids are snapshots
+/// so reassignment is visible without exposing mutable history.
+model RoadFreightShipmentEvent {
+  id                 String                      @id @default(uuid(7)) @db.Uuid
+  shipmentId         String                      @map("shipment_id") @db.Uuid
+  sequence           Int
+  type               RoadFreightEventType
+  lifecycleStatus    RoadFreightLifecycleStatus  @map("lifecycle_status")
+  exceptionStatus    RoadFreightExceptionStatus? @map("exception_status")
+  occurredAt         DateTime                    @map("occurred_at") @db.Timestamptz(3)
+  recordedAt         DateTime                    @default(now()) @map("recorded_at") @db.Timestamptz(3)
+  actorIdentityId    String                      @map("actor_identity_id") @db.Uuid
+  routeWaypointId    String?                     @map("route_waypoint_id") @db.Uuid
+  tripId             String?                     @map("trip_id") @db.Uuid
+  vehicleId          String?                     @map("vehicle_id") @db.Uuid
+  clientEventId      String?                     @map("client_event_id") @db.VarChar(64)
+  payloadFingerprint String                      @map("payload_fingerprint") @db.Char(64)
+
+  shipment     RoadFreightShipment @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  actor        AuthIdentity        @relation("RoadFreightEventActor", fields: [actorIdentityId], references: [id], onDelete: Restrict)
+  routeWaypoint RouteWaypoint?     @relation(fields: [routeWaypointId], references: [id], onDelete: Restrict)
+  trip         Trip?               @relation("RoadFreightEventTrip", fields: [tripId], references: [id], onDelete: Restrict)
+  vehicle      Vehicle?            @relation("RoadFreightEventVehicle", fields: [vehicleId], references: [id], onDelete: Restrict)
+
+  @@unique([shipmentId, sequence])
+  @@unique([shipmentId, clientEventId])
+  @@index([actorIdentityId, recordedAt])
+  @@index([routeWaypointId])
+  @@map("road_freight_shipment_event")
 }
 
 /// PR-11: metadata of a private object. PostgreSQL never stores the binary,

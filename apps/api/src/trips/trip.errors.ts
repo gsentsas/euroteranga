@@ -97,6 +97,12 @@ export const TripErrors = {
       'TRIP_SUPPORT_VEHICLE_SAME_AS_PRIMARY',
       "Le véhicule d'appoint doit être différent du véhicule principal.",
     ),
+  cargoAssignmentConflict: () =>
+    new PublicApiError(
+      409,
+      'TRIP_CARGO_ASSIGNMENT_CONFLICT',
+      'Du fret actif est affecté à ce véhicule. Réaffectez ou terminez ce fret avant de modifier le convoi.',
+    ),
   seatMapConflict: () =>
     new PublicApiError(
       409,

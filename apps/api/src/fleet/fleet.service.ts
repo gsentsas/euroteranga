@@ -110,6 +110,9 @@ function translateDatabaseError(error: unknown): never {
     if (error.code === 'P2003') throw FleetErrors.countryNotFound();
     if (error.code === 'P2025') throw FleetErrors.vehicleNotFound();
   }
+  if (String(error).includes('active road freight conflicts with vehicle capacity or status')) {
+    throw FleetErrors.cargoAssignmentConflict();
+  }
   throw error;
 }
 

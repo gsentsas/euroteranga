@@ -83,6 +83,11 @@ export function RefineProvider({ children }: { children: ReactNode }) {
             meta: { label: 'Bagages', permission: 'baggage.read' },
           },
           {
+            name: 'cargo',
+            list: '/cargo',
+            meta: { label: 'Colis & fret', permission: 'cargo.read' },
+          },
+          {
             name: 'check-in',
             list: '/check-in',
             meta: { label: 'Check-in / Embarquement', permission: 'checkin.read' },

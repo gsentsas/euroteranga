@@ -62,6 +62,12 @@ export const RATE_LIMITS = {
     limit: 600,
     windowMs: 15 * MINUTE,
   },
+  /** STAFF road-freight writes and operational events. */
+  cargoOperationIdentity: {
+    action: 'cargo-operation:identity',
+    limit: 600,
+    windowMs: 15 * MINUTE,
+  },
   /** Customer seat assignments and self check-ins per identity (PR-14). */
   checkInCustomerIdentity: {
     action: 'check-in-customer:identity',
