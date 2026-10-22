@@ -4374,10 +4374,7 @@ export function createAuthClient(baseUrl: string) {
             ...input,
           }),
         qr: (reference: string) =>
-          call<RoadFreightQr>(
-            'GET',
-            `/v1/admin/cargo/${encodeURIComponent(reference)}/qr`,
-          ),
+          call<RoadFreightQr>('GET', `/v1/admin/cargo/${encodeURIComponent(reference)}/qr`),
         trackingTokens: (reference: string) =>
           call<{ items: RoadFreightTrackingTokenSummary[] }>(
             'GET',
