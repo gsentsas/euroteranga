@@ -267,6 +267,26 @@ describe('CARGO-PRICE-1 versioned commercial freight quotes', () => {
     const issued = await staffCargoApi(manager).issueQuote(reference, quoteReference);
     expect(issued.status, issued.text).toBe(200);
 
+    const issuedAt = new Date(issued.body.issuedAt as string);
+    const tamperedIssuedAt = new Date(issuedAt.getTime() + 1_000);
+    await expect(
+      db(t.app).roadFreightQuote.update({
+        where: { id: quote.id },
+        data: { issuedAt: tamperedIssuedAt },
+      }),
+    ).rejects.toThrow(/issued road freight quote is immutable/);
+    await expect(
+      db(t.app).roadFreightQuote.update({
+        where: { id: quote.id },
+        data: {
+          status: 'ACCEPTED',
+          acceptedByIdentityId: manager.id,
+          acceptedAt: new Date(),
+          issuedAt: tamperedIssuedAt,
+        },
+      }),
+    ).rejects.toThrow(/issuance metadata is immutable/);
+
     await expect(
       db(t.app).roadFreightQuoteLine.create({
         data: {
