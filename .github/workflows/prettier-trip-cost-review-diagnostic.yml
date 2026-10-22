@@ -1,0 +1,24 @@
+name: Prettier Trip Cost Review Diagnostic
+
+on:
+  push:
+    branches:
+      - tmp/prettier-trip-cost-review
+
+permissions:
+  contents: read
+
+jobs:
+  prettier:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: ./.github/actions/setup-workspace
+      - name: Print exact Prettier diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec prettier --write apps/api/test/integration/trips/trip-costs.int.spec.ts
+          echo "===== PRETTIER_DIFF_BEGIN ====="
+          git --no-pager diff -- apps/api/test/integration/trips/trip-costs.int.spec.ts
+          echo "===== PRETTIER_DIFF_END ====="
