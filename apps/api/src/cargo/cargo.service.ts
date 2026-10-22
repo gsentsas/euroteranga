@@ -174,9 +174,9 @@ export class CargoService {
                 pickupRequired: input.pickupRequired,
                 deliveryRequired: input.deliveryRequired,
               },
-              select: { id: true },
+              select: { id: true, createdAt: true },
             });
-            const occurredAt = new Date();
+            const occurredAt = shipment.createdAt;
             await tx.roadFreightShipmentEvent.create({
               data: {
                 shipmentId: shipment.id,
