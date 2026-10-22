@@ -152,13 +152,16 @@ export class CargoTrackingService {
       if (!current) throw CargoTrackingErrors.notFound();
       if (current.revokedAt) return current;
 
-      const row = await tx.roadFreightPublicToken.update({
-        where: { id: current.id },
+      const updated = await tx.roadFreightPublicToken.updateMany({
+        where: { id: current.id, shipmentId: shipment.id, revokedAt: null },
         data: {
           revokedAt: new Date(),
           revokedByIdentityId: actor.identityId,
           revocationReason: input.reason,
         },
+      });
+      const row = await tx.roadFreightPublicToken.findUniqueOrThrow({
+        where: { id: current.id },
         select: {
           id: true,
           createdAt: true,
@@ -167,6 +170,7 @@ export class CargoTrackingService {
           revocationReason: true,
         },
       });
+      if (updated.count === 0) return row;
 
       await this.audit.record(
         {
