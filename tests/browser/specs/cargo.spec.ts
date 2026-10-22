@@ -117,6 +117,60 @@ test.describe('CARGO-1 OPS workspace', () => {
     expect(errors).toEqual([]);
   });
 
+  test('switching shipments resets unsaved quote form state', async ({ page }) => {
+    const errors = trackPageErrors(page);
+    await addSessionCookie(page.context(), preauthenticatedSession('permitManager'));
+    const api = directAdminApi(page.request);
+    const createCargo = (suffix: string) =>
+      api.post('/cargo', {
+        direction: 'PAR_DKR',
+        senderName: `Expéditeur ${suffix}`,
+        senderContact: '+33101010101',
+        recipientName: `Destinataire ${suffix}`,
+        recipientContact: '+221770000001',
+        weightKg: '10.000',
+        volumeLiters: 100,
+        packageCount: 1,
+        declaredContents: `Fret isolation devis ${suffix}`,
+        fragile: false,
+        professional: false,
+        pickupRequired: false,
+        deliveryRequired: false,
+      });
+    const [first, second] = await Promise.all([createCargo('A'), createCargo('B')]);
+    expect(first.status()).toBe(201);
+    expect(second.status()).toBe(201);
+    const firstReference = ((await first.json()) as { reference: string }).reference;
+    const secondReference = ((await second.json()) as { reference: string }).reference;
+
+    await page.goto(appUrl(opsApp, '/cargo'));
+    const workspace = page.getByTestId('cargo-workspace');
+    const cargoList = workspace.locator('section[aria-labelledby="cargo-list-title"]');
+
+    const firstRow = cargoList.getByRole('row').filter({ hasText: firstReference });
+    await expect(firstRow).toBeVisible();
+    await firstRow.getByRole('button', { name: 'Consulter' }).click();
+
+    const firstQuoteForm = workspace
+      .getByTestId('cargo-quotes')
+      .getByRole('form', { name: 'Créer un devis fret' });
+    await firstQuoteForm.getByLabel('Devise').fill('XOF');
+    await firstQuoteForm.getByLabel('Libellé').fill('Tarif temporaire fret A');
+    await firstQuoteForm.getByLabel('Montant (XOF)').fill('9000');
+
+    const secondRow = cargoList.getByRole('row').filter({ hasText: secondReference });
+    await secondRow.getByRole('button', { name: 'Consulter' }).click();
+    await expect(workspace.getByTestId('cargo-detail')).toContainText(secondReference);
+
+    const secondQuoteForm = workspace
+      .getByTestId('cargo-quotes')
+      .getByRole('form', { name: 'Créer un devis fret' });
+    await expect(secondQuoteForm.getByLabel('Devise')).toHaveValue('EUR');
+    await expect(secondQuoteForm.getByLabel('Libellé')).toHaveValue('Transport fret');
+    await expect(secondQuoteForm.getByLabel('Montant (EUR)')).toHaveValue('');
+    expect(errors).toEqual([]);
+  });
+
   test('staff without cargo.read has no menu, no workspace and receives 403', async ({ page }) => {
     const errors = trackPageErrors(page);
     await addSessionCookie(page.context(), preauthenticatedSession('baggageDenied'));
