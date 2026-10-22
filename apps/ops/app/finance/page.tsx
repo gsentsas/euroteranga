@@ -9,7 +9,7 @@ export default function Page() {
   return (
     <OpsShell
       title="Finance opérationnelle"
-      subtitle="Revenus, dépenses, remboursements et contribution par voyage"
+      subtitle="Revenus, dépenses, budget, Cargo commercial et contribution par voyage"
     >
       <RequirePermission permission="finance.read">
         <FinanceAdmin />
