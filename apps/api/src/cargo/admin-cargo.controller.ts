@@ -126,10 +126,7 @@ export class AdminCargoController {
   @RequirePermissions(PERMISSIONS.PRICING_READ)
   @Header('Cache-Control', 'no-store')
   @ApiOkResponse({ description: 'Versioned commercial freight quotes.' })
-  quotesList(
-    @CurrentPrincipal() principal: AuthPrincipal,
-    @Param('reference') reference: string,
-  ) {
+  quotesList(@CurrentPrincipal() principal: AuthPrincipal, @Param('reference') reference: string) {
     return this.quotes.list(principal, reference);
   }
 
