@@ -188,20 +188,75 @@ describe('network administration API (isolated database)', () => {
     it('creates and updates checkpoints of every type', async () => {
       const api = adminApi(admin);
       const country = await createCountry(api);
-      for (const type of ['BORDER', 'FERRY_TERMINAL', 'PORT', 'TECHNICAL']) {
-        await createCheckpoint(api, country.id, { type });
+      const expectedKinds = {
+        BORDER: 'BORDER',
+        FERRY_TERMINAL: 'FERRY',
+        PORT: 'FERRY',
+        TECHNICAL: 'TECHNICAL',
+      } as const;
+      for (const type of ['BORDER', 'FERRY_TERMINAL', 'PORT', 'TECHNICAL'] as const) {
+        const created = await createCheckpoint(api, country.id, { type });
+        expect(created).toMatchObject({
+          type,
+          terangaKind: expectedKinds[type],
+          travellerVisible: type !== 'TECHNICAL',
+          facilities: [],
+          suggestedDwellMinutes: null,
+        });
       }
-      const checkpoint = await createCheckpoint(api, country.id);
+      const checkpoint = await createCheckpoint(api, country.id, {
+        terangaKind: 'REST',
+        travellerVisible: true,
+        suggestedDwellMinutes: 45,
+        facilities: ['SHOWER', 'RESTROOM', 'SHOWER', 'SECURE_PARKING'],
+      });
+      expect(checkpoint).toMatchObject({
+        type: 'TECHNICAL',
+        terangaKind: 'REST',
+        travellerVisible: true,
+        suggestedDwellMinutes: 45,
+        facilities: ['RESTROOM', 'SHOWER', 'SECURE_PARKING'],
+      });
       expect(
         (await api.post('/network/checkpoints', { code: syntheticCode('C'), type: 'AIRPORT' }))
           .status,
       ).toBe(400);
+      const invalidKind = await api.post('/network/checkpoints', {
+        code: syntheticCode('C'),
+        name: 'Nature incompatible',
+        countryId: country.id,
+        type: 'TECHNICAL',
+        terangaKind: 'BORDER',
+        locality: 'Localité',
+        latitude: 1,
+        longitude: 1,
+        timezone: 'Etc/UTC',
+        active: true,
+      });
+      expect(invalidKind.status).toBe(422);
+      expect(invalidKind.body.code).toBe('NETWORK_INVARIANT_VIOLATION');
+
+      const sameType = await api.post(`/network/checkpoints/${checkpoint.id}`, {
+        type: 'TECHNICAL',
+        name: 'Repos renommé',
+      });
+      expect(sameType.status).toBe(200);
+      expect(sameType.body).toMatchObject({
+        type: 'TECHNICAL',
+        terangaKind: 'REST',
+        name: 'Repos renommé',
+      });
+
       const updated = await api.post(`/network/checkpoints/${checkpoint.id}`, {
         type: 'PORT',
         name: 'Port synthétique',
       });
       expect(updated.status).toBe(200);
-      expect(updated.body).toMatchObject({ type: 'PORT', name: 'Port synthétique' });
+      expect(updated.body).toMatchObject({
+        type: 'PORT',
+        terangaKind: 'FERRY',
+        name: 'Port synthétique',
+      });
       const duplicate = await api.post(`/network/checkpoints/${checkpoint.id}`, {
         code: (await createCheckpoint(api, country.id)).code,
       });

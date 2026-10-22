@@ -957,6 +957,20 @@ async function seedTripData(db: ReturnType<typeof createDatabaseClient>): Promis
     },
   });
   await db.vehicle.update({ where: { id: vehicle.id }, data: { status: 'ACTIVE' } });
+  const supportVehicle = await db.vehicle.create({
+    data: {
+      code: seed.supportVehicleCode,
+      manufacturer: 'Constructeur synthétique',
+      model: 'Fourgon support',
+      role: 'CARGO_SUPPORT',
+      payloadCapacityKg: 1200,
+      cargoVolumeLiters: 20000,
+    },
+  });
+  await db.vehicle.update({
+    where: { id: supportVehicle.id },
+    data: { status: 'ACTIVE' },
+  });
   await db.trip.create({
     data: { reference: seed.seededTripReference, routeVersionId: version.id },
   });
@@ -1268,6 +1282,8 @@ async function seedPublicPagesData(db: ReturnType<typeof createDatabaseClient>):
         name,
         countryId: via!.id,
         type,
+        terangaKind: type === 'BORDER' ? 'BORDER' : 'TECHNICAL',
+        travellerVisible: type === 'BORDER',
         locality: `Frontière ${run}`,
         latitude: 1,
         longitude: 1,

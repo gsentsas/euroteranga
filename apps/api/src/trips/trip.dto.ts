@@ -72,6 +72,14 @@ export const tripVehicleSchema = z
   })
   .strict();
 
+export const tripSupportVehicleSchema = z
+  .object({
+    supportVehicleId: uuid.nullable(),
+    expectedSupportVehicleId: uuid.nullable().optional(),
+    reason: reason.optional(),
+  })
+  .strict();
+
 /** Dedicated operation, DRAFT trips only. */
 export const tripSeatMapSchema = z
   .object({
@@ -126,6 +134,15 @@ export class TripVehicleBody {
   @ApiProperty({ nullable: true, format: 'uuid', description: 'null removes the vehicle.' })
   vehicleId!: string | null;
   @ApiPropertyOptional({ nullable: true, format: 'uuid' }) expectedVehicleId?: string | null;
+  @ApiPropertyOptional({ minLength: 3, maxLength: 500, description: 'Required once SCHEDULED.' })
+  reason?: string;
+}
+
+export class TripSupportVehicleBody {
+  @ApiProperty({ nullable: true, format: 'uuid', description: 'null removes the support vehicle.' })
+  supportVehicleId!: string | null;
+  @ApiPropertyOptional({ nullable: true, format: 'uuid' })
+  expectedSupportVehicleId?: string | null;
   @ApiPropertyOptional({ minLength: 3, maxLength: 500, description: 'Required once SCHEDULED.' })
   reason?: string;
 }

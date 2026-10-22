@@ -27,6 +27,7 @@ import {
   type ApiResult,
   type ResolvedTripFare,
   type TripFareTableIdentity,
+  type TripCostPlan,
   type NetworkRouteVersion,
   type NetworkWaypointReplacement,
   type Passenger,
@@ -982,10 +983,43 @@ describe('admin client', () => {
     });
   });
 
+  it('reads and atomically replaces internal trip costs through the CSRF flow', async () => {
+    const calls = mockFetch([
+      { status: 200, body: { id: null, items: [], totalCostMinor: '0' } },
+      { status: 200, body: { csrfToken: 'v1.1.n.m' } },
+      { status: 200, body: { id: 'plan-id', items: [], totalCostMinor: '12500' } },
+    ]);
+    const trips = createAuthClient('http://api.test').admin.trips;
+    await trips.tripCosts('trip/../id');
+    const input = {
+      status: 'ESTIMATED' as const,
+      currencyCode: 'EUR' as const,
+      items: [
+        {
+          category: 'FUEL' as const,
+          label: 'Carburant',
+          amountMinor: '12500',
+          position: 0,
+        },
+      ],
+    };
+    await trips.replaceTripCosts('trip/../id', input);
+    expect(calls[0]?.url).toBe('http://api.test/v1/admin/trips/trip%2F..%2Fid/costs');
+    expect(calls[0]?.init.method).toBe('GET');
+    expect(calls[2]?.url).toBe('http://api.test/v1/admin/trips/trip%2F..%2Fid/costs');
+    expect(calls[2]?.init).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': 'v1.1.n.m' },
+    });
+    expect(JSON.parse(String(calls[2]?.init.body))).toEqual(input);
+  });
+
   it('types trip results and inputs', () => {
     const trips = createAuthClient('http://api.test').admin.trips;
     expectTypeOf(trips.trips).returns.resolves.toEqualTypeOf<ApiResult<Page<AdminTripSummary>>>();
     expectTypeOf(trips.trip).returns.resolves.toEqualTypeOf<ApiResult<AdminTrip>>();
+    expectTypeOf(trips.tripCosts).returns.resolves.toEqualTypeOf<ApiResult<TripCostPlan>>();
+    expectTypeOf(trips.replaceTripCosts).returns.resolves.toEqualTypeOf<ApiResult<TripCostPlan>>();
     expectTypeOf(trips.scheduleTrip).returns.resolves.toEqualTypeOf<ApiResult<AdminTrip>>();
     expectTypeOf(trips.assignTripVehicle)
       .parameter(1)

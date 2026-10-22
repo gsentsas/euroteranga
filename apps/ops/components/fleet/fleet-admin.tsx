@@ -22,6 +22,7 @@ import { useCan } from '../staff-access';
 import {
   AMENITY_LABELS,
   EMPTY_VEHICLE,
+  VEHICLE_ROLE_LABELS,
   toVehicleInput,
   VehicleFields,
   type VehicleFormValues,
@@ -46,6 +47,11 @@ const NEXT_STATUSES: Record<VehicleStatus, Array<VehicleStatusTransitionInput['s
 };
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+const volumeFormat = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3 });
+
+function volumeM3(litres: number | null): string {
+  return litres === null ? '—' : `${volumeFormat.format(litres / 1000)} m³`;
+}
 
 function registrationOf(vehicle: AdminVehicle): string {
   if (!vehicle.registrationPlate) return '—';
@@ -121,6 +127,11 @@ function EditVehicleForm({
       manufacturer: vehicle.manufacturer,
       model: vehicle.model,
       modelYear: vehicle.modelYear === null ? '' : String(vehicle.modelYear),
+      role: vehicle.role,
+      payloadCapacityKg:
+        vehicle.payloadCapacityKg === null ? '' : String(vehicle.payloadCapacityKg),
+      cargoVolumeM3:
+        vehicle.cargoVolumeLiters === null ? '' : String(vehicle.cargoVolumeLiters / 1000),
       vin: vehicle.vin ?? '',
       registrationPlate: vehicle.registrationPlate ?? '',
       registrationCountryId: vehicle.registrationCountryId ?? '',
@@ -296,6 +307,14 @@ function VehicleDetail({
         <dd>{vehicle.vin ?? '—'}</dd>
         <dt>Immatriculation</dt>
         <dd>{registrationOf(vehicle)}</dd>
+        <dt>Usage</dt>
+        <dd data-testid="vehicle-role">{VEHICLE_ROLE_LABELS[vehicle.role]}</dd>
+        <dt>Charge utile bagages/fret</dt>
+        <dd data-testid="vehicle-payload-capacity">
+          {vehicle.payloadCapacityKg === null ? '—' : `${vehicle.payloadCapacityKg} kg`}
+        </dd>
+        <dt>Volume utile bagages/fret</dt>
+        <dd data-testid="vehicle-volume-capacity">{volumeM3(vehicle.cargoVolumeLiters)}</dd>
         <dt>Équipements à bord</dt>
         <dd data-testid="vehicle-amenities">
           {vehicle.amenities.length

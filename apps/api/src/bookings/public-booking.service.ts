@@ -73,6 +73,9 @@ export class PublicBookingService {
                   select: {
                     name: true,
                     type: true,
+                    terangaKind: true,
+                    travellerVisible: true,
+                    facilities: true,
                     locality: true,
                     timezone: true,
                     country: { select: { iso2: true, name: true } },
@@ -93,6 +96,7 @@ export class PublicBookingService {
             model: true,
             modelYear: true,
             status: true,
+            role: true,
             amenities: true,
           },
         },
@@ -100,16 +104,28 @@ export class PublicBookingService {
     });
     if (!trip) throw BookingErrors.tripNotBookable();
     const timings = new Map(trip.timings.map((timing) => [timing.routeWaypointId, timing]));
-    const { status: vehicleStatus, ...vehicle } = trip.vehicle ?? { status: null };
+    const {
+      status: vehicleStatus,
+      role: vehicleRole,
+      ...vehicle
+    } = trip.vehicle ?? {
+      status: null,
+      role: null,
+    };
     return {
       tripId: trip.id,
       tripReference: trip.reference,
       route: trip.routeVersion.route,
-      vehicle: trip.vehicle && vehicleStatus === 'ACTIVE' ? vehicle : null,
-      // Technical checkpoints (fuel, rest, crew change) stay internal: only
-      // stops, borders and crossings are public.
+      vehicle:
+        trip.vehicle && vehicleStatus === 'ACTIVE' && vehicleRole !== 'CARGO_SUPPORT'
+          ? vehicle
+          : null,
+      // Passenger stops are public. Operational checkpoints are public only
+      // when OPS explicitly marks them traveller-visible.
       waypoints: trip.routeVersion.waypoints
-        .filter((waypoint) => waypoint.checkpoint?.type !== 'TECHNICAL')
+        .filter(
+          (waypoint) => Boolean(waypoint.stop) || waypoint.checkpoint?.travellerVisible === true,
+        )
         .map((waypoint) => {
           const timing = timings.get(waypoint.id);
           const place = waypoint.stop ?? waypoint.checkpoint;
@@ -123,6 +139,8 @@ export class PublicBookingService {
             timezone: place?.timezone ?? null,
             country: place?.country ?? null,
             checkpointType: waypoint.checkpoint?.type ?? null,
+            terangaStopKind: waypoint.checkpoint?.terangaKind ?? null,
+            facilities: waypoint.checkpoint?.facilities ?? [],
             boardingAllowed: waypoint.boardingAllowed,
             alightingAllowed: waypoint.alightingAllowed,
             plannedArrivalAt: timing?.plannedArrivalAt ?? null,
@@ -257,7 +275,11 @@ export class PublicBookingService {
     const vehicleMedia = new Map(
       (
         await this.database.client.vehicle.findMany({
-          where: { id: { in: vehicleIds }, status: 'ACTIVE' },
+          where: {
+            id: { in: vehicleIds },
+            status: 'ACTIVE',
+            role: { in: ['PASSENGER_COACH', 'MIXED'] },
+          },
           select: { id: true, primaryMedia: { select: publicMediaSelect } },
         })
       ).map((vehicle) => [vehicle.id, publicMediaView(vehicle.primaryMedia)]),

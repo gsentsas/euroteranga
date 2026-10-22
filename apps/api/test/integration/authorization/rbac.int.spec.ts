@@ -393,11 +393,14 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['POST', '/v1/admin/fleet/vehicles/01900000-0000-7000-8000-000000000000/media'],
   ['GET', '/v1/admin/trips'],
   ['GET', '/v1/admin/trips/01900000-0000-7000-8000-000000000000'],
+  ['GET', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/costs'],
   ['POST', '/v1/admin/trips'],
+  ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/costs'],
   ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/timetable'],
   ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/schedule'],
   ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/cancel'],
   ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/vehicle'],
+  ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/support-vehicle'],
   ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/seat-map'],
   ['POST', '/v1/admin/fleet/vehicles/01900000-0000-7000-8000-000000000000/seat-map'],
   ['GET', '/v1/admin/seat-maps'],
@@ -624,6 +627,25 @@ describe('server-side RBAC', () => {
         ).status,
       ).toBe(allowed('fleet.manage') && allowed('media.read') ? 404 : 403);
       expect((await api.get('/trips')).status).toBe(allowed('trip.read') ? 200 : 403);
+      expect((await api.get('/trips/01900000-0000-7000-8000-000000000000/costs')).status).toBe(
+        allowed('trip.read') ? 404 : 403,
+      );
+      expect(
+        (
+          await api.post('/trips/01900000-0000-7000-8000-000000000000/costs', {
+            status: 'DRAFT',
+            currencyCode: 'EUR',
+            items: [],
+          })
+        ).status,
+      ).toBe(allowed('trip.manage') ? 404 : 403);
+      expect(
+        (
+          await api.post('/trips/01900000-0000-7000-8000-000000000000/support-vehicle', {
+            supportVehicleId: null,
+          })
+        ).status,
+      ).toBe(allowed('trip.manage') ? 404 : 403);
       expect((await api.get('/seat-maps')).status).toBe(allowed('seatmap.read') ? 200 : 403);
       expect((await api.get('/pricing/fare-tables')).status).toBe(
         allowed('pricing.read') ? 200 : 403,

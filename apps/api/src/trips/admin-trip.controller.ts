@@ -35,6 +35,7 @@ import {
   TripCreateBody,
   TripFareTableBody,
   TripSeatMapBody,
+  TripSupportVehicleBody,
   TripTimetableBody,
   TripVehicleBody,
   tripCancelSchema,
@@ -44,11 +45,14 @@ import {
   tripListQuerySchema,
   tripScheduleSchema,
   tripSeatMapSchema,
+  tripSupportVehicleSchema,
   tripTimetableSchema,
   tripVehicleSchema,
 } from './trip.dto.js';
 import type { FareTableVersionIdentity } from '../pricing/fare-assignment.js';
 import { FareResolutionService } from '../pricing/fare-resolution.service.js';
+import { TripCostReplaceBody, tripCostReplaceSchema } from './trip-cost.dto.js';
+import { TripCostService } from './trip-cost.service.js';
 import { TripService, withFareTableIdentityOnly } from './trip.service.js';
 
 const uuidV7 = new ParseUUIDPipe({ version: '7' });
@@ -69,6 +73,7 @@ const uuidV7 = new ParseUUIDPipe({ version: '7' });
 export class AdminTripController {
   constructor(
     private readonly trips: TripService,
+    private readonly tripCosts: TripCostService,
     private readonly fares: FareResolutionService,
     private readonly authorization: AuthorizationService,
   ) {}
@@ -117,6 +122,29 @@ export class AdminTripController {
   @ApiOkResponse({ description: 'Trip with route geometry, timetable, vehicle and history.' })
   trip(@Param('id', uuidV7) id: string, @CurrentPrincipal() principal: AuthPrincipal) {
     return this.forCaller(principal, () => this.trips.trip(id));
+  }
+
+  @Get(':id/costs')
+  @RequirePermissions(PERMISSIONS.TRIP_READ)
+  @ApiOkResponse({ description: 'Internal operational cost plan with a server-derived total.' })
+  costs(@Param('id', uuidV7) id: string) {
+    return this.tripCosts.costPlan(id);
+  }
+
+  @Post(':id/costs')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.TRIP_MANAGE)
+  @ApiOkResponse({ description: 'Complete cost plan replaced atomically and audited.' })
+  @ApiConflictResponse({ type: ErrorBody, description: 'TRIP_COST_LOCKED' })
+  @ApiBody({ type: TripCostReplaceBody })
+  replaceCosts(
+    @Param('id', uuidV7) id: string,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body(new ZodValidationPipe(tripCostReplaceSchema))
+    body: z.infer<typeof tripCostReplaceSchema>,
+  ) {
+    return this.tripCosts.replaceCostPlan(id, body, principal);
   }
 
   @Post()
@@ -213,6 +241,33 @@ export class AdminTripController {
     @Body(new ZodValidationPipe(tripVehicleSchema)) body: z.infer<typeof tripVehicleSchema>,
   ) {
     return this.forCaller(principal, () => this.trips.assignVehicle(id, body, principal));
+  }
+
+  @Post(':id/support-vehicle')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.TRIP_MANAGE)
+  @ApiOkResponse({
+    description: 'Cargo-support vehicle assigned, changed or removed, and audited.',
+  })
+  @ApiConflictResponse({
+    type: ErrorBody,
+    description:
+      'TRIP_CANCELLED, TRIP_DISPATCH_STARTED, TRIP_SUPPORT_VEHICLE_CONFLICT or TRIP_VEHICLE_OVERLAP',
+  })
+  @ApiUnprocessableEntityResponse({
+    type: ErrorBody,
+    description:
+      'TRIP_VEHICLE_UNAVAILABLE, TRIP_SUPPORT_VEHICLE_ROLE_INVALID, TRIP_SUPPORT_VEHICLE_CAPACITY_MISSING, TRIP_SUPPORT_VEHICLE_SAME_AS_PRIMARY or TRIP_REASON_REQUIRED',
+  })
+  @ApiBody({ type: TripSupportVehicleBody })
+  supportVehicle(
+    @Param('id', uuidV7) id: string,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body(new ZodValidationPipe(tripSupportVehicleSchema))
+    body: z.infer<typeof tripSupportVehicleSchema>,
+  ) {
+    return this.forCaller(principal, () => this.trips.assignSupportVehicle(id, body, principal));
   }
 
   @Post(':id/seat-map')

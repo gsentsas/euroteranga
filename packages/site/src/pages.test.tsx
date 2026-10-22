@@ -86,6 +86,8 @@ const waypoint = (
   timezone: 'Etc/UTC',
   country: place,
   checkpointType: null,
+  terangaStopKind: null,
+  facilities: [],
   plannedArrivalAt: null,
   plannedDepartureAt: null,
   ...overrides,
@@ -106,6 +108,8 @@ const publicItinerary = (vehicle: PublicItinerary['vehicle']): PublicItinerary =
       kind: 'CHECKPOINT',
       name: 'Poste frontière',
       checkpointType: 'BORDER',
+      terangaStopKind: 'BORDER',
+      facilities: ['RESTROOM'],
       plannedArrivalAt: '2030-11-13T20:00:00.000Z',
     }),
     waypoint('w4', 'Dakar', country('SN', 'Sénégal'), {

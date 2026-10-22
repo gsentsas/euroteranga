@@ -172,6 +172,7 @@ export class FleetService {
       where: {
         ...(query.cursor ? { id: { lt: query.cursor } } : {}),
         ...(query.status ? { status: query.status } : {}),
+        ...(query.role ? { role: query.role } : {}),
       },
       orderBy: { id: 'desc' },
       include: vehicleInclude,
@@ -212,7 +213,10 @@ export class FleetService {
    */
   async publicFleet() {
     const vehicles = await this.database.client.vehicle.findMany({
-      where: { status: 'ACTIVE' },
+      where: {
+        status: 'ACTIVE',
+        role: { in: ['PASSENGER_COACH', 'MIXED'] },
+      },
       orderBy: [{ name: 'asc' }, { code: 'asc' }],
       take: 50,
       select: {
@@ -257,6 +261,9 @@ export class FleetService {
             manufacturer: input.manufacturer,
             model: input.model,
             modelYear: input.modelYear ?? null,
+            role: input.role ?? 'PASSENGER_COACH',
+            payloadCapacityKg: input.payloadCapacityKg ?? null,
+            cargoVolumeLiters: input.cargoVolumeLiters ?? null,
             amenities: input.amenities ?? [],
           },
           include: vehicleInclude,
@@ -312,6 +319,13 @@ export class FleetService {
             ...(input.manufacturer !== undefined ? { manufacturer: input.manufacturer } : {}),
             ...(input.model !== undefined ? { model: input.model } : {}),
             ...(input.modelYear !== undefined ? { modelYear: input.modelYear } : {}),
+            ...(input.role !== undefined ? { role: input.role } : {}),
+            ...(input.payloadCapacityKg !== undefined
+              ? { payloadCapacityKg: input.payloadCapacityKg }
+              : {}),
+            ...(input.cargoVolumeLiters !== undefined
+              ? { cargoVolumeLiters: input.cargoVolumeLiters }
+              : {}),
             ...(input.amenities !== undefined ? { amenities: input.amenities } : {}),
           },
           include: vehicleInclude,

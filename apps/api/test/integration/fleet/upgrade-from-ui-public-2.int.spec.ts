@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDatabaseClient } from '@euroteranga/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CURRENT_MIGRATIONS, LATEST_MIGRATION } from '../../support/migrations.js';
+import { CURRENT_MIGRATIONS } from '../../support/migrations.js';
 
 const DATABASE_PACKAGE = fileURLToPath(
   new URL('../../../../../packages/database/', import.meta.url),
@@ -40,7 +40,7 @@ describe('upgrade to vehicle media (isolated database)', () => {
     ).map((row) => row.migration_name);
 
   beforeAll(async () => {
-    expect(LATEST_MIGRATION).toBe(FLEET_MEDIA_MIGRATION);
+    expect(CURRENT_MIGRATIONS).toContain(FLEET_MEDIA_MIGRATION);
     const base = process.env.DATABASE_URL;
     if (!base) throw new Error('DATABASE_URL is required');
     root = createDatabaseClient({ databaseUrl: base });
