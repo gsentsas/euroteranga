@@ -11,6 +11,7 @@ import type {
   CargoCreateInput,
   CargoEventInput,
   CargoListQuery,
+  CargoScanInput,
   CargoUpdateInput,
 } from './cargo.dto.js';
 import { CargoErrors } from './cargo.errors.js';
@@ -18,7 +19,9 @@ import {
   cargoEventFingerprint,
   CargoTransitionError,
   normalizeCargoReference,
+  parseCargoQrPayload,
   projectCargoEvent,
+  renderCargoQrSvg,
   withFreshCargoReference,
 } from './cargo-rules.js';
 import {
@@ -116,6 +119,24 @@ export class CargoService {
     private readonly audit: AuditService,
     private readonly rateLimits: RateLimitService,
   ) {}
+
+  async resolveQr(actor: AuthPrincipal, qrPayload: string) {
+    const reference = parseCargoQrPayload(qrPayload);
+    if (!reference) throw CargoErrors.notFound();
+    return this.detail(actor, reference, 'QR_RESOLVE');
+  }
+
+  async qr(actor: AuthPrincipal, rawReference: string) {
+    const cargo = await this.detail(actor, rawReference, 'QR_LABEL');
+    return { reference: cargo.reference, svg: renderCargoQrSvg(cargo.reference) };
+  }
+
+  async recordScan(actor: AuthPrincipal, input: CargoScanInput) {
+    const reference = parseCargoQrPayload(input.qrPayload);
+    if (!reference) throw CargoErrors.notFound();
+    const { qrPayload: _qrPayload, ...event } = input;
+    return this.recordEvent(actor, reference, event);
+  }
 
   async create(actor: AuthPrincipal, input: CargoCreateInput) {
     await this.rateLimits.consume(RATE_LIMITS.cargoOperationIdentity, actor.identityId);
