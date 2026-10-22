@@ -73,10 +73,7 @@ function databaseQuoteError(error: unknown): never {
   throw error;
 }
 
-async function lockedShipment(
-  tx: DatabaseTransaction,
-  reference: string,
-) {
+async function lockedShipment(tx: DatabaseTransaction, reference: string) {
   const rows = await tx.$queryRaw<Array<{ id: string }>>`
     SELECT "id"
     FROM "road_freight_shipment"
@@ -102,11 +99,7 @@ async function lockedShipment(
   });
 }
 
-async function lockedQuote(
-  tx: DatabaseTransaction,
-  shipmentId: string,
-  reference: string,
-) {
+async function lockedQuote(tx: DatabaseTransaction, shipmentId: string, reference: string) {
   const rows = await tx.$queryRaw<Array<{ id: string }>>`
     SELECT "id"
     FROM "road_freight_quote"
