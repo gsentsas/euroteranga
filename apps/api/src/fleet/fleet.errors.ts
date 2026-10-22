@@ -17,6 +17,12 @@ export const FleetErrors = {
     ),
   vehicleRetired: () =>
     new PublicApiError(409, 'VEHICLE_RETIRED', 'Un véhicule retiré ne peut plus être modifié.'),
+  cargoAssignmentConflict: () =>
+    new PublicApiError(
+      409,
+      'VEHICLE_CARGO_ASSIGNMENT_CONFLICT',
+      'Ce changement rendrait incompatible un fret actif affecté à ce véhicule.',
+    ),
   mediaUnavailable: () =>
     new PublicApiError(
       422,
