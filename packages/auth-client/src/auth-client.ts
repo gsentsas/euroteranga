@@ -1752,12 +1752,7 @@ export interface RoadFreightListOptions {
   createdTo?: string;
 }
 
-export type RoadFreightQuoteStatus =
-  | 'DRAFT'
-  | 'ISSUED'
-  | 'ACCEPTED'
-  | 'SUPERSEDED'
-  | 'CANCELLED';
+export type RoadFreightQuoteStatus = 'DRAFT' | 'ISSUED' | 'ACCEPTED' | 'SUPERSEDED' | 'CANCELLED';
 export type RoadFreightQuoteLineKind = 'CHARGE' | 'DISCOUNT';
 
 export interface RoadFreightQuoteLine {
