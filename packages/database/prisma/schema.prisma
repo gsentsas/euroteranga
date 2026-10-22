@@ -1663,9 +1663,6 @@ model BaggageEvent {
   @@map("baggage_event")
 }
 
-/// PR-11: metadata of a private object. PostgreSQL never stores the binary,
-/// original filename, scanner output, signed URL or document number.
-
 /// CARGO-1: one road-freight consignment, independent from passenger baggage.
 /// Pricing and payment snapshots are deliberately absent until CARGO-PRICE-1.
 model RoadFreightShipment {
