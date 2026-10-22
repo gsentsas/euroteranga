@@ -33,6 +33,7 @@ import {
   dayOffset,
   durationLabel,
   placeKindLabel,
+  terangaFacilityLabels,
   type ItineraryLookup,
   type SitePlace,
 } from './itinerary.js';
@@ -976,6 +977,9 @@ function Itinerary({
                             {placeKindLabel(place)} : {place.locality}
                             {place.name !== place.locality ? ` — ${place.name}` : ''} (
                             {place.country.name})
+                            {terangaFacilityLabels(place.facilities).length
+                              ? ` · ${terangaFacilityLabels(place.facilities).join(', ')}`
+                              : ''}
                           </span>
                         </li>
                       );

@@ -65,9 +65,36 @@ const stopFields = {
 export const stopCreateSchema = z.object(stopFields).strict();
 export const stopUpdateSchema = nonEmptyUpdate(stopFields);
 
+export const CHECKPOINT_TYPES = ['BORDER', 'FERRY_TERMINAL', 'PORT', 'TECHNICAL'] as const;
+export const TERANGA_STOP_KINDS = [
+  'BREAK',
+  'MEAL',
+  'SHOWER',
+  'REST',
+  'OVERNIGHT',
+  'FUEL',
+  'BORDER',
+  'FERRY',
+  'TECHNICAL',
+] as const;
+export const TERANGA_FACILITIES = ['RESTROOM', 'SHOWER', 'FOOD', 'SECURE_PARKING', 'FUEL'] as const;
+
+const facilities = z
+  .array(z.enum(TERANGA_FACILITIES))
+  .max(TERANGA_FACILITIES.length)
+  .transform((values) =>
+    [...new Set(values)].sort(
+      (left, right) => TERANGA_FACILITIES.indexOf(left) - TERANGA_FACILITIES.indexOf(right),
+    ),
+  );
+
 const checkpointFields = {
   ...stopFields,
-  type: z.enum(['BORDER', 'FERRY_TERMINAL', 'PORT', 'TECHNICAL']),
+  type: z.enum(CHECKPOINT_TYPES),
+  terangaKind: z.enum(TERANGA_STOP_KINDS).optional(),
+  travellerVisible: z.boolean().optional(),
+  suggestedDwellMinutes: z.number().int().min(5).max(1440).nullable().optional(),
+  facilities: facilities.optional(),
 };
 export const checkpointCreateSchema = z.object(checkpointFields).strict();
 export const checkpointUpdateSchema = nonEmptyUpdate(checkpointFields);
@@ -134,13 +161,35 @@ export class StopUpdateBody {
 }
 
 export class CheckpointCreateBody extends StopCreateBody {
-  @ApiProperty({ enum: ['BORDER', 'FERRY_TERMINAL', 'PORT', 'TECHNICAL'] })
-  type!: 'BORDER' | 'FERRY_TERMINAL' | 'PORT' | 'TECHNICAL';
+  @ApiProperty({ enum: CHECKPOINT_TYPES })
+  type!: (typeof CHECKPOINT_TYPES)[number];
+  @ApiPropertyOptional({ enum: TERANGA_STOP_KINDS })
+  terangaKind?: (typeof TERANGA_STOP_KINDS)[number];
+  @ApiPropertyOptional({
+    description: 'Explicitly include this checkpoint in the traveller-facing itinerary.',
+  })
+  travellerVisible?: boolean;
+  @ApiPropertyOptional({
+    nullable: true,
+    minimum: 5,
+    maximum: 1440,
+    description: 'Non-binding planning hint in minutes; never a driver-hours rule.',
+  })
+  suggestedDwellMinutes?: number | null;
+  @ApiPropertyOptional({ enum: TERANGA_FACILITIES, isArray: true })
+  facilities?: Array<(typeof TERANGA_FACILITIES)[number]>;
 }
 
 export class CheckpointUpdateBody extends StopUpdateBody {
-  @ApiPropertyOptional({ enum: ['BORDER', 'FERRY_TERMINAL', 'PORT', 'TECHNICAL'] })
-  type?: 'BORDER' | 'FERRY_TERMINAL' | 'PORT' | 'TECHNICAL';
+  @ApiPropertyOptional({ enum: CHECKPOINT_TYPES })
+  type?: (typeof CHECKPOINT_TYPES)[number];
+  @ApiPropertyOptional({ enum: TERANGA_STOP_KINDS })
+  terangaKind?: (typeof TERANGA_STOP_KINDS)[number];
+  @ApiPropertyOptional() travellerVisible?: boolean;
+  @ApiPropertyOptional({ nullable: true, minimum: 5, maximum: 1440 })
+  suggestedDwellMinutes?: number | null;
+  @ApiPropertyOptional({ enum: TERANGA_FACILITIES, isArray: true })
+  facilities?: Array<(typeof TERANGA_FACILITIES)[number]>;
 }
 
 export class RouteCreateBody {

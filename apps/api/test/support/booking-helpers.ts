@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { client, createIdentity, csrfToken, db, loginCookie, uniqueIp } from './auth-helpers.js';
 
@@ -102,19 +102,36 @@ export async function bookableFixture(
     { stopId: stopIds[1]!, boardingAllowed: true, alightingAllowed: true },
   ];
   if (options.withCheckpoint) {
-    const checkpoint = await prisma.checkpoint.create({
-      data: {
-        code: `CK_${suffix()}`,
-        name: 'Point de contrôle',
-        countryId,
-        type: 'TECHNICAL',
-        locality: 'L',
-        latitude: 1,
-        longitude: 1,
-        timezone: 'Etc/UTC',
-      },
-    });
-    waypoints.push({ checkpointId: checkpoint.id });
+    // Historical upgrade suites intentionally run this current helper against
+    // pre-TERANGA-STOPS schemas. Use only checkpoint columns that have existed
+    // since NETWORK-ROUTES; current schemas fill Teranga fields from defaults.
+    const checkpointId = randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO "checkpoint" (
+        "id",
+        "code",
+        "name",
+        "country_id",
+        "type",
+        "locality",
+        "latitude",
+        "longitude",
+        "timezone",
+        "updated_at"
+      ) VALUES (
+        ${checkpointId}::uuid,
+        ${`CK_${suffix()}`},
+        'Point de contrôle',
+        ${countryId}::uuid,
+        'TECHNICAL'::checkpoint_type,
+        'L',
+        1,
+        1,
+        'Etc/UTC',
+        now()
+      )
+    `;
+    waypoints.push({ checkpointId });
   }
   waypoints.push(
     { stopId: stopIds[2]!, boardingAllowed: true, alightingAllowed: true },

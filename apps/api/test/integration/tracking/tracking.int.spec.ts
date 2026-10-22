@@ -98,6 +98,8 @@ describe('PR-19 tracking domain', () => {
           name: 'Checkpoint test',
           countryId: senegal.id,
           type: 'BORDER',
+          terangaKind: 'BORDER',
+          travellerVisible: true,
           locality: 'Frontière test',
           latitude: 14.9,
           longitude: -16.2,

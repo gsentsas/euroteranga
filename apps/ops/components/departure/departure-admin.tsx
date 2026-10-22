@@ -25,6 +25,10 @@ const BLOCKER_LABELS: Record<DepartureBlockerCode, string> = {
   VEHICLE_NOT_ASSIGNED: 'Aucun véhicule n’est affecté.',
   VEHICLE_NOT_ACTIVE: 'Le véhicule affecté n’est plus en service.',
   VEHICLE_SEAT_MAP_MISMATCH: 'Le plan de sièges actuel du véhicule ne correspond plus au voyage.',
+  SUPPORT_VEHICLE_NOT_ACTIVE: 'Le véhicule d’appoint n’est plus en service.',
+  SUPPORT_VEHICLE_ROLE_INVALID: 'Le véhicule d’appoint n’est plus configuré comme CARGO_SUPPORT.',
+  SUPPORT_VEHICLE_CAPACITY_MISSING:
+    'La charge utile ou le volume du véhicule d’appoint n’est plus configuré.',
   PASSENGER_NOT_CHECKED_IN: 'Un passager confirmé n’est pas enregistré.',
   PASSENGER_NOT_BOARDED: 'Un passager confirmé n’est pas embarqué.',
   PASSENGER_READINESS_STALE: 'Les conditions PR-14 d’un passager ne sont plus valides.',

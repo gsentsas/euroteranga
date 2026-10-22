@@ -85,7 +85,7 @@ describe('departure readiness and dispatch (PR-17)', () => {
     const readiness = await api.readiness(item.tripReference);
     expect(readiness.status, readiness.text).toBe(200);
     expect(readiness.body.readiness).toMatchObject({
-      engineVersion: 'departure-readiness/1',
+      engineVersion: 'departure-readiness/2',
       status: 'READY',
       permitPolicy: { requirementCount: 0, requirements: [] },
       passengers: { total: 1, checkedIn: 1, boarded: 1, currentReady: 1 },
@@ -100,7 +100,7 @@ describe('departure readiness and dispatch (PR-17)', () => {
       authorization: {
         reference: expect.stringMatching(/^ETDA-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{12}$/u),
         version: 1,
-        engineVersion: 'departure-readiness/1',
+        engineVersion: 'departure-readiness/2',
       },
     });
     const replay = await api.authorize(item.tripReference);
@@ -229,6 +229,63 @@ describe('departure readiness and dispatch (PR-17)', () => {
       gate: 'PASSENGERS',
       code: 'PASSENGER_READINESS_STALE',
       reference: passengerItem.passengerReference,
+    });
+  }, 120_000);
+
+  it('invalidates an authorization when the optional support vehicle changes', async () => {
+    const item = await readyWithEmptyPolicy();
+    const api = departureApi(manager);
+    const authorization = await api.authorize(item.tripReference);
+    expect(authorization.status, authorization.text).toBe(200);
+
+    const support = await db(t.app).vehicle.create({
+      data: {
+        code: `VH_SUPPORT_${item.tripId.slice(-8).toUpperCase()}`,
+        manufacturer: 'Synthétique',
+        model: 'Support 20m3',
+        role: 'CARGO_SUPPORT',
+        payloadCapacityKg: 1200,
+        cargoVolumeLiters: 20000,
+        status: 'PLANNED',
+      },
+    });
+    await db(t.app).vehicle.update({
+      where: { id: support.id },
+      data: { status: 'ACTIVE' },
+    });
+    await db(t.app).trip.update({
+      where: { id: item.tripId },
+      data: { supportVehicleId: support.id },
+    });
+
+    const changed = await api.readiness(item.tripReference);
+    expect(changed.status, changed.text).toBe(200);
+    expect(changed.body.readiness).toMatchObject({
+      status: 'READY',
+      supportVehicle: {
+        code: support.code,
+        active: true,
+        role: 'CARGO_SUPPORT',
+        payloadCapacityKg: 1200,
+        cargoVolumeLiters: 20000,
+      },
+    });
+    expect(changed.body.fingerprint).not.toBe(
+      authorization.body.authorization.readinessFingerprint,
+    );
+    expect(changed.body.latestAuthorization).toMatchObject({
+      reference: authorization.body.authorization.reference,
+      current: false,
+    });
+
+    await db(t.app).vehicle.update({
+      where: { id: support.id },
+      data: { status: 'OUT_OF_SERVICE' },
+    });
+    const unavailable = await api.readiness(item.tripReference);
+    expect(unavailable.body.readiness.blockers).toContainEqual({
+      gate: 'VEHICLE',
+      code: 'SUPPORT_VEHICLE_NOT_ACTIVE',
     });
   }, 120_000);
 

@@ -24,6 +24,8 @@ export interface PublicItinerary {
     timezone: string;
     country: { iso2: string; name: string };
     checkpointType: string | null;
+    terangaStopKind: string | null;
+    facilities: readonly string[];
     plannedArrivalAt: string | null;
     plannedDepartureAt: string | null;
   }>;
@@ -36,6 +38,8 @@ export interface SitePlace {
   timezone: string;
   country: { iso2: string; name: string };
   checkpointType: string | null;
+  terangaStopKind: string | null;
+  facilities: readonly string[];
   arrivalAt: string | null;
   departureAt: string | null;
 }
@@ -74,6 +78,8 @@ export function journeyItinerary(
     timezone: waypoint.timezone,
     country: waypoint.country,
     checkpointType: waypoint.checkpointType,
+    terangaStopKind: waypoint.terangaStopKind,
+    facilities: waypoint.facilities,
     arrivalAt: waypoint.plannedArrivalAt,
     departureAt: waypoint.plannedDepartureAt,
   }));
@@ -121,6 +127,34 @@ export function dayOffset(
 /** How a place of the journey is introduced to travellers. */
 export function placeKindLabel(place: SitePlace): string {
   if (place.kind === 'STOP') return 'Arrêt';
-  if (place.checkpointType === 'BORDER') return 'Passage de frontière';
-  return 'Traversée';
+  const labels: Record<string, string> = {
+    BREAK: 'Pause',
+    MEAL: 'Pause repas',
+    SHOWER: 'Pause douche',
+    REST: 'Repos',
+    OVERNIGHT: 'Étape nuit',
+    FUEL: 'Ravitaillement',
+    BORDER: 'Passage de frontière',
+    FERRY: 'Traversée ferry',
+    TECHNICAL: 'Étape technique',
+  };
+  const fallbackKind =
+    place.checkpointType === 'BORDER'
+      ? 'BORDER'
+      : place.checkpointType === 'FERRY_TERMINAL' || place.checkpointType === 'PORT'
+        ? 'FERRY'
+        : null;
+  const kind = place.terangaStopKind ?? fallbackKind;
+  return kind ? (labels[kind] ?? 'Étape') : 'Étape';
+}
+
+export function terangaFacilityLabels(facilities: readonly string[]): string[] {
+  const labels: Record<string, string> = {
+    RESTROOM: 'toilettes',
+    SHOWER: 'douche',
+    FOOD: 'repas',
+    SECURE_PARKING: 'parking sécurisé',
+    FUEL: 'carburant',
+  };
+  return facilities.flatMap((facility) => (labels[facility] ? [labels[facility]!] : []));
 }

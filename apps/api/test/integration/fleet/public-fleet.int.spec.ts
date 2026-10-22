@@ -390,14 +390,39 @@ describe('public fleet and itinerary (isolated database)', () => {
     expect(waypoints[0]!.plannedDepartureAt).toEqual(expect.any(String));
     expect(waypoints.at(-1)!.plannedArrivalAt).toEqual(expect.any(String));
     expect(response.text).not.toContain('Point de contrôle');
-    // A border crossing is public, with its country and planned times.
     const checkpoint = await db(t.app).routeWaypoint.findUniqueOrThrow({
       where: { id: fixture.checkpointWaypointId! },
       select: { checkpointId: true },
     });
+
+    // A technical pause becomes public only after an explicit OPS-style opt-in.
     await db(t.app).checkpoint.update({
       where: { id: checkpoint.checkpointId! },
-      data: { type: 'BORDER' },
+      data: {
+        terangaKind: 'REST',
+        travellerVisible: true,
+        suggestedDwellMinutes: 45,
+        facilities: ['RESTROOM', 'SHOWER', 'SECURE_PARKING'],
+      },
+    });
+    const rest = (await publicGet(`/booking/trips/${fixture.tripId}/itinerary`)).body.waypoints[2];
+    expect(rest).toMatchObject({
+      sequence: 3,
+      kind: 'CHECKPOINT',
+      checkpointType: 'TECHNICAL',
+      terangaStopKind: 'REST',
+      facilities: ['RESTROOM', 'SHOWER', 'SECURE_PARKING'],
+    });
+
+    // A border crossing remains public when classified consistently.
+    await db(t.app).checkpoint.update({
+      where: { id: checkpoint.checkpointId! },
+      data: {
+        type: 'BORDER',
+        terangaKind: 'BORDER',
+        travellerVisible: true,
+        facilities: [],
+      },
     });
     const border = (await publicGet(`/booking/trips/${fixture.tripId}/itinerary`)).body
       .waypoints[2];
@@ -407,6 +432,8 @@ describe('public fleet and itinerary (isolated database)', () => {
       code: null,
       name: 'Point de contrôle',
       checkpointType: 'BORDER',
+      terangaStopKind: 'BORDER',
+      facilities: [],
       country: { iso2: expect.any(String) },
     });
     expect(border.plannedArrivalAt).toEqual(expect.any(String));

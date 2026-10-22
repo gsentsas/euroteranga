@@ -65,6 +65,73 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
   ).toBeVisible();
   await expect(detail.getByTestId('trip-vehicle')).toContainText(seed.vehicleCode);
 
+  const supportVehicleForm = detail.getByRole('form', {
+    name: `Véhicule d’appoint du voyage ${reference}`,
+  });
+  await supportVehicleForm
+    .getByLabel('Véhicule CARGO_SUPPORT à affecter', { exact: true })
+    .selectOption({
+      label: `${seed.supportVehicleCode} — ${seed.supportVehicleLabel} · 1200 kg · 20 m³`,
+    });
+  await supportVehicleForm
+    .getByRole('button', { name: 'Enregistrer le véhicule d’appoint' })
+    .click();
+  await expect(
+    notice(page, `Véhicule d’appoint du voyage ${reference} : ${seed.supportVehicleCode}.`),
+  ).toBeVisible();
+  await expect(detail.getByTestId('trip-support-vehicle')).toContainText(seed.supportVehicleCode);
+  await expect(detail.getByTestId('trip-support-vehicle')).toContainText('1200 kg');
+  await expect(detail.getByTestId('trip-support-vehicle')).toContainText('20 m³');
+
+  await page.reload();
+  await page.getByRole('button', { name: `Consulter le voyage ${reference}` }).click();
+  await expect(detail.getByTestId('trip-support-vehicle')).toContainText(seed.supportVehicleCode);
+  await expect(detail.getByTestId('trip-support-vehicle')).toContainText('20 m³');
+
+  const costs = detail.getByRole('form', {
+    name: `Coûts prévisionnels du voyage ${reference}`,
+  });
+  await costs.getByRole('button', { name: 'Ajouter une ligne' }).click();
+  await costs.getByRole('button', { name: 'Ajouter une ligne' }).click();
+  const fuel = costs.getByRole('group', { name: 'Ligne 1' });
+  await fuel.getByLabel('Catégorie', { exact: true }).selectOption('FUEL');
+  await fuel.getByLabel('Libellé', { exact: true }).fill('Carburant prévisionnel');
+  await fuel.getByLabel('Montant (EUR)', { exact: true }).fill('4200');
+  const stops = costs.getByRole('group', { name: 'Ligne 2' });
+  await stops.getByLabel('Catégorie', { exact: true }).selectOption('STOP_COST');
+  await stops.getByLabel('Libellé', { exact: true }).fill('Coûts des arrêts');
+  await stops.getByLabel('Montant (EUR)', { exact: true }).fill('1800');
+  await costs.getByLabel('Statut du chiffrage', { exact: true }).selectOption('ESTIMATED');
+  await expect(costs.getByTestId('trip-cost-total')).toHaveText(/6\s?000,00 €/u);
+  await costs.getByRole('button', { name: 'Enregistrer les coûts' }).click();
+  await expect(
+    notice(page, `Coûts prévisionnels du voyage ${reference} enregistrés.`),
+  ).toBeVisible();
+
+  // A full reload proves persistence and the second replacement proves edit + derived total.
+  await page.reload();
+  await page.getByRole('button', { name: `Consulter le voyage ${reference}` }).click();
+  const persistedCosts = detail.getByRole('form', {
+    name: `Coûts prévisionnels du voyage ${reference}`,
+  });
+  await expect(persistedCosts.getByTestId('trip-cost-total')).toHaveText(/6\s?000,00 €/u);
+  await persistedCosts
+    .getByRole('group', { name: 'Ligne 2' })
+    .getByLabel('Montant (EUR)', { exact: true })
+    .fill('2000');
+  await persistedCosts.getByRole('button', { name: 'Enregistrer les coûts' }).click();
+  await expect(
+    notice(page, `Coûts prévisionnels du voyage ${reference} enregistrés.`),
+  ).toBeVisible();
+
+  // Reload again so 6 200 € is proven to come from the server, not just local form state.
+  await page.reload();
+  await page.getByRole('button', { name: `Consulter le voyage ${reference}` }).click();
+  const reloadedCosts = detail.getByRole('form', {
+    name: `Coûts prévisionnels du voyage ${reference}`,
+  });
+  await expect(reloadedCosts.getByTestId('trip-cost-total')).toHaveText(/6\s?200,00 €/u);
+
   await detail.getByRole('button', { name: 'Planifier le voyage' }).click();
   await expect(notice(page, `Voyage ${reference} planifié.`)).toBeVisible();
   await expect(detail.getByTestId('trip-status')).toHaveText('Planifié');
@@ -94,7 +161,7 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
   const history = detail
     .getByRole('list', { name: `Historique du voyage ${reference}` })
     .getByRole('listitem');
-  await expect(history).toHaveCount(5);
+  await expect(history).toHaveCount(8);
   await expect(history.nth(0)).toContainText(
     'Annulation (Planifié → Annulé) — Annulation synthétique',
   );
@@ -123,6 +190,11 @@ test('ops trips: trip.read consults without any mutation control; the API refuse
   await expect(detail.getByTestId('trip-status')).toHaveText('Brouillon');
   await expect(detail.getByRole('form')).toHaveCount(0);
   await expect(
+    detail.getByRole('region', {
+      name: `Coûts prévisionnels du voyage ${seed.seededTripReference}`,
+    }),
+  ).toBeVisible();
+  await expect(
     page.getByRole('button', { name: /^(Créer|Enregistrer|Planifier|Annuler)/ }),
   ).toHaveCount(0);
   await page.getByRole('button', { name: 'Retour à la liste' }).click();
@@ -147,6 +219,12 @@ test('ops trips: trip.read consults without any mutation control; the API refuse
     await api.post(`/trips/${seeded?.id}/schedule`, {}),
     await api.post(`/trips/${seeded?.id}/cancel`, { reason: 'Interdit' }),
     await api.post(`/trips/${seeded?.id}/vehicle`, { vehicleId: null }),
+    await api.post(`/trips/${seeded?.id}/support-vehicle`, { supportVehicleId: null }),
+    await api.post(`/trips/${seeded?.id}/costs`, {
+      status: 'DRAFT',
+      currencyCode: 'EUR',
+      items: [],
+    }),
   ];
   for (const attempt of attempts) {
     expect(attempt.status()).toBe(403);

@@ -190,6 +190,11 @@ describe('trip administration API (isolated database)', () => {
         await api.post(`/trips/${trip.id}/schedule`, {}),
         await api.post(`/trips/${trip.id}/cancel`, { reason: 'Interdit' }),
         await api.post(`/trips/${trip.id}/vehicle`, { vehicleId: null }),
+        await api.post(`/trips/${trip.id}/costs`, {
+          status: 'DRAFT',
+          currencyCode: 'EUR',
+          items: [],
+        }),
       ];
       for (const attempt of attempts) {
         expect(attempt.status).toBe(403);
@@ -208,6 +213,7 @@ describe('trip administration API (isolated database)', () => {
         [`/trips/${trip.id}/schedule`, {}],
         [`/trips/${trip.id}/cancel`, { reason: 'Sans CSRF' }],
         [`/trips/${trip.id}/vehicle`, { vehicleId: null }],
+        [`/trips/${trip.id}/costs`, { status: 'DRAFT', currencyCode: 'EUR', items: [] }],
       ];
       for (const [path, body] of calls) {
         expect((await api.post(path, body, { csrf: null })).status, path).toBe(403);

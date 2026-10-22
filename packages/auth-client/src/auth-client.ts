@@ -109,12 +109,21 @@ export interface NetworkStop {
 
 export type NetworkCheckpointType = 'BORDER' | 'FERRY_TERMINAL' | 'PORT' | 'TECHNICAL';
 
+export type NetworkTerangaStopKind =
+  'BREAK' | 'MEAL' | 'SHOWER' | 'REST' | 'OVERNIGHT' | 'FUEL' | 'BORDER' | 'FERRY' | 'TECHNICAL';
+
+export type NetworkTerangaFacility = 'RESTROOM' | 'SHOWER' | 'FOOD' | 'SECURE_PARKING' | 'FUEL';
+
 export interface NetworkCheckpoint {
   id: string;
   code: string;
   name: string;
   countryId: string;
   type: NetworkCheckpointType;
+  terangaKind: NetworkTerangaStopKind;
+  travellerVisible: boolean;
+  suggestedDwellMinutes: number | null;
+  facilities: NetworkTerangaFacility[];
   locality: string;
   latitude: number;
   longitude: number;
@@ -216,10 +225,18 @@ export interface NetworkPlaceUpdate {
 
 export interface NetworkCheckpointInput extends NetworkPlaceInput {
   type: NetworkCheckpointType;
+  terangaKind?: NetworkTerangaStopKind;
+  travellerVisible?: boolean;
+  suggestedDwellMinutes?: number | null;
+  facilities?: NetworkTerangaFacility[];
 }
 
 export interface NetworkCheckpointUpdate extends NetworkPlaceUpdate {
   type?: NetworkCheckpointType;
+  terangaKind?: NetworkTerangaStopKind;
+  travellerVisible?: boolean;
+  suggestedDwellMinutes?: number | null;
+  facilities?: NetworkTerangaFacility[];
 }
 
 export interface NetworkRouteInput {
@@ -378,6 +395,7 @@ export interface VehicleListOptions {
   cursor?: string;
   limit?: number;
   status?: VehicleStatus;
+  role?: VehicleRole;
 }
 
 export interface VehicleCreateInput {
@@ -420,6 +438,7 @@ export interface AdminTripSummary {
   reference: string;
   routeVersionId: string;
   vehicleId: string | null;
+  supportVehicleId: string | null;
   status: TripStatus;
   /** UTC instants (ISO 8601). */
   plannedDepartureAt: string | null;
@@ -448,6 +467,17 @@ export interface AdminTripSummary {
     model: string;
     /** The vehicle's current configuration (may differ from the trip's later). */
     seatMapVersion: AssignedSeatMapVersion | null;
+  } | null;
+  supportVehicle: {
+    id: string;
+    code: string;
+    name: string | null;
+    status: VehicleStatus;
+    manufacturer: string;
+    model: string;
+    role: VehicleRole;
+    payloadCapacityKg: number | null;
+    cargoVolumeLiters: number | null;
   } | null;
   /** Historical seat map of the trip; frozen once SCHEDULED. */
   seatMapVersionId: string | null;
@@ -492,6 +522,8 @@ export interface TripHistoryEntry {
   toStatus: TripStatus | null;
   fromVehicleCode: string | null;
   toVehicleCode: string | null;
+  fromSupportVehicleCode: string | null;
+  toSupportVehicleCode: string | null;
   fromSeatMap: string | null;
   toSeatMap: string | null;
   fromFareTable: string | null;
@@ -530,6 +562,62 @@ export interface TripTimetableInput {
   }>;
 }
 
+export type TripCostStatus = 'DRAFT' | 'ESTIMATED' | 'LOCKED';
+export type TripCostCategory =
+  | 'FUEL'
+  | 'TOLLS'
+  | 'FERRY'
+  | 'BORDER_FEES'
+  | 'PERMITS'
+  | 'DRIVERS'
+  | 'ACCOMMODATION'
+  | 'MEALS_ALLOWANCES'
+  | 'MAINTENANCE'
+  | 'INSURANCE'
+  | 'CLEANING_PREPARATION'
+  | 'PARKING'
+  | 'STOP_COST'
+  | 'SUPPORT_VEHICLE'
+  | 'CONTINGENCY'
+  | 'OTHER';
+
+export interface TripCostItem {
+  id: string;
+  category: TripCostCategory;
+  label: string;
+  /** Exact integer minor units, represented as a string for BIGINT safety. */
+  amountMinor: string;
+  notes: string | null;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TripCostPlan {
+  /** null until the first mutation; reads still expose the implied empty draft. */
+  id: string | null;
+  tripId: string;
+  status: TripCostStatus;
+  currencyCode: 'EUR';
+  currencyMinorUnit: 2;
+  totalCostMinor: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  items: TripCostItem[];
+}
+
+export interface TripCostReplaceInput {
+  status: TripCostStatus;
+  currencyCode: 'EUR';
+  items: Array<{
+    category: TripCostCategory;
+    label: string;
+    amountMinor: string;
+    notes?: string;
+    position: number;
+  }>;
+}
+
 export interface TripCancelInput {
   reason: string;
   expectedStatus?: TripStatus;
@@ -541,6 +629,12 @@ export interface TripVehicleInput {
   /** Vehicle the decision was based on (null: none); refused if it moved. */
   expectedVehicleId?: string | null;
   /** Required once the trip is SCHEDULED. */
+  reason?: string;
+}
+
+export interface TripSupportVehicleInput {
+  supportVehicleId: string | null;
+  expectedSupportVehicleId?: string | null;
   reason?: string;
 }
 
@@ -826,8 +920,12 @@ export interface BookingItineraryWaypoint {
   locality: string;
   timezone: string;
   country: { iso2: string; name: string };
-  /** Checkpoints only: BORDER, FERRY_TERMINAL or PORT (technical ones stay internal). */
+  /** Structural checkpoint type; null for passenger stops. */
   checkpointType: string | null;
+  /** Traveller-facing Teranga Stop purpose; null for passenger stops. */
+  terangaStopKind: string | null;
+  /** Services explicitly verified by OPS for a traveller-visible checkpoint. */
+  facilities: string[];
   boardingAllowed: boolean;
   alightingAllowed: boolean;
   plannedArrivalAt: string | null;
@@ -2386,6 +2484,9 @@ export type DepartureBlockerCode =
   | 'VEHICLE_NOT_ASSIGNED'
   | 'VEHICLE_NOT_ACTIVE'
   | 'VEHICLE_SEAT_MAP_MISMATCH'
+  | 'SUPPORT_VEHICLE_NOT_ACTIVE'
+  | 'SUPPORT_VEHICLE_ROLE_INVALID'
+  | 'SUPPORT_VEHICLE_CAPACITY_MISSING'
   | 'PASSENGER_NOT_CHECKED_IN'
   | 'PASSENGER_NOT_BOARDED'
   | 'PASSENGER_READINESS_STALE'
@@ -2425,10 +2526,17 @@ export interface DeparturePermitPolicy {
 }
 
 export interface DepartureReadinessSnapshot {
-  engineVersion: 'departure-readiness/1';
+  engineVersion: 'departure-readiness/2';
   status: 'READY' | 'BLOCKED';
   trip: { reference: string; status: TripStatus };
   vehicle: { code: string; active: boolean; seatMapCompatible: boolean } | null;
+  supportVehicle: {
+    code: string;
+    active: boolean;
+    role: VehicleRole;
+    payloadCapacityKg: number | null;
+    cargoVolumeLiters: number | null;
+  } | null;
   passengers: {
     total: number;
     checkedIn: number;
@@ -2462,7 +2570,7 @@ export interface DepartureReadinessSnapshot {
 export interface DepartureAuthorization {
   reference: string;
   version: number;
-  engineVersion: 'departure-readiness/1';
+  engineVersion: 'departure-readiness/2';
   readinessFingerprint: string;
   authorizedAt: string;
 }
@@ -3482,7 +3590,12 @@ export function createAuthClient(baseUrl: string) {
         vehicles: (options: VehicleListOptions = {}) =>
           call<Page<AdminVehicle>>(
             'GET',
-            `/v1/admin/fleet/vehicles?${query({ cursor: options.cursor, limit: options.limit, status: options.status })}`,
+            `/v1/admin/fleet/vehicles?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              status: options.status,
+              role: options.role,
+            })}`,
           ),
         vehicle: (vehicleId: string) =>
           call<AdminVehicleDetail>(
@@ -3532,6 +3645,14 @@ export function createAuthClient(baseUrl: string) {
           ),
         trip: (tripId: string) =>
           call<AdminTrip>('GET', `/v1/admin/trips/${encodeURIComponent(tripId)}`),
+        tripCosts: (tripId: string) =>
+          call<TripCostPlan>('GET', `/v1/admin/trips/${encodeURIComponent(tripId)}/costs`),
+        replaceTripCosts: (tripId: string, input: TripCostReplaceInput) =>
+          withCsrf<TripCostPlan>(
+            'staff',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/costs`,
+            input,
+          ),
         createTrip: (input: TripCreateInput) =>
           withCsrf<AdminTrip>('staff', '/v1/admin/trips', input),
         replaceTimetable: (tripId: string, input: TripTimetableInput) =>
@@ -3552,6 +3673,12 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<AdminTrip>(
             'staff',
             `/v1/admin/trips/${encodeURIComponent(tripId)}/vehicle`,
+            input,
+          ),
+        assignTripSupportVehicle: (tripId: string, input: TripSupportVehicleInput) =>
+          withCsrf<AdminTrip>(
+            'staff',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/support-vehicle`,
             input,
           ),
         assignTripSeatMap: (tripId: string, input: TripSeatMapInput) =>
