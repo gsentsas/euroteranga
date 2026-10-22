@@ -18,7 +18,7 @@ const GROUPS: ReadonlyArray<{ key: string; label: string; resources: readonly st
   {
     key: 'exploitation',
     label: 'Exploitation',
-    resources: ['baggage', 'check-in', 'manifests', 'regulatory-permits', 'departure'],
+    resources: ['baggage', 'cargo', 'check-in', 'manifests', 'regulatory-permits', 'departure'],
   },
   {
     key: 'compliance',

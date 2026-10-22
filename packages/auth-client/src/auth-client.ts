@@ -1588,6 +1588,172 @@ export interface BaggageListOptions {
   createdTo?: string;
 }
 
+
+export type RoadFreightDirection = 'PAR_DKR' | 'DKR_PAR';
+export type RoadFreightLifecycleStatus =
+  | 'QUOTE'
+  | 'BOOKED'
+  | 'RECEIVED'
+  | 'INSPECTED'
+  | 'ASSIGNED'
+  | 'LOADED'
+  | 'DEPARTED'
+  | 'IN_TRANSIT'
+  | 'ARRIVED'
+  | 'AVAILABLE'
+  | 'DELIVERED'
+  | 'REFUSED'
+  | 'CANCELLED';
+export type RoadFreightExceptionStatus = 'HELD' | 'CUSTOMS_HOLD' | 'DAMAGED';
+export type RoadFreightOperationalEventType =
+  | Exclude<RoadFreightLifecycleStatus, 'QUOTE' | 'ASSIGNED'>
+  | RoadFreightExceptionStatus
+  | 'EXCEPTION_RESOLVED';
+export type RoadFreightEventType =
+  | 'QUOTE'
+  | 'ASSIGNED'
+  | 'ASSIGNMENT_UPDATED'
+  | RoadFreightOperationalEventType;
+
+export interface RoadFreightDeclaredValue {
+  amountMinor: string;
+  currencyCode: string;
+  currencyMinorUnit: number;
+}
+
+export interface RoadFreightEvent {
+  sequence: number;
+  type: RoadFreightEventType;
+  lifecycleStatus: RoadFreightLifecycleStatus;
+  exceptionStatus: RoadFreightExceptionStatus | null;
+  occurredAt: string;
+  recordedAt: string;
+  assignment: { tripId: string | null; vehicleId: string | null };
+  location: {
+    sequence: number;
+    kind: 'STOP' | 'CHECKPOINT';
+    code: string | null;
+    name: string | null;
+    checkpointType: string | null;
+  } | null;
+}
+
+export interface RoadFreightShipment {
+  reference: string;
+  direction: RoadFreightDirection;
+  lifecycleStatus: RoadFreightLifecycleStatus;
+  exceptionStatus: RoadFreightExceptionStatus | null;
+  senderName: string;
+  recipientName: string;
+  /** Exact kilograms, always three decimals. */
+  weightKg: string;
+  volumeLiters: number;
+  packageCount: number;
+  dimensionsCm: { length: number; width: number; height: number } | null;
+  declaredContents: string;
+  declaredValue: RoadFreightDeclaredValue | null;
+  fragile: boolean;
+  professional: boolean;
+  pickupRequired: boolean;
+  deliveryRequired: boolean;
+  booking: { reference: string } | null;
+  trip: {
+    id: string;
+    reference: string;
+    status: TripStatus;
+    route: { code: string; name: string };
+    plannedDepartureAt: string | null;
+    plannedArrivalAt: string | null;
+  } | null;
+  vehicle: {
+    id: string;
+    code: string;
+    name: string | null;
+    role: VehicleRole;
+    payloadCapacityKg: number | null;
+    cargoVolumeLiters: number | null;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoadFreightShipmentDetail extends RoadFreightShipment {
+  senderContact: string;
+  recipientContact: string;
+  events: RoadFreightEvent[];
+}
+
+export interface RoadFreightCreateInput {
+  direction: RoadFreightDirection;
+  bookingReference?: string;
+  senderName: string;
+  senderContact: string;
+  recipientName: string;
+  recipientContact: string;
+  weightKg: string;
+  volumeLiters: number;
+  packageCount: number;
+  dimensionsCm?: { length: number; width: number; height: number } | null;
+  declaredContents: string;
+  declaredValue?: RoadFreightDeclaredValue | null;
+  fragile: boolean;
+  professional: boolean;
+  pickupRequired: boolean;
+  deliveryRequired: boolean;
+}
+
+export interface RoadFreightUpdateInput {
+  senderName?: string;
+  senderContact?: string;
+  recipientName?: string;
+  recipientContact?: string;
+  weightKg?: string;
+  volumeLiters?: number;
+  packageCount?: number;
+  dimensionsCm?: { length: number; width: number; height: number } | null;
+  declaredContents?: string;
+  declaredValue?: RoadFreightDeclaredValue | null;
+  fragile?: boolean;
+  professional?: boolean;
+  pickupRequired?: boolean;
+  deliveryRequired?: boolean;
+  expectedUpdatedAt?: string;
+}
+
+export interface RoadFreightAssignmentInput {
+  tripReference: string;
+  vehicleCode: string;
+  occurredAt?: string;
+  expectedTripReference?: string | null;
+  expectedVehicleCode?: string | null;
+}
+
+export interface RoadFreightEventInput {
+  type: RoadFreightOperationalEventType;
+  occurredAt?: string;
+  routeWaypointId?: string | null;
+  clientEventId?: string;
+}
+
+export interface RoadFreightEventResult {
+  created: boolean;
+  event: RoadFreightEvent;
+}
+
+export interface RoadFreightListOptions {
+  cursor?: string;
+  limit?: number;
+  reference?: string;
+  bookingReference?: string;
+  tripReference?: string;
+  vehicleCode?: string;
+  direction?: RoadFreightDirection;
+  lifecycleStatus?: RoadFreightLifecycleStatus;
+  exceptionStatus?: RoadFreightExceptionStatus;
+  createdFrom?: string;
+  createdTo?: string;
+}
+
 /** PR-14: the six server-derived check-in gates of one BookingPassenger. */
 export type CheckInGate = 'BOOKING' | 'PAYMENT' | 'DOCUMENTS' | 'COMPLIANCE' | 'SEAT' | 'BAGGAGE';
 export type CheckInGateStatus = 'PASS' | 'BLOCKED' | 'PENDING_REVIEW';
@@ -4030,6 +4196,51 @@ export function createAuthClient(baseUrl: string) {
           }),
         resolveQr: (qrPayload: string) =>
           withCsrf<BaggageDetail>('staff', '/v1/admin/baggage/resolve-qr', { qrPayload }),
+      },
+      /** cargo.read for reads; every mutation additionally requires cargo.manage. */
+      cargo: {
+        list: (options: RoadFreightListOptions = {}) =>
+          call<Page<RoadFreightShipment>>(
+            'GET',
+            `/v1/admin/cargo?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              reference: options.reference,
+              bookingReference: options.bookingReference,
+              tripReference: options.tripReference,
+              vehicleCode: options.vehicleCode,
+              direction: options.direction,
+              lifecycleStatus: options.lifecycleStatus,
+              exceptionStatus: options.exceptionStatus,
+              createdFrom: options.createdFrom,
+              createdTo: options.createdTo,
+            })}`,
+          ),
+        detail: (reference: string) =>
+          call<RoadFreightShipmentDetail>(
+            'GET',
+            `/v1/admin/cargo/${encodeURIComponent(reference)}`,
+          ),
+        create: (input: RoadFreightCreateInput) =>
+          withCsrf<RoadFreightShipmentDetail>('staff', '/v1/admin/cargo', input),
+        update: (reference: string, input: RoadFreightUpdateInput) =>
+          withCsrf<RoadFreightShipmentDetail>(
+            'staff',
+            `/v1/admin/cargo/${encodeURIComponent(reference)}/details`,
+            input,
+          ),
+        assign: (reference: string, input: RoadFreightAssignmentInput) =>
+          withCsrf<RoadFreightShipmentDetail>(
+            'staff',
+            `/v1/admin/cargo/${encodeURIComponent(reference)}/assignment`,
+            input,
+          ),
+        recordEvent: (reference: string, input: RoadFreightEventInput) =>
+          withCsrf<RoadFreightEventResult>(
+            'staff',
+            `/v1/admin/cargo/${encodeURIComponent(reference)}/events`,
+            input,
+          ),
       },
       /** PR-14: checkin.read for reads; seat and check-in need checkin.manage. */
       checkIn: {
