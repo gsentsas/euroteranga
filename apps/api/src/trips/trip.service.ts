@@ -152,6 +152,9 @@ function translateDatabaseError(error: unknown): never {
     if (error.code === 'P2002') throw TripErrors.referenceConflict();
     if (error.code === 'P2025') throw TripErrors.tripNotFound();
   }
+  if (String(error).includes('active road freight would be orphaned')) {
+    throw TripErrors.cargoAssignmentConflict();
+  }
   throw error;
 }
 
@@ -321,6 +324,34 @@ async function assertVehiclesAvailable(
     const conflict = conflicts[0];
     if (conflict) throw TripErrors.vehicleOverlap(conflict.reference);
   }
+}
+
+
+/**
+ * CARGO-1: changing the convoy must never leave active freight pointing to a
+ * vehicle that no longer belongs to the trip. The trip row is already locked
+ * FOR UPDATE, which serializes this check against cargo assignment's FOR SHARE.
+ */
+async function assertCargoStaysInConvoy(
+  tx: DatabaseTransaction,
+  tripId: string,
+  primaryVehicleId: string | null,
+  supportVehicleId: string | null,
+): Promise<void> {
+  const convoyIds = [primaryVehicleId, supportVehicleId].filter(
+    (id): id is string => id !== null,
+  );
+  const conflicting = await tx.roadFreightShipment.findFirst({
+    where: {
+      tripId,
+      lifecycleStatus: {
+        in: ['ASSIGNED', 'LOADED', 'DEPARTED', 'IN_TRANSIT', 'ARRIVED', 'AVAILABLE'],
+      },
+      vehicleId: convoyIds.length > 0 ? { notIn: convoyIds } : { not: null },
+    },
+    select: { id: true },
+  });
+  if (conflicting) throw TripErrors.cargoAssignmentConflict();
 }
 
 /**
@@ -712,6 +743,7 @@ export class TripService {
             );
           }
         }
+        await assertCargoStaysInConvoy(tx, id, next?.id ?? null, trip.supportVehicleId);
         const previousCode = await vehicleCode(tx, trip.vehicleId);
         await tx.trip.update({ where: { id }, data: { vehicleId: next?.id ?? null } });
         await this.audit.record(
@@ -778,6 +810,7 @@ export class TripService {
           }
         }
 
+        await assertCargoStaysInConvoy(tx, id, trip.vehicleId, next?.id ?? null);
         const previousCode = await vehicleCode(tx, trip.supportVehicleId);
         await tx.trip.update({
           where: { id },

@@ -1,6 +1,12 @@
 import type { ApiEnv } from '@euroteranga/config';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { isolatedDatabase, staffActor, type StaffActor } from '../../support/admin-helpers.js';
+import {
+  adminApi,
+  isolatedDatabase,
+  operatorVehicle,
+  staffActor,
+  type StaffActor,
+} from '../../support/admin-helpers.js';
 import { db } from '../../support/auth-helpers.js';
 import {
   cargoCreateBody,
@@ -108,6 +114,36 @@ describe('CARGO-1 road freight, RBAC, capacity and history', () => {
       trip: { reference: fixture.tripReference },
       vehicle: { code: fixture.vehicleCode },
     });
+
+    const replacementVehicleId = await operatorVehicle(
+      manager,
+      {
+        code: `CG_ALT_${firstReference.slice(-8)}`,
+        name: `Cargo replacement ${firstReference.slice(-8)}`,
+        manufacturer: 'Test',
+        model: 'Cargo',
+        role: 'MIXED',
+        payloadCapacityKg: 1000,
+        cargoVolumeLiters: 2000,
+      },
+      ['ACTIVE'],
+    );
+    const convoyChange = await adminApi(manager).post(
+      `/trips/${fixture.tripId}/vehicle`,
+      {
+        vehicleId: replacementVehicleId,
+        expectedVehicleId: fixture.vehicleId,
+        reason: 'Test CARGO-1 : fret encore affecté',
+      },
+    );
+    expect(convoyChange.status).toBe(409);
+    expect(convoyChange.body.code).toBe('TRIP_CARGO_ASSIGNMENT_CONFLICT');
+    await expect(
+      db(t.app).trip.update({
+        where: { id: fixture.tripId },
+        data: { vehicleId: replacementVehicleId },
+      }),
+    ).rejects.toThrow(/active road freight would be orphaned/);
 
     const second = await staffCargoApi(manager).create(
       cargoCreateBody({ weightKg: '400.000', volumeLiters: 600 }),

@@ -610,6 +610,43 @@ CREATE TRIGGER "road_freight_event_no_truncate"
   BEFORE TRUNCATE ON "road_freight_shipment_event"
   FOR EACH STATEMENT EXECUTE FUNCTION "road_freight_no_truncate"();
 
+
+-- CARGO-1 extends CONVOY-1: an active freight assignment keeps its vehicle in
+-- the trip convoy. This trigger is the direct-SQL/concurrency backstop; the
+-- TripService performs the same check to return a stable public 409.
+CREATE FUNCTION "road_freight_trip_convoy_guard"() RETURNS trigger
+LANGUAGE plpgsql AS $
+DECLARE
+  conflicting_id UUID;
+BEGIN
+  IF NEW."vehicle_id" IS NOT DISTINCT FROM OLD."vehicle_id"
+     AND NEW."support_vehicle_id" IS NOT DISTINCT FROM OLD."support_vehicle_id" THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT s."id" INTO conflicting_id
+  FROM "road_freight_shipment" s
+  WHERE s."trip_id" = NEW."id"
+    AND s."lifecycle_status" IN (
+      'ASSIGNED', 'LOADED', 'DEPARTED', 'IN_TRANSIT', 'ARRIVED', 'AVAILABLE'
+    )
+    AND s."vehicle_id" IS NOT NULL
+    AND s."vehicle_id" IS DISTINCT FROM NEW."vehicle_id"
+    AND s."vehicle_id" IS DISTINCT FROM NEW."support_vehicle_id"
+  LIMIT 1;
+
+  IF conflicting_id IS NOT NULL THEN
+    RAISE EXCEPTION 'active road freight would be orphaned by this convoy change'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$;
+
+CREATE TRIGGER "road_freight_trip_convoy_guard"
+  BEFORE UPDATE OF "vehicle_id", "support_vehicle_id" ON "trip"
+  FOR EACH ROW EXECUTE FUNCTION "road_freight_trip_convoy_guard"();
+
 INSERT INTO "authorization_permission" ("key", "description") VALUES
   ('cargo.read', 'Read road-freight identity, assignment and operational history'),
   ('cargo.manage', 'Create and manage road-freight records and operational events');

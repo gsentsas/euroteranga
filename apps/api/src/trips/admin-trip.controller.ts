@@ -228,7 +228,8 @@ export class AdminTripController {
   @ApiOkResponse({ description: 'Vehicle assigned, changed or removed, and audited.' })
   @ApiConflictResponse({
     type: ErrorBody,
-    description: 'TRIP_CANCELLED, TRIP_VEHICLE_CONFLICT or TRIP_VEHICLE_OVERLAP',
+    description:
+      'TRIP_CANCELLED, TRIP_VEHICLE_CONFLICT, TRIP_VEHICLE_OVERLAP or TRIP_CARGO_ASSIGNMENT_CONFLICT',
   })
   @ApiUnprocessableEntityResponse({
     type: ErrorBody,
@@ -253,7 +254,7 @@ export class AdminTripController {
   @ApiConflictResponse({
     type: ErrorBody,
     description:
-      'TRIP_CANCELLED, TRIP_DISPATCH_STARTED, TRIP_SUPPORT_VEHICLE_CONFLICT or TRIP_VEHICLE_OVERLAP',
+      'TRIP_CANCELLED, TRIP_DISPATCH_STARTED, TRIP_SUPPORT_VEHICLE_CONFLICT, TRIP_VEHICLE_OVERLAP or TRIP_CARGO_ASSIGNMENT_CONFLICT',
   })
   @ApiUnprocessableEntityResponse({
     type: ErrorBody,

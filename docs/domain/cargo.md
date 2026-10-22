@@ -73,6 +73,10 @@ La base prend un advisory lock sur le couple voyage/véhicule puis additionne
 les autres frets actifs. Une affectation ou une correction de poids/volume qui
 dépasserait la charge utile ou le volume est refusée.
 
+Une modification ultérieure du véhicule principal ou du véhicule support du
+voyage est également refusée si elle laisserait un fret actif affecté à un
+véhicule qui sort du convoi. OPS doit d'abord réaffecter ou terminer ce fret.
+
 CARGO-1 compte uniquement le fret commercial. L'intégration de la franchise et
 des bagages supplémentaires dans le même budget de capacité appartient à
 `BAGGAGE-PLUS-1`.
