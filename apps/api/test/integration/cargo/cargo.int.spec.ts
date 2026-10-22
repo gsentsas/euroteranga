@@ -108,6 +108,24 @@ describe('CARGO-1 road freight, RBAC, capacity and history', () => {
     );
     expect(invalid.status).toBe(404);
     expect(invalid.body.code).toBe('CARGO_CUSTOMER_NOT_FOUND');
+
+    await expect(
+      db(t.app).roadFreightShipment.create({
+        data: {
+          reference: 'ETC-ZZZZZZZZZZZZ',
+          direction: 'PAR_DKR',
+          customerIdentityId: manager.id,
+          senderName: 'SQL sender',
+          senderContact: 'sql-sender',
+          recipientName: 'SQL recipient',
+          recipientContact: 'sql-recipient',
+          weightKg: '1.000',
+          volumeLiters: 1,
+          packageCount: 1,
+          declaredContents: 'SQL guard probe',
+        },
+      }),
+    ).rejects.toThrow(/customer identity must be CUSTOMER/);
   });
 
   it('progresses, assigns to the convoy and refuses kg/L oversubscription', async () => {
@@ -221,6 +239,37 @@ describe('CARGO-1 road freight, RBAC, capacity and history', () => {
     expect(stored.lifecycleStatus).toBe('INSPECTED');
     expect(stored.tripId).toBeNull();
     expect(stored.vehicleId).toBeNull();
+  });
+
+  it('continues the cargo lifecycle after the assigned trip starts', async () => {
+    const running = await cargoTripFixture(t.app, manager);
+    const created = await staffCargoApi(manager).create(
+      cargoCreateBody({ weightKg: '100.000', volumeLiters: 100 }),
+    );
+    const reference = created.body.reference as string;
+    for (const type of ['BOOKED', 'RECEIVED', 'INSPECTED']) {
+      expect((await staffCargoApi(manager).event(reference, { type })).status).toBe(201);
+    }
+    expect(
+      (
+        await staffCargoApi(manager).assign(reference, {
+          tripReference: running.tripReference,
+          vehicleCode: running.vehicleCode,
+        })
+      ).status,
+    ).toBe(200);
+    expect((await staffCargoApi(manager).event(reference, { type: 'LOADED' })).status).toBe(201);
+
+    await db(t.app).trip.update({
+      where: { id: running.tripId },
+      data: { status: 'IN_PROGRESS' },
+    });
+
+    for (const type of ['DEPARTED', 'IN_TRANSIT', 'ARRIVED', 'AVAILABLE', 'DELIVERED']) {
+      const response = await staffCargoApi(manager).event(reference, { type });
+      expect(response.status, `${type}: ${response.text}`).toBe(201);
+    }
+    expect((await staffCargoApi(manager).detail(reference)).body.lifecycleStatus).toBe('DELIVERED');
   });
 
   it('keeps exceptions separate, deduplicates events and freezes facts after loading', async () => {
