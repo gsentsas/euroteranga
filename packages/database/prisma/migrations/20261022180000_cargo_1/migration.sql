@@ -324,6 +324,21 @@ DECLARE
 BEGIN
   IF NEW."trip_id" IS NULL THEN RETURN NEW; END IF;
 
+  -- Lifecycle progression and exception updates do not re-validate a frozen
+  -- assignment against the trip's current state. The assignment itself and
+  -- load changes are validated below; entering ASSIGNED is also revalidated.
+  IF TG_OP = 'UPDATE'
+     AND NEW."trip_id" IS NOT DISTINCT FROM OLD."trip_id"
+     AND NEW."vehicle_id" IS NOT DISTINCT FROM OLD."vehicle_id"
+     AND NEW."weight_kg" IS NOT DISTINCT FROM OLD."weight_kg"
+     AND NEW."volume_liters" IS NOT DISTINCT FROM OLD."volume_liters"
+     AND NOT (
+       NEW."lifecycle_status" = 'ASSIGNED'
+       AND OLD."lifecycle_status" <> 'ASSIGNED'
+     ) THEN
+    RETURN NEW;
+  END IF;
+
   SELECT t."status", t."vehicle_id", t."support_vehicle_id"
     INTO trip_state, primary_vehicle, support_vehicle
   FROM "trip" t WHERE t."id" = NEW."trip_id" FOR SHARE;
