@@ -20,6 +20,23 @@ export function staffCargoApi(actor: StaffActor) {
       api.post(`/cargo/${reference}/assignment`, body, options),
     event: (reference: string, body: unknown, options: { csrf?: string | null } = {}) =>
       api.post(`/cargo/${reference}/events`, body, options),
+    resolveQr: (qrPayload: string, options: { csrf?: string | null } = {}) =>
+      api.post('/cargo/resolve-qr', { qrPayload }, options),
+    scan: (body: unknown, options: { csrf?: string | null } = {}) =>
+      api.post('/cargo/scan', body, options),
+    qr: (reference: string) => api.get(`/cargo/${reference}/qr`),
+    trackingTokens: (reference: string) => api.get(`/cargo/${reference}/tracking-tokens`),
+    issueTrackingToken: (
+      reference: string,
+      body: unknown = {},
+      options: { csrf?: string | null } = {},
+    ) => api.post(`/cargo/${reference}/tracking-tokens`, body, options),
+    revokeTrackingToken: (
+      reference: string,
+      tokenId: string,
+      body: unknown,
+      options: { csrf?: string | null } = {},
+    ) => api.post(`/cargo/${reference}/tracking-tokens/${tokenId}/revoke`, body, options),
     quotes: (reference: string) => api.get(`/cargo/${reference}/quotes`),
     quote: (reference: string, quoteReference: string) =>
       api.get(`/cargo/${reference}/quotes/${quoteReference}`),
