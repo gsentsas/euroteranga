@@ -13,6 +13,7 @@ Inclus :
 - poids exact, volume en litres, nombre de pièces et dimensions facultatives ;
 - contenu et valeur déclarés ;
 - réservation client facultative ;
+- association facultative à une identité `CUSTOMER` existante, avec ou sans réservation ;
 - affectation explicite à un voyage et à un véhicule du convoi ;
 - capacité kg + litres verrouillée en base ;
 - historique append-only et idempotence des événements ;
@@ -77,11 +78,21 @@ Une modification ultérieure du véhicule principal ou du véhicule support du
 voyage est également refusée si elle laisserait un fret actif affecté à un
 véhicule qui sort du convoi. OPS doit d'abord réaffecter ou terminer ce fret.
 
+Tant qu'un fret actif reste affecté au véhicule, Fleet interdit également de
+rendre ce véhicule non actif, de supprimer ses capacités kg/L ou de réduire
+l'une des capacités sous la charge commerciale déjà affectée. Ce garde-fou est
+appliqué en PostgreSQL, y compris pour une écriture SQL directe.
+
 CARGO-1 compte uniquement le fret commercial. L'intégration de la franchise et
 des bagages supplémentaires dans le même budget de capacité appartient à
 `BAGGAGE-PLUS-1`.
 
-## Données et audit
+## Client, données et audit
+
+Le fret peut être créé sans compte client, lié directement à une identité
+`CUSTOMER` existante, ou lié à une réservation. Avec une réservation, le
+client est dérivé du `Booking`; si un identifiant client est également fourni,
+les deux doivent correspondre. CARGO-1 ne crée jamais de client.
 
 Les contacts et le contenu déclaré sont des données privées OPS. Ils ne sont
 jamais exposés sur une route publique.
