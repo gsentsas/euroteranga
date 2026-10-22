@@ -73,6 +73,11 @@ export class AdminFleetController {
     required: false,
     enum: ['PLANNED', 'ACTIVE', 'OUT_OF_SERVICE', 'RETIRED'],
   })
+  @ApiQuery({
+    name: 'role',
+    required: false,
+    enum: ['PASSENGER_COACH', 'CARGO_SUPPORT', 'MIXED'],
+  })
   vehicles(
     @Query(new ZodValidationPipe(vehicleListQuerySchema))
     query: z.infer<typeof vehicleListQuerySchema>,

@@ -87,7 +87,12 @@ const modelYear = z
   .refine((year) => year <= new Date().getUTCFullYear() + 1, { message: 'model year too late' });
 
 export const vehicleListQuerySchema = z
-  .object({ limit: pageLimit, cursor: uuid.optional(), status: z.enum(STATUSES).optional() })
+  .object({
+    limit: pageLimit,
+    cursor: uuid.optional(),
+    status: z.enum(STATUSES).optional(),
+    role: z.enum(VEHICLE_ROLES).optional(),
+  })
   .strict();
 
 const payloadCapacityKg = z.number().int().min(1).max(100_000);

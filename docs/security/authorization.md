@@ -438,3 +438,7 @@ private. `SUPER_ADMIN`, `DIRECTOR` and `CONTENT_EDITOR` hold both.
 `OPS_MANAGER` holds `media.read` only, so Fleet can select existing images;
 vehicle media assignment separately requires `fleet.manage` and never grants
 upload, description or archive authority.
+
+## CONVOY-1 — contrôle d’accès
+
+La lecture du convoi est incluse dans les lectures Trip internes protégées par `trip.read`. `POST /v1/admin/trips/:id/support-vehicle` exige `trip.manage` et la protection CSRF STAFF. L’affectation est auditée sous `TRIP_SUPPORT_VEHICLE_CHANGED`. Aucun endpoint public ne permet de lire ou modifier `supportVehicleId`.

@@ -400,6 +400,7 @@ const ADMIN_ROUTES: Array<['GET' | 'POST', string]> = [
   ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/schedule'],
   ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/cancel'],
   ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/vehicle'],
+  ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/support-vehicle'],
   ['POST', '/v1/admin/trips/01900000-0000-7000-8000-000000000000/seat-map'],
   ['POST', '/v1/admin/fleet/vehicles/01900000-0000-7000-8000-000000000000/seat-map'],
   ['GET', '/v1/admin/seat-maps'],
@@ -635,6 +636,13 @@ describe('server-side RBAC', () => {
             status: 'DRAFT',
             currencyCode: 'EUR',
             items: [],
+          })
+        ).status,
+      ).toBe(allowed('trip.manage') ? 404 : 403);
+      expect(
+        (
+          await api.post('/trips/01900000-0000-7000-8000-000000000000/support-vehicle', {
+            supportVehicleId: null,
           })
         ).status,
       ).toBe(allowed('trip.manage') ? 404 : 403);

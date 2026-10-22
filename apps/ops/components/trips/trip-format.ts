@@ -14,6 +14,7 @@ export const TRIP_ACTION_LABELS: Record<string, string> = {
   TRIP_SCHEDULED: 'Planification',
   TRIP_CANCELLED: 'Annulation',
   TRIP_VEHICLE_CHANGED: 'Changement de véhicule',
+  TRIP_SUPPORT_VEHICLE_CHANGED: "Changement de véhicule d'appoint",
   TRIP_FARE_TABLE_CHANGED: 'Changement de tarification',
   TRIP_COST_UPDATED: 'Coûts prévisionnels enregistrés',
   TRIP_DEPARTED: 'Départ réel',
@@ -71,4 +72,9 @@ export function placeOf(waypoint: AdminTripRouteWaypoint): {
 /** "ET-COACH-001 « Teranga 01 »": the code, then the operational name when set. */
 export function vehicleIdentity(vehicle: { code: string; name: string | null }): string {
   return vehicle.name ? `${vehicle.code} « ${vehicle.name} »` : vehicle.code;
+}
+
+export function formatCargoVolume(liters: number | null): string {
+  if (liters === null) return '—';
+  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3 }).format(liters / 1000)} m³`;
 }

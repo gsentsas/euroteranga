@@ -67,6 +67,36 @@ export const TripErrors = {
       'TRIP_VEHICLE_CONFLICT',
       'Le véhicule affecté a changé entre-temps. Rechargez la fiche.',
     ),
+  supportVehicleConflict: () =>
+    new PublicApiError(
+      409,
+      'TRIP_SUPPORT_VEHICLE_CONFLICT',
+      "Le véhicule d'appoint a changé entre-temps. Rechargez la fiche.",
+    ),
+  primaryVehicleRoleInvalid: () =>
+    new PublicApiError(
+      422,
+      'TRIP_PRIMARY_VEHICLE_ROLE_INVALID',
+      "Un véhicule CARGO_SUPPORT ne peut pas être l'autocar principal du voyage.",
+    ),
+  supportVehicleRoleInvalid: () =>
+    new PublicApiError(
+      422,
+      'TRIP_SUPPORT_VEHICLE_ROLE_INVALID',
+      "Le véhicule d'appoint doit avoir le rôle CARGO_SUPPORT.",
+    ),
+  supportVehicleCapacityMissing: () =>
+    new PublicApiError(
+      422,
+      'TRIP_SUPPORT_VEHICLE_CAPACITY_MISSING',
+      "Le véhicule d'appoint doit avoir une charge utile et un volume configurés.",
+    ),
+  supportVehicleSameAsPrimary: () =>
+    new PublicApiError(
+      422,
+      'TRIP_SUPPORT_VEHICLE_SAME_AS_PRIMARY',
+      "Le véhicule d'appoint doit être différent du véhicule principal.",
+    ),
   seatMapConflict: () =>
     new PublicApiError(
       409,

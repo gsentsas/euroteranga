@@ -395,6 +395,7 @@ export interface VehicleListOptions {
   cursor?: string;
   limit?: number;
   status?: VehicleStatus;
+  role?: VehicleRole;
 }
 
 export interface VehicleCreateInput {
@@ -437,6 +438,7 @@ export interface AdminTripSummary {
   reference: string;
   routeVersionId: string;
   vehicleId: string | null;
+  supportVehicleId: string | null;
   status: TripStatus;
   /** UTC instants (ISO 8601). */
   plannedDepartureAt: string | null;
@@ -465,6 +467,17 @@ export interface AdminTripSummary {
     model: string;
     /** The vehicle's current configuration (may differ from the trip's later). */
     seatMapVersion: AssignedSeatMapVersion | null;
+  } | null;
+  supportVehicle: {
+    id: string;
+    code: string;
+    name: string | null;
+    status: VehicleStatus;
+    manufacturer: string;
+    model: string;
+    role: VehicleRole;
+    payloadCapacityKg: number | null;
+    cargoVolumeLiters: number | null;
   } | null;
   /** Historical seat map of the trip; frozen once SCHEDULED. */
   seatMapVersionId: string | null;
@@ -509,6 +522,8 @@ export interface TripHistoryEntry {
   toStatus: TripStatus | null;
   fromVehicleCode: string | null;
   toVehicleCode: string | null;
+  fromSupportVehicleCode: string | null;
+  toSupportVehicleCode: string | null;
   fromSeatMap: string | null;
   toSeatMap: string | null;
   fromFareTable: string | null;
@@ -614,6 +629,12 @@ export interface TripVehicleInput {
   /** Vehicle the decision was based on (null: none); refused if it moved. */
   expectedVehicleId?: string | null;
   /** Required once the trip is SCHEDULED. */
+  reason?: string;
+}
+
+export interface TripSupportVehicleInput {
+  supportVehicleId: string | null;
+  expectedSupportVehicleId?: string | null;
   reason?: string;
 }
 
@@ -2463,6 +2484,9 @@ export type DepartureBlockerCode =
   | 'VEHICLE_NOT_ASSIGNED'
   | 'VEHICLE_NOT_ACTIVE'
   | 'VEHICLE_SEAT_MAP_MISMATCH'
+  | 'SUPPORT_VEHICLE_NOT_ACTIVE'
+  | 'SUPPORT_VEHICLE_ROLE_INVALID'
+  | 'SUPPORT_VEHICLE_CAPACITY_MISSING'
   | 'PASSENGER_NOT_CHECKED_IN'
   | 'PASSENGER_NOT_BOARDED'
   | 'PASSENGER_READINESS_STALE'
@@ -2502,10 +2526,17 @@ export interface DeparturePermitPolicy {
 }
 
 export interface DepartureReadinessSnapshot {
-  engineVersion: 'departure-readiness/1';
+  engineVersion: 'departure-readiness/2';
   status: 'READY' | 'BLOCKED';
   trip: { reference: string; status: TripStatus };
   vehicle: { code: string; active: boolean; seatMapCompatible: boolean } | null;
+  supportVehicle: {
+    code: string;
+    active: boolean;
+    role: VehicleRole;
+    payloadCapacityKg: number | null;
+    cargoVolumeLiters: number | null;
+  } | null;
   passengers: {
     total: number;
     checkedIn: number;
@@ -2539,7 +2570,7 @@ export interface DepartureReadinessSnapshot {
 export interface DepartureAuthorization {
   reference: string;
   version: number;
-  engineVersion: 'departure-readiness/1';
+  engineVersion: 'departure-readiness/2';
   readinessFingerprint: string;
   authorizedAt: string;
 }
@@ -3559,7 +3590,12 @@ export function createAuthClient(baseUrl: string) {
         vehicles: (options: VehicleListOptions = {}) =>
           call<Page<AdminVehicle>>(
             'GET',
-            `/v1/admin/fleet/vehicles?${query({ cursor: options.cursor, limit: options.limit, status: options.status })}`,
+            `/v1/admin/fleet/vehicles?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              status: options.status,
+              role: options.role,
+            })}`,
           ),
         vehicle: (vehicleId: string) =>
           call<AdminVehicleDetail>(
@@ -3637,6 +3673,12 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<AdminTrip>(
             'staff',
             `/v1/admin/trips/${encodeURIComponent(tripId)}/vehicle`,
+            input,
+          ),
+        assignTripSupportVehicle: (tripId: string, input: TripSupportVehicleInput) =>
+          withCsrf<AdminTrip>(
+            'staff',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/support-vehicle`,
             input,
           ),
         assignTripSeatMap: (tripId: string, input: TripSeatMapInput) =>

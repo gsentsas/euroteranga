@@ -65,6 +65,29 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
   ).toBeVisible();
   await expect(detail.getByTestId('trip-vehicle')).toContainText(seed.vehicleCode);
 
+  const supportVehicleForm = detail.getByRole('form', {
+    name: `Véhicule d’appoint du voyage ${reference}`,
+  });
+  await supportVehicleForm
+    .getByLabel('Véhicule CARGO_SUPPORT à affecter', { exact: true })
+    .selectOption({
+      label: `${seed.supportVehicleCode} — ${seed.supportVehicleLabel} · 1200 kg · 20 m³`,
+    });
+  await supportVehicleForm
+    .getByRole('button', { name: 'Enregistrer le véhicule d’appoint' })
+    .click();
+  await expect(
+    notice(page, `Véhicule d’appoint du voyage ${reference} : ${seed.supportVehicleCode}.`),
+  ).toBeVisible();
+  await expect(detail.getByTestId('trip-support-vehicle')).toContainText(seed.supportVehicleCode);
+  await expect(detail.getByTestId('trip-support-vehicle')).toContainText('1200 kg');
+  await expect(detail.getByTestId('trip-support-vehicle')).toContainText('20 m³');
+
+  await page.reload();
+  await page.getByRole('button', { name: `Consulter le voyage ${reference}` }).click();
+  await expect(detail.getByTestId('trip-support-vehicle')).toContainText(seed.supportVehicleCode);
+  await expect(detail.getByTestId('trip-support-vehicle')).toContainText('20 m³');
+
   const costs = detail.getByRole('form', {
     name: `Coûts prévisionnels du voyage ${reference}`,
   });
@@ -138,7 +161,7 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
   const history = detail
     .getByRole('list', { name: `Historique du voyage ${reference}` })
     .getByRole('listitem');
-  await expect(history).toHaveCount(7);
+  await expect(history).toHaveCount(8);
   await expect(history.nth(0)).toContainText(
     'Annulation (Planifié → Annulé) — Annulation synthétique',
   );
@@ -196,6 +219,7 @@ test('ops trips: trip.read consults without any mutation control; the API refuse
     await api.post(`/trips/${seeded?.id}/schedule`, {}),
     await api.post(`/trips/${seeded?.id}/cancel`, { reason: 'Interdit' }),
     await api.post(`/trips/${seeded?.id}/vehicle`, { vehicleId: null }),
+    await api.post(`/trips/${seeded?.id}/support-vehicle`, { supportVehicleId: null }),
     await api.post(`/trips/${seeded?.id}/costs`, {
       status: 'DRAFT',
       currencyCode: 'EUR',

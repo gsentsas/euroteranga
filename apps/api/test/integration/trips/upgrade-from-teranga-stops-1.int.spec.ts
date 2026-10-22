@@ -24,8 +24,8 @@ function deploy(config: string | null, url: string) {
   );
 }
 
-/** Additive upgrade over a populated TERANGA-STOPS-1 schema. */
-describe('upgrade from TERANGA-STOPS-1 to TRIP-COST-1 (isolated database)', () => {
+/** Additive upgrade over a populated TERANGA-STOPS-1 schema through the current schema. */
+describe('upgrade from TERANGA-STOPS-1 through TRIP-COST-1 (isolated database)', () => {
   let root: ReturnType<typeof createDatabaseClient>;
   let raw: ReturnType<typeof createDatabaseClient>;
   let url: string;
@@ -43,12 +43,13 @@ describe('upgrade from TERANGA-STOPS-1 to TRIP-COST-1 (isolated database)', () =
   const tripSnapshot = async () =>
     (
       await raw.$queryRawUnsafe<Array<{ value: string }>>(
-        `SELECT row_to_json(t)::text AS value FROM (SELECT * FROM trip WHERE id = '${TRIP_ID}') t`,
+        `SELECT (to_jsonb(t) - 'support_vehicle_id')::text AS value
+         FROM (SELECT * FROM trip WHERE id = '${TRIP_ID}') t`,
       )
     )[0]!.value;
 
   beforeAll(async () => {
-    expect(CURRENT_MIGRATIONS.at(-1)).toBe(TRIP_COST_MIGRATION);
+    expect(CURRENT_MIGRATIONS).toContain(TRIP_COST_MIGRATION);
     const base = process.env.DATABASE_URL;
     if (!base) throw new Error('DATABASE_URL is required');
     root = createDatabaseClient({ databaseUrl: base });
@@ -106,7 +107,7 @@ describe('upgrade from TERANGA-STOPS-1 to TRIP-COST-1 (isolated database)', () =
     await raw?.$disconnect();
     await root?.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
     await root?.$disconnect();
-    rmSync(workDir, { recursive: true, force: true });
+    if (workDir) rmSync(workDir, { recursive: true, force: true });
   });
 
   it('preserves the existing trip and invents no operational cost', async () => {

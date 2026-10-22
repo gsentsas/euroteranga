@@ -278,3 +278,7 @@ indexes and foreign keys. It does **not** see CHECK constraints or triggers:
 dropping `vehicle_model_year_range` on a migrated database still reports no
 drift. Their presence and behaviour are proven by the direct database tests
 instead, and each is covered by a mutation check.
+
+## CONVOY-1 — utilisation du parc
+
+Un véhicule `CARGO_SUPPORT` actif, avec charge utile et volume configurés, peut être affecté comme support d’un voyage. Un `CARGO_SUPPORT` ne peut pas être l’autocar principal. Les contrôles de chevauchement couvrent les usages principal et support.
