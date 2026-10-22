@@ -156,7 +156,54 @@ function financeSummary() {
   };
 }
 
+function profitabilitySummary() {
+  return {
+    trip: {
+      id: '01900000-0000-7000-8000-000000000220',
+      reference: tripReference,
+      status: 'SCHEDULED',
+    },
+    financeActuals: financeSummary().currencies,
+    plannedCost: {
+      status: 'ESTIMATED',
+      currencyCode: 'EUR',
+      currencyMinorUnit: 2,
+      plannedCostMinor: '30000',
+      actualExpenseMinor: '4000',
+      varianceMinor: '-26000',
+      remainingBudgetMinor: '26000',
+      varianceBasisPoints: '-8666',
+    },
+    cargo: {
+      shipmentCount: 2,
+      acceptedQuoteCount: 1,
+      shipmentsWithoutAcceptedQuote: 1,
+      commercial: [
+        {
+          currencyCode: 'EUR',
+          currencyMinorUnit: 2,
+          acceptedQuoteCount: 1,
+          acceptedCommercialValueMinor: '13000',
+          recognizedRevenueMinor: '0',
+        },
+      ],
+      capacity: {
+        vehicleCount: 1,
+        vehicleCodes: ['ET-BUS-PROFIT'],
+        payloadCapacityKg: '1000',
+        cargoVolumeLiters: '2000',
+        usedWeightKg: '150.250',
+        usedVolumeLiters: '750',
+      },
+    },
+    warnings: ['MULTI_CURRENCY_NO_FX', 'CARGO_COMMERCIAL_NOT_RECOGNIZED_REVENUE'],
+    fxConversionApplied: false,
+    cargoRevenueRecognitionApplied: false,
+  };
+}
+
 async function mockFinance(page: Page) {
+  let profitabilityRequests = 0;
   await page.route('**/v1/admin/finance/trips/' + tripReference, (route) =>
     route.fulfill({
       status: 200,
@@ -164,6 +211,15 @@ async function mockFinance(page: Page) {
       body: JSON.stringify(financeSummary()),
     }),
   );
+  await page.route('**/v1/admin/ops-profit/trips/' + tripReference, (route) => {
+    profitabilityRequests += 1;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(profitabilitySummary()),
+    });
+  });
+  return { profitabilityRequests: () => profitabilityRequests };
 }
 
 async function loadTrip(page: Page) {
@@ -181,7 +237,7 @@ test.describe('PR-22 operational finance', () => {
   }) => {
     const errors = trackPageErrors(page);
     await staffSession(context, preauthenticatedSession('complianceRuleManager'));
-    await mockFinance(page);
+    const mocked = await mockFinance(page);
 
     await page.goto(appUrl(ops, '/finance'));
     await expect(page.getByTestId('finance-workspace')).toBeVisible();
@@ -199,6 +255,26 @@ test.describe('PR-22 operational finance', () => {
       '-50 000 XOF',
     );
 
+    const opsProfit = workspace.getByTestId('ops-profit-panel');
+    await expect(opsProfit).toBeVisible();
+    await expect(opsProfit.getByRole('heading', { name: 'Réalisé Finance' })).toBeVisible();
+    await expect(opsProfit.getByRole('heading', { name: 'Prévisionnel' })).toBeVisible();
+    await expect(
+      opsProfit.getByRole('heading', { name: 'Commercial Cargo non reconnu' }),
+    ).toBeVisible();
+    await expect(opsProfit).toContainText('210,00 EUR');
+    await expect(opsProfit).toContainText('130,00 EUR');
+    const cargoCommercial = opsProfit.getByRole('table', {
+      name: 'Valeur commerciale acceptée, hors revenu Finance',
+    });
+    const cargoRow = cargoCommercial.getByRole('row', {
+      name: /^EUR\s+1\s+130,00 EUR\s+0,00 EUR$/u,
+    });
+    await expect(cargoRow).toBeVisible();
+    await expect(cargoRow.getByRole('cell').last()).toHaveText('0,00 EUR');
+    await expect(opsProfit).toContainText('150.250 kg / 1000 kg');
+    await expect(opsProfit).toContainText('750 L / 2000 L');
+
     await expect(
       workspace.getByRole('heading', { name: 'Ajouter une recette hors billet' }),
     ).toBeVisible();
@@ -213,6 +289,10 @@ test.describe('PR-22 operational finance', () => {
     await expect(workspace).toContainText('ETCN-0123456789AB');
     await expect(workspace.getByRole('button', { name: 'Export CSV' })).toBeVisible();
     await expect(workspace.getByRole('button', { name: 'Export XLSX' })).toBeVisible();
+
+    await expect.poll(mocked.profitabilityRequests).toBe(1);
+    await loadTrip(page);
+    await expect.poll(mocked.profitabilityRequests).toBe(2);
 
     expect(errors.pageErrors).toEqual([]);
     expect(errors.consoleErrors).toEqual([]);
@@ -231,6 +311,9 @@ test.describe('PR-22 operational finance', () => {
 
     const workspace = page.getByTestId('finance-workspace');
     await expect(workspace).toContainText('210,00 EUR');
+    await expect(workspace.getByTestId('ops-profit-panel')).toContainText(
+      'Commercial Cargo non reconnu',
+    );
     await expect(
       workspace.getByRole('heading', { name: 'Ajouter une recette hors billet' }),
     ).toHaveCount(0);

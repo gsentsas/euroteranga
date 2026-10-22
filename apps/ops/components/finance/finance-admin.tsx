@@ -11,6 +11,7 @@ import { FormAlert, FormStatus } from '@euroteranga/ui';
 import { useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useCan } from '../staff-access';
+import { ProfitabilityPanel } from './profitability-panel';
 
 const REVENUE_LABELS: Record<FinanceRevenueType, string> = {
   BAGGAGE: 'Bagage',
@@ -810,6 +811,11 @@ export function FinanceAdmin() {
       {summary ? (
         <>
           <Summary summary={summary} />
+          <ProfitabilityPanel
+            key={activeReference}
+            tripReference={activeReference}
+            refreshKey={summary}
+          />
           <div className="et-actions">
             <button
               type="button"

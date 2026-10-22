@@ -19,6 +19,7 @@ import { FinanceModule } from './finance/finance.module.js';
 import { IncidentModule } from './incidents/incident.module.js';
 import { ManifestModule } from './manifests/manifest.module.js';
 import { NetworkModule } from './network/network.module.js';
+import { OpsProfitModule } from './ops-profit/ops-profit.module.js';
 import { PaymentModule } from './payments/payment.module.js';
 import type { PayPalGateway } from './payments/providers/paypal-payment.provider.js';
 import type { StripeGateway } from './payments/providers/stripe-payment.provider.js';
@@ -61,6 +62,7 @@ export class AppModule {
         NetworkModule,
         FleetModule,
         FinanceModule,
+        OpsProfitModule,
         TripModule,
         SeatMapModule,
         PricingModule,
