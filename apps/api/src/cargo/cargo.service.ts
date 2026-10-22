@@ -44,6 +44,12 @@ function databaseDomainError(error: unknown): never {
   }
   const message = String(error);
   if (message.includes('road freight capacity exceeded')) throw CargoErrors.capacityExceeded();
+  if (message.includes('road freight customer identity must be CUSTOMER')) {
+    throw CargoErrors.customerNotFound();
+  }
+  if (message.includes('road freight booking customer mismatch')) {
+    throw CargoErrors.customerMismatch();
+  }
   if (
     message.includes('road freight assignment') ||
     message.includes('road freight direction') ||
@@ -118,20 +124,35 @@ export class CargoService {
       reference = await withFreshCargoReference(
         (candidate) =>
           this.database.client.$transaction(async (tx) => {
-            const booking = input.bookingReference
-              ? await tx.booking.findUnique({
-                  where: { reference: input.bookingReference },
-                  select: { id: true, customerIdentityId: true },
-                })
-              : null;
+            const [booking, customer] = await Promise.all([
+              input.bookingReference
+                ? tx.booking.findUnique({
+                    where: { reference: input.bookingReference },
+                    select: { id: true, customerIdentityId: true },
+                  })
+                : null,
+              input.customerIdentityId
+                ? tx.authIdentity.findUnique({
+                    where: { id: input.customerIdentityId },
+                    select: { id: true, realm: true },
+                  })
+                : null,
+            ]);
             if (input.bookingReference && !booking) throw CargoErrors.bookingNotFound();
+            if (input.customerIdentityId && (!customer || customer.realm !== 'CUSTOMER')) {
+              throw CargoErrors.customerNotFound();
+            }
+            if (booking && customer && booking.customerIdentityId !== customer.id) {
+              throw CargoErrors.customerMismatch();
+            }
+            const customerIdentityId = booking?.customerIdentityId ?? customer?.id ?? null;
 
             const shipment = await tx.roadFreightShipment.create({
               data: {
                 reference: candidate,
                 direction: input.direction,
                 bookingId: booking?.id ?? null,
-                customerIdentityId: booking?.customerIdentityId ?? null,
+                customerIdentityId,
                 senderName: input.senderName,
                 senderContact: input.senderContact,
                 recipientName: input.recipientName,
@@ -183,6 +204,7 @@ export class CargoService {
                   reference: candidate,
                   direction: input.direction,
                   bookingReference: input.bookingReference ?? null,
+                  customerIdentityId,
                   weightKg: input.weightKg,
                   volumeLiters: input.volumeLiters,
                   packageCount: input.packageCount,
