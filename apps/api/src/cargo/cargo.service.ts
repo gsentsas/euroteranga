@@ -1,4 +1,4 @@
-import { Prisma } from '@euroteranga/database';
+import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
 import { PublicApiError } from '../auth/http/public-api-error.js';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
@@ -66,7 +66,7 @@ function databaseDomainError(error: unknown): never {
 }
 
 async function lockedShipmentId(
-  tx: Prisma.TransactionClient,
+  tx: DatabaseTransaction,
   reference: string,
 ): Promise<string> {
   const rows = await tx.$queryRaw<Array<{ id: string }>>`
