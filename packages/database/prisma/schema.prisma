@@ -614,6 +614,23 @@ enum RoadFreightEventType {
   @@map("road_freight_event_type")
 }
 
+enum RoadFreightQuoteStatus {
+  DRAFT
+  ISSUED
+  ACCEPTED
+  SUPERSEDED
+  CANCELLED
+
+  @@map("road_freight_quote_status")
+}
+
+enum RoadFreightQuoteLineKind {
+  CHARGE
+  DISCOUNT
+
+  @@map("road_freight_quote_line_kind")
+}
+
 enum RegulatoryPermitStatus {
   DRAFT
   ACTIVE
@@ -719,8 +736,12 @@ model AuthIdentity {
   complianceEvaluations            ComplianceEvaluation[]   @relation("ComplianceEvaluationActor")
   complianceReviews                ComplianceReview[]       @relation("ComplianceReviewer")
   baggageEvents                    BaggageEvent[]           @relation("BaggageEventActor")
-  roadFreightShipments              RoadFreightShipment[]    @relation("RoadFreightCustomer")
+  roadFreightShipments              RoadFreightShipment[]     @relation("RoadFreightCustomer")
   roadFreightEvents                 RoadFreightShipmentEvent[] @relation("RoadFreightEventActor")
+  roadFreightQuotesCreated          RoadFreightQuote[]         @relation("RoadFreightQuoteCreator")
+  roadFreightQuotesIssued           RoadFreightQuote[]         @relation("RoadFreightQuoteIssuer")
+  roadFreightQuotesAccepted         RoadFreightQuote[]         @relation("RoadFreightQuoteAcceptor")
+  roadFreightQuotesCancelled        RoadFreightQuote[]         @relation("RoadFreightQuoteCanceller")
   seatAssignments                  BookingPassengerSeat[]   @relation("BookingPassengerSeatAssigner")
   passengerCheckIns                PassengerCheckIn[]       @relation("PassengerCheckInActor")
   passengerBoardings               PassengerBoarding[]      @relation("PassengerBoardingActor")
@@ -1701,6 +1722,7 @@ model RoadFreightShipment {
   trip             Trip?                      @relation(fields: [tripId], references: [id], onDelete: Restrict)
   vehicle          Vehicle?                   @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   events           RoadFreightShipmentEvent[]
+  quotes           RoadFreightQuote[]
 
   @@index([direction, lifecycleStatus, id])
   @@index([exceptionStatus, id])
@@ -1713,6 +1735,64 @@ model RoadFreightShipment {
 
 /// CARGO-1 append-only operational event stream. Assignment ids are snapshots
 /// so reassignment is visible without exposing mutable history.
+model RoadFreightQuote {
+  id                     String                     @id @default(uuid(7)) @db.Uuid
+  reference              String                     @unique @db.VarChar(17)
+  shipmentId             String                     @map("shipment_id") @db.Uuid
+  version                Int
+  status                 RoadFreightQuoteStatus     @default(DRAFT)
+  currencyCode           String                     @map("currency_code") @db.VarChar(3)
+  currencyMinorUnit      Int                        @map("currency_minor_unit")
+  snapshotDirection      RoadFreightDirection       @map("snapshot_direction")
+  snapshotWeightKg       Decimal                    @map("snapshot_weight_kg") @db.Decimal(8, 3)
+  snapshotVolumeLiters   Int                        @map("snapshot_volume_liters")
+  snapshotPackageCount   Int                        @map("snapshot_package_count")
+  snapshotFragile        Boolean                    @map("snapshot_fragile")
+  snapshotProfessional   Boolean                    @map("snapshot_professional")
+  snapshotPickupRequired Boolean                    @map("snapshot_pickup_required")
+  snapshotDeliveryRequired Boolean                  @map("snapshot_delivery_required")
+  shipmentUpdatedAt      DateTime                   @map("shipment_updated_at") @db.Timestamptz(3)
+  createdByIdentityId    String                     @map("created_by_identity_id") @db.Uuid
+  issuedByIdentityId     String?                    @map("issued_by_identity_id") @db.Uuid
+  acceptedByIdentityId   String?                    @map("accepted_by_identity_id") @db.Uuid
+  cancelledByIdentityId  String?                    @map("cancelled_by_identity_id") @db.Uuid
+  issuedAt               DateTime?                  @map("issued_at") @db.Timestamptz(3)
+  acceptedAt             DateTime?                  @map("accepted_at") @db.Timestamptz(3)
+  cancelledAt            DateTime?                  @map("cancelled_at") @db.Timestamptz(3)
+  supersededAt           DateTime?                  @map("superseded_at") @db.Timestamptz(3)
+  createdAt              DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shipment    RoadFreightShipment @relation(fields: [shipmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy   AuthIdentity        @relation("RoadFreightQuoteCreator", fields: [createdByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  issuedBy    AuthIdentity?       @relation("RoadFreightQuoteIssuer", fields: [issuedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  acceptedBy  AuthIdentity?       @relation("RoadFreightQuoteAcceptor", fields: [acceptedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cancelledBy AuthIdentity?       @relation("RoadFreightQuoteCanceller", fields: [cancelledByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  lines       RoadFreightQuoteLine[]
+
+  @@unique([shipmentId, version])
+  @@index([shipmentId, status, version])
+  @@index([createdAt, id])
+  @@map("road_freight_quote")
+}
+
+model RoadFreightQuoteLine {
+  id          String                     @id @default(uuid(7)) @db.Uuid
+  quoteId     String                     @map("quote_id") @db.Uuid
+  kind        RoadFreightQuoteLineKind
+  label       String                     @db.VarChar(160)
+  amountMinor BigInt                     @map("amount_minor")
+  notes       String?                    @db.VarChar(500)
+  position    Int
+  createdAt   DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  quote RoadFreightQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([quoteId, position])
+  @@index([quoteId, kind])
+  @@map("road_freight_quote_line")
+}
+
 model RoadFreightShipmentEvent {
   id                 String                      @id @default(uuid(7)) @db.Uuid
   shipmentId         String                      @map("shipment_id") @db.Uuid
