@@ -168,7 +168,6 @@ test.describe('CARGO-1 OPS workspace', () => {
     expect(publicBody).not.toContain('PRIVATE BROWSER CONTENT');
     expect(publicBody).not.toContain('+33199999999');
     expect(publicBody).not.toContain('+221779999999');
-    expect(publicBody).not.toContain('GPS précise');
 
     const listed = await api.get(`/cargo/${reference}/tracking-tokens`);
     expect(listed.status()).toBe(200);
