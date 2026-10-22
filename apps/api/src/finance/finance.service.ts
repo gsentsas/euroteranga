@@ -31,12 +31,8 @@ import type {
 } from './finance.dto.js';
 import { FinanceErrors } from './finance.errors.js';
 import { parseFinanceReceiptUpload } from './finance-receipt-upload.js';
-import {
-  currencyKey,
-  exactMinorAmount,
-  financeReceiptObjectKey,
-  generateFinanceReference,
-} from './finance-rules.js';
+import { exactMinorAmount, financeReceiptObjectKey, generateFinanceReference } from './finance-rules.js';
+import { buildFinanceCurrencySummary } from './finance-summary.js';
 
 type RevenueInput = z.infer<typeof revenueCreateSchema>;
 type ExpenseInput = z.infer<typeof expenseCreateSchema>;
@@ -137,16 +133,6 @@ function mapDatabaseViolation(error: unknown): never {
   throw error;
 }
 
-interface CurrencyBucket {
-  currencyCode: string;
-  currencyMinorUnit: number;
-  ticketRevenueMinor: bigint;
-  additionalRevenueMinor: bigint;
-  refundMinor: bigint;
-  expenseMinor: bigint;
-  payoutMinor: bigint;
-}
-
 @Injectable()
 export class FinanceService {
   constructor(
@@ -164,27 +150,6 @@ export class FinanceService {
     });
     if (!trip) throw FinanceErrors.tripNotFound();
     return trip;
-  }
-
-  private bucket(
-    buckets: Map<string, CurrencyBucket>,
-    currencyCode: string,
-    currencyMinorUnit: number,
-  ): CurrencyBucket {
-    const key = currencyKey(currencyCode, currencyMinorUnit);
-    const current = buckets.get(key);
-    if (current) return current;
-    const created: CurrencyBucket = {
-      currencyCode,
-      currencyMinorUnit,
-      ticketRevenueMinor: 0n,
-      additionalRevenueMinor: 0n,
-      refundMinor: 0n,
-      expenseMinor: 0n,
-      payoutMinor: 0n,
-    };
-    buckets.set(key, created);
-    return created;
   }
 
   async tripSummary(actor: AuthPrincipal, rawTripReference: string) {
@@ -225,50 +190,7 @@ export class FinanceService {
       }),
     ]);
 
-    const buckets = new Map<string, CurrencyBucket>();
-    for (const payment of payments) {
-      const bucket = this.bucket(buckets, payment.currencyCode, payment.currencyMinorUnit);
-      bucket.ticketRevenueMinor += payment.amountMinor;
-      for (const refund of payment.refunds) bucket.refundMinor += refund.amountMinor;
-    }
-    for (const revenue of revenues) {
-      if (revenue.status !== 'ACTIVE') continue;
-      this.bucket(
-        buckets,
-        revenue.currencyCode,
-        revenue.currencyMinorUnit,
-      ).additionalRevenueMinor += revenue.amountMinor;
-    }
-    for (const expense of expenses) {
-      if (expense.status !== 'ACTIVE') continue;
-      const bucket = this.bucket(buckets, expense.currencyCode, expense.currencyMinorUnit);
-      bucket.expenseMinor += expense.amountMinor;
-      for (const payout of expense.payouts) bucket.payoutMinor += payout.amountMinor;
-    }
-
-    const currencies = [...buckets.values()]
-      .sort((a, b) =>
-        a.currencyCode === b.currencyCode
-          ? a.currencyMinorUnit - b.currencyMinorUnit
-          : a.currencyCode.localeCompare(b.currencyCode),
-      )
-      .map((bucket) => {
-        const grossRevenue = bucket.ticketRevenueMinor + bucket.additionalRevenueMinor;
-        const netRevenue = grossRevenue - bucket.refundMinor;
-        return {
-          currencyCode: bucket.currencyCode,
-          currencyMinorUnit: bucket.currencyMinorUnit,
-          ticketRevenueMinor: bucket.ticketRevenueMinor.toString(),
-          additionalRevenueMinor: bucket.additionalRevenueMinor.toString(),
-          grossRevenueMinor: grossRevenue.toString(),
-          refundMinor: bucket.refundMinor.toString(),
-          netRevenueMinor: netRevenue.toString(),
-          expenseMinor: bucket.expenseMinor.toString(),
-          contributionMinor: (netRevenue - bucket.expenseMinor).toString(),
-          payoutMinor: bucket.payoutMinor.toString(),
-          outstandingExpenseMinor: (bucket.expenseMinor - bucket.payoutMinor).toString(),
-        };
-      });
+    const currencies = buildFinanceCurrencySummary({ payments, revenues, expenses });
 
     await this.database.client.$transaction((tx) =>
       this.audit.record(
