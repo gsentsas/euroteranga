@@ -1,5 +1,6 @@
 import { Prisma } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
+import { PublicApiError } from '../auth/http/public-api-error.js';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { RATE_LIMITS } from '../auth/rate-limit/rate-limit.rules.js';
 import { RateLimitService } from '../auth/rate-limit/rate-limit.service.js';
@@ -197,7 +198,7 @@ export class CargoService {
         uniqueViolation,
       );
     } catch (error) {
-      if (error instanceof Error && 'status' in error) throw error;
+      if (error instanceof PublicApiError) throw error;
       return databaseDomainError(error);
     }
     return this.detail(actor, reference, 'CREATE_RESULT');
@@ -351,7 +352,7 @@ export class CargoService {
         );
       });
     } catch (error) {
-      if (error instanceof Error && 'status' in error) throw error;
+      if (error instanceof PublicApiError) throw error;
       return databaseDomainError(error);
     }
     return this.detail(actor, reference, 'UPDATE_RESULT');
@@ -455,7 +456,7 @@ export class CargoService {
         );
       });
     } catch (error) {
-      if (error instanceof Error && 'status' in error) throw error;
+      if (error instanceof PublicApiError) throw error;
       return databaseDomainError(error);
     }
     return this.detail(actor, reference, 'ASSIGNMENT_RESULT');
@@ -553,7 +554,7 @@ export class CargoService {
         return { created: true, event: cargoEventView(event) };
       });
     } catch (error) {
-      if (error instanceof Error && 'status' in error) throw error;
+      if (error instanceof PublicApiError) throw error;
       return databaseDomainError(error);
     }
   }
