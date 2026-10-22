@@ -317,6 +317,14 @@ export class CargoService {
           throw CargoErrors.conflict();
         }
         const changedFields = Object.keys(input).filter((key) => key !== 'expectedUpdatedAt');
+        if (
+          changedFields.length > 0 &&
+          ['LOADED', 'DEPARTED', 'IN_TRANSIT', 'ARRIVED', 'AVAILABLE', 'DELIVERED', 'REFUSED', 'CANCELLED'].includes(
+            before.lifecycleStatus,
+          )
+        ) {
+          throw CargoErrors.frozen();
+        }
         const after = await tx.roadFreightShipment.update({
           where: { id },
           data: {
