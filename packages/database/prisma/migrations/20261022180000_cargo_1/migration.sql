@@ -386,6 +386,8 @@ DECLARE
   waypoint_version UUID;
   trip_version UUID;
   expected_next "road_freight_lifecycle_status";
+  actor_realm "auth_realm";
+  actor_status "auth_identity_status";
 BEGIN
   IF TG_OP <> 'INSERT' THEN
     RAISE EXCEPTION 'road freight event history is append-only'
@@ -397,6 +399,15 @@ BEGIN
   WHERE s."id" = NEW."shipment_id"
   FOR UPDATE;
   IF NOT FOUND THEN RETURN NEW; END IF;
+
+  SELECT a."realm", a."status" INTO actor_realm, actor_status
+  FROM "auth_identity" a
+  WHERE a."id" = NEW."actor_identity_id"
+  FOR SHARE;
+  IF NOT FOUND OR actor_realm <> 'STAFF' OR actor_status <> 'ACTIVE' THEN
+    RAISE EXCEPTION 'only active STAFF may record road freight events'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
 
   SELECT max(e."sequence") INTO previous_sequence
   FROM "road_freight_shipment_event" e
