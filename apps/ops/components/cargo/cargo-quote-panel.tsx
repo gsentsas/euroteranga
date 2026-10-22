@@ -1,9 +1,6 @@
 'use client';
 
-import type {
-  RoadFreightQuote,
-  RoadFreightQuoteLineKind,
-} from '@euroteranga/auth-client';
+import type { RoadFreightQuote, RoadFreightQuoteLineKind } from '@euroteranga/auth-client';
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
@@ -143,7 +140,10 @@ export function CargoQuotePanel({
       : null;
   };
 
-  const run = async (action: () => Promise<{ ok: boolean; data?: RoadFreightQuote; error?: { message: string } }>, message: string) => {
+  const run = async (
+    action: () => Promise<{ ok: boolean; data?: RoadFreightQuote; error?: { message: string } }>,
+    message: string,
+  ) => {
     if (busy) return;
     setBusy(true);
     setError(null);
@@ -216,7 +216,11 @@ export function CargoQuotePanel({
         Finance.
       </p>
       <FormAlert message={error} />
-      {notice ? <FormStatus><p>{notice}</p></FormStatus> : null}
+      {notice ? (
+        <FormStatus>
+          <p>{notice}</p>
+        </FormStatus>
+      ) : null}
 
       {quotes.length ? (
         <div className="et-table-wrap">
@@ -238,7 +242,9 @@ export function CargoQuotePanel({
                   <td>v{quote.version}</td>
                   <td className="et-code">{quote.reference}</td>
                   <td>{STATUS_LABELS[quote.status]}</td>
-                  <td>{formatMoney(quote.totalMinor, quote.currencyCode, quote.currencyMinorUnit)}</td>
+                  <td>
+                    {formatMoney(quote.totalMinor, quote.currencyCode, quote.currencyMinorUnit)}
+                  </td>
                   <td>{new Date(quote.createdAt).toLocaleString('fr-FR')}</td>
                   <td>
                     <button
@@ -347,7 +353,9 @@ export function CargoQuotePanel({
                   onChange={(event) => setCurrencyMinorUnit(Number(event.target.value))}
                 >
                   {[0, 1, 2, 3].map((value) => (
-                    <option key={value} value={value}>{value}</option>
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
                   ))}
                 </select>
               </div>
