@@ -80,6 +80,7 @@ const formatVolume = (liters: number) =>
 const EMPTY_CREATE = {
   direction: 'PAR_DKR' as RoadFreightDirection,
   bookingReference: '',
+  customerIdentityId: '',
   senderName: '',
   senderContact: '',
   recipientName: '',
@@ -248,6 +249,16 @@ function CargoDetail({
         <dd>{shipment.declaredContents}</dd>
         <dt>Réservation</dt>
         <dd className="et-code">{shipment.booking?.reference ?? '—'}</dd>
+        <dt>Client</dt>
+        <dd>
+          {shipment.customer ? (
+            <>
+              {shipment.customer.email} · <span className="et-code">{shipment.customer.id}</span>
+            </>
+          ) : (
+            '—'
+          )}
+        </dd>
         <dt>Voyage</dt>
         <dd className="et-code">{shipment.trip?.reference ?? 'Non affecté'}</dd>
         <dt>Véhicule</dt>
@@ -470,6 +481,9 @@ export function CargoAdmin() {
         ...(create.bookingReference.trim()
           ? { bookingReference: create.bookingReference.trim().toUpperCase() }
           : {}),
+        ...(create.customerIdentityId.trim()
+          ? { customerIdentityId: create.customerIdentityId.trim().toLowerCase() }
+          : {}),
         senderName: create.senderName,
         senderContact: create.senderContact,
         recipientName: create.recipientName,
@@ -554,6 +568,15 @@ export function CargoAdmin() {
               required={false}
               autoComplete="off"
               maxLength={16}
+            />
+            <TextField
+              label="Identifiant client (facultatif)"
+              name="cargoCustomerIdentityId"
+              value={create.customerIdentityId}
+              onChange={(value) => setCreate((state) => ({ ...state, customerIdentityId: value }))}
+              required={false}
+              autoComplete="off"
+              maxLength={36}
             />
             <TextField
               label="Expéditeur"
