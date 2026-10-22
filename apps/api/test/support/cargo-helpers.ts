@@ -20,6 +20,35 @@ export function staffCargoApi(actor: StaffActor) {
       api.post(`/cargo/${reference}/assignment`, body, options),
     event: (reference: string, body: unknown, options: { csrf?: string | null } = {}) =>
       api.post(`/cargo/${reference}/events`, body, options),
+    quotes: (reference: string) => api.get(`/cargo/${reference}/quotes`),
+    quote: (reference: string, quoteReference: string) =>
+      api.get(`/cargo/${reference}/quotes/${quoteReference}`),
+    createQuote: (reference: string, body: unknown, options: { csrf?: string | null } = {}) =>
+      api.post(`/cargo/${reference}/quotes`, body, options),
+    replaceQuoteLines: (
+      reference: string,
+      quoteReference: string,
+      body: unknown,
+      options: { csrf?: string | null } = {},
+    ) => api.post(`/cargo/${reference}/quotes/${quoteReference}`, body, options),
+    issueQuote: (
+      reference: string,
+      quoteReference: string,
+      body: unknown = {},
+      options: { csrf?: string | null } = {},
+    ) => api.post(`/cargo/${reference}/quotes/${quoteReference}/issue`, body, options),
+    acceptQuote: (
+      reference: string,
+      quoteReference: string,
+      body: unknown = {},
+      options: { csrf?: string | null } = {},
+    ) => api.post(`/cargo/${reference}/quotes/${quoteReference}/accept`, body, options),
+    cancelQuote: (
+      reference: string,
+      quoteReference: string,
+      body: unknown,
+      options: { csrf?: string | null } = {},
+    ) => api.post(`/cargo/${reference}/quotes/${quoteReference}/cancel`, body, options),
   };
 }
 

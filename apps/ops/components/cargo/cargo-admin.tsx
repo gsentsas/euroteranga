@@ -12,6 +12,7 @@ import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useCan } from '../staff-access';
+import { CargoQuotePanel } from './cargo-quote-panel';
 
 const DIRECTION_LABELS: Record<RoadFreightDirection, string> = {
   PAR_DKR: 'Paris → Dakar',
@@ -98,10 +99,14 @@ const EMPTY_CREATE = {
 function CargoDetail({
   shipment,
   canManage,
+  canReadPricing,
+  canManagePricing,
   onChanged,
 }: {
   shipment: RoadFreightShipmentDetail;
   canManage: boolean;
+  canReadPricing: boolean;
+  canManagePricing: boolean;
   onChanged: (reference: string, message: string) => Promise<void>;
 }) {
   const eventId = useId();
@@ -267,6 +272,13 @@ function CargoDetail({
 
       <FormAlert message={error} />
 
+      <CargoQuotePanel
+        key={shipment.reference}
+        shipmentReference={shipment.reference}
+        canRead={canReadPricing}
+        canManage={canManage && canManagePricing}
+      />
+
       {canManage && editable ? (
         <form
           className="et-form"
@@ -412,6 +424,8 @@ export function CargoAdmin() {
   const statusFilterId = useId();
   const eventDirectionId = useId();
   const canManage = useCan('cargo.manage');
+  const canReadPricing = useCan('pricing.read');
+  const canManagePricing = useCan('pricing.manage');
 
   const [create, setCreate] = useState(EMPTY_CREATE);
   const [reference, setReference] = useState('');
@@ -522,8 +536,8 @@ export function CargoAdmin() {
   return (
     <div className="et-network" data-testid="cargo-workspace">
       <p>
-        Colis et fret routier distincts des bagages voyageurs. Les prix et paiements restent hors de
-        CARGO-1 ; poids, volume, affectation et historique sont opérationnels.
+        Colis et fret routier distincts des bagages voyageurs. CARGO-PRICE-1 ajoute des devis
+        commerciaux versionnés ; les paiements et la comptabilisation Finance restent séparés.
       </p>
       <FormAlert message={error} />
       {notice ? (
@@ -734,7 +748,15 @@ export function CargoAdmin() {
         </button>
       </form>
 
-      {detail ? <CargoDetail shipment={detail} canManage={canManage} onChanged={changed} /> : null}
+      {detail ? (
+        <CargoDetail
+          shipment={detail}
+          canManage={canManage}
+          canReadPricing={canReadPricing}
+          canManagePricing={canManagePricing}
+          onChanged={changed}
+        />
+      ) : null}
 
       <section aria-labelledby="cargo-list-title">
         <h2 id="cargo-list-title">Colis & fret</h2>

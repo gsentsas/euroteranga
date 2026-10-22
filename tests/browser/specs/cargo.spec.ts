@@ -67,6 +67,107 @@ test.describe('CARGO-1 OPS workspace', () => {
     await detail.getByRole('button', { name: 'Enregistrer l’événement' }).click();
     await expect(detail.locator('.et-tag').first()).toHaveText('Reçu');
     await expect(detail.getByTestId('cargo-timeline').locator('tbody tr')).toHaveCount(3);
+    await expect(detail.getByTestId('cargo-quotes')).toBeVisible();
+    await expect(detail.getByRole('form', { name: 'Créer un devis fret' })).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test('OPS_MANAGER creates, issues and accepts a freight quote without payment', async ({
+    page,
+  }) => {
+    const errors = trackPageErrors(page);
+    await addSessionCookie(page.context(), preauthenticatedSession('permitManager'));
+    await page.goto(appUrl(opsApp, '/cargo'));
+
+    const workspace = page.getByTestId('cargo-workspace');
+    const createCargo = workspace.getByRole('form', { name: 'Créer un colis ou fret' });
+    await createCargo.getByLabel('Expéditeur', { exact: true }).fill('Awa Pricing');
+    await createCargo.getByLabel('Contact expéditeur').fill('+33101010101');
+    await createCargo.getByLabel('Destinataire', { exact: true }).fill('Moussa Pricing');
+    await createCargo.getByLabel('Contact destinataire').fill('+221770000001');
+    await createCargo.getByLabel('Poids (kg)').fill('40,000');
+    await createCargo.getByLabel('Volume (litres)').fill('450');
+    await createCargo.getByLabel('Nombre de pièces').fill('3');
+    await createCargo.getByLabel('Contenu déclaré').fill('Fret commercial test');
+    await createCargo.getByRole('button', { name: 'Créer' }).click();
+
+    const detail = page.getByTestId('cargo-detail');
+    const quotes = detail.getByTestId('cargo-quotes');
+    await expect(quotes).toBeVisible();
+
+    const createQuote = quotes.getByRole('form', { name: 'Créer un devis fret' });
+    await createQuote.getByLabel('Devise').fill('EUR');
+    await createQuote.getByLabel('Libellé').fill('Transport Paris Dakar');
+    await createQuote.getByLabel('Montant (EUR)').fill('125,50');
+    await createQuote.getByRole('button', { name: 'Créer le brouillon' }).click();
+
+    await expect(quotes.getByRole('status')).toContainText('Brouillon de devis créé.');
+    await expect(quotes.getByTestId('cargo-quote-detail')).toContainText('125,50 EUR');
+    await expect(quotes.getByTestId('cargo-quote-detail')).toContainText(/ETCQ-[0-9A-Z]{12}/);
+
+    await quotes.getByRole('button', { name: 'Émettre le devis' }).click();
+    await expect(quotes.getByRole('status')).toContainText('Devis émis.');
+
+    await quotes.getByRole('button', { name: 'Accepter le devis' }).click();
+    await expect(quotes.getByRole('status')).toContainText(
+      'Devis accepté. Aucun paiement n’a été déclenché.',
+    );
+    await expect(quotes).toContainText('Accepté');
+    await expect(quotes).toContainText('Paiement non déclenché');
+    expect(errors).toEqual([]);
+  });
+
+  test('switching shipments resets unsaved quote form state', async ({ page }) => {
+    const errors = trackPageErrors(page);
+    await addSessionCookie(page.context(), preauthenticatedSession('permitManager'));
+    const api = directAdminApi(page.request);
+    const createCargo = (suffix: string) =>
+      api.post('/cargo', {
+        direction: 'PAR_DKR',
+        senderName: `Expéditeur ${suffix}`,
+        senderContact: '+33101010101',
+        recipientName: `Destinataire ${suffix}`,
+        recipientContact: '+221770000001',
+        weightKg: '10.000',
+        volumeLiters: 100,
+        packageCount: 1,
+        declaredContents: `Fret isolation devis ${suffix}`,
+        fragile: false,
+        professional: false,
+        pickupRequired: false,
+        deliveryRequired: false,
+      });
+    const [first, second] = await Promise.all([createCargo('A'), createCargo('B')]);
+    expect(first.status()).toBe(201);
+    expect(second.status()).toBe(201);
+    const firstReference = ((await first.json()) as { reference: string }).reference;
+    const secondReference = ((await second.json()) as { reference: string }).reference;
+
+    await page.goto(appUrl(opsApp, '/cargo'));
+    const workspace = page.getByTestId('cargo-workspace');
+    const cargoList = workspace.locator('section[aria-labelledby="cargo-list-title"]');
+
+    const firstRow = cargoList.getByRole('row').filter({ hasText: firstReference });
+    await expect(firstRow).toBeVisible();
+    await firstRow.getByRole('button', { name: 'Consulter' }).click();
+
+    const firstQuoteForm = workspace
+      .getByTestId('cargo-quotes')
+      .getByRole('form', { name: 'Créer un devis fret' });
+    await firstQuoteForm.getByLabel('Devise').fill('XOF');
+    await firstQuoteForm.getByLabel('Libellé').fill('Tarif temporaire fret A');
+    await firstQuoteForm.getByLabel('Montant (XOF)').fill('9000');
+
+    const secondRow = cargoList.getByRole('row').filter({ hasText: secondReference });
+    await secondRow.getByRole('button', { name: 'Consulter' }).click();
+    await expect(workspace.getByTestId('cargo-detail')).toContainText(secondReference);
+
+    const secondQuoteForm = workspace
+      .getByTestId('cargo-quotes')
+      .getByRole('form', { name: 'Créer un devis fret' });
+    await expect(secondQuoteForm.getByLabel('Devise')).toHaveValue('EUR');
+    await expect(secondQuoteForm.getByLabel('Libellé')).toHaveValue('Transport fret');
+    await expect(secondQuoteForm.getByLabel('Montant (EUR)')).toHaveValue('');
     expect(errors).toEqual([]);
   });
 

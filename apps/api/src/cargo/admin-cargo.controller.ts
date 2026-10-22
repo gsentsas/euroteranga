@@ -26,6 +26,13 @@ import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { AuthorizationGuard, RequirePermissions } from '../authorization/authorization.guard.js';
 import { PERMISSIONS } from '../authorization/permissions.js';
 import {
+  cargoQuoteCancelSchema,
+  cargoQuoteCreateSchema,
+  cargoQuoteLinesSchema,
+  cargoQuoteTransitionSchema,
+} from './cargo-quote.dto.js';
+import { CargoQuoteService } from './cargo-quote.service.js';
+import {
   cargoAssignmentSchema,
   cargoCreateSchema,
   cargoEventSchema,
@@ -42,7 +49,10 @@ import { CargoService } from './cargo.service.js';
 @UseGuards(AuthRequestGuard, SessionGuard, AuthorizationGuard)
 @RequirePermissions(PERMISSIONS.OPS_ACCESS, PERMISSIONS.CARGO_READ)
 export class AdminCargoController {
-  constructor(private readonly cargo: CargoService) {}
+  constructor(
+    private readonly cargo: CargoService,
+    private readonly quotes: CargoQuoteService,
+  ) {}
 
   @Get()
   @Header('Cache-Control', 'no-store')
@@ -110,6 +120,104 @@ export class AdminCargoController {
     body: z.infer<typeof cargoEventSchema>,
   ) {
     return this.cargo.recordEvent(principal, reference, body);
+  }
+
+  @Get(':reference/quotes')
+  @RequirePermissions(PERMISSIONS.PRICING_READ)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ description: 'Versioned commercial freight quotes.' })
+  quotesList(@CurrentPrincipal() principal: AuthPrincipal, @Param('reference') reference: string) {
+    return this.quotes.list(principal, reference);
+  }
+
+  @Get(':reference/quotes/:quoteReference')
+  @RequirePermissions(PERMISSIONS.PRICING_READ)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ description: 'One commercial freight quote snapshot.' })
+  quoteDetail(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('reference') reference: string,
+    @Param('quoteReference') quoteReference: string,
+  ) {
+    return this.quotes.detail(principal, reference, quoteReference);
+  }
+
+  @Post(':reference/quotes')
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.CARGO_MANAGE, PERMISSIONS.PRICING_MANAGE)
+  @Header('Cache-Control', 'no-store')
+  @ApiCreatedResponse({ description: 'Creates the next DRAFT freight quote version.' })
+  quoteCreate(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('reference') reference: string,
+    @Body(new ZodValidationPipe(cargoQuoteCreateSchema))
+    body: z.infer<typeof cargoQuoteCreateSchema>,
+  ) {
+    return this.quotes.create(principal, reference, body);
+  }
+
+  @Post(':reference/quotes/:quoteReference')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.CARGO_MANAGE, PERMISSIONS.PRICING_MANAGE)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ description: 'Atomically replaces all lines of a DRAFT freight quote.' })
+  quoteReplaceLines(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('reference') reference: string,
+    @Param('quoteReference') quoteReference: string,
+    @Body(new ZodValidationPipe(cargoQuoteLinesSchema))
+    body: z.infer<typeof cargoQuoteLinesSchema>,
+  ) {
+    return this.quotes.replaceLines(principal, reference, quoteReference, body);
+  }
+
+  @Post(':reference/quotes/:quoteReference/issue')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.CARGO_MANAGE, PERMISSIONS.PRICING_MANAGE)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ description: 'Issues the DRAFT and supersedes any prior ISSUED quote.' })
+  quoteIssue(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('reference') reference: string,
+    @Param('quoteReference') quoteReference: string,
+    @Body(new ZodValidationPipe(cargoQuoteTransitionSchema))
+    body: z.infer<typeof cargoQuoteTransitionSchema>,
+  ) {
+    return this.quotes.issue(principal, reference, quoteReference, body);
+  }
+
+  @Post(':reference/quotes/:quoteReference/accept')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.CARGO_MANAGE, PERMISSIONS.PRICING_MANAGE)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ description: 'Accepts an ISSUED quote without triggering payment.' })
+  quoteAccept(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('reference') reference: string,
+    @Param('quoteReference') quoteReference: string,
+    @Body(new ZodValidationPipe(cargoQuoteTransitionSchema))
+    body: z.infer<typeof cargoQuoteTransitionSchema>,
+  ) {
+    return this.quotes.accept(principal, reference, quoteReference, body);
+  }
+
+  @Post(':reference/quotes/:quoteReference/cancel')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.CARGO_MANAGE, PERMISSIONS.PRICING_MANAGE)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ description: 'Cancels a DRAFT or ISSUED quote; reason is audited.' })
+  quoteCancel(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('reference') reference: string,
+    @Param('quoteReference') quoteReference: string,
+    @Body(new ZodValidationPipe(cargoQuoteCancelSchema))
+    body: z.infer<typeof cargoQuoteCancelSchema>,
+  ) {
+    return this.quotes.cancel(principal, reference, quoteReference, body);
   }
 
   @Get(':reference')
