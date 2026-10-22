@@ -2,6 +2,7 @@ import type { Prisma } from '@euroteranga/database';
 
 export const cargoSummaryInclude = {
   booking: { select: { reference: true } },
+  customerIdentity: { select: { id: true, email: true } },
   trip: {
     select: {
       id: true,
@@ -112,6 +113,9 @@ export function cargoSummaryView(row: CargoSummaryRow) {
     pickupRequired: row.pickupRequired,
     deliveryRequired: row.deliveryRequired,
     booking: row.booking ? { reference: row.booking.reference } : null,
+    customer: row.customerIdentity
+      ? { id: row.customerIdentity.id, email: row.customerIdentity.email }
+      : null,
     trip: row.trip
       ? {
           id: row.trip.id,
