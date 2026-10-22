@@ -203,6 +203,7 @@ function profitabilitySummary() {
 }
 
 async function mockFinance(page: Page) {
+  let profitabilityRequests = 0;
   await page.route('**/v1/admin/finance/trips/' + tripReference, (route) =>
     route.fulfill({
       status: 200,
@@ -210,13 +211,15 @@ async function mockFinance(page: Page) {
       body: JSON.stringify(financeSummary()),
     }),
   );
-  await page.route('**/v1/admin/ops-profit/trips/' + tripReference, (route) =>
-    route.fulfill({
+  await page.route('**/v1/admin/ops-profit/trips/' + tripReference, (route) => {
+    profitabilityRequests += 1;
+    return route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(profitabilitySummary()),
-    }),
-  );
+    });
+  });
+  return { profitabilityRequests: () => profitabilityRequests };
 }
 
 async function loadTrip(page: Page) {
@@ -234,7 +237,7 @@ test.describe('PR-22 operational finance', () => {
   }) => {
     const errors = trackPageErrors(page);
     await staffSession(context, preauthenticatedSession('complianceRuleManager'));
-    await mockFinance(page);
+    const mocked = await mockFinance(page);
 
     await page.goto(appUrl(ops, '/finance'));
     await expect(page.getByTestId('finance-workspace')).toBeVisible();
@@ -261,7 +264,12 @@ test.describe('PR-22 operational finance', () => {
     ).toBeVisible();
     await expect(opsProfit).toContainText('210,00 EUR');
     await expect(opsProfit).toContainText('130,00 EUR');
-    await expect(opsProfit).toContainText('0,00 EUR');
+    const cargoCommercial = opsProfit.getByRole('table', {
+      name: 'Valeur commerciale acceptée, hors revenu Finance',
+    });
+    const cargoRow = cargoCommercial.getByRole('row').filter({ hasText: 'EUR' });
+    await expect(cargoRow).toHaveCount(1);
+    await expect(cargoRow.getByRole('cell').last()).toHaveText('0,00 EUR');
     await expect(opsProfit).toContainText('150.250 kg / 1000 kg');
     await expect(opsProfit).toContainText('750 L / 2000 L');
 
@@ -279,6 +287,10 @@ test.describe('PR-22 operational finance', () => {
     await expect(workspace).toContainText('ETCN-0123456789AB');
     await expect(workspace.getByRole('button', { name: 'Export CSV' })).toBeVisible();
     await expect(workspace.getByRole('button', { name: 'Export XLSX' })).toBeVisible();
+
+    await expect.poll(mocked.profitabilityRequests).toBe(1);
+    await loadTrip(page);
+    await expect.poll(mocked.profitabilityRequests).toBe(2);
 
     expect(errors.pageErrors).toEqual([]);
     expect(errors.consoleErrors).toEqual([]);
