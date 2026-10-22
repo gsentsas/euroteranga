@@ -41,6 +41,7 @@ const bookingReference = z
   .trim()
   .toUpperCase()
   .regex(/^ETB-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{12}$/);
+const customerIdentityId = z.uuid();
 const tripReference = z.string().trim().toUpperCase().min(1).max(32);
 const vehicleCode = z.string().trim().toUpperCase().min(1).max(32);
 const occurredAt = z.iso.datetime({ offset: true }).transform((value) => new Date(value));
@@ -97,6 +98,7 @@ export const cargoCreateSchema = z
   .object({
     direction: z.enum(CARGO_DIRECTIONS),
     bookingReference: bookingReference.optional(),
+    customerIdentityId: customerIdentityId.optional(),
     ...cargoEditable,
   })
   .strict();
