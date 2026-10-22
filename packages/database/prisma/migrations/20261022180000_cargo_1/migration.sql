@@ -69,7 +69,7 @@ CREATE TABLE "road_freight_shipment_event" (
 
 CREATE UNIQUE INDEX "road_freight_shipment_reference_key"
   ON "road_freight_shipment"("reference");
-CREATE INDEX "road_freight_shipment_direction_status_id_idx"
+CREATE INDEX "road_freight_shipment_direction_lifecycle_status_id_idx"
   ON "road_freight_shipment"("direction", "lifecycle_status", "id");
 CREATE INDEX "road_freight_shipment_exception_status_id_idx"
   ON "road_freight_shipment"("exception_status", "id");
@@ -77,7 +77,7 @@ CREATE INDEX "road_freight_shipment_booking_id_idx"
   ON "road_freight_shipment"("booking_id");
 CREATE INDEX "road_freight_shipment_customer_identity_id_idx"
   ON "road_freight_shipment"("customer_identity_id");
-CREATE INDEX "road_freight_shipment_trip_id_vehicle_id_idx"
+CREATE INDEX "road_freight_shipment_trip_id_vehicle_id_id_idx"
   ON "road_freight_shipment"("trip_id", "vehicle_id", "id");
 CREATE INDEX "road_freight_shipment_created_at_id_idx"
   ON "road_freight_shipment"("created_at", "id");
