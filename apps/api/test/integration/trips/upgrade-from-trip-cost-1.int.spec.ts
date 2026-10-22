@@ -39,7 +39,10 @@ describe('upgrade from TRIP-COST-1 to CONVOY-1 (isolated database)', () => {
     ).map((row) => row.migration_name);
 
   beforeAll(async () => {
-    expect(CURRENT_MIGRATIONS.at(-1)).toBe(CONVOY_MIGRATION);
+    expect(CURRENT_MIGRATIONS).toContain(CONVOY_MIGRATION);
+    expect(CURRENT_MIGRATIONS.indexOf(CONVOY_MIGRATION)).toBeGreaterThan(
+      CURRENT_MIGRATIONS.indexOf(TRIP_COST_MIGRATION),
+    );
     const base = process.env.DATABASE_URL;
     if (!base) throw new Error('DATABASE_URL is required');
     root = createDatabaseClient({ databaseUrl: base });

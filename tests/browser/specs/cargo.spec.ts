@@ -59,11 +59,11 @@ test.describe('CARGO-1 OPS workspace', () => {
     await expect(detail).toContainText('Demande / devis');
     await expect(detail.getByTestId('cargo-weight')).toHaveText('25,500 kg');
 
-    await detail.getByLabel('Événement').selectOption('BOOKED');
+    await detail.getByLabel('Événement', { exact: true }).selectOption('BOOKED');
     await detail.getByRole('button', { name: 'Enregistrer l’événement' }).click();
     await expect(workspace.getByRole('status')).toContainText('Réserver');
 
-    await detail.getByLabel('Événement').selectOption('RECEIVED');
+    await detail.getByLabel('Événement', { exact: true }).selectOption('RECEIVED');
     await detail.getByRole('button', { name: 'Enregistrer l’événement' }).click();
     await expect(detail.locator('.et-tag').first()).toHaveText('Reçu');
     await expect(detail.getByTestId('cargo-timeline').locator('tbody tr')).toHaveCount(3);
