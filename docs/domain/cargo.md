@@ -1,4 +1,4 @@
-# CARGO-1 — Colis & fret routier
+# CARGO — Colis, fret routier et devis commerciaux
 
 CARGO-1 crée un domaine de fret indépendant de `Baggage`. Un colis commercial
 n'est jamais transformé en bagage passager.
@@ -20,17 +20,22 @@ Inclus :
 - RBAC `cargo.read` / `cargo.manage` et audit des lectures/écritures ;
 - workspace OPS « Colis & fret ».
 
+CARGO-PRICE-1 ajoute ensuite les devis commerciaux versionnés, sans formule de
+prix automatique : les lignes sont saisies explicitement par OPS et le total
+est dérivé côté serveur en unités monétaires mineures exactes.
+
 Hors périmètre :
 
-- prix, devis monétaire, promotions et paiement (`CARGO-PRICE-1`) ;
+- paiement Cargo, FX, promotions et calculateur public ;
 - QR/scans et tracking public (`CARGO-TRACK-1`) ;
 - documents douaniers privés ;
 - déclenchement automatique du véhicule support ;
 - calcul de marge/rentabilité ;
 - création client autonome.
 
-L'état `QUOTE` représente une demande opérationnelle sans montant. Aucun prix
-n'est stocké dans CARGO-1.
+L'état `QUOTE` reste un statut opérationnel du fret. Le prix n'est pas porté
+par `RoadFreightShipment` : CARGO-PRICE-1 le stocke dans des objets
+`RoadFreightQuote` séparés et historisés.
 
 ## Modèle
 
@@ -109,6 +114,76 @@ Les actions d'audit évitent de recopier les contacts ou le contenu déclaré :
 Les caractéristiques commerciales deviennent immuables à partir de
 `LOADED`. Le fret et ses événements ne sont jamais supprimés physiquement.
 
+## Devis commerciaux — CARGO-PRICE-1
+
+Chaque `RoadFreightShipment` peut posséder plusieurs versions de
+`RoadFreightQuote`, identifiées par une référence opaque `ETCQ-…`.
+
+Une version capture explicitement les faits ayant servi au chiffrage :
+
+- direction ;
+- poids exact ;
+- volume ;
+- nombre de pièces ;
+- fragile / professionnel ;
+- collecte / livraison ;
+- `shipmentUpdatedAt`.
+
+Ce snapshot ne contient ni contact expéditeur/destinataire ni contenu déclaré.
+
+Les lignes `RoadFreightQuoteLine` sont de type `CHARGE` ou `DISCOUNT`.
+Le montant est stocké en `BIGINT` dans l'unité mineure de la devise. Aucun
+`float` ni `number` JavaScript n'est utilisé pour calculer le total :
+
+```
+totalMinor = Σ CHARGE - Σ DISCOUNT
+```
+
+Le total ne peut jamais devenir négatif.
+
+Cycle d'un devis :
+
+```
+DRAFT → ISSUED → ACCEPTED
+           ├──→ SUPERSEDED
+           └──→ CANCELLED
+
+DRAFT ─────────→ CANCELLED
+```
+
+Règles structurantes :
+
+- une seule version `DRAFT` par fret ;
+- une seule version `ISSUED` courante ;
+- version allouée sous verrou du fret, sans trou concurrent ;
+- émission d'une nouvelle version : ancien `ISSUED` → `SUPERSEDED`
+  atomiquement ;
+- un devis `ACCEPTED` bloque toute nouvelle émission ;
+- lignes modifiables uniquement en `DRAFT` ;
+- `ISSUED`, `ACCEPTED`, `SUPERSEDED` et `CANCELLED` conservent
+  l'historique ;
+- aucune suppression ni `TRUNCATE` ;
+- aucune création de `Payment`, `PaymentQuote` ou `TripRevenue`.
+
+Le RBAC sépare exploitation et décision de prix :
+
+- lecture : `cargo.read + pricing.read` ;
+- mutation / émission / acceptation / annulation :
+  `cargo.manage + pricing.manage` + CSRF.
+
+Ainsi, les rôles opérationnels qui gèrent le fret sans `pricing.manage` ne
+peuvent pas fixer seuls un prix.
+
+Audit dédié :
+
+- `ROAD_FREIGHT_QUOTE_CREATED`
+- `ROAD_FREIGHT_QUOTE_LINES_REPLACED`
+- `ROAD_FREIGHT_QUOTE_ISSUED`
+- `ROAD_FREIGHT_QUOTE_SUPERSEDED`
+- `ROAD_FREIGHT_QUOTE_ACCEPTED`
+- `ROAD_FREIGHT_QUOTE_CANCELLED`
+- `ROAD_FREIGHT_QUOTE_ACCESSED`
+
 ## API STAFF
 
 Toutes les routes sont sous `/v1/admin/cargo`.
@@ -121,5 +196,12 @@ Toutes les routes sont sous `/v1/admin/cargo`.
 | POST    | `/:reference/details`    | cargo.manage |
 | POST    | `/:reference/assignment` | cargo.manage |
 | POST    | `/:reference/events`     | cargo.manage |
+| GET     | `/:reference/quotes` | cargo.read + pricing.read |
+| GET     | `/:reference/quotes/:quoteReference` | cargo.read + pricing.read |
+| POST    | `/:reference/quotes` | cargo.manage + pricing.manage |
+| POST    | `/:reference/quotes/:quoteReference` | cargo.manage + pricing.manage |
+| POST    | `/:reference/quotes/:quoteReference/issue` | cargo.manage + pricing.manage |
+| POST    | `/:reference/quotes/:quoteReference/accept` | cargo.manage + pricing.manage |
+| POST    | `/:reference/quotes/:quoteReference/cancel` | cargo.manage + pricing.manage |
 
 Toutes les mutations exigent CSRF.
