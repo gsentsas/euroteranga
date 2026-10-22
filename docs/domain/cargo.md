@@ -102,13 +102,13 @@ Les caractéristiques commerciales deviennent immuables à partir de
 
 Toutes les routes sont sous `/v1/admin/cargo`.
 
-| Méthode | Route | Permission |
-| --- | --- | --- |
-| GET | `/` | cargo.read |
-| GET | `/:reference` | cargo.read |
-| POST | `/` | cargo.manage |
-| POST | `/:reference/details` | cargo.manage |
-| POST | `/:reference/assignment` | cargo.manage |
-| POST | `/:reference/events` | cargo.manage |
+| Méthode | Route                    | Permission   |
+| ------- | ------------------------ | ------------ |
+| GET     | `/`                      | cargo.read   |
+| GET     | `/:reference`            | cargo.read   |
+| POST    | `/`                      | cargo.manage |
+| POST    | `/:reference/details`    | cargo.manage |
+| POST    | `/:reference/assignment` | cargo.manage |
+| POST    | `/:reference/events`     | cargo.manage |
 
 Toutes les mutations exigent CSRF.

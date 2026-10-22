@@ -22,10 +22,7 @@ export type CargoLifecycle =
 export type CargoException = 'HELD' | 'CUSTOMS_HOLD' | 'DAMAGED';
 
 export type CargoEvent =
-  | CargoLifecycle
-  | CargoException
-  | 'EXCEPTION_RESOLVED'
-  | 'ASSIGNMENT_UPDATED';
+  CargoLifecycle | CargoException | 'EXCEPTION_RESOLVED' | 'ASSIGNMENT_UPDATED';
 
 export interface CargoProjection {
   lifecycleStatus: CargoLifecycle;
@@ -74,7 +71,13 @@ const nextLifecycle: Partial<Record<CargoLifecycle, CargoLifecycle>> = {
 };
 
 const terminal = new Set<CargoLifecycle>(['DELIVERED', 'REFUSED', 'CANCELLED']);
-const cancellable = new Set<CargoLifecycle>(['QUOTE', 'BOOKED', 'RECEIVED', 'INSPECTED', 'ASSIGNED']);
+const cancellable = new Set<CargoLifecycle>([
+  'QUOTE',
+  'BOOKED',
+  'RECEIVED',
+  'INSPECTED',
+  'ASSIGNED',
+]);
 const exceptionEligible = new Set<CargoLifecycle>([
   'BOOKED',
   'RECEIVED',

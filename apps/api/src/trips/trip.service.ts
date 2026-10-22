@@ -326,7 +326,6 @@ async function assertVehiclesAvailable(
   }
 }
 
-
 /**
  * CARGO-1: changing the convoy must never leave active freight pointing to a
  * vehicle that no longer belongs to the trip. The trip row is already locked
@@ -338,9 +337,7 @@ async function assertCargoStaysInConvoy(
   primaryVehicleId: string | null,
   supportVehicleId: string | null,
 ): Promise<void> {
-  const convoyIds = [primaryVehicleId, supportVehicleId].filter(
-    (id): id is string => id !== null,
-  );
+  const convoyIds = [primaryVehicleId, supportVehicleId].filter((id): id is string => id !== null);
   const conflicting = await tx.roadFreightShipment.findFirst({
     where: {
       tripId,

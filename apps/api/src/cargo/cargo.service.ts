@@ -66,10 +66,7 @@ function databaseDomainError(error: unknown): never {
   throw error;
 }
 
-async function lockedShipmentId(
-  tx: DatabaseTransaction,
-  reference: string,
-): Promise<string> {
+async function lockedShipmentId(tx: DatabaseTransaction, reference: string): Promise<string> {
   const rows = await tx.$queryRaw<Array<{ id: string }>>`
     SELECT "id" FROM "road_freight_shipment"
     WHERE "reference" = ${reference}
@@ -331,9 +328,7 @@ export class CargoService {
               : {}),
             ...(input.fragile !== undefined ? { fragile: input.fragile } : {}),
             ...(input.professional !== undefined ? { professional: input.professional } : {}),
-            ...(input.pickupRequired !== undefined
-              ? { pickupRequired: input.pickupRequired }
-              : {}),
+            ...(input.pickupRequired !== undefined ? { pickupRequired: input.pickupRequired } : {}),
             ...(input.deliveryRequired !== undefined
               ? { deliveryRequired: input.deliveryRequired }
               : {}),
@@ -408,7 +403,8 @@ export class CargoService {
           data: { tripId: trip.id, vehicleId: vehicle.id },
         });
 
-        const eventType = shipment.lifecycleStatus === 'INSPECTED' ? 'ASSIGNED' : 'ASSIGNMENT_UPDATED';
+        const eventType =
+          shipment.lifecycleStatus === 'INSPECTED' ? 'ASSIGNED' : 'ASSIGNMENT_UPDATED';
         const latest = await tx.roadFreightShipmentEvent.findFirst({
           where: { shipmentId: id },
           orderBy: { sequence: 'desc' },

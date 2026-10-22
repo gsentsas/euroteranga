@@ -67,7 +67,11 @@ const dimensionsCm = z
 const declaredValue = z
   .object({
     amountMinor: z.string().regex(/^(0|[1-9][0-9]{0,17})$/),
-    currencyCode: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
+    currencyCode: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{3}$/),
     currencyMinorUnit: z.coerce.number().int().min(0).max(3),
   })
   .strict();
@@ -116,10 +120,9 @@ export const cargoUpdateSchema = z
     expectedUpdatedAt: expectedAt.optional(),
   })
   .strict()
-  .refine(
-    (value) => Object.keys(value).some((key) => key !== 'expectedUpdatedAt'),
-    { message: 'at least one cargo field must change' },
-  );
+  .refine((value) => Object.keys(value).some((key) => key !== 'expectedUpdatedAt'), {
+    message: 'at least one cargo field must change',
+  });
 
 const idempotentEventFields = z
   .object({

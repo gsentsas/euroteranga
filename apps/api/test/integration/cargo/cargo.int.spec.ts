@@ -8,11 +8,7 @@ import {
   type StaffActor,
 } from '../../support/admin-helpers.js';
 import { db } from '../../support/auth-helpers.js';
-import {
-  cargoCreateBody,
-  cargoTripFixture,
-  staffCargoApi,
-} from '../../support/cargo-helpers.js';
+import { cargoCreateBody, cargoTripFixture, staffCargoApi } from '../../support/cargo-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
 
 describe('CARGO-1 road freight, RBAC, capacity and history', () => {
@@ -73,7 +69,9 @@ describe('CARGO-1 road freight, RBAC, capacity and history', () => {
     });
     expect(grants.map((permission) => permission.key)).toEqual(['cargo.manage', 'cargo.read']);
     expect(
-      grants.find((permission) => permission.key === 'cargo.manage')?.roles.map((role) => role.roleKey),
+      grants
+        .find((permission) => permission.key === 'cargo.manage')
+        ?.roles.map((role) => role.roleKey),
     ).not.toContain('CUSTOMER_SUPPORT');
   });
 
@@ -128,14 +126,11 @@ describe('CARGO-1 road freight, RBAC, capacity and history', () => {
       },
       ['ACTIVE'],
     );
-    const convoyChange = await adminApi(manager).post(
-      `/trips/${fixture.tripId}/vehicle`,
-      {
-        vehicleId: replacementVehicleId,
-        expectedVehicleId: fixture.vehicleId,
-        reason: 'Test CARGO-1 : fret encore affecté',
-      },
-    );
+    const convoyChange = await adminApi(manager).post(`/trips/${fixture.tripId}/vehicle`, {
+      vehicleId: replacementVehicleId,
+      expectedVehicleId: fixture.vehicleId,
+      reason: 'Test CARGO-1 : fret encore affecté',
+    });
     expect(convoyChange.status).toBe(409);
     expect(convoyChange.body.code).toBe('TRIP_CARGO_ASSIGNMENT_CONFLICT');
     await expect(
@@ -225,7 +220,9 @@ describe('CARGO-1 road freight, RBAC, capacity and history', () => {
     const reference = created.body.reference as string;
     await staffCargoApi(manager).list(`?reference=${reference}`);
     await staffCargoApi(manager).detail(reference);
-    const shipment = await db(t.app).roadFreightShipment.findUniqueOrThrow({ where: { reference } });
+    const shipment = await db(t.app).roadFreightShipment.findUniqueOrThrow({
+      where: { reference },
+    });
     const audits = await db(t.app).auditEvent.findMany({
       where: {
         OR: [

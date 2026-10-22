@@ -23,11 +23,7 @@ export function staffCargoApi(actor: StaffActor) {
   };
 }
 
-async function corridorStop(
-  app: NestExpressApplication,
-  code: 'PAR' | 'DKR',
-  countryId: string,
-) {
+async function corridorStop(app: NestExpressApplication, code: 'PAR' | 'DKR', countryId: string) {
   const existing = await db(app).stop.findUnique({ where: { code } });
   if (existing) return existing.id;
   return (

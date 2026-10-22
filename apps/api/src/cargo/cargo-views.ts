@@ -48,7 +48,9 @@ export const cargoDetailInclude = {
   events: { orderBy: { sequence: 'asc' as const }, select: cargoEventSelect },
 } as const satisfies Prisma.RoadFreightShipmentInclude;
 
-type CargoSummaryRow = Prisma.RoadFreightShipmentGetPayload<{ include: typeof cargoSummaryInclude }>;
+type CargoSummaryRow = Prisma.RoadFreightShipmentGetPayload<{
+  include: typeof cargoSummaryInclude;
+}>;
 type CargoDetailRow = Prisma.RoadFreightShipmentGetPayload<{ include: typeof cargoDetailInclude }>;
 type CargoEventRow = Prisma.RoadFreightShipmentEventGetPayload<{ select: typeof cargoEventSelect }>;
 

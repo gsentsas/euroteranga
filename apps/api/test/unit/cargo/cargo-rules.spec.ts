@@ -85,7 +85,10 @@ describe('cargo event projection', () => {
 
   it('allows cancellation only before loading and makes terminal states immutable', () => {
     const assigned = projectCargoEvent(
-      projectCargoEvent(projectCargoEvent(projectCargoEvent(quote(), 'BOOKED'), 'RECEIVED'), 'INSPECTED'),
+      projectCargoEvent(
+        projectCargoEvent(projectCargoEvent(quote(), 'BOOKED'), 'RECEIVED'),
+        'INSPECTED',
+      ),
       'ASSIGNED',
     );
     expect(projectCargoEvent(assigned, 'CANCELLED').lifecycleStatus).toBe('CANCELLED');

@@ -1588,7 +1588,6 @@ export interface BaggageListOptions {
   createdTo?: string;
 }
 
-
 export type RoadFreightDirection = 'PAR_DKR' | 'DKR_PAR';
 export type RoadFreightLifecycleStatus =
   | 'QUOTE'
@@ -1610,10 +1609,7 @@ export type RoadFreightOperationalEventType =
   | RoadFreightExceptionStatus
   | 'EXCEPTION_RESOLVED';
 export type RoadFreightEventType =
-  | 'QUOTE'
-  | 'ASSIGNED'
-  | 'ASSIGNMENT_UPDATED'
-  | RoadFreightOperationalEventType;
+  'QUOTE' | 'ASSIGNED' | 'ASSIGNMENT_UPDATED' | RoadFreightOperationalEventType;
 
 export interface RoadFreightDeclaredValue {
   amountMinor: string;

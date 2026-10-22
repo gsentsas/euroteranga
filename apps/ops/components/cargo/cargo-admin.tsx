@@ -201,9 +201,16 @@ function CargoDetail({
     }
   };
 
-  const editable = !['LOADED', 'DEPARTED', 'IN_TRANSIT', 'ARRIVED', 'AVAILABLE', 'DELIVERED', 'REFUSED', 'CANCELLED'].includes(
-    shipment.lifecycleStatus,
-  );
+  const editable = ![
+    'LOADED',
+    'DEPARTED',
+    'IN_TRANSIT',
+    'ARRIVED',
+    'AVAILABLE',
+    'DELIVERED',
+    'REFUSED',
+    'CANCELLED',
+  ].includes(shipment.lifecycleStatus);
   const assignable = ['INSPECTED', 'ASSIGNED'].includes(shipment.lifecycleStatus);
 
   return (
@@ -224,9 +231,13 @@ function CargoDetail({
         <dt>Sens</dt>
         <dd>{DIRECTION_LABELS[shipment.direction]}</dd>
         <dt>Expéditeur</dt>
-        <dd>{shipment.senderName} · {shipment.senderContact}</dd>
+        <dd>
+          {shipment.senderName} · {shipment.senderContact}
+        </dd>
         <dt>Destinataire</dt>
-        <dd>{shipment.recipientName} · {shipment.recipientContact}</dd>
+        <dd>
+          {shipment.recipientName} · {shipment.recipientContact}
+        </dd>
         <dt>Poids</dt>
         <dd data-testid="cargo-weight">{formatWeight(shipment.weightKg)}</dd>
         <dt>Volume</dt>
@@ -246,7 +257,11 @@ function CargoDetail({
       <FormAlert message={error} />
 
       {canManage && editable ? (
-        <form className="et-form" aria-label="Modifier les caractéristiques du fret" onSubmit={submitFacts}>
+        <form
+          className="et-form"
+          aria-label="Modifier les caractéristiques du fret"
+          onSubmit={submitFacts}
+        >
           <div className="et-network-adders">
             <TextField
               label="Poids (kg)"
@@ -493,8 +508,8 @@ export function CargoAdmin() {
   return (
     <div className="et-network" data-testid="cargo-workspace">
       <p>
-        Colis et fret routier distincts des bagages voyageurs. Les prix et paiements restent hors
-        de CARGO-1 ; poids, volume, affectation et historique sont opérationnels.
+        Colis et fret routier distincts des bagages voyageurs. Les prix et paiements restent hors de
+        CARGO-1 ; poids, volume, affectation et historique sont opérationnels.
       </p>
       <FormAlert message={error} />
       {notice ? (
@@ -504,7 +519,11 @@ export function CargoAdmin() {
       ) : null}
 
       {canManage ? (
-        <form className="et-form et-network-form" aria-label="Créer un colis ou fret" onSubmit={submitCreate}>
+        <form
+          className="et-form et-network-form"
+          aria-label="Créer un colis ou fret"
+          onSubmit={submitCreate}
+        >
           <h2>Nouveau colis / fret</h2>
           <div className="et-network-adders">
             <div className="et-field">
@@ -619,7 +638,11 @@ export function CargoAdmin() {
         </form>
       ) : null}
 
-      <form className="et-form et-network-form" aria-label="Filtrer les colis et fret" onSubmit={filter}>
+      <form
+        className="et-form et-network-form"
+        aria-label="Filtrer les colis et fret"
+        onSubmit={filter}
+      >
         <div className="et-network-adders">
           <TextField
             label="Référence fret"
@@ -714,7 +737,9 @@ export function CargoAdmin() {
                   <tr key={item.reference}>
                     <td className="et-code">{item.reference}</td>
                     <td>{DIRECTION_LABELS[item.direction]}</td>
-                    <td>{item.senderName} → {item.recipientName}</td>
+                    <td>
+                      {item.senderName} → {item.recipientName}
+                    </td>
                     <td>{formatWeight(item.weightKg)}</td>
                     <td>{formatVolume(item.volumeLiters)}</td>
                     <td>{STATUS_LABELS[item.lifecycleStatus]}</td>
