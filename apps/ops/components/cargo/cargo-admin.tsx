@@ -567,7 +567,11 @@ export function CargoAdmin() {
         </FormStatus>
       ) : null}
 
-      <form className="et-form et-network-form" aria-label="Résoudre un QR fret" onSubmit={resolveQr}>
+      <form
+        className="et-form et-network-form"
+        aria-label="Résoudre un QR fret"
+        onSubmit={resolveQr}
+      >
         <TextField
           label="Code QR fret"
           name="cargoQrPayload"

@@ -277,9 +277,7 @@ export class CargoTrackingService {
         place && lastLocation
           ? {
               sequence: lastLocation.routeWaypoint?.sequence ?? null,
-              kind: lastLocation.routeWaypoint?.stop
-                ? ('STOP' as const)
-                : ('CHECKPOINT' as const),
+              kind: lastLocation.routeWaypoint?.stop ? ('STOP' as const) : ('CHECKPOINT' as const),
               code: place.code,
               name: place.name,
               observedAt: lastLocation.occurredAt,

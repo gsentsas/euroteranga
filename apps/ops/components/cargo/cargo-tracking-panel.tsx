@@ -1,9 +1,6 @@
 'use client';
 
-import type {
-  RoadFreightQr,
-  RoadFreightTrackingTokenSummary,
-} from '@euroteranga/auth-client';
+import type { RoadFreightQr, RoadFreightTrackingTokenSummary } from '@euroteranga/auth-client';
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
@@ -107,7 +104,11 @@ export function CargoTrackingPanel({
   };
 
   return (
-    <section className="et-network-panel" aria-label="QR et suivi public du fret" data-testid="cargo-tracking-panel">
+    <section
+      className="et-network-panel"
+      aria-label="QR et suivi public du fret"
+      data-testid="cargo-tracking-panel"
+    >
       <div className="et-actions">
         <h3>QR & suivi public</h3>
         <span className="et-tag">Sans PII</span>

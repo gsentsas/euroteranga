@@ -235,26 +235,26 @@ Les catégories d'exception sensibles sont volontairement réduites à
 
 Toutes les routes sont sous `/v1/admin/cargo`.
 
-| Méthode | Route                                       | Permission                    |
-| ------- | ------------------------------------------- | ----------------------------- |
-| GET     | `/`                                         | cargo.read                    |
-| GET     | `/:reference`                               | cargo.read                    |
-| POST    | `/`                                         | cargo.manage                  |
-| POST    | `/:reference/details`                       | cargo.manage                  |
-| POST    | `/:reference/assignment`                    | cargo.manage                  |
-| POST    | `/:reference/events`                        | cargo.manage                  |
-| GET     | `/:reference/quotes`                        | cargo.read + pricing.read     |
-| GET     | `/:reference/quotes/:quoteReference`        | cargo.read + pricing.read     |
-| POST    | `/:reference/quotes`                        | cargo.manage + pricing.manage |
-| POST    | `/:reference/quotes/:quoteReference`        | cargo.manage + pricing.manage |
-| POST    | `/:reference/quotes/:quoteReference/issue`  | cargo.manage + pricing.manage |
-| POST    | `/:reference/quotes/:quoteReference/accept` | cargo.manage + pricing.manage |
-| POST    | `/:reference/quotes/:quoteReference/cancel` | cargo.manage + pricing.manage |
-| GET     | `/:reference/qr` | cargo.read |
-| POST    | `/resolve-qr` | cargo.read |
-| POST    | `/scan` | cargo.manage |
-| GET     | `/:reference/tracking-tokens` | cargo.read |
-| POST    | `/:reference/tracking-tokens` | cargo.manage |
-| POST    | `/:reference/tracking-tokens/:tokenId/revoke` | cargo.manage |
+| Méthode | Route                                         | Permission                    |
+| ------- | --------------------------------------------- | ----------------------------- |
+| GET     | `/`                                           | cargo.read                    |
+| GET     | `/:reference`                                 | cargo.read                    |
+| POST    | `/`                                           | cargo.manage                  |
+| POST    | `/:reference/details`                         | cargo.manage                  |
+| POST    | `/:reference/assignment`                      | cargo.manage                  |
+| POST    | `/:reference/events`                          | cargo.manage                  |
+| GET     | `/:reference/quotes`                          | cargo.read + pricing.read     |
+| GET     | `/:reference/quotes/:quoteReference`          | cargo.read + pricing.read     |
+| POST    | `/:reference/quotes`                          | cargo.manage + pricing.manage |
+| POST    | `/:reference/quotes/:quoteReference`          | cargo.manage + pricing.manage |
+| POST    | `/:reference/quotes/:quoteReference/issue`    | cargo.manage + pricing.manage |
+| POST    | `/:reference/quotes/:quoteReference/accept`   | cargo.manage + pricing.manage |
+| POST    | `/:reference/quotes/:quoteReference/cancel`   | cargo.manage + pricing.manage |
+| GET     | `/:reference/qr`                              | cargo.read                    |
+| POST    | `/resolve-qr`                                 | cargo.read                    |
+| POST    | `/scan`                                       | cargo.manage                  |
+| GET     | `/:reference/tracking-tokens`                 | cargo.read                    |
+| POST    | `/:reference/tracking-tokens`                 | cargo.manage                  |
+| POST    | `/:reference/tracking-tokens/:tokenId/revoke` | cargo.manage                  |
 
 Toutes les mutations exigent CSRF.

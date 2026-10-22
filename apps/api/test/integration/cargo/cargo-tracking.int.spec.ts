@@ -168,10 +168,9 @@ describe('CARGO-TRACK-1 QR scans and public freight tracking', () => {
     expect((await staffCargoApi(reader).issueTrackingToken(reference)).status).toBe(403);
     expect(
       (
-        await staffCargoApi(manager).issueTrackingToken(
-          reference,
-          { expiresAt: new Date(Date.now() - 60_000).toISOString() },
-        )
+        await staffCargoApi(manager).issueTrackingToken(reference, {
+          expiresAt: new Date(Date.now() - 60_000).toISOString(),
+        })
       ).body.code,
     ).toBe('CARGO_TRACKING_TOKEN_EXPIRY_INVALID');
 
@@ -239,9 +238,9 @@ describe('CARGO-TRACK-1 QR scans and public freight tracking', () => {
     await expect(
       db(t.app).roadFreightPublicToken.delete({ where: { id: tokenRow.id } }),
     ).rejects.toThrow(/tracking tokens cannot be deleted/);
-    await expect(
-      db(t.app).$executeRawUnsafe('TRUNCATE road_freight_public_token'),
-    ).rejects.toThrow(/token history cannot be truncated/);
+    await expect(db(t.app).$executeRawUnsafe('TRUNCATE road_freight_public_token')).rejects.toThrow(
+      /token history cannot be truncated/,
+    );
 
     const revoked = await staffCargoApi(manager).revokeTrackingToken(
       reference,

@@ -171,7 +171,9 @@ test.describe('CARGO-1 OPS workspace', () => {
 
     const listed = await api.get(`/cargo/${reference}/tracking-tokens`);
     expect(listed.status()).toBe(200);
-    const tokens = (await listed.json()) as { items: Array<{ id: string; revokedAt: string | null }> };
+    const tokens = (await listed.json()) as {
+      items: Array<{ id: string; revokedAt: string | null }>;
+    };
     expect(tokens.items).toHaveLength(1);
     expect(JSON.stringify(tokens)).not.toContain(token);
 

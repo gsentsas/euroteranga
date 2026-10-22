@@ -1834,8 +1834,10 @@ export interface RoadFreightTrackingTokenSummary {
   revocationReason: string | null;
 }
 
-export interface RoadFreightTrackingIssuedToken
-  extends Omit<RoadFreightTrackingTokenSummary, 'revokedAt' | 'revocationReason'> {
+export interface RoadFreightTrackingIssuedToken extends Omit<
+  RoadFreightTrackingTokenSummary,
+  'revokedAt' | 'revocationReason'
+> {
   token: string;
 }
 
@@ -3687,10 +3689,7 @@ export function createAuthClient(baseUrl: string) {
     },
     cargoTracking: {
       public: (token: string) =>
-        call<PublicRoadFreightTracking>(
-          'GET',
-          '/v1/cargo-tracking/' + encodeURIComponent(token),
-        ),
+        call<PublicRoadFreightTracking>('GET', '/v1/cargo-tracking/' + encodeURIComponent(token)),
     },
     content: {
       page: (path: string) =>

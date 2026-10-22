@@ -125,8 +125,8 @@ export function PublicCargoTracking({ token }: { token: string }) {
           </section>
 
           <p className="tracking-privacy">
-            Ce suivi ne publie ni coordonnées personnelles, ni contenu déclaré, ni valeur,
-            ni prix, ni position GPS précise.
+            Ce suivi ne publie ni coordonnées personnelles, ni contenu déclaré, ni valeur, ni prix,
+            ni position GPS précise.
           </p>
         </div>
       ) : null}
