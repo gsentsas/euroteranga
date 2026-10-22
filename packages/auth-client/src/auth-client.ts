@@ -1360,6 +1360,52 @@ export interface FinanceTripSummary {
   fxConversionApplied: false;
 }
 
+export interface OpsProfitPlannedCost {
+  status: TripCostStatus;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  plannedCostMinor: string;
+  actualExpenseMinor: string;
+  varianceMinor: string;
+  remainingBudgetMinor: string;
+  /** Signed basis points. Positive means over budget. */
+  varianceBasisPoints: string | null;
+}
+
+export interface OpsProfitCargoCommercial {
+  currencyCode: string;
+  currencyMinorUnit: number;
+  acceptedQuoteCount: number;
+  acceptedCommercialValueMinor: string;
+  /** Deliberately zero until an explicit Finance workflow recognizes Cargo revenue. */
+  recognizedRevenueMinor: '0';
+}
+
+export interface OpsProfitCargoCapacity {
+  vehicleCount: number;
+  vehicleCodes: string[];
+  payloadCapacityKg: string;
+  cargoVolumeLiters: string;
+  usedWeightKg: string;
+  usedVolumeLiters: string;
+}
+
+export interface OpsProfitTripProjection {
+  trip: { id: string; reference: string; status: TripStatus };
+  financeActuals: FinanceCurrencySummary[];
+  plannedCost: OpsProfitPlannedCost | null;
+  cargo: {
+    shipmentCount: number;
+    acceptedQuoteCount: number;
+    shipmentsWithoutAcceptedQuote: number;
+    commercial: OpsProfitCargoCommercial[];
+    capacity: OpsProfitCargoCapacity;
+  };
+  warnings: string[];
+  fxConversionApplied: false;
+  cargoRevenueRecognitionApplied: false;
+}
+
 export interface FinanceRevenueInput {
   type: FinanceRevenueType;
   amountMinor: string;
@@ -4182,6 +4228,11 @@ export function createAuthClient(baseUrl: string) {
           call<FinanceTripSummary>(
             'GET',
             '/v1/admin/finance/trips/' + encodeURIComponent(tripReference),
+          ),
+        profitability: (tripReference: string) =>
+          call<OpsProfitTripProjection>(
+            'GET',
+            '/v1/admin/ops-profit/trips/' + encodeURIComponent(tripReference),
           ),
         createRevenue: (tripReference: string, input: FinanceRevenueInput) =>
           withCsrf<FinanceRevenue>(
