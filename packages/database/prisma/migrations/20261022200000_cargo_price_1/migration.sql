@@ -263,6 +263,18 @@ BEGIN
     RETURN OLD;
   END IF;
 
+  IF OLD."status" = 'ISSUED' THEN
+    IF NEW."status" = 'ISSUED' THEN
+      RAISE EXCEPTION 'issued road freight quote is immutable'
+        USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+    IF NEW."issued_by_identity_id" IS DISTINCT FROM OLD."issued_by_identity_id"
+       OR NEW."issued_at" IS DISTINCT FROM OLD."issued_at" THEN
+      RAISE EXCEPTION 'issued road freight quote issuance metadata is immutable'
+        USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+  END IF;
+
   IF NEW."status" IS DISTINCT FROM OLD."status" THEN
     IF OLD."status" = 'DRAFT' AND NEW."status" = 'ISSUED' THEN
       IF NOT "road_freight_quote_staff_active"(NEW."issued_by_identity_id") THEN
