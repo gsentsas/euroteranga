@@ -252,7 +252,8 @@ export class CargoTrackingService {
       },
     });
 
-    const place = lastLocation?.routeWaypoint?.stop ?? lastLocation?.routeWaypoint?.checkpoint ?? null;
+    const place =
+      lastLocation?.routeWaypoint?.stop ?? lastLocation?.routeWaypoint?.checkpoint ?? null;
     const latestEvent = shipment.events[0] ?? null;
 
     return {
