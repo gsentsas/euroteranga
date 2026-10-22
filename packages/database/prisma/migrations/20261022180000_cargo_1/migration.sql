@@ -324,6 +324,17 @@ DECLARE
 BEGIN
   IF NEW."trip_id" IS NULL THEN RETURN NEW; END IF;
 
+  -- Once loading has started, the shipment guard is authoritative for frozen
+  -- facts and assignment immutability. Returning here also lets normal
+  -- lifecycle/exception progression continue after the trip has departed.
+  IF TG_OP = 'UPDATE'
+     AND OLD."lifecycle_status" IN (
+       'LOADED', 'DEPARTED', 'IN_TRANSIT', 'ARRIVED', 'AVAILABLE',
+       'DELIVERED', 'REFUSED', 'CANCELLED'
+     ) THEN
+    RETURN NEW;
+  END IF;
+
   -- Lifecycle progression and exception updates do not re-validate a frozen
   -- assignment against the trip's current state. The assignment itself and
   -- load changes are validated below; entering ASSIGNED is also revalidated.
