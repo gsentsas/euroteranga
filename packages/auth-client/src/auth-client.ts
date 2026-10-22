@@ -1653,6 +1653,7 @@ export interface RoadFreightShipment {
   pickupRequired: boolean;
   deliveryRequired: boolean;
   booking: { reference: string } | null;
+  customer: { id: string; email: string } | null;
   trip: {
     id: string;
     reference: string;
@@ -1682,6 +1683,7 @@ export interface RoadFreightShipmentDetail extends RoadFreightShipment {
 export interface RoadFreightCreateInput {
   direction: RoadFreightDirection;
   bookingReference?: string;
+  customerIdentityId?: string;
   senderName: string;
   senderContact: string;
   recipientName: string;
