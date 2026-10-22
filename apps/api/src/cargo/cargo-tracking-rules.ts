@@ -1,7 +1,4 @@
-import type {
-  RoadFreightExceptionStatus,
-  RoadFreightLifecycleStatus,
-} from '@euroteranga/database';
+import type { CargoException, CargoLifecycle } from './cargo-rules.js';
 
 export type PublicCargoTrackingStatus =
   | 'PREPARING'
@@ -14,8 +11,8 @@ export type PublicCargoTrackingStatus =
   | 'CANCELLED';
 
 export function publicCargoTrackingStatus(
-  lifecycle: RoadFreightLifecycleStatus,
-  exception: RoadFreightExceptionStatus | null,
+  lifecycle: CargoLifecycle,
+  exception: CargoException | null,
 ): PublicCargoTrackingStatus {
   if (lifecycle === 'CANCELLED' || lifecycle === 'REFUSED') return 'CANCELLED';
   if (exception) return 'ATTENTION';
