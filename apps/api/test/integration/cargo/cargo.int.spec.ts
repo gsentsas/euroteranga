@@ -260,9 +260,7 @@ describe('CARGO-1 road freight, RBAC, capacity and history', () => {
     ).toBe(200);
     expect((await staffCargoApi(manager).event(reference, { type: 'LOADED' })).status).toBe(201);
 
-    const manifest = await adminApi(manager).post(
-      `/manifests/trips/${running.tripReference}`,
-    );
+    const manifest = await adminApi(manager).post(`/manifests/trips/${running.tripReference}`);
     expect(manifest.status, manifest.text).toBe(201);
 
     const policy = await adminApi(manager).post(
