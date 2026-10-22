@@ -1,0 +1,49 @@
+name: Temporary Cargo Track Formatter
+
+on:
+  push:
+    branches: [feat/cargo-track-1]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-workspace
+      - name: Format CARGO-TRACK-1 files
+        run: |
+          pnpm exec prettier --write \
+            apps/api/src/cargo/cargo-tracking.service.ts \
+            apps/api/test/integration/cargo/cargo-tracking.int.spec.ts \
+            apps/ops/components/cargo/cargo-admin.tsx \
+            apps/ops/components/cargo/cargo-tracking-panel.tsx \
+            apps/tracking/components/public-cargo-tracking.tsx \
+            docs/domain/cargo.md \
+            packages/auth-client/src/auth-client.ts \
+            tests/browser/specs/cargo.spec.ts \
+            apps/api/test/integration/cargo/upgrade-from-cargo-price-1.int.spec.ts
+      - name: Commit formatting when needed
+        run: |
+          if git diff --quiet; then
+            echo "FORMAT_DIFF=NONE"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/api/src/cargo/cargo-tracking.service.ts \
+            apps/api/test/integration/cargo/cargo-tracking.int.spec.ts \
+            apps/ops/components/cargo/cargo-admin.tsx \
+            apps/ops/components/cargo/cargo-tracking-panel.tsx \
+            apps/tracking/components/public-cargo-tracking.tsx \
+            docs/domain/cargo.md \
+            packages/auth-client/src/auth-client.ts \
+            tests/browser/specs/cargo.spec.ts \
+            apps/api/test/integration/cargo/upgrade-from-cargo-price-1.int.spec.ts
+          git commit -m "style(cargo-track): apply Prettier"
+          git push origin HEAD:feat/cargo-track-1
