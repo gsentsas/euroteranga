@@ -35,4 +35,5 @@ export function publicCargoTrackingStatus(
     case 'DELIVERED':
       return 'DELIVERED';
   }
+  throw new Error('unsupported cargo lifecycle');
 }
