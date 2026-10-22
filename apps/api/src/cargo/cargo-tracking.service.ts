@@ -5,6 +5,8 @@ import {
   isWellFormedOpaqueToken,
   secureRandomToken,
 } from '../auth/crypto/tokens.js';
+import { RATE_LIMITS } from '../auth/rate-limit/rate-limit.rules.js';
+import { RateLimitService } from '../auth/rate-limit/rate-limit.service.js';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
@@ -26,6 +28,7 @@ export class CargoTrackingService {
   constructor(
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
+    private readonly rateLimits: RateLimitService,
   ) {}
 
   private async shipmentId(rawReference: string): Promise<{ id: string; reference: string }> {
@@ -183,7 +186,8 @@ export class CargoTrackingService {
     });
   }
 
-  async publicProjection(token: string) {
+  async publicProjection(token: string, clientIp: string) {
+    await this.rateLimits.consume(RATE_LIMITS.cargoPublicTrackingIp, clientIp);
     if (!isWellFormedOpaqueToken(token)) throw CargoTrackingErrors.notFound();
     const now = new Date();
 
