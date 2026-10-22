@@ -215,6 +215,7 @@ DECLARE
   booking_customer UUID;
   booking_trip UUID;
   booking_direction "road_freight_direction";
+  customer_realm "auth_realm";
   frozen BOOLEAN;
 BEGIN
   IF TG_OP = 'DELETE' THEN
@@ -269,6 +270,17 @@ BEGIN
     ) THEN
       RAISE EXCEPTION 'road freight details are frozen after loading'
         USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+  END IF;
+
+  IF NEW."customer_identity_id" IS NOT NULL THEN
+    SELECT a."realm" INTO customer_realm
+    FROM "auth_identity" a
+    WHERE a."id" = NEW."customer_identity_id"
+    FOR SHARE;
+    IF NOT FOUND OR customer_realm <> 'CUSTOMER' THEN
+      RAISE EXCEPTION 'road freight customer identity must be CUSTOMER'
+        USING ERRCODE = 'check_violation';
     END IF;
   END IF;
 
@@ -647,6 +659,51 @@ $cargo$;
 CREATE TRIGGER "road_freight_trip_convoy_guard"
   BEFORE UPDATE OF "vehicle_id", "support_vehicle_id" ON "trip"
   FOR EACH ROW EXECUTE FUNCTION "road_freight_trip_convoy_guard"();
+
+-- A vehicle that carries active road freight cannot be made OUT_OF_SERVICE /
+-- RETIRED, stripped of dual capacity, or reduced below its already allocated
+-- kg/litre load. Fleet mutations lock the vehicle row first; cargo assignment
+-- takes that same row FOR SHARE, so these paths serialize without weakening the
+-- existing per trip/vehicle advisory capacity lock.
+CREATE FUNCTION "road_freight_vehicle_capacity_guard"() RETURNS trigger
+LANGUAGE plpgsql AS $cargo$
+DECLARE
+  assigned_weight NUMERIC(12,3);
+  assigned_volume BIGINT;
+BEGIN
+  IF NEW."status" IS NOT DISTINCT FROM OLD."status"
+     AND NEW."payload_capacity_kg" IS NOT DISTINCT FROM OLD."payload_capacity_kg"
+     AND NEW."cargo_volume_liters" IS NOT DISTINCT FROM OLD."cargo_volume_liters" THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT
+    COALESCE(sum(s."weight_kg"), 0),
+    COALESCE(sum(s."volume_liters"), 0)
+    INTO assigned_weight, assigned_volume
+  FROM "road_freight_shipment" s
+  WHERE s."vehicle_id" = NEW."id"
+    AND s."lifecycle_status" IN (
+      'ASSIGNED', 'LOADED', 'DEPARTED', 'IN_TRANSIT', 'ARRIVED', 'AVAILABLE'
+    );
+
+  IF assigned_weight > 0 OR assigned_volume > 0 THEN
+    IF NEW."status" <> 'ACTIVE'
+       OR NEW."payload_capacity_kg" IS NULL
+       OR NEW."cargo_volume_liters" IS NULL
+       OR assigned_weight > NEW."payload_capacity_kg"
+       OR assigned_volume > NEW."cargo_volume_liters" THEN
+      RAISE EXCEPTION 'active road freight conflicts with vehicle capacity or status'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$cargo$;
+
+CREATE TRIGGER "road_freight_vehicle_capacity_guard"
+  BEFORE UPDATE OF "status", "payload_capacity_kg", "cargo_volume_liters" ON "vehicle"
+  FOR EACH ROW EXECUTE FUNCTION "road_freight_vehicle_capacity_guard"();
 
 INSERT INTO "authorization_permission" ("key", "description") VALUES
   ('cargo.read', 'Read road-freight identity, assignment and operational history'),
