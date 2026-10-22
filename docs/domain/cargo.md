@@ -184,24 +184,77 @@ Audit dédié :
 - `ROAD_FREIGHT_QUOTE_CANCELLED`
 - `ROAD_FREIGHT_QUOTE_ACCESSED`
 
+## QR, scanner et suivi public — CARGO-TRACK-1
+
+Le QR opérationnel Cargo utilise le payload versionné :
+
+```
+ETC1:<ETC-reference>
+```
+
+Il contient uniquement la référence opaque du fret. Il ne contient ni nom,
+contact, contenu déclaré, valeur, booking, customer, prix ni URL publique.
+L'SVG est rendu localement ; un QR reste un identifiant et jamais une
+autorisation.
+
+Le scanner STAFF réutilise le même moteur `recordEvent` que les mutations
+Cargo normales : mêmes transitions, même verrouillage PostgreSQL, même
+idempotence et même audit.
+
+Le partage public utilise `RoadFreightPublicToken`. Le token brut est un
+secret CSPRNG 256 bits retourné une seule fois à la création ; seule son
+empreinte SHA-256 est persistée. Un token peut expirer ou être révoqué de
+manière irréversible. Les tokens et leur historique ne peuvent être ni
+supprimés ni tronqués.
+
+La route publique est :
+
+`GET /v1/cargo-tracking/:token`
+
+Elle renvoie uniquement une projection coarse-grained :
+
+- référence Cargo opaque ;
+- direction Paris ↔ Dakar ;
+- statut public borné ;
+- nombre de pièces ;
+- route et horaires planifiés si un voyage est affecté ;
+- dernier waypoint public connu et son horodatage.
+
+Elle n'expose jamais les coordonnées expéditeur/destinataire, le customer, la
+réservation, le contenu/valeur déclarés, les devis/prix, les UUIDs internes,
+les acteurs d'audit ou une position GPS précise.
+
+Les statuts internes et exceptions sont projetés vers :
+
+`PREPARING | RECEIVED | IN_TRANSIT | ARRIVED | AVAILABLE | DELIVERED | ATTENTION | CANCELLED`
+
+Les catégories d'exception sensibles sont volontairement réduites à
+`ATTENTION`.
+
 ## API STAFF
 
 Toutes les routes sont sous `/v1/admin/cargo`.
 
-| Méthode | Route                                       | Permission                    |
-| ------- | ------------------------------------------- | ----------------------------- |
-| GET     | `/`                                         | cargo.read                    |
-| GET     | `/:reference`                               | cargo.read                    |
-| POST    | `/`                                         | cargo.manage                  |
-| POST    | `/:reference/details`                       | cargo.manage                  |
-| POST    | `/:reference/assignment`                    | cargo.manage                  |
-| POST    | `/:reference/events`                        | cargo.manage                  |
-| GET     | `/:reference/quotes`                        | cargo.read + pricing.read     |
-| GET     | `/:reference/quotes/:quoteReference`        | cargo.read + pricing.read     |
-| POST    | `/:reference/quotes`                        | cargo.manage + pricing.manage |
-| POST    | `/:reference/quotes/:quoteReference`        | cargo.manage + pricing.manage |
-| POST    | `/:reference/quotes/:quoteReference/issue`  | cargo.manage + pricing.manage |
-| POST    | `/:reference/quotes/:quoteReference/accept` | cargo.manage + pricing.manage |
-| POST    | `/:reference/quotes/:quoteReference/cancel` | cargo.manage + pricing.manage |
+| Méthode | Route                                         | Permission                    |
+| ------- | --------------------------------------------- | ----------------------------- |
+| GET     | `/`                                           | cargo.read                    |
+| GET     | `/:reference`                                 | cargo.read                    |
+| POST    | `/`                                           | cargo.manage                  |
+| POST    | `/:reference/details`                         | cargo.manage                  |
+| POST    | `/:reference/assignment`                      | cargo.manage                  |
+| POST    | `/:reference/events`                          | cargo.manage                  |
+| GET     | `/:reference/quotes`                          | cargo.read + pricing.read     |
+| GET     | `/:reference/quotes/:quoteReference`          | cargo.read + pricing.read     |
+| POST    | `/:reference/quotes`                          | cargo.manage + pricing.manage |
+| POST    | `/:reference/quotes/:quoteReference`          | cargo.manage + pricing.manage |
+| POST    | `/:reference/quotes/:quoteReference/issue`    | cargo.manage + pricing.manage |
+| POST    | `/:reference/quotes/:quoteReference/accept`   | cargo.manage + pricing.manage |
+| POST    | `/:reference/quotes/:quoteReference/cancel`   | cargo.manage + pricing.manage |
+| GET     | `/:reference/qr`                              | cargo.read                    |
+| POST    | `/resolve-qr`                                 | cargo.read                    |
+| POST    | `/scan`                                       | cargo.manage                  |
+| GET     | `/:reference/tracking-tokens`                 | cargo.read                    |
+| POST    | `/:reference/tracking-tokens`                 | cargo.manage                  |
+| POST    | `/:reference/tracking-tokens/:tokenId/revoke` | cargo.manage                  |
 
 Toutes les mutations exigent CSRF.

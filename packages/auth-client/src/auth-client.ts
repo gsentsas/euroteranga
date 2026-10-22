@@ -1821,6 +1821,57 @@ export interface RoadFreightQuoteCancelInput extends RoadFreightQuoteTransitionI
   reason: string;
 }
 
+export interface RoadFreightQr {
+  reference: string;
+  svg: string;
+}
+
+export interface RoadFreightTrackingTokenSummary {
+  id: string;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  revocationReason: string | null;
+}
+
+export interface RoadFreightTrackingIssuedToken extends Omit<
+  RoadFreightTrackingTokenSummary,
+  'revokedAt' | 'revocationReason'
+> {
+  token: string;
+}
+
+export type PublicRoadFreightTrackingStatus =
+  | 'PREPARING'
+  | 'RECEIVED'
+  | 'IN_TRANSIT'
+  | 'ARRIVED'
+  | 'AVAILABLE'
+  | 'DELIVERED'
+  | 'ATTENTION'
+  | 'CANCELLED';
+
+export interface PublicRoadFreightTracking {
+  reference: string;
+  direction: RoadFreightDirection;
+  status: PublicRoadFreightTrackingStatus;
+  packageCount: number;
+  trip: {
+    status: string;
+    route: { code: string; name: string };
+    plannedDepartureAt: string | null;
+    plannedArrivalAt: string | null;
+  } | null;
+  lastUpdatedAt: string;
+  location: {
+    sequence: number | null;
+    kind: 'STOP' | 'CHECKPOINT';
+    code: string;
+    name: string;
+    observedAt: string;
+  } | null;
+}
+
 /** PR-14: the six server-derived check-in gates of one BookingPassenger. */
 export type CheckInGate = 'BOOKING' | 'PAYMENT' | 'DOCUMENTS' | 'COMPLIANCE' | 'SEAT' | 'BAGGAGE';
 export type CheckInGateStatus = 'PASS' | 'BLOCKED' | 'PENDING_REVIEW';
@@ -3636,6 +3687,10 @@ export function createAuthClient(baseUrl: string) {
       public: (token: string) =>
         call<PublicTrackingProjection>('GET', '/v1/tracking/' + encodeURIComponent(token)),
     },
+    cargoTracking: {
+      public: (token: string) =>
+        call<PublicRoadFreightTracking>('GET', '/v1/cargo-tracking/' + encodeURIComponent(token)),
+    },
     content: {
       page: (path: string) =>
         call<PublicContentPage>('GET', `/v1/content/pages?${query({ path })}`),
@@ -4307,6 +4362,34 @@ export function createAuthClient(baseUrl: string) {
             'staff',
             `/v1/admin/cargo/${encodeURIComponent(reference)}/events`,
             input,
+          ),
+        resolveQr: (qrPayload: string) =>
+          withCsrf<RoadFreightShipmentDetail>('staff', '/v1/admin/cargo/resolve-qr', {
+            qrPayload,
+          }),
+        scan: (qrPayload: string, input: RoadFreightEventInput) =>
+          withCsrf<RoadFreightEventResult>('staff', '/v1/admin/cargo/scan', {
+            qrPayload,
+            ...input,
+          }),
+        qr: (reference: string) =>
+          call<RoadFreightQr>('GET', `/v1/admin/cargo/${encodeURIComponent(reference)}/qr`),
+        trackingTokens: (reference: string) =>
+          call<{ items: RoadFreightTrackingTokenSummary[] }>(
+            'GET',
+            `/v1/admin/cargo/${encodeURIComponent(reference)}/tracking-tokens`,
+          ),
+        issueTrackingToken: (reference: string, expiresAt?: string) =>
+          withCsrf<RoadFreightTrackingIssuedToken>(
+            'staff',
+            `/v1/admin/cargo/${encodeURIComponent(reference)}/tracking-tokens`,
+            expiresAt ? { expiresAt } : {},
+          ),
+        revokeTrackingToken: (reference: string, tokenId: string, reason: string) =>
+          withCsrf<RoadFreightTrackingTokenSummary>(
+            'staff',
+            `/v1/admin/cargo/${encodeURIComponent(reference)}/tracking-tokens/${encodeURIComponent(tokenId)}/revoke`,
+            { reason },
           ),
         quotes: (reference: string) =>
           call<{ items: RoadFreightQuote[] }>(

@@ -68,6 +68,12 @@ export const RATE_LIMITS = {
     limit: 600,
     windowMs: 15 * MINUTE,
   },
+  /** Public Cargo tracking lookups per client address; tokens are capability secrets. */
+  cargoPublicTrackingIp: {
+    action: 'cargo-tracking:ip',
+    limit: 300,
+    windowMs: 15 * MINUTE,
+  },
   /** Customer seat assignments and self check-ins per identity (PR-14). */
   checkInCustomerIdentity: {
     action: 'check-in-customer:identity',

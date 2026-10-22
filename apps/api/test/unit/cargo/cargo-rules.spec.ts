@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CARGO_QR_PATTERN,
   CARGO_REFERENCE_PATTERN,
   CargoTransitionError,
   cargoEventFingerprint,
+  cargoQrPayload,
   generateCargoReference,
   normalizeCargoReference,
   normalizeCargoWeightKg,
+  parseCargoQrPayload,
   projectCargoEvent,
   withFreshCargoReference,
   type CargoProjection,
@@ -18,6 +21,12 @@ describe('cargo identity and exact weight', () => {
     expect(reference).toMatch(CARGO_REFERENCE_PATTERN);
     expect(normalizeCargoReference(' etc-0123456789ab ')).toBe('ETC-0123456789AB');
     expect(normalizeCargoReference('ETC-ILOU01234567')).toBeNull();
+
+    expect(cargoQrPayload('ETC-0123456789AB')).toBe('ETC1:ETC-0123456789AB');
+    expect('ETC1:ETC-0123456789AB').toMatch(CARGO_QR_PATTERN);
+    expect(parseCargoQrPayload(' etc1:etc-0123456789ab ')).toBe('ETC-0123456789AB');
+    expect(parseCargoQrPayload('ETC-0123456789AB')).toBeNull();
+    expect(parseCargoQrPayload('ETC2:ETC-0123456789AB')).toBeNull();
 
     expect(normalizeCargoWeightKg('1')).toBe('1.000');
     expect(normalizeCargoWeightKg('12.3')).toBe('12.300');

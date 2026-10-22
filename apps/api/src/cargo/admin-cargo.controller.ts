@@ -33,10 +33,17 @@ import {
 } from './cargo-quote.dto.js';
 import { CargoQuoteService } from './cargo-quote.service.js';
 import {
+  cargoTrackingTokenCreateSchema,
+  cargoTrackingTokenRevokeSchema,
+} from './cargo-tracking.dto.js';
+import { CargoTrackingService } from './cargo-tracking.service.js';
+import {
   cargoAssignmentSchema,
   cargoCreateSchema,
   cargoEventSchema,
   cargoListQuerySchema,
+  cargoQrResolveSchema,
+  cargoScanSchema,
   cargoUpdateSchema,
 } from './cargo.dto.js';
 import { CargoService } from './cargo.service.js';
@@ -52,6 +59,7 @@ export class AdminCargoController {
   constructor(
     private readonly cargo: CargoService,
     private readonly quotes: CargoQuoteService,
+    private readonly tracking: CargoTrackingService,
   ) {}
 
   @Get()
@@ -63,6 +71,32 @@ export class AdminCargoController {
     query: z.infer<typeof cargoListQuerySchema>,
   ) {
     return this.cargo.list(principal, query);
+  }
+
+  @Post('resolve-qr')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ description: 'Authenticated lookup of a versioned, PII-free Cargo QR.' })
+  resolveQr(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body(new ZodValidationPipe(cargoQrResolveSchema))
+    body: z.infer<typeof cargoQrResolveSchema>,
+  ) {
+    return this.cargo.resolveQr(principal, body.qrPayload);
+  }
+
+  @Post('scan')
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.CARGO_MANAGE)
+  @Header('Cache-Control', 'no-store')
+  @ApiCreatedResponse({ description: 'Idempotent Cargo event from a versioned QR scan.' })
+  scan(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body(new ZodValidationPipe(cargoScanSchema))
+    body: z.infer<typeof cargoScanSchema>,
+  ) {
+    return this.cargo.recordScan(principal, body);
   }
 
   @Post()
@@ -218,6 +252,54 @@ export class AdminCargoController {
     body: z.infer<typeof cargoQuoteCancelSchema>,
   ) {
     return this.quotes.cancel(principal, reference, quoteReference, body);
+  }
+
+  @Get(':reference/qr')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  @ApiOkResponse({ description: 'Locally generated PII-free Cargo QR SVG.' })
+  qr(@CurrentPrincipal() principal: AuthPrincipal, @Param('reference') reference: string) {
+    return this.cargo.qr(principal, reference);
+  }
+
+  @Get(':reference/tracking-tokens')
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ description: 'Cargo public tracking capabilities without token secrets.' })
+  trackingTokens(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('reference') reference: string,
+  ) {
+    return this.tracking.listTokens(principal, reference);
+  }
+
+  @Post(':reference/tracking-tokens')
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.CARGO_MANAGE)
+  @Header('Cache-Control', 'no-store')
+  @ApiCreatedResponse({ description: 'Creates one opaque public Cargo tracking link.' })
+  trackingTokenCreate(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('reference') reference: string,
+    @Body(new ZodValidationPipe(cargoTrackingTokenCreateSchema))
+    body: z.infer<typeof cargoTrackingTokenCreateSchema>,
+  ) {
+    return this.tracking.issueToken(principal, reference, body);
+  }
+
+  @Post(':reference/tracking-tokens/:tokenId/revoke')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.CARGO_MANAGE)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ description: 'Irreversibly revokes one Cargo public tracking link.' })
+  trackingTokenRevoke(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('reference') reference: string,
+    @Param('tokenId') tokenId: string,
+    @Body(new ZodValidationPipe(cargoTrackingTokenRevokeSchema))
+    body: z.infer<typeof cargoTrackingTokenRevokeSchema>,
+  ) {
+    return this.tracking.revokeToken(principal, reference, tokenId, body);
   }
 
   @Get(':reference')

@@ -158,6 +158,8 @@ jobs:
       DATABASE_URL: postgresql://euroteranga:ci-only-password@localhost:5432/euroteranga_ci
       API_HOST: 127.0.0.1
       API_PORT: '4000'
+      # Public, unauthenticated browser apps that call the Core API directly.
+      API_CORS_ORIGINS: http://localhost:3003
       # CUSTOMER: the client account and the booking app (PR-09).
       AUTH_CUSTOMER_ORIGINS: http://localhost:3002,http://localhost:3001
       AUTH_STAFF_ORIGINS: http://localhost:3004

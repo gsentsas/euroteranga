@@ -742,6 +742,8 @@ model AuthIdentity {
   roadFreightQuotesIssued           RoadFreightQuote[]         @relation("RoadFreightQuoteIssuer")
   roadFreightQuotesAccepted         RoadFreightQuote[]         @relation("RoadFreightQuoteAcceptor")
   roadFreightQuotesCancelled        RoadFreightQuote[]         @relation("RoadFreightQuoteCanceller")
+  roadFreightTrackingTokensCreated   RoadFreightPublicToken[]   @relation("RoadFreightTrackingTokenCreator")
+  roadFreightTrackingTokensRevoked   RoadFreightPublicToken[]   @relation("RoadFreightTrackingTokenRevoker")
   seatAssignments                  BookingPassengerSeat[]   @relation("BookingPassengerSeatAssigner")
   passengerCheckIns                PassengerCheckIn[]       @relation("PassengerCheckInActor")
   passengerBoardings               PassengerBoarding[]      @relation("PassengerBoardingActor")
@@ -1723,6 +1725,7 @@ model RoadFreightShipment {
   vehicle          Vehicle?                   @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   events           RoadFreightShipmentEvent[]
   quotes           RoadFreightQuote[]
+  trackingTokens   RoadFreightPublicToken[]
 
   @@index([direction, lifecycleStatus, id])
   @@index([exceptionStatus, id])
@@ -1735,6 +1738,26 @@ model RoadFreightShipment {
 
 /// CARGO-1 append-only operational event stream. Assignment ids are snapshots
 /// so reassignment is visible without exposing mutable history.
+model RoadFreightPublicToken {
+  id                  String    @id @default(uuid(7)) @db.Uuid
+  shipmentId          String    @map("shipment_id") @db.Uuid
+  tokenHash           Bytes     @unique @map("token_hash")
+  createdByIdentityId String    @map("created_by_identity_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt           DateTime? @map("expires_at") @db.Timestamptz(3)
+  revokedAt           DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revokedByIdentityId String?   @map("revoked_by_identity_id") @db.Uuid
+  revocationReason    String?   @map("revocation_reason") @db.VarChar(255)
+
+  shipment  RoadFreightShipment @relation(fields: [shipmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy AuthIdentity         @relation("RoadFreightTrackingTokenCreator", fields: [createdByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revokedBy AuthIdentity?        @relation("RoadFreightTrackingTokenRevoker", fields: [revokedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([shipmentId, revokedAt, expiresAt])
+  @@index([createdAt, id])
+  @@map("road_freight_public_token")
+}
+
 model RoadFreightQuote {
   id                     String                     @id @default(uuid(7)) @db.Uuid
   reference              String                     @unique @db.VarChar(17)

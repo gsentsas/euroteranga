@@ -4,6 +4,7 @@ import { preauthenticatedSession } from '../fixtures.js';
 import { BROWSER_API_URL, directAdminApi } from '../staff.js';
 
 const opsApp = appByName('ops');
+const trackingApp = appByName('tracking');
 const CARGO_REFERENCE = /ETC-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{12}/;
 
 function trackPageErrors(page: Page): string[] {
@@ -114,6 +115,77 @@ test.describe('CARGO-1 OPS workspace', () => {
     );
     await expect(quotes).toContainText('Accepté');
     await expect(quotes).toContainText('Paiement non déclenché');
+    expect(errors).toEqual([]);
+  });
+
+  test('OPS creates a privacy-safe public cargo link and revokes it', async ({ page }) => {
+    const errors = trackPageErrors(page);
+    await addSessionCookie(page.context(), preauthenticatedSession('permitManager'));
+    const api = directAdminApi(page.request);
+    const created = await api.post('/cargo', {
+      direction: 'PAR_DKR',
+      senderName: 'PRIVATE BROWSER SENDER',
+      senderContact: '+33199999999',
+      recipientName: 'PRIVATE BROWSER RECIPIENT',
+      recipientContact: '+221779999999',
+      weightKg: '12.500',
+      volumeLiters: 80,
+      packageCount: 2,
+      declaredContents: 'PRIVATE BROWSER CONTENT',
+      fragile: false,
+      professional: false,
+      pickupRequired: false,
+      deliveryRequired: false,
+    });
+    expect(created.status()).toBe(201);
+    const reference = ((await created.json()) as { reference: string }).reference;
+
+    await page.goto(appUrl(opsApp, '/cargo'));
+    const workspace = page.getByTestId('cargo-workspace');
+    const row = workspace
+      .locator('section[aria-labelledby="cargo-list-title"]')
+      .getByRole('row')
+      .filter({ hasText: reference });
+    await row.getByRole('button', { name: 'Consulter' }).click();
+
+    const trackingPanel = workspace.getByTestId('cargo-tracking-panel');
+    await expect(trackingPanel).toBeVisible();
+    await expect(trackingPanel.locator('img')).toBeVisible();
+    await trackingPanel.getByRole('button', { name: 'Créer un lien de suivi public' }).click();
+
+    const issued = trackingPanel.getByTestId('cargo-issued-tracking-link');
+    await expect(issued).toBeVisible();
+    const issuedText = (await issued.textContent()) ?? '';
+    const token = issuedText.match(/[A-Za-z0-9_-]{43}/)?.[0] ?? '';
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+    await page.goto(appUrl(trackingApp, `/cargo/${token}`));
+    await expect(page.getByTestId('public-cargo-tracking')).toBeVisible();
+    await expect(page.getByRole('heading', { name: reference })).toBeVisible();
+    const publicBody = await page.locator('body').innerText();
+    expect(publicBody).not.toContain('PRIVATE BROWSER SENDER');
+    expect(publicBody).not.toContain('PRIVATE BROWSER RECIPIENT');
+    expect(publicBody).not.toContain('PRIVATE BROWSER CONTENT');
+    expect(publicBody).not.toContain('+33199999999');
+    expect(publicBody).not.toContain('+221779999999');
+
+    const listed = await api.get(`/cargo/${reference}/tracking-tokens`);
+    expect(listed.status()).toBe(200);
+    const tokens = (await listed.json()) as {
+      items: Array<{ id: string; revokedAt: string | null }>;
+    };
+    expect(tokens.items).toHaveLength(1);
+    expect(JSON.stringify(tokens)).not.toContain(token);
+
+    const revoked = await api.post(
+      `/cargo/${reference}/tracking-tokens/${tokens.items[0]!.id}/revoke`,
+      { reason: 'Fin du partage navigateur' },
+    );
+    expect(revoked.status()).toBe(200);
+
+    await page.reload();
+    await expect(page.getByTestId('cargo-tracking-unavailable')).toBeVisible();
+    await expect(page.getByTestId('public-cargo-tracking')).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 
