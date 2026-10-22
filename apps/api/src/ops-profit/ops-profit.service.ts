@@ -22,7 +22,7 @@ function quoteTotal(lines: Array<{ kind: 'CHARGE' | 'DISCOUNT'; amountMinor: big
 }
 
 function parseWeightMilliKg(value: string): bigint {
-  const [whole, fraction = ''] = value.split('.');
+  const [whole = '0', fraction = ''] = value.split('.');
   return BigInt(whole) * 1000n + BigInt(fraction.padEnd(3, '0'));
 }
 
