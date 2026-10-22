@@ -67,6 +67,53 @@ test.describe('CARGO-1 OPS workspace', () => {
     await detail.getByRole('button', { name: 'Enregistrer l’événement' }).click();
     await expect(detail.locator('.et-tag').first()).toHaveText('Reçu');
     await expect(detail.getByTestId('cargo-timeline').locator('tbody tr')).toHaveCount(3);
+    await expect(detail.getByTestId('cargo-quotes')).toBeVisible();
+    await expect(detail.getByRole('form', { name: 'Créer un devis fret' })).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test('OPS_MANAGER creates, issues and accepts a freight quote without payment', async ({
+    page,
+  }) => {
+    const errors = trackPageErrors(page);
+    await addSessionCookie(page.context(), preauthenticatedSession('permitManager'));
+    await page.goto(appUrl(opsApp, '/cargo'));
+
+    const workspace = page.getByTestId('cargo-workspace');
+    const createCargo = workspace.getByRole('form', { name: 'Créer un colis ou fret' });
+    await createCargo.getByLabel('Expéditeur', { exact: true }).fill('Awa Pricing');
+    await createCargo.getByLabel('Contact expéditeur').fill('+33101010101');
+    await createCargo.getByLabel('Destinataire', { exact: true }).fill('Moussa Pricing');
+    await createCargo.getByLabel('Contact destinataire').fill('+221770000001');
+    await createCargo.getByLabel('Poids (kg)').fill('40,000');
+    await createCargo.getByLabel('Volume (litres)').fill('450');
+    await createCargo.getByLabel('Nombre de pièces').fill('3');
+    await createCargo.getByLabel('Contenu déclaré').fill('Fret commercial test');
+    await createCargo.getByRole('button', { name: 'Créer' }).click();
+
+    const detail = page.getByTestId('cargo-detail');
+    const quotes = detail.getByTestId('cargo-quotes');
+    await expect(quotes).toBeVisible();
+
+    const createQuote = quotes.getByRole('form', { name: 'Créer un devis fret' });
+    await createQuote.getByLabel('Devise').fill('EUR');
+    await createQuote.getByLabel('Libellé').fill('Transport Paris Dakar');
+    await createQuote.getByLabel('Montant (EUR)').fill('125,50');
+    await createQuote.getByRole('button', { name: 'Créer le brouillon' }).click();
+
+    await expect(quotes.getByRole('status')).toContainText('Brouillon de devis créé.');
+    await expect(quotes.getByTestId('cargo-quote-detail')).toContainText('125,50 EUR');
+    await expect(quotes.getByTestId('cargo-quote-detail')).toContainText(/ETCQ-[0-9A-Z]{12}/);
+
+    await quotes.getByRole('button', { name: 'Émettre le devis' }).click();
+    await expect(quotes.getByRole('status')).toContainText('Devis émis.');
+
+    await quotes.getByRole('button', { name: 'Accepter le devis' }).click();
+    await expect(quotes.getByRole('status')).toContainText(
+      'Devis accepté. Aucun paiement n’a été déclenché.',
+    );
+    await expect(quotes).toContainText('Accepté');
+    await expect(quotes).toContainText('Paiement non déclenché');
     expect(errors).toEqual([]);
   });
 
