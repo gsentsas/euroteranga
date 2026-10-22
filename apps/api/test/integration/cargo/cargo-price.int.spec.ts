@@ -107,7 +107,8 @@ describe('CARGO-PRICE-1 versioned commercial freight quotes', () => {
 
     expect((await staffCargoApi(denied).quotes(reference)).status).toBe(403);
     expect(
-      (await staffCargoApi(manager).issueQuote(reference, quoteReference, {}, { csrf: null })).status,
+      (await staffCargoApi(manager).issueQuote(reference, quoteReference, {}, { csrf: null }))
+        .status,
     ).toBe(403);
   });
 
@@ -277,16 +278,14 @@ describe('CARGO-PRICE-1 versioned commercial freight quotes', () => {
         },
       }),
     ).rejects.toThrow(/quote lines are frozen/);
-    await expect(
-      db(t.app).roadFreightQuote.delete({ where: { id: quote.id } }),
-    ).rejects.toThrow(/quotes cannot be deleted/);
-    await expect(
-      db(t.app).$executeRawUnsafe('TRUNCATE road_freight_quote_line'),
-    ).rejects.toThrow(/quote history cannot be truncated/);
+    await expect(db(t.app).roadFreightQuote.delete({ where: { id: quote.id } })).rejects.toThrow(
+      /quotes cannot be deleted/,
+    );
+    await expect(db(t.app).$executeRawUnsafe('TRUNCATE road_freight_quote_line')).rejects.toThrow(
+      /quote history cannot be truncated/,
+    );
 
-    expect(
-      await db(t.app).roadFreightQuote.count({ where: { shipmentId: shipment.id } }),
-    ).toBe(1);
+    expect(await db(t.app).roadFreightQuote.count({ where: { shipmentId: shipment.id } })).toBe(1);
   });
 
   it('rolls the quote transition back if the audit write fails', async () => {
@@ -318,9 +317,7 @@ describe('CARGO-PRICE-1 versioned commercial freight quotes', () => {
         ).status,
       ).toBe('DRAFT');
     } finally {
-      await db(t.app).$executeRawUnsafe(
-        'DROP TRIGGER test_fail_cargo_quote_audit ON audit_event',
-      );
+      await db(t.app).$executeRawUnsafe('DROP TRIGGER test_fail_cargo_quote_audit ON audit_event');
       await db(t.app).$executeRawUnsafe('DROP FUNCTION test_fail_cargo_quote_audit()');
     }
 
