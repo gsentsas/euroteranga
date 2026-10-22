@@ -1,6 +1,11 @@
 import type { ApiEnv } from '@euroteranga/config';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { adminApi, isolatedDatabase, staffActor, type StaffActor } from '../../support/admin-helpers.js';
+import {
+  adminApi,
+  isolatedDatabase,
+  staffActor,
+  type StaffActor,
+} from '../../support/admin-helpers.js';
 import { db } from '../../support/auth-helpers.js';
 import { cargoCreateBody, cargoTripFixture, staffCargoApi } from '../../support/cargo-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
