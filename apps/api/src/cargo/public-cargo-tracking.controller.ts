@@ -1,6 +1,7 @@
 import { Controller, Get, Header, Param } from '@nestjs/common';
 import { ApiNotFoundResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ErrorBody } from '../auth/dto/auth.dto.js';
+import { ClientIp } from '../auth/http/request-context.js';
 import { CargoTrackingService } from './cargo-tracking.service.js';
 
 @ApiTags('cargo tracking')
@@ -15,7 +16,7 @@ export class PublicCargoTrackingController {
     type: ErrorBody,
     description: 'Invalid, revoked or expired cargo tracking link.',
   })
-  publicTracking(@Param('token') token: string) {
-    return this.tracking.publicProjection(token);
+  publicTracking(@Param('token') token: string, @ClientIp() clientIp: string) {
+    return this.tracking.publicProjection(token, clientIp);
   }
 }
