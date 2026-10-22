@@ -4,6 +4,14 @@ export const CargoErrors = {
   notFound: () => new PublicApiError(404, 'CARGO_NOT_FOUND', 'Colis ou fret introuvable.'),
   bookingNotFound: () =>
     new PublicApiError(404, 'CARGO_BOOKING_NOT_FOUND', 'Réservation associée introuvable.'),
+  customerNotFound: () =>
+    new PublicApiError(404, 'CARGO_CUSTOMER_NOT_FOUND', 'Client associé introuvable.'),
+  customerMismatch: () =>
+    new PublicApiError(
+      409,
+      'CARGO_CUSTOMER_MISMATCH',
+      'Le client associé ne correspond pas au client de la réservation.',
+    ),
   assignmentTargetNotFound: () =>
     new PublicApiError(404, 'CARGO_ASSIGNMENT_TARGET_NOT_FOUND', 'Voyage ou véhicule introuvable.'),
   invalidTransition: () =>
