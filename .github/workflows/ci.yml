@@ -42,6 +42,42 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+  format-diagnostic:
+    name: format-diagnostic
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-workspace
+      - name: Format CARGO-PRICE-1 files with repository Prettier
+        run: |
+          pnpm exec prettier --write \
+            apps/api/src/cargo/admin-cargo.controller.ts \
+            apps/api/src/cargo/cargo-quote.errors.ts \
+            apps/api/src/cargo/cargo-quote.service.ts \
+            apps/api/test/integration/cargo/cargo-price.int.spec.ts \
+            apps/api/test/support/cargo-helpers.ts \
+            apps/ops/components/cargo/cargo-quote-panel.tsx \
+            docs/domain/cargo.md \
+            packages/auth-client/src/auth-client.ts
+      - name: Upload exact formatted files
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cargo-price-prettier
+          path: |
+            apps/api/src/cargo/admin-cargo.controller.ts
+            apps/api/src/cargo/cargo-quote.errors.ts
+            apps/api/src/cargo/cargo-quote.service.ts
+            apps/api/test/integration/cargo/cargo-price.int.spec.ts
+            apps/api/test/support/cargo-helpers.ts
+            apps/ops/components/cargo/cargo-quote-panel.tsx
+            docs/domain/cargo.md
+            packages/auth-client/src/auth-client.ts
+          retention-days: 1
+
   database:
     name: database
     runs-on: ubuntu-24.04
