@@ -547,6 +547,62 @@ export interface TripTimetableInput {
   }>;
 }
 
+export type TripCostStatus = 'DRAFT' | 'ESTIMATED' | 'LOCKED';
+export type TripCostCategory =
+  | 'FUEL'
+  | 'TOLLS'
+  | 'FERRY'
+  | 'BORDER_FEES'
+  | 'PERMITS'
+  | 'DRIVERS'
+  | 'ACCOMMODATION'
+  | 'MEALS_ALLOWANCES'
+  | 'MAINTENANCE'
+  | 'INSURANCE'
+  | 'CLEANING_PREPARATION'
+  | 'PARKING'
+  | 'STOP_COST'
+  | 'SUPPORT_VEHICLE'
+  | 'CONTINGENCY'
+  | 'OTHER';
+
+export interface TripCostItem {
+  id: string;
+  category: TripCostCategory;
+  label: string;
+  /** Exact integer minor units, represented as a string for BIGINT safety. */
+  amountMinor: string;
+  notes: string | null;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TripCostPlan {
+  /** null until the first mutation; reads still expose the implied empty draft. */
+  id: string | null;
+  tripId: string;
+  status: TripCostStatus;
+  currencyCode: 'EUR';
+  currencyMinorUnit: 2;
+  totalCostMinor: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  items: TripCostItem[];
+}
+
+export interface TripCostReplaceInput {
+  status: TripCostStatus;
+  currencyCode: 'EUR';
+  items: Array<{
+    category: TripCostCategory;
+    label: string;
+    amountMinor: string;
+    notes?: string;
+    position: number;
+  }>;
+}
+
 export interface TripCancelInput {
   reason: string;
   expectedStatus?: TripStatus;
@@ -3553,6 +3609,14 @@ export function createAuthClient(baseUrl: string) {
           ),
         trip: (tripId: string) =>
           call<AdminTrip>('GET', `/v1/admin/trips/${encodeURIComponent(tripId)}`),
+        tripCosts: (tripId: string) =>
+          call<TripCostPlan>('GET', `/v1/admin/trips/${encodeURIComponent(tripId)}/costs`),
+        replaceTripCosts: (tripId: string, input: TripCostReplaceInput) =>
+          withCsrf<TripCostPlan>(
+            'staff',
+            `/v1/admin/trips/${encodeURIComponent(tripId)}/costs`,
+            input,
+          ),
         createTrip: (input: TripCreateInput) =>
           withCsrf<AdminTrip>('staff', '/v1/admin/trips', input),
         replaceTimetable: (tripId: string, input: TripTimetableInput) =>

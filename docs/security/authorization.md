@@ -40,8 +40,8 @@ ADR-017 to ADR-020. This document contains no secret value.
 | `network.manage`           | Managing them, drafting and publishing route versions                               |
 | `fleet.read`               | Reading the vehicle registry and status history (PR-05)                             |
 | `fleet.manage`             | Registering vehicles, editing them, changing their status                           |
-| `trip.read`                | Reading trips, their timetable and vehicle (PR-06)                                  |
-| `trip.manage`              | Creating, timing, scheduling, cancelling trips; vehicles                            |
+| `trip.read`                | Reading trips, timetable, vehicle and internal operational cost plan                |
+| `trip.manage`              | Creating, timing, scheduling, cancelling trips; vehicles and operational costs      |
 | `seatmap.read`             | Reading seat maps, versions, cells and capacity (PR-07)                             |
 | `seatmap.manage`           | Creating seat maps, editing drafts, publishing versions                             |
 | `pricing.read`             | Reading fare tables, versions and fares (PR-08)                                     |

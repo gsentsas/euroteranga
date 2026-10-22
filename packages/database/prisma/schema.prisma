@@ -125,6 +125,37 @@ enum TripStatus {
   @@map("trip_status")
 }
 
+/// Maturity of the internal operational cost plan. LOCKED is terminal.
+enum TripCostStatus {
+  DRAFT
+  ESTIMATED
+  LOCKED
+
+  @@map("trip_cost_status")
+}
+
+/// Strict, traveller-independent classification of one planned trip cost.
+enum TripCostCategory {
+  FUEL
+  TOLLS
+  FERRY
+  BORDER_FEES
+  PERMITS
+  DRIVERS
+  ACCOMMODATION
+  MEALS_ALLOWANCES
+  MAINTENANCE
+  INSURANCE
+  CLEANING_PREPARATION
+  PARKING
+  STOP_COST
+  SUPPORT_VEHICLE
+  CONTINGENCY
+  OTHER
+
+  @@map("trip_cost_category")
+}
+
 enum VehicleStatus {
   PLANNED
   ACTIVE
@@ -1206,6 +1237,7 @@ model Trip {
   incidents               Incident[]
   financeRevenues         TripRevenue[]
   financeExpenses         TripExpense[]
+  costPlan                TripCostPlan?
 
   @@index([status, id])
   @@index([routeVersionId, id])
@@ -1216,6 +1248,43 @@ model Trip {
   @@index([actualDepartureAt, id])
   @@index([actualArrivalAt, id])
   @@map("trip")
+}
+
+/// Internal pre-departure cost plan. It is distinct from incurred expenses,
+/// ticket pricing, revenue and profitability.
+model TripCostPlan {
+  id                String         @id @default(uuid(7)) @db.Uuid
+  tripId            String         @unique @map("trip_id") @db.Uuid
+  status            TripCostStatus @default(DRAFT)
+  currencyCode      String         @default("EUR") @map("currency_code") @db.VarChar(3)
+  currencyMinorUnit Int            @default(2) @map("currency_minor_unit")
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip  Trip           @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  items TripCostItem[]
+
+  @@index([status, updatedAt])
+  @@map("trip_cost_plan")
+}
+
+/// One ordered component of a trip cost plan. Amounts are integer minor units.
+model TripCostItem {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  planId      String           @map("plan_id") @db.Uuid
+  category    TripCostCategory
+  label       String           @db.VarChar(160)
+  amountMinor BigInt           @map("amount_minor")
+  notes       String?          @db.VarChar(500)
+  position    Int
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  plan TripCostPlan @relation(fields: [planId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([planId, position])
+  @@index([planId, category])
+  @@map("trip_cost_item")
 }
 
 /// Planned time at one waypoint of the trip's route version (UTC). Editable

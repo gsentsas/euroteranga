@@ -15,6 +15,7 @@ export const TRIP_ACTION_LABELS: Record<string, string> = {
   TRIP_CANCELLED: 'Annulation',
   TRIP_VEHICLE_CHANGED: 'Changement de véhicule',
   TRIP_FARE_TABLE_CHANGED: 'Changement de tarification',
+  TRIP_COST_UPDATED: 'Coûts prévisionnels enregistrés',
   TRIP_DEPARTED: 'Départ réel',
   TRIP_COMPLETED: 'Arrivée / clôture',
 };

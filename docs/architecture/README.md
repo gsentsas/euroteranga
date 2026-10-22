@@ -156,6 +156,14 @@ per waypoint, and an optional `ACTIVE` vehicle. Lifecycle:
 See [`docs/domain/trips.md`](../domain/trips.md) and
 [ADR-023](../adr/ADR-023-trip-lifecycle.md).
 
+TRIP-COST-1 extends that same Trip aggregate with one internal cost plan and
+ordered exact minor-unit lines. `GET/POST /v1/admin/trips/:id/costs` reuse
+`trip.read`/`trip.manage`; a replacement locks the trip, replaces every line
+and appends its audit event in one transaction. The server derives the total,
+semantic no-ops write nothing, and `LOCKED` is terminal in both API and
+PostgreSQL. Public and customer projections do not access these tables. See
+[`docs/domain/trip-costs.md`](../domain/trip-costs.md).
+
 ## Seat maps (PR-07)
 
 `apps/api/src/seat-maps` (SeatMapModule):

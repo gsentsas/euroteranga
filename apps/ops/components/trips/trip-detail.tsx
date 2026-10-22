@@ -9,6 +9,7 @@ import { TripPricingPanel } from '../pricing/trip-pricing-panel';
 import { assignedLabel } from '../seat-maps/seat-map-format';
 import { SeatMapAssignmentForm } from '../seat-maps/seat-map-assignment-form';
 import type { PublishedVersionOption } from '../seat-maps/use-published-versions';
+import { TripCostPanel } from './trip-cost-panel';
 import {
   formatLocal,
   formatUtc,
@@ -502,6 +503,15 @@ export function TripDetail({
           onReload={onReload}
         />
       ) : null}
+
+      <TripCostPanel
+        tripId={trip.id}
+        tripReference={trip.reference}
+        canManage={canManage && trip.status !== 'CANCELLED'}
+        run={run}
+        busy={busy}
+        onSaved={onReload}
+      />
 
       {canManage && trip.status !== 'CANCELLED' ? (
         <VehicleForm trip={trip} vehicles={vehicles} run={run} busy={busy} onSaved={onReload} />

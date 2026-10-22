@@ -49,6 +49,8 @@ import {
 } from './trip.dto.js';
 import type { FareTableVersionIdentity } from '../pricing/fare-assignment.js';
 import { FareResolutionService } from '../pricing/fare-resolution.service.js';
+import { TripCostReplaceBody, tripCostReplaceSchema } from './trip-cost.dto.js';
+import { TripCostService } from './trip-cost.service.js';
 import { TripService, withFareTableIdentityOnly } from './trip.service.js';
 
 const uuidV7 = new ParseUUIDPipe({ version: '7' });
@@ -69,6 +71,7 @@ const uuidV7 = new ParseUUIDPipe({ version: '7' });
 export class AdminTripController {
   constructor(
     private readonly trips: TripService,
+    private readonly tripCosts: TripCostService,
     private readonly fares: FareResolutionService,
     private readonly authorization: AuthorizationService,
   ) {}
@@ -117,6 +120,29 @@ export class AdminTripController {
   @ApiOkResponse({ description: 'Trip with route geometry, timetable, vehicle and history.' })
   trip(@Param('id', uuidV7) id: string, @CurrentPrincipal() principal: AuthPrincipal) {
     return this.forCaller(principal, () => this.trips.trip(id));
+  }
+
+  @Get(':id/costs')
+  @RequirePermissions(PERMISSIONS.TRIP_READ)
+  @ApiOkResponse({ description: 'Internal operational cost plan with a server-derived total.' })
+  costs(@Param('id', uuidV7) id: string) {
+    return this.tripCosts.costPlan(id);
+  }
+
+  @Post(':id/costs')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  @RequirePermissions(PERMISSIONS.TRIP_MANAGE)
+  @ApiOkResponse({ description: 'Complete cost plan replaced atomically and audited.' })
+  @ApiConflictResponse({ type: ErrorBody, description: 'TRIP_COST_LOCKED' })
+  @ApiBody({ type: TripCostReplaceBody })
+  replaceCosts(
+    @Param('id', uuidV7) id: string,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body(new ZodValidationPipe(tripCostReplaceSchema))
+    body: z.infer<typeof tripCostReplaceSchema>,
+  ) {
+    return this.tripCosts.replaceCostPlan(id, body, principal);
   }
 
   @Post()

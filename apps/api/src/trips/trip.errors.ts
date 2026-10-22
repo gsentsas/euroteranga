@@ -98,6 +98,12 @@ export const TripErrors = {
       "Un motif est obligatoire pour changer le véhicule d'un voyage planifié.",
     ),
   timetableInvalid: (message: string) => new PublicApiError(422, 'TRIP_TIMETABLE_INVALID', message),
+  costPlanLocked: () =>
+    new PublicApiError(
+      409,
+      'TRIP_COST_LOCKED',
+      'Le chiffrage de ce voyage est verrouillé et ne peut plus être modifié.',
+    ),
   hasConfirmedBookings: () =>
     new PublicApiError(
       409,

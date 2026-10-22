@@ -187,6 +187,15 @@ cancelled trip.
 Trip history itself remains independent of the booking list. See
 [bookings.md](bookings.md).
 
+## Operational cost plan (TRIP-COST-1)
+
+Each trip may have one internal, ordered operational cost plan. Its exact EUR
+minor-unit total is derived from detailed lines on the server. `trip.read`
+reads it, `trip.manage` replaces it atomically, and `LOCKED` is a terminal
+database-enforced snapshot. It is distinct from ticket pricing, incurred
+finance expenses, revenue and profitability, and is never included in public
+trip or booking projections. See [trip-costs.md](trip-costs.md).
+
 ## Payments and confirmed bookings (PR-10)
 
 A booking becomes CONFIRMED when its payment succeeds. Refunds do not exist
