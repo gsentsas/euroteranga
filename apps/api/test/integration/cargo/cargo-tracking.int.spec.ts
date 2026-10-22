@@ -213,6 +213,20 @@ describe('CARGO-TRACK-1 QR scans and public freight tracking', () => {
     expect(publicJson).not.toContain('longitude');
     expect((await publicHttp.get('/v1/cargo-tracking/not-a-token')).status).toBe(404);
 
+    const shipment = await db(t.app).roadFreightShipment.findUniqueOrThrow({
+      where: { reference },
+      select: { id: true },
+    });
+    await expect(
+      db(t.app).roadFreightPublicToken.create({
+        data: {
+          shipmentId: shipment.id,
+          tokenHash: Buffer.from('short'),
+          createdByIdentityId: manager.id,
+        },
+      }),
+    ).rejects.toThrow();
+
     const tokenRow = await db(t.app).roadFreightPublicToken.findUniqueOrThrow({
       where: { id: issued.body.id as string },
     });
