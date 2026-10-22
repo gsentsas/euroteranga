@@ -261,10 +261,7 @@ describe('trip operational costs (isolated database)', () => {
       },
     });
     const initialBody = body('ESTIMATED', [{ ...lines[0], position: 0 }]);
-    const initial = await adminApi(manager).post(
-      `/trips/${cancelledTrip.id}/costs`,
-      initialBody,
-    );
+    const initial = await adminApi(manager).post(`/trips/${cancelledTrip.id}/costs`, initialBody);
     expect(initial.status).toBe(200);
 
     const cancelled = await adminApi(manager).post(`/trips/${cancelledTrip.id}/cancel`, {
@@ -279,10 +276,7 @@ describe('trip operational costs (isolated database)', () => {
       });
     expect(await auditCount()).toBe(1);
 
-    const exactNoOp = await adminApi(manager).post(
-      `/trips/${cancelledTrip.id}/costs`,
-      initialBody,
-    );
+    const exactNoOp = await adminApi(manager).post(`/trips/${cancelledTrip.id}/costs`, initialBody);
     expect(exactNoOp.status).toBe(200);
     expect(exactNoOp.body.updatedAt).toBe(initial.body.updatedAt);
     expect(await auditCount()).toBe(1);
