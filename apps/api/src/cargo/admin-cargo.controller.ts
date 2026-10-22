@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import {
   ApiCreatedResponse,
   ApiForbiddenResponse,
@@ -59,6 +59,7 @@ export class AdminCargoController {
   }
 
   @Post(':reference/details')
+  @HttpCode(200)
   @UseGuards(CsrfGuard)
   @RequirePermissions(PERMISSIONS.CARGO_MANAGE)
   @Header('Cache-Control', 'no-store')
@@ -73,6 +74,7 @@ export class AdminCargoController {
   }
 
   @Post(':reference/assignment')
+  @HttpCode(200)
   @UseGuards(CsrfGuard)
   @RequirePermissions(PERMISSIONS.CARGO_MANAGE)
   @Header('Cache-Control', 'no-store')
