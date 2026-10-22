@@ -562,10 +562,11 @@ DECLARE
   shipment RECORD;
   latest RECORD;
 BEGIN
-  target_id := CASE
-    WHEN TG_TABLE_NAME = 'road_freight_shipment' THEN NEW."id"
-    ELSE NEW."shipment_id"
-  END;
+  IF TG_TABLE_NAME = 'road_freight_shipment' THEN
+    target_id := NEW."id";
+  ELSE
+    target_id := NEW."shipment_id";
+  END IF;
   SELECT s.* INTO shipment FROM "road_freight_shipment" s WHERE s."id" = target_id;
   IF NOT FOUND THEN RETURN NULL; END IF;
   SELECT e.* INTO latest

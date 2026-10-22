@@ -39,9 +39,9 @@ test.describe('CARGO-1 OPS workspace', () => {
 
     const workspace = page.getByTestId('cargo-workspace');
     const create = workspace.getByRole('form', { name: 'Créer un colis ou fret' });
-    await create.getByLabel('Expéditeur').fill('Awa Cargo');
+    await create.getByLabel('Expéditeur', { exact: true }).fill('Awa Cargo');
     await create.getByLabel('Contact expéditeur').fill('+33102030405');
-    await create.getByLabel('Destinataire').fill('Moussa Cargo');
+    await create.getByLabel('Destinataire', { exact: true }).fill('Moussa Cargo');
     await create.getByLabel('Contact destinataire').fill('+221770102030');
     await create.getByLabel('Poids (kg)').fill('25,500');
     await create.getByLabel('Volume (litres)').fill('320');
