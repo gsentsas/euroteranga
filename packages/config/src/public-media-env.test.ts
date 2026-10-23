@@ -104,21 +104,23 @@ describe('public media library configuration (MEDIA-1)', () => {
     );
   });
 
-  it('allows LOCAL public media in production, unlike passenger documents', () => {
+  it('allows separate LOCAL public media and private passenger storage in production', () => {
     expect(
       loadApiEnv(
-        production({ PUBLIC_MEDIA_STORAGE: 'LOCAL', PUBLIC_MEDIA_LOCAL_ROOT: '/srv/et/media' }),
-      ).PUBLIC_MEDIA_STORAGE,
-    ).toBe('LOCAL');
-    expect(
-      problems(
         production({
+          PUBLIC_MEDIA_STORAGE: 'LOCAL',
+          PUBLIC_MEDIA_LOCAL_ROOT: '/srv/et/media',
           OBJECT_STORAGE_PROVIDER: 'LOCAL',
           OBJECT_STORAGE_LOCAL_ROOT: '/srv/et/private',
           MALWARE_SCANNER: 'CLAMAV',
           CLAMAV_HOST: 'clamav.internal',
         }),
       ),
-    ).toContain('LOCAL is refused in staging and production');
+    ).toMatchObject({
+      PUBLIC_MEDIA_STORAGE: 'LOCAL',
+      OBJECT_STORAGE_PROVIDER: 'LOCAL',
+      OBJECT_STORAGE_LOCAL_ROOT: '/srv/et/private',
+      MALWARE_SCANNER: 'CLAMAV',
+    });
   });
 });
