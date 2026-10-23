@@ -364,7 +364,7 @@ BEGIN
        OR NEW."excess_charge_minor" IS NOT NULL
        OR NEW."excess_charge_currency_code" IS NOT NULL
        OR NEW."excess_charge_currency_minor_unit" IS NOT NULL THEN
-      RAISE EXCEPTION 'baggage must be registered without measured pricing projections'
+      RAISE EXCEPTION 'baggage must be registered without operational or measured pricing projections'
         USING ERRCODE = 'check_violation';
     END IF;
 
