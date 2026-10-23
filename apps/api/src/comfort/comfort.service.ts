@@ -214,7 +214,8 @@ export class ComfortService {
       const latest = latestByWaypoint.get(waypoint.id);
       const place = waypoint.stop ?? waypoint.checkpoint;
       if (!place) throw new Error('route waypoint has no place');
-      const travellerVisible = waypoint.stop !== null || waypoint.checkpoint?.travellerVisible === true;
+      const travellerVisible =
+        waypoint.stop !== null || waypoint.checkpoint?.travellerVisible === true;
       const status = latest?.type ?? ('PLANNED' as const);
       return {
         routeWaypointId: waypoint.id,
