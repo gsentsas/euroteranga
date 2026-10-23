@@ -49,6 +49,74 @@ export function formatWeightKg(value: string | null): string {
   return value === null ? 'Non pesé' : `${value.replace('.', ',')} kg`;
 }
 
+
+function formatExactMoney(amountMinor: string, currencyCode: string, minorUnit: number): string {
+  const amount = BigInt(amountMinor);
+  if (minorUnit === 0) return `${amount.toString()} ${currencyCode}`;
+  const scale = 10n ** BigInt(minorUnit);
+  const major = amount / scale;
+  const minor = (amount % scale).toString().padStart(minorUnit, '0');
+  return `${major.toString()},${minor} ${currencyCode}`;
+}
+
+function AllowanceSummary({ item }: { item: Baggage }) {
+  const allowance = item.allowance;
+  if (allowance.status === 'NOT_CONFIGURED' || !allowance.policy) {
+    return <p>Franchise bagage non configurée pour cette tarification historique.</p>;
+  }
+
+  const piece = allowance.pieceOrdinal ?? 0;
+  const includedPiece = piece > 0 && piece <= allowance.policy.includedPieces;
+  const base = (
+    <>
+      Franchise <strong>{allowance.policy.name}</strong> : pièce {piece} ·{' '}
+      {includedPiece
+        ? `jusqu’à ${formatWeightKg(allowance.policy.includedWeightKgPerPiece)} inclus`
+        : 'bagage additionnel hors nombre de pièces incluses'}
+      .
+    </>
+  );
+
+  if (allowance.status === 'PENDING_WEIGHT') {
+    return (
+      <p>
+        {base} Le supplément éventuel sera déterminé après la pesée officielle.
+      </p>
+    );
+  }
+  if (allowance.status === 'INCLUDED') {
+    return (
+      <p>
+        {base} <strong>Aucun supplément bagage.</strong>
+      </p>
+    );
+  }
+  if (allowance.status === 'EXCESS_UNPRICED') {
+    return (
+      <p>
+        {base} Excédent : {formatWeightKg(allowance.excessWeightKg)}.{' '}
+        <strong>Tarif à confirmer par EURO TERANGA.</strong>
+      </p>
+    );
+  }
+
+  return (
+    <p>
+      {base} Excédent : {formatWeightKg(allowance.excessWeightKg)}. Supplément calculé :{' '}
+      <strong>
+        {allowance.excessCharge
+          ? formatExactMoney(
+              allowance.excessCharge.amountMinor,
+              allowance.excessCharge.currencyCode,
+              allowance.excessCharge.currencyMinorUnit,
+            )
+          : '—'}
+      </strong>
+      . Aucun paiement n’est déclenché depuis cet écran.
+    </p>
+  );
+}
+
 interface PassengerChoice {
   bookingReference: string;
   passenger: Passenger;
@@ -87,6 +155,7 @@ function BaggageCard({ item }: { item: Baggage }) {
         {BAGGAGE_TYPE_LABELS[item.type]} de {item.passenger.givenName} {item.passenger.familyName}
         {' — '}poids mesuré : {formatWeightKg(item.measuredWeightKg)}
       </p>
+      <AllowanceSummary item={item} />
       <FormAlert message={error} />
       <div className="et-actions">
         <button
@@ -229,9 +298,10 @@ export function CustomerBaggage() {
         </button>
       </div>
       <p>
-        Déclarez vos bagages avant le départ. Le poids officiel est mesuré par l’équipe EURO TERANGA
-        lors de la prise en charge. Aucune franchise ni aucun supplément bagage n’est calculé ou
-        facturé ici.
+        Déclarez vos bagages avant le départ. La franchise applicable est figée au moment de
+        l’enregistrement du bagage à partir de la tarification historique de la réservation. Le
+        poids officiel est mesuré par l’équipe EURO TERANGA ; un supplément éventuel est alors
+        calculé selon les paliers configurés. Aucun paiement n’est déclenché depuis cet espace.
       </p>
       <FormAlert message={error} />
       {notice ? (
