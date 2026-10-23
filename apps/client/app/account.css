@@ -218,6 +218,10 @@
 }
 
 @media (max-width: 48rem) {
+  .et-comfort-grid {
+    grid-template-columns: 1fr;
+  }
+
   .et-client-home,
   .et-account-sections {
     margin-top: -2.4rem;
@@ -238,4 +242,57 @@
   .et-client-welcome {
     padding: 1rem;
   }
+}
+
+
+.et-comfort-summary {
+  display: grid;
+  gap: 0.85rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid #dce5e0;
+  border-radius: 0.95rem;
+  background: #f7fcf9;
+}
+
+.et-comfort-summary h4,
+.et-comfort-summary p {
+  margin: 0;
+}
+
+.et-comfort-summary > .et-actions > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.et-comfort-summary > .et-actions p,
+.et-comfort-note {
+  color: #5a6762;
+  font-size: 0.88rem;
+}
+
+.et-comfort-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.et-comfort-step {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.9rem;
+  border: 1px solid #e3eae6;
+  border-radius: 0.8rem;
+  background: #fff;
+}
+
+.et-comfort-step > span {
+  color: #33443e;
+  font-size: 0.9rem;
+}
+
+.et-comfort-note {
+  padding-left: 0.8rem;
+  border-left: 3px solid #e7aa2f;
 }
