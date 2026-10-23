@@ -12,6 +12,8 @@ GIT_URL="${EUROTERANGA_GIT_URL:-https://github.com/gsentsas/euroteranga.git}"
 NODE_PATH=/opt/plesk/node/24/bin:/usr/local/bin:/usr/bin:/bin
 KEEP_RELEASES="${KEEP_RELEASES:-4}"
 SERVICES=(web booking client tracking ops crew api)
+# shellcheck source=lib/readiness.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/readiness.sh"
 
 usage() { echo "Usage: deploy-release.sh <40-char-main-commit-sha>" >&2; exit 2; }
 [ "$(id -u)" -eq 0 ] || { echo "Must run as root" >&2; exit 1; }
@@ -61,20 +63,11 @@ if [ ! -d "$RELEASE" ]; then
     exit 1
   fi
 
-  # git archive intentionally produces no .git directory, while the hygiene
-  # gate relies on git ls-files/git grep. Reconstruct only a temporary index
-  # from the archived release before dependency installation so the gate scans
-  # exactly the source files that will be deployed, not node_modules/build
-  # artifacts. The temporary repository is removed even when the gate fails.
+  # The hygiene gate supports a git-archive release tree directly; no temporary
+  # .git repository is reconstructed here. Scan the exact source tree before
+  # dependency installation so generated artifacts cannot hide a violation.
   runuser -u "$APP_USER" -- env HOME="$APP_ROOT" PATH="$NODE_PATH" \
-    bash -c "set -euo pipefail
-cd '$TMP'
-git init -q
-trap 'rm -rf .git' EXIT
-git add -f -A
-pnpm check:forbidden-files
-rm -rf .git
-trap - EXIT"
+    bash -c "cd '$TMP' && bash scripts/check-forbidden-files.sh"
 
   runuser -u "$APP_USER" -- bash -c 'printf "%s\\n" "$1" >"$2/.release-sha"' _ "$SHA" "$TMP"
   runuser -u "$APP_USER" -- env HOME="$APP_ROOT" PATH="$NODE_PATH" \
@@ -114,34 +107,21 @@ mv -Tf "$NEW_LINK" "$CURRENT"
 restart_all() {
   for service in "${SERVICES[@]}"; do systemctl restart "euroteranga-${service}.service"; done
 }
-verify_loopback_once() {
-  curl --fail --silent --show-error --max-time 2 http://127.0.0.1:3206/health/ready |
-    grep -q '"status":"ok"'
-  for port in 3200 3201 3202 3203 3204 3205; do
-    curl --fail --silent --show-error --max-time 2 "http://127.0.0.1:${port}/" >/dev/null
-  done
-}
-
-wait_for_loopback() {
-  local attempt
-  for attempt in $(seq 1 30); do
-    if verify_loopback_once; then
-      return 0
-    fi
-    sleep 1
-  done
-  return 1
-}
 
 restart_all
-if ! wait_for_loopback; then
-  echo "New release failed loopback health checks" >&2
+if ! wait_until_ready "release ${SHA:0:12}"; then
+  echo "New release failed its readiness checks" >&2
   if [ -n "$PREVIOUS" ] && [ -d "$PREVIOUS" ]; then
-    ROLLBACK_LINK="$APP_ROOT/.current.rollback.$$"
+    ROLLBACK_LINK="$APP_ROOT/.current.rollback.$"
     ln -s "$PREVIOUS" "$ROLLBACK_LINK"
     mv -Tf "$ROLLBACK_LINK" "$CURRENT"
     restart_all
     echo "Application symlink restored to $(basename "$PREVIOUS")" >&2
+    if wait_until_ready "previous release $(basename "$PREVIOUS" | cut -c1-12)"; then
+      echo "Previous release is serving again" >&2
+    else
+      echo "Previous release is NOT ready either: manual intervention required" >&2
+    fi
     echo "Database migrations were not rolled back automatically" >&2
   fi
   exit 1
