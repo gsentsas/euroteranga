@@ -119,7 +119,7 @@ export function ComfortAdmin({
         routeWaypointId: step.routeWaypointId,
         type,
         occurredAt: new Date().toISOString(),
-        actualFacilities: type === 'COMPLETED' ? facilities[step.routeWaypointId] ?? [] : [],
+        actualFacilities: type === 'COMPLETED' ? (facilities[step.routeWaypointId] ?? []) : [],
       });
       if (!result.ok) {
         setError(result.error.message);
@@ -167,7 +167,9 @@ export function ComfortAdmin({
         <>
           <dl className="et-booking-admin-summary">
             <dt>Étape actuelle</dt>
-            <dd>{view.currentStep ? `${view.currentStep.code} — ${view.currentStep.name}` : '—'}</dd>
+            <dd>
+              {view.currentStep ? `${view.currentStep.code} — ${view.currentStep.name}` : '—'}
+            </dd>
             <dt>Prochaine étape</dt>
             <dd>{view.nextStep ? `${view.nextStep.code} — ${view.nextStep.name}` : '—'}</dd>
             <dt>Prochaine pause</dt>
@@ -205,9 +207,15 @@ export function ComfortAdmin({
                       <td>{formatAt(step.plannedArrivalAt)}</td>
                       <td>
                         {step.status === 'COMPLETED' && step.actualFacilities.length > 0 ? (
-                          <>Constatés : {step.actualFacilities.map((item) => FACILITY_LABELS[item]).join(', ')}</>
+                          <>
+                            Constatés:{' '}
+                            {step.actualFacilities.map((item) => FACILITY_LABELS[item]).join(', ')}
+                          </>
                         ) : step.plannedFacilities.length > 0 ? (
-                          <>Prévus : {step.plannedFacilities.map((item) => FACILITY_LABELS[item]).join(', ')}</>
+                          <>
+                            Prévus:{' '}
+                            {step.plannedFacilities.map((item) => FACILITY_LABELS[item]).join(', ')}
+                          </>
                         ) : (
                           '—'
                         )}
