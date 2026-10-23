@@ -43,11 +43,8 @@ export function staffBaggagePolicyApi(actor: StaffActor) {
       body: unknown,
       options: { csrf?: string | null } = {},
     ) => api.post(`/baggage/policies/${id}/versions/${versionId}/tiers`, body, options),
-    publish: (
-      id: string,
-      versionId: string,
-      options: { csrf?: string | null } = {},
-    ) => api.post(`/baggage/policies/${id}/versions/${versionId}/publish`, {}, options),
+    publish: (id: string, versionId: string, options: { csrf?: string | null } = {}) =>
+      api.post(`/baggage/policies/${id}/versions/${versionId}/publish`, {}, options),
   };
 }
 

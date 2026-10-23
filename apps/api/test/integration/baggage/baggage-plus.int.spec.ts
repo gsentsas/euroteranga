@@ -171,21 +171,17 @@ describe('BAGGAGE-PLUS-1 versioned allowance and excess pricing', () => {
       ],
     });
 
-    const invalidMoney = await staffBaggagePolicyApi(manager).replaceTiers(
-      policyId,
-      versionOneId,
-      {
-        tiers: [
-          {
-            code: 'INVALID',
-            label: 'Invalid',
-            maxExcessWeightKg: '5.000',
-            chargeMinor: 12.34,
-            position: 0,
-          },
-        ],
-      },
-    );
+    const invalidMoney = await staffBaggagePolicyApi(manager).replaceTiers(policyId, versionOneId, {
+      tiers: [
+        {
+          code: 'INVALID',
+          label: 'Invalid',
+          maxExcessWeightKg: '5.000',
+          chargeMinor: 12.34,
+          position: 0,
+        },
+      ],
+    });
     expect(invalidMoney.status).toBe(400);
   });
 
@@ -331,7 +327,9 @@ describe('BAGGAGE-PLUS-1 versioned allowance and excess pricing', () => {
         })
       ).status,
     ).toBe(201);
-    expect((await staffBaggagePolicyApi(manager).publish(policyId, versionTwo.id)).status).toBe(201);
+    expect((await staffBaggagePolicyApi(manager).publish(policyId, versionTwo.id)).status).toBe(
+      201,
+    );
 
     const oldWeighted = await staffBaggageApi(manager).weight(historical.body.reference, {
       measuredWeightKg: '25.000',

@@ -88,20 +88,17 @@ test.describe('PR-13 baggage', () => {
     const draft = policyWithDraft.versions.find((version) => version.status === 'DRAFT');
     expect(draft).toBeTruthy();
 
-    const tiers = await admin.post(
-      `/baggage/policies/${policy.id}/versions/${draft!.id}/tiers`,
-      {
-        tiers: [
-          {
-            code: 'E2E_OVERWEIGHT',
-            label: 'Palier synthétique navigateur',
-            maxExcessWeightKg: '50.000',
-            chargeMinor: '1234',
-            position: 0,
-          },
-        ],
-      },
-    );
+    const tiers = await admin.post(`/baggage/policies/${policy.id}/versions/${draft!.id}/tiers`, {
+      tiers: [
+        {
+          code: 'E2E_OVERWEIGHT',
+          label: 'Palier synthétique navigateur',
+          maxExcessWeightKg: '50.000',
+          chargeMinor: '1234',
+          position: 0,
+        },
+      ],
+    });
     expect(tiers.status()).toBe(201);
     const published = await admin.post(
       `/baggage/policies/${policy.id}/versions/${draft!.id}/publish`,
@@ -137,7 +134,9 @@ test.describe('PR-13 baggage', () => {
     await expect(card).toContainText('poids mesuré : Non pesé');
     await expect(card).toContainText('Franchise Standard navigateur : pièce 1');
     await expect(card).toContainText('jusqu’à 23,000 kg inclus');
-    await expect(card).toContainText('Le supplément éventuel sera déterminé après la pesée officielle');
+    await expect(card).toContainText(
+      'Le supplément éventuel sera déterminé après la pesée officielle',
+    );
     // The customer has no weight or event control.
     await expect(section.getByLabel(/Poids/)).toHaveCount(0);
 

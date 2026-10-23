@@ -1571,12 +1571,7 @@ export interface Baggage {
   /** Exact kilograms, always three decimals; null before STAFF measurement. */
   measuredWeightKg: string | null;
   allowance: {
-    status:
-      | 'NOT_CONFIGURED'
-      | 'PENDING_WEIGHT'
-      | 'INCLUDED'
-      | 'EXCESS_PRICED'
-      | 'EXCESS_UNPRICED';
+    status: 'NOT_CONFIGURED' | 'PENDING_WEIGHT' | 'INCLUDED' | 'EXCESS_PRICED' | 'EXCESS_UNPRICED';
     pieceOrdinal: number | null;
     policy: {
       code: string;
@@ -4252,10 +4247,7 @@ export function createAuthClient(baseUrl: string) {
             })}`,
           ),
         detail: (policyId: string) =>
-          call<BaggagePolicy>(
-            'GET',
-            `/v1/admin/baggage/policies/${encodeURIComponent(policyId)}`,
-          ),
+          call<BaggagePolicy>('GET', `/v1/admin/baggage/policies/${encodeURIComponent(policyId)}`),
         create: (input: BaggagePolicyCreateInput) =>
           withCsrf<BaggagePolicy>('staff', '/v1/admin/baggage/policies', input),
         update: (policyId: string, input: BaggagePolicyUpdateInput) =>
@@ -4270,11 +4262,7 @@ export function createAuthClient(baseUrl: string) {
             `/v1/admin/baggage/policies/${encodeURIComponent(policyId)}/versions`,
             input,
           ),
-        replaceTiers: (
-          policyId: string,
-          versionId: string,
-          input: BaggagePolicyTiersInput,
-        ) =>
+        replaceTiers: (policyId: string, versionId: string, input: BaggagePolicyTiersInput) =>
           withCsrf<BaggagePolicy>(
             'staff',
             `/v1/admin/baggage/policies/${encodeURIComponent(policyId)}/versions/${encodeURIComponent(versionId)}/tiers`,

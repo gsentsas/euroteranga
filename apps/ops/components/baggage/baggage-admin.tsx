@@ -66,7 +66,6 @@ const formatAt = (value: string) =>
 const formatWeight = (value: string | null) =>
   value === null ? 'Non pesé' : `${value.replace('.', ',')} kg`;
 
-
 function formatExactMoney(amountMinor: string, currencyCode: string, minorUnit: number): string {
   const amount = BigInt(amountMinor);
   if (minorUnit === 0) return `${amount.toString()} ${currencyCode}`;

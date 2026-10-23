@@ -49,7 +49,6 @@ export function formatWeightKg(value: string | null): string {
   return value === null ? 'Non pesé' : `${value.replace('.', ',')} kg`;
 }
 
-
 function formatExactMoney(amountMinor: string, currencyCode: string, minorUnit: number): string {
   const amount = BigInt(amountMinor);
   if (minorUnit === 0) return `${amount.toString()} ${currencyCode}`;
@@ -78,11 +77,7 @@ function AllowanceSummary({ item }: { item: Baggage }) {
   );
 
   if (allowance.status === 'PENDING_WEIGHT') {
-    return (
-      <p>
-        {base} Le supplément éventuel sera déterminé après la pesée officielle.
-      </p>
-    );
+    return <p>{base} Le supplément éventuel sera déterminé après la pesée officielle.</p>;
   }
   if (allowance.status === 'INCLUDED') {
     return (

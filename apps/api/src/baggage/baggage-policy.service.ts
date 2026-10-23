@@ -54,14 +54,16 @@ const versionSelect = {
   _count: { select: { baggage: true } },
 } as const satisfies Prisma.BaggagePolicyVersionSelect;
 
-function versionView<T extends {
-  includedWeightKgPerPiece: { toFixed(digits: number): string };
-  tiers: Array<{
-    maxExcessWeightKg: { toFixed(digits: number): string };
-    chargeMinor: bigint;
-  }>;
-  _count: { baggage: number };
-}>(version: T) {
+function versionView<
+  T extends {
+    includedWeightKgPerPiece: { toFixed(digits: number): string };
+    tiers: Array<{
+      maxExcessWeightKg: { toFixed(digits: number): string };
+      chargeMinor: bigint;
+    }>;
+    _count: { baggage: number };
+  },
+>(version: T) {
   const { _count, ...rest } = version;
   return {
     ...rest,
@@ -88,7 +90,10 @@ function databaseError(error: unknown): never {
   }
   const message = String(error);
   if (message.includes('currency must match')) throw BaggagePolicyErrors.currencyMismatch();
-  if (message.includes('not publishable') || message.includes('requires at least one excess tier')) {
+  if (
+    message.includes('not publishable') ||
+    message.includes('requires at least one excess tier')
+  ) {
     throw BaggagePolicyErrors.notPublishable(
       'La politique doit être active, liée à une version tarifaire publiée et contenir au moins un palier.',
     );

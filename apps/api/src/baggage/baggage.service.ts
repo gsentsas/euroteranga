@@ -44,7 +44,6 @@ function uniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
-
 function weightToMilliKg(value: string): bigint {
   const [whole, fraction = ''] = value.split('.');
   return BigInt(whole!) * 1000n + BigInt(fraction.padEnd(3, '0'));

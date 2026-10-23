@@ -6,7 +6,13 @@ const code = z
   .string()
   .trim()
   .transform((value) => value.toUpperCase())
-  .pipe(z.string().min(2).max(32).regex(/^[A-Z0-9][A-Z0-9_-]*$/));
+  .pipe(
+    z
+      .string()
+      .min(2)
+      .max(32)
+      .regex(/^[A-Z0-9][A-Z0-9_-]*$/),
+  );
 const name = z.string().trim().min(1).max(160);
 const currencyCode = z
   .string()

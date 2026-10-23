@@ -18,13 +18,13 @@ BAGGAGE-PLUS-1 adds a **versioned allowance and excess-price catalogue**. It sti
 
 ## Model
 
-| Table           | Role                                                                                    |
-| --------------- | --------------------------------------------------------------------------------------- |
+| Table                    | Role                                                                                                |
+| ------------------------ | --------------------------------------------------------------------------------------------------- |
 | `baggage`                | Identity, owning `BookingPassenger`, current operational projection and frozen commercial snapshot. |
-| `baggage_event`          | Append-only operational history. Every projection change is one event.                               |
-| `baggage_policy`         | Stable commercial identity (code/name/currency/active).                                               |
-| `baggage_policy_version` | Historical allowance linked to a fare-table version: DRAFT → PUBLISHED → RETIRED.                    |
-| `baggage_excess_tier`    | Explicit maximum excess-weight tiers and exact charges in minor units.                               |
+| `baggage_event`          | Append-only operational history. Every projection change is one event.                              |
+| `baggage_policy`         | Stable commercial identity (code/name/currency/active).                                             |
+| `baggage_policy_version` | Historical allowance linked to a fare-table version: DRAFT → PUBLISHED → RETIRED.                   |
+| `baggage_excess_tier`    | Explicit maximum excess-weight tiers and exact charges in minor units.                              |
 
 `Baggage`:
 

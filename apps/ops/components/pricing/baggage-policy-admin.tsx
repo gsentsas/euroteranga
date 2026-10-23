@@ -19,7 +19,6 @@ interface TierDraft {
   amount: string;
 }
 
-
 function parseExactMoney(input: string, minorUnit: number): string | null {
   const cleaned = input.replace(/[\s\u00a0\u202f]/g, '');
   const match = /^(\d+)(?:[.,](\d+))?$/.exec(cleaned);
@@ -28,8 +27,7 @@ function parseExactMoney(input: string, minorUnit: number): string | null {
   const fraction = match[2] ?? '';
   if (fraction.length > minorUnit) return null;
   const minor =
-    BigInt(integer) * 10n ** BigInt(minorUnit) +
-    BigInt(fraction.padEnd(minorUnit, '0') || '0');
+    BigInt(integer) * 10n ** BigInt(minorUnit) + BigInt(fraction.padEnd(minorUnit, '0') || '0');
   return minor <= 9_223_372_036_854_775_807n ? minor.toString() : null;
 }
 
@@ -90,9 +88,19 @@ function CreatePolicy({
   };
 
   return (
-    <form className="et-form et-network-form" aria-label="Créer une politique bagage" onSubmit={submit}>
+    <form
+      className="et-form et-network-form"
+      aria-label="Créer une politique bagage"
+      onSubmit={submit}
+    >
       <h3>Créer une politique de franchise</h3>
-      <TextField label="Code" name="baggagePolicyCode" value={code} onChange={setCode} maxLength={32} />
+      <TextField
+        label="Code"
+        name="baggagePolicyCode"
+        value={code}
+        onChange={setCode}
+        maxLength={32}
+      />
       <TextField
         label="Nom"
         name="baggagePolicyName"
@@ -109,13 +117,22 @@ function CreatePolicy({
       />
       <div className="et-field">
         <label htmlFor={unitId}>Décimales de la devise</label>
-        <select id={unitId} className="et-select" value={minorUnit} onChange={(event) => setMinorUnit(event.target.value)}>
+        <select
+          id={unitId}
+          className="et-select"
+          value={minorUnit}
+          onChange={(event) => setMinorUnit(event.target.value)}
+        >
           {['0', '1', '2', '3'].map((value) => (
-            <option key={value} value={value}>{value}</option>
+            <option key={value} value={value}>
+              {value}
+            </option>
           ))}
         </select>
       </div>
-      <button type="submit" className="et-button" disabled={busy}>Créer la politique</button>
+      <button type="submit" className="et-button" disabled={busy}>
+        Créer la politique
+      </button>
     </form>
   );
 }
@@ -213,10 +230,15 @@ function DraftEditor({
     <section className="et-network-panel" aria-labelledby="baggage-policy-draft-title">
       <h4 id="baggage-policy-draft-title">Brouillon version {draft.version}</h4>
       <p>
-        Franchise : {draft.includedPieces} pièce(s) × {draft.includedWeightKgPerPiece.replace('.', ',')} kg.
-        Les paliers ci-dessous portent sur le <strong>poids d’excédent</strong>. Aucun paiement n’est créé.
+        Franchise : {draft.includedPieces} pièce(s) ×{' '}
+        {draft.includedWeightKgPerPiece.replace('.', ',')} kg. Les paliers ci-dessous portent sur le{' '}
+        <strong>poids d’excédent</strong>. Aucun paiement n’est créé.
       </p>
-      {localError ? <p className="et-error" role="status">{localError}</p> : null}
+      {localError ? (
+        <p className="et-error" role="status">
+          {localError}
+        </p>
+      ) : null}
       {tiers.map((tier, index) => (
         <div className="et-network-adders" key={tier.key}>
           <TextField
@@ -224,7 +246,9 @@ function DraftEditor({
             name={`tierCode${tier.key}`}
             value={tier.code}
             onChange={(value) =>
-              setTiers((current) => current.map((row) => row.key === tier.key ? { ...row, code: value } : row))
+              setTiers((current) =>
+                current.map((row) => (row.key === tier.key ? { ...row, code: value } : row)),
+              )
             }
             maxLength={32}
           />
@@ -233,7 +257,9 @@ function DraftEditor({
             name={`tierLabel${tier.key}`}
             value={tier.label}
             onChange={(value) =>
-              setTiers((current) => current.map((row) => row.key === tier.key ? { ...row, label: value } : row))
+              setTiers((current) =>
+                current.map((row) => (row.key === tier.key ? { ...row, label: value } : row)),
+              )
             }
             maxLength={160}
           />
@@ -242,7 +268,11 @@ function DraftEditor({
             name={`tierWeight${tier.key}`}
             value={tier.maxExcessWeightKg}
             onChange={(value) =>
-              setTiers((current) => current.map((row) => row.key === tier.key ? { ...row, maxExcessWeightKg: value } : row))
+              setTiers((current) =>
+                current.map((row) =>
+                  row.key === tier.key ? { ...row, maxExcessWeightKg: value } : row,
+                ),
+              )
             }
             maxLength={7}
           />
@@ -251,7 +281,9 @@ function DraftEditor({
             name={`tierAmount${tier.key}`}
             value={tier.amount}
             onChange={(value) =>
-              setTiers((current) => current.map((row) => row.key === tier.key ? { ...row, amount: value } : row))
+              setTiers((current) =>
+                current.map((row) => (row.key === tier.key ? { ...row, amount: value } : row)),
+              )
             }
             maxLength={32}
           />
@@ -265,7 +297,12 @@ function DraftEditor({
         </div>
       ))}
       <div className="et-actions">
-        <button type="button" className="et-button et-button--secondary" onClick={addTier} disabled={busy}>
+        <button
+          type="button"
+          className="et-button et-button--secondary"
+          onClick={addTier}
+          disabled={busy}
+        >
           Ajouter un palier
         </button>
         <button type="button" className="et-button" onClick={() => void save()} disabled={busy}>
@@ -320,7 +357,8 @@ function PolicyDetail({
   const createVersion = async (event: FormEvent) => {
     event.preventDefault();
     const pieces = Number(includedPieces);
-    if (!fareTableVersionId || !Number.isInteger(pieces) || pieces < 0 || !includedWeight.trim()) return;
+    if (!fareTableVersionId || !Number.isInteger(pieces) || pieces < 0 || !includedWeight.trim())
+      return;
     const ok = await run(
       () =>
         auth.admin.baggagePolicies.createVersion(policy.id, {
@@ -347,24 +385,42 @@ function PolicyDetail({
 
   return (
     <section className="et-network-panel" data-testid="baggage-policy-detail">
-      <h3>{policy.code} — {policy.name}</h3>
+      <h3>
+        {policy.code} — {policy.name}
+      </h3>
       <p>
-        Devise : {policy.currencyCode} · état : {policy.active ? 'active' : 'désactivée'}.
-        La politique est figée sur chaque bagage lors de son enregistrement.
+        Devise : {policy.currencyCode} · état : {policy.active ? 'active' : 'désactivée'}. La
+        politique est figée sur chaque bagage lors de son enregistrement.
       </p>
       {canManage ? (
-        <button type="button" className="et-button et-button--secondary" onClick={() => void toggle()} disabled={busy}>
+        <button
+          type="button"
+          className="et-button et-button--secondary"
+          onClick={() => void toggle()}
+          disabled={busy}
+        >
           {policy.active ? 'Désactiver' : 'Activer'} la politique
         </button>
       ) : null}
       {canManage && !draft ? (
-        <form className="et-form et-network-form" aria-label="Créer une version de franchise" onSubmit={createVersion}>
+        <form
+          className="et-form et-network-form"
+          aria-label="Créer une version de franchise"
+          onSubmit={createVersion}
+        >
           <div className="et-field">
             <label htmlFor={fareId}>Version tarifaire historique</label>
-            <select id={fareId} className="et-select" value={fareTableVersionId} onChange={(event) => setFareTableVersionId(event.target.value)}>
+            <select
+              id={fareId}
+              className="et-select"
+              value={fareTableVersionId}
+              onChange={(event) => setFareTableVersionId(event.target.value)}
+            >
               <option value="">Choisir une version publiée</option>
               {compatible.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>{candidate.label}</option>
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.label}
+                </option>
               ))}
             </select>
           </div>
@@ -382,7 +438,9 @@ function PolicyDetail({
             onChange={setIncludedWeight}
             maxLength={7}
           />
-          <button type="submit" className="et-button" disabled={busy}>Créer le brouillon</button>
+          <button type="submit" className="et-button" disabled={busy}>
+            Créer le brouillon
+          </button>
         </form>
       ) : null}
 
@@ -391,13 +449,21 @@ function PolicyDetail({
         <details key={version.id} open={version.status === 'DRAFT'}>
           <summary>
             Version {version.version} · {statusLabel(version.status)} · {version.includedPieces} ×{' '}
-            {version.includedWeightKgPerPiece.replace('.', ',')} kg · {version.baggageCount} bagage(s)
+            {version.includedWeightKgPerPiece.replace('.', ',')} kg · {version.baggageCount}{' '}
+            bagage(s)
           </summary>
           <p>
-            Tarification : {version.fareTableVersion.fareTable.code} v{version.fareTableVersion.version}.
+            Tarification : {version.fareTableVersion.fareTable.code} v
+            {version.fareTableVersion.version}.
           </p>
           {version.status === 'DRAFT' && canManage ? (
-            <DraftEditor policy={policy} draft={version} busy={busy} run={run} onReload={onReload} />
+            <DraftEditor
+              policy={policy}
+              draft={version}
+              busy={busy}
+              run={run}
+              onReload={onReload}
+            />
           ) : version.tiers.length === 0 ? (
             <p>Aucun palier.</p>
           ) : (
@@ -405,14 +471,26 @@ function PolicyDetail({
               <table className="et-table">
                 <caption>Paliers de la version {version.version}</caption>
                 <thead>
-                  <tr><th>Code</th><th>Excédent max.</th><th>Prix</th></tr>
+                  <tr>
+                    <th>Code</th>
+                    <th>Excédent max.</th>
+                    <th>Prix</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {version.tiers.map((tier) => (
                     <tr key={tier.id}>
-                      <th>{tier.code} — {tier.label}</th>
+                      <th>
+                        {tier.code} — {tier.label}
+                      </th>
                       <td>{tier.maxExcessWeightKg.replace('.', ',')} kg</td>
-                      <td>{formatExactMoney(tier.chargeMinor, policy.currencyCode, policy.currencyMinorUnit)}</td>
+                      <td>
+                        {formatExactMoney(
+                          tier.chargeMinor,
+                          policy.currencyCode,
+                          policy.currencyMinorUnit,
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -446,13 +524,18 @@ export function BaggagePolicyAdmin() {
     if (fareResult.ok) setFareTables(fareResult.data.items);
   }, [setError]);
 
-  const loadDetail = useCallback(async (id: string) => {
-    const result = await auth.admin.baggagePolicies.detail(id);
-    if (result.ok) setDetail(result.data);
-    else setError(result.error.message);
-  }, [setError]);
+  const loadDetail = useCallback(
+    async (id: string) => {
+      const result = await auth.admin.baggagePolicies.detail(id);
+      if (result.ok) setDetail(result.data);
+      else setError(result.error.message);
+    },
+    [setError],
+  );
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
   useEffect(() => {
     if (selectedId) void loadDetail(selectedId);
     else setDetail(null);
@@ -464,11 +547,15 @@ export function BaggagePolicyAdmin() {
   };
 
   return (
-    <section className="et-network" aria-labelledby="baggage-policy-title" data-testid="baggage-policy-workspace">
+    <section
+      className="et-network"
+      aria-labelledby="baggage-policy-title"
+      data-testid="baggage-policy-workspace"
+    >
       <h2 id="baggage-policy-title">Franchises & bagages supplémentaires</h2>
       <p>
-        Configurez le nombre de pièces incluses, le poids par pièce et les paliers d’excédent.
-        Les montants sont versionnés avec la tarification ; aucun paiement n’est déclenché ici.
+        Configurez le nombre de pièces incluses, le poids par pièce et les paliers d’excédent. Les
+        montants sont versionnés avec la tarification ; aucun paiement n’est déclenché ici.
       </p>
       {feedback}
       {canManage ? (
@@ -486,14 +573,22 @@ export function BaggagePolicyAdmin() {
           <table className="et-table">
             <caption>Politiques de franchise bagage</caption>
             <thead>
-              <tr><th>Code</th><th>Devise</th><th>Version publiée</th><th>État</th><th>Action</th></tr>
+              <tr>
+                <th>Code</th>
+                <th>Devise</th>
+                <th>Version publiée</th>
+                <th>État</th>
+                <th>Action</th>
+              </tr>
             </thead>
             <tbody>
               {policies.map((policy) => {
                 const published = policy.versions.find((version) => version.status === 'PUBLISHED');
                 return (
                   <tr key={policy.id}>
-                    <th>{policy.code} — {policy.name}</th>
+                    <th>
+                      {policy.code} — {policy.name}
+                    </th>
                     <td>{policy.currencyCode}</td>
                     <td>
                       {published
@@ -502,7 +597,11 @@ export function BaggagePolicyAdmin() {
                     </td>
                     <td>{policy.active ? 'Active' : 'Désactivée'}</td>
                     <td>
-                      <button type="button" className="et-button et-button--secondary" onClick={() => setSelectedId(policy.id)}>
+                      <button
+                        type="button"
+                        className="et-button et-button--secondary"
+                        onClick={() => setSelectedId(policy.id)}
+                      >
                         Consulter
                       </button>
                     </td>
