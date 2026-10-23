@@ -787,9 +787,10 @@ export class PilotBootstrap {
         pending.push({ reference: trip.reference });
         continue;
       }
+      const tripId = trip.id;
       await this.guarded('tracking', trip.reference, [], async () => {
         const existing = await db.tripTrackingConfig.findUnique({
-          where: { tripId: trip.id! },
+          where: { tripId },
           select: { enabled: true, visibility: true, trackingDeviceId: true },
         });
         if (existing) {
@@ -805,8 +806,8 @@ export class PilotBootstrap {
           this.report('existing', 'tracking', trip.reference, 'CHECKPOINT_ONLY, no GPS device');
           return trip.id;
         }
-        missing.push({ id: trip.id, reference: trip.reference });
-        return trip.id;
+        missing.push({ id: tripId, reference: trip.reference });
+        return tripId;
       });
     }
 
