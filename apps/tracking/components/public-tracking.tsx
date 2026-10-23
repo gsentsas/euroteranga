@@ -9,7 +9,7 @@ import type {
 import { JourneyShell } from '@euroteranga/ui';
 import { useEffect, useState } from 'react';
 import { auth } from '../lib/auth';
-import { publicEnv } from '../lib/env';
+import { journeyLinks, publicEnv } from '../lib/env';
 
 const PROVIDER_LABELS: Record<TrackingProviderStatus, string> = {
   UP: 'Données récentes',
@@ -110,6 +110,7 @@ export function PublicTracking({ token }: { token: string }) {
       title="Où en est votre voyage ?"
       subtitle="Consultez les informations opérationnelles publiées pour votre trajet."
       environment={publicEnv.NEXT_PUBLIC_APP_ENV}
+      links={journeyLinks}
       current="tracking"
     >
       {state === 'loading' ? <p role="status">Chargement du suivi…</p> : null}

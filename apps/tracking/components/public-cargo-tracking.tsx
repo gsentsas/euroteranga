@@ -7,7 +7,7 @@ import type {
 import { JourneyShell } from '@euroteranga/ui';
 import { useEffect, useState } from 'react';
 import { auth } from '../lib/auth';
-import { publicEnv } from '../lib/env';
+import { journeyLinks, publicEnv } from '../lib/env';
 
 const STATUS_LABELS: Record<PublicRoadFreightTrackingStatus, string> = {
   PREPARING: 'Préparation',
@@ -60,6 +60,7 @@ export function PublicCargoTracking({ token }: { token: string }) {
       title="Suivez votre envoi EURO TERANGA."
       subtitle="Le lien public affiche uniquement la progression autorisée de votre colis ou fret."
       environment={publicEnv.NEXT_PUBLIC_APP_ENV}
+      links={journeyLinks}
       current="tracking"
     >
       {state === 'loading' ? <p role="status">Chargement du suivi fret…</p> : null}

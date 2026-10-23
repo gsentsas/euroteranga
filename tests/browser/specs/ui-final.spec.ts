@@ -1,5 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { appUrl, frontendApps } from '../apps.js';
+import { appByName, appUrl, frontendApps } from '../apps.js';
+
+const journeyDestinations = [
+  { name: 'Accueil', href: appUrl(appByName('web')) },
+  { name: 'Réserver', href: appUrl(appByName('booking')) },
+  { name: 'Mon espace', href: appUrl(appByName('client'), '/compte') },
+  { name: 'Suivi', href: appUrl(appByName('tracking')) },
+] as const;
 
 const viewports = [
   { name: 'desktop', width: 1440, height: 900 },
@@ -62,6 +69,16 @@ for (const app of frontendApps) {
       expect(structure.mainCount).toBe(1);
       expect(structure.h1Count).toBe(1);
       expect(structure.horizontalOverflow).toBeLessThanOrEqual(1);
+
+      if (['booking', 'client', 'tracking'].includes(app.name)) {
+        const journeyNav = page.getByRole('navigation', { name: 'Navigation voyageur' });
+        for (const destination of journeyDestinations) {
+          await expect(journeyNav.getByRole('link', { name: destination.name })).toHaveAttribute(
+            'href',
+            destination.href,
+          );
+        }
+      }
 
       if (viewport.name === 'mobile') {
         const tapTargetSelector =

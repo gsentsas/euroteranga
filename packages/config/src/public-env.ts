@@ -10,8 +10,11 @@ export const publicEnvSchema = z
   .object({
     NEXT_PUBLIC_APP_ENV: appEnvSchema,
     NEXT_PUBLIC_API_BASE_URL: httpUrlSchema,
-    /** Customer account app (links from the booking app); optional elsewhere. */
+    /** Public application URLs used by the shared traveller navigation. */
+    NEXT_PUBLIC_SITE_URL: httpUrlSchema.optional(),
+    NEXT_PUBLIC_BOOKING_URL: httpUrlSchema.optional(),
     NEXT_PUBLIC_CLIENT_URL: httpUrlSchema.optional(),
+    NEXT_PUBLIC_TRACKING_URL: httpUrlSchema.optional(),
   })
   .superRefine((env, ctx) => {
     const deployed =
@@ -19,7 +22,12 @@ export const publicEnvSchema = z
     if (!deployed) return;
 
     const requireHttps = (
-      name: 'NEXT_PUBLIC_API_BASE_URL' | 'NEXT_PUBLIC_CLIENT_URL',
+      name:
+        | 'NEXT_PUBLIC_API_BASE_URL'
+        | 'NEXT_PUBLIC_SITE_URL'
+        | 'NEXT_PUBLIC_BOOKING_URL'
+        | 'NEXT_PUBLIC_CLIENT_URL'
+        | 'NEXT_PUBLIC_TRACKING_URL',
       value?: string,
     ) => {
       if (value && !value.startsWith('https://')) {
@@ -31,10 +39,49 @@ export const publicEnvSchema = z
       }
     };
     requireHttps('NEXT_PUBLIC_API_BASE_URL', env.NEXT_PUBLIC_API_BASE_URL);
+    requireHttps('NEXT_PUBLIC_SITE_URL', env.NEXT_PUBLIC_SITE_URL);
+    requireHttps('NEXT_PUBLIC_BOOKING_URL', env.NEXT_PUBLIC_BOOKING_URL);
     requireHttps('NEXT_PUBLIC_CLIENT_URL', env.NEXT_PUBLIC_CLIENT_URL);
+    requireHttps('NEXT_PUBLIC_TRACKING_URL', env.NEXT_PUBLIC_TRACKING_URL);
   });
 
 export type PublicEnv = z.infer<typeof publicEnvSchema>;
+
+export interface JourneyPublicUrls {
+  home: string;
+  booking: string;
+  client: string;
+  tracking: string;
+}
+
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+}
+
+export function loadJourneyPublicUrls(env: PublicEnv): JourneyPublicUrls {
+  const required = [
+    ['NEXT_PUBLIC_SITE_URL', env.NEXT_PUBLIC_SITE_URL],
+    ['NEXT_PUBLIC_BOOKING_URL', env.NEXT_PUBLIC_BOOKING_URL],
+    ['NEXT_PUBLIC_CLIENT_URL', env.NEXT_PUBLIC_CLIENT_URL],
+    ['NEXT_PUBLIC_TRACKING_URL', env.NEXT_PUBLIC_TRACKING_URL],
+  ] as const;
+  const missing = required.filter(([, value]) => !value).map(([name]) => name);
+  if (missing.length > 0) {
+    throw new ConfigValidationError(
+      'traveller public URLs',
+      missing.map((name) => `${name}: required by JourneyShell`),
+    );
+  }
+
+  return {
+    home: `${trimTrailingSlashes(env.NEXT_PUBLIC_SITE_URL!)}/`,
+    booking: `${trimTrailingSlashes(env.NEXT_PUBLIC_BOOKING_URL!)}/`,
+    client: `${trimTrailingSlashes(env.NEXT_PUBLIC_CLIENT_URL!)}/compte`,
+    tracking: `${trimTrailingSlashes(env.NEXT_PUBLIC_TRACKING_URL!)}/`,
+  };
+}
 
 export function loadPublicEnv(env: Record<string, string | undefined>): PublicEnv {
   const result = publicEnvSchema.safeParse(env);
