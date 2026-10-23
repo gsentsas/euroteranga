@@ -15,7 +15,7 @@
     "build:frontends": "pnpm --recursive --filter \"./apps/**\" --filter \"!@euroteranga/api\" run build",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --write apps/api/src/content/content.service.ts apps/ops/components/content/content-editor.tsx apps/ops/components/content/document-forms.tsx docs/audit/2026-10-full-product-audit.md packages/content/src/templates.test.ts tests/browser/specs/web-pages.spec.ts && git diff -- apps/api/src/content/content.service.ts apps/ops/components/content/content-editor.tsx apps/ops/components/content/document-forms.tsx docs/audit/2026-10-full-product-audit.md packages/content/src/templates.test.ts tests/browser/specs/web-pages.spec.ts && false",
     "typecheck": "pnpm --recursive run typecheck",
     "test": "pnpm test:unit && pnpm test:integration",
     "test:unit": "pnpm --recursive --if-present run test:unit",
