@@ -98,6 +98,27 @@ test.describe('PR-20 operational border crossings', () => {
         body: JSON.stringify(tripDetail),
       }),
     );
+    await page.route(`**/v1/admin/tracking/trips/${tripId}/comfort`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          tripId,
+          tripReference: tripSummary.reference,
+          tripStatus: tripSummary.status,
+          route: tripSummary.route,
+          plannedDepartureAt: tripSummary.plannedDepartureAt,
+          plannedArrivalAt: tripSummary.plannedArrivalAt,
+          progressSequence: 0,
+          lastUpdatedAt: null,
+          currentStep: null,
+          nextStep: null,
+          nextPause: null,
+          steps: [],
+          events: [],
+        }),
+      }),
+    );
     await page.route(`**/v1/admin/borders/trips/${tripId}`, (route) => {
       if (route.request().method() !== 'GET') return route.fallback();
       return route.fulfill({
