@@ -7,10 +7,13 @@ Wants=network-online.target
 Type=simple
 User=euroteranga.com_5p804yhows7
 Group=psacln
-WorkingDirectory=/var/www/vhosts/euroteranga.com/current
+WorkingDirectory=/var/www/vhosts/euroteranga.com/current/apps/ops
 EnvironmentFile=/var/www/vhosts/euroteranga.com/.secrets/public.env
 Environment=PATH=/opt/plesk/node/24/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/opt/plesk/node/24/bin/pnpm --filter @euroteranga/ops exec next start --hostname 127.0.0.1 --port 3204
+# Node runs Next.js directly (OPS-DEPLOY-2): the pnpm wrapper turned every normal
+# stop (SIGTERM to the control group) into exit code 1, ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL,
+# so deployments logged frontends as failed. A real crash still exits non-zero.
+ExecStart=/opt/plesk/node/24/bin/node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3204
 Restart=on-failure
 RestartSec=3s
 TimeoutStopSec=30s
