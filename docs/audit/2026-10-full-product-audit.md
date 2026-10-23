@@ -120,7 +120,7 @@ Weaknesses:
 | Regulatory permits                  | ✅  | ✅     | —           | ✅ ✅ ✅                 | ✅   |
 | Departure readiness and dispatch    | ✅  | ✅     | —           | ✅ ✅ ✅                 | ✅   |
 | Crew PWA (offline)                  | ✅  | —      | ✅ (Crew)   | ✅ ✅ ✅                 | ✅   |
-| Tracking                            | ✅  | ✅     | ✅          | ✅ ✅ ✅                 | ❌   |
+| Tracking                            | ✅  | ✅     | ✅          | ✅ ✅ ✅                 | ✅   |
 | Borders                             | ✅  | ✅     | ✅ (Crew)   | ✅ ✅ ✅                 | ✅   |
 | Incidents                           | ✅  | ✅     | ✅ (Crew)   | ✅ ✅ ✅                 | ✅   |
 | Finance and refunds                 | ✅  | ✅     | —           | ✅ ✅ ✅                 | ✅   |
@@ -208,7 +208,7 @@ Criticality:
 | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------- | ----- | ------------------------------------------------------------------------- | ------ | ------------------ | ------- |
 | F-DOC-01 | Docs     | The README states "NOT PRODUCTION DEPLOYED", contains literal `\n` sequences, a truncated sentence and broken table rows          | `README.md`                    | Misleading status; broken rendering                | P2    | Rewrite the status and fix the formatting                                 | S      | FIXED              | AUDIT-0 |
 | F-DOC-02 | Docs     | The pilot deployment runbook shows escaped backticks (`` \`bash …\` ``), so the commands cannot be copied as rendered             | `pilot-deployment.md`          | Operator error during a deployment                 | P2    | Use real code spans and blocks                                            | S      | FIXED              | AUDIT-0 |
-| F-DOC-04 | Docs     | Tracking (PR-19) has no domain or security document, unlike every other domain                                                    | `docs/domain`, `docs/security` | Visibility levels and token rules are only in code | P2    | `docs/domain/tracking.md`                                                 | S      | READY_TO_IMPLEMENT | DOCS-1  |
+| F-DOC-04 | Docs     | Tracking (PR-19) now has a domain document covering visibility, public capabilities, RBAC, Crew provenance and privacy boundaries | `docs/domain/tracking.md`         | Visibility levels and token rules are documented   | P2    | `docs/domain/tracking.md`                                                 | S      | FIXED              | DOCS-1  |
 | F-DOC-03 | Docs     | The architecture overview still says "Implementation starts in PR-01… No business feature is implemented yet", and stops at PR-16 | `docs/architecture/README.md`  | Stale reference document                           | P2    | Update the header, and add a current domain map and the ADR index entries | S      | FIXED              | AUDIT-0 |
 
 ## UI and UX
@@ -405,5 +405,5 @@ and is merged only when CI and CodeQL are green.
 | Trips     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No trip in production (F-DATA-01)                          |
 | Payment   | ⚠️   | ✅  | —    | ✅    | ✅   | ❌          | SANDBOX only (F-PAY-01)                                    |
 | Documents | ✅   | ✅  | —    | ✅    | ✅   | ❌          | Storage and scanner disabled (F-INF-03)                    |
-| Tracking  | ✅   | ✅  | ❌   | ✅    | ❌   | ⚠️          | Needs trips; soft 404 (F-SEO-05); no domain doc (F-DOC-04) |
+| Tracking  | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Needs trips; public availability still depends on configured trip data |
 | Finance   | ✅   | ✅  | —    | ✅    | ✅   | ⚠️          | Operational finance only; no statutory accounting          |
