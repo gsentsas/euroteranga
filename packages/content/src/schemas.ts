@@ -459,6 +459,18 @@ export const bannerBlockSchema = z
   })
   .strict();
 
+export const OWNER_INFO_KINDS = ['contact', 'legal', 'privacy'] as const;
+
+export const ownerInfoBlockSchema = z
+  .object({
+    type: z.literal('ownerInfo'),
+    ...sectionHead,
+    kind: z.enum(OWNER_INFO_KINDS),
+    title: text(160),
+    intro: optionalText(400),
+  })
+  .strict();
+
 export const blockSchema = z.discriminatedUnion('type', [
   heroBlockSchema,
   richTextBlockSchema,
@@ -472,6 +484,7 @@ export const blockSchema = z.discriminatedUnion('type', [
   statsBlockSchema,
   galleryBlockSchema,
   bannerBlockSchema,
+  ownerInfoBlockSchema,
   sectionNavBlockSchema,
   itineraryBlockSchema,
   fleetBlockSchema,
@@ -535,6 +548,15 @@ export const pageDocumentSchema = z
 /** Missing owner information stays `null`: it is shown as "to complete" in OPS, never invented. */
 const ownerText = (max: number) => text(max).nullable();
 
+export const DEFAULT_PRIVACY_SETTINGS = {
+  dataController: null,
+  privacyContact: null,
+  purposesAndLegalBases: null,
+  retentionPeriods: null,
+  processors: null,
+  transfersOutsideEu: null,
+} as const;
+
 export const SOCIAL_NETWORKS = [
   'facebook',
   'instagram',
@@ -587,6 +609,17 @@ export const siteSettingsSchema = z
         hostContact: ownerText(120),
       })
       .strict(),
+    privacy: z
+      .object({
+        dataController: ownerText(200),
+        privacyContact: ownerText(200),
+        purposesAndLegalBases: ownerText(1200),
+        retentionPeriods: ownerText(1200),
+        processors: ownerText(1200),
+        transfersOutsideEu: ownerText(1200),
+      })
+      .strict()
+      .default(DEFAULT_PRIVACY_SETTINGS),
     social: z
       .array(z.object({ network: z.enum(SOCIAL_NETWORKS), url: httpsUrlSchema }).strict())
       .max(8),
@@ -638,12 +671,46 @@ export function missingOwnerInputs(settings: SiteSettings): string[] {
   for (const [group, values] of [
     ['contact', settings.contact],
     ['legal', settings.legal],
+    ['privacy', settings.privacy],
   ] as const) {
     for (const [field, value] of Object.entries(values)) {
       if (value === null) missing.push(`${group}.${field}`);
     }
   }
+  if (settings.social.length === 0) missing.push('social');
   return missing;
+}
+
+export type OwnerInfoKind = (typeof OWNER_INFO_KINDS)[number];
+
+const OWNER_INFO_REQUIRED_FIELDS: Record<OwnerInfoKind, readonly string[]> = {
+  contact: ['contact.email', 'contact.phone', 'contact.hours', 'social'],
+  legal: [
+    'legal.companyName',
+    'legal.legalForm',
+    'legal.registeredAddress',
+    'legal.shareCapital',
+    'legal.registrationNumber',
+    'legal.vatNumber',
+    'legal.publicationDirector',
+    'legal.hostName',
+    'legal.hostAddress',
+    'legal.hostContact',
+  ],
+  privacy: [
+    'privacy.dataController',
+    'privacy.privacyContact',
+    'privacy.purposesAndLegalBases',
+    'privacy.retentionPeriods',
+    'privacy.processors',
+    'privacy.transfersOutsideEu',
+  ],
+};
+
+/** Exact owner inputs required before a dynamic owner-information block may go live. */
+export function missingOwnerInfoInputs(settings: SiteSettings, kind: OwnerInfoKind): string[] {
+  const missing = new Set(missingOwnerInputs(settings));
+  return OWNER_INFO_REQUIRED_FIELDS[kind].filter((field) => missing.has(field));
 }
 
 /** Where a page references media: the field path and the media id (MEDIA-1). */
