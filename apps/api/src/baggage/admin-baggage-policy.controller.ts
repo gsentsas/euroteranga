@@ -18,7 +18,7 @@ import {
 import { BaggagePolicyService } from './baggage-policy.service.js';
 
 @ApiTags('admin: baggage policies')
-@Controller({ path: 'admin/baggage/policies', version: '1' })
+@Controller({ path: 'admin/baggage-policies', version: '1' })
 @AuthRealmRoute('staff')
 @UseGuards(AuthRequestGuard, SessionGuard, AuthorizationGuard)
 @RequirePermissions(PERMISSIONS.OPS_ACCESS, PERMISSIONS.PRICING_READ)
