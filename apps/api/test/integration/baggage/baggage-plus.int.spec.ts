@@ -16,6 +16,7 @@ describe('BAGGAGE-PLUS-1 versioned allowance and excess pricing', () => {
   let t: TestApp;
   let env: ApiEnv;
   let manager: StaffActor;
+  let reader: StaffActor;
   let customer: CustomerActor;
   let subject: Awaited<ReturnType<typeof confirmedPassenger>>;
   let policyId: string;
@@ -28,8 +29,9 @@ describe('BAGGAGE-PLUS-1 versioned allowance and excess pricing', () => {
     database = await isolatedDatabase();
     env = integrationEnv({ DATABASE_URL: database.url });
     t = await startTestApp(env);
-    [manager, customer] = await Promise.all([
+    [manager, reader, customer] = await Promise.all([
       staffActor(t.app, ['OPS_MANAGER']),
+      staffActor(t.app, ['FINANCE']),
       customerActor(t.app),
     ]);
     subject = await confirmedPassenger(t.app, env, customer);
@@ -120,6 +122,23 @@ describe('BAGGAGE-PLUS-1 versioned allowance and excess pricing', () => {
     expect(response.status, response.text).toBe(201);
     return response;
   }
+
+  it('separates pricing.read from pricing.manage and requires CSRF', async () => {
+    const readable = await staffBaggagePolicyApi(reader).detail(policyId);
+    expect(readable.status, readable.text).toBe(200);
+
+    const denied = await staffBaggagePolicyApi(reader).update(policyId, {
+      name: 'Tentative interdite',
+    });
+    expect(denied.status).toBe(403);
+
+    const noCsrf = await staffBaggagePolicyApi(manager).update(
+      policyId,
+      { name: 'Sans CSRF' },
+      { csrf: null },
+    );
+    expect(noCsrf.status).toBe(403);
+  });
 
   it('publishes an admin-managed policy without hard-coded commercial prices', async () => {
     const detail = await staffBaggagePolicyApi(manager).detail(policyId);
