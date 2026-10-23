@@ -1569,4 +1569,21 @@ async function seedPublicPagesData(db: ReturnType<typeof createDatabaseClient>):
       { type: 'cards', variant: 'services', title: 'Ce qui vous accompagne', items: services },
     ],
   });
+
+  // WEB-2A: publish the real help-page templates in the disposable browser
+  // database. Reused local test databases keep an existing page instead of
+  // mutating published history; CI starts clean and therefore tests this HEAD.
+  for (const id of ['baggage', 'how-it-works', 'faq', 'about'] as const) {
+    const template = PAGE_TEMPLATES.find((candidate) => candidate.id === id);
+    if (!template) throw new Error(`Missing WEB-2A page template: ${id}`);
+    const existing = await db.contentEntry.findUnique({
+      where: { kind_key: { kind: 'PAGE', key: template.path } },
+    });
+    if (existing) continue;
+    const document = pageDocumentSchema.parse(template.document);
+    await publish(template.path, {
+      ...document,
+      seo: { ...document.seo, indexable: false },
+    });
+  }
 }

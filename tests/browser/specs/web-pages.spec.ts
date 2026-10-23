@@ -165,3 +165,60 @@ test.describe('public inner pages (UI-PUBLIC-2)', () => {
     await expectPublicPageStructure(page);
   });
 });
+
+test.describe('public help pages (WEB-2A)', () => {
+  const pages = [
+    { path: '/bagages', heading: 'Préparez vos bagages' },
+    { path: '/comment-ca-marche', heading: 'Comment ça marche' },
+    { path: '/faq', heading: 'Questions fréquentes' },
+    { path: '/a-propos', heading: 'À propos d’EURO TERANGA' },
+  ] as const;
+
+  for (const item of pages) {
+    test(`${item.path} renders the real CMS template at desktop and 400 px`, async ({ page }) => {
+      const response = await page.goto(appUrl(web, item.path));
+      expect(response?.status()).toBe(200);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(item.heading);
+      await expectPublicPageStructure(page);
+
+      const structured = await page.locator('script[type="application/ld+json"]').allTextContents();
+      if (item.path === '/faq') {
+        expect(structured.some((text) => text.includes('"FAQPage"'))).toBe(true);
+      } else {
+        expect(structured.some((text) => text.includes('"FAQPage"'))).toBe(false);
+      }
+
+      await page.setViewportSize({ width: 400, height: 844 });
+      await expectPublicPageStructure(page);
+    });
+  }
+
+  test('the baggage page does not invent an allowance, weight or public amount', async ({
+    page,
+  }) => {
+    await page.goto(appUrl(web, '/bagages'));
+    const text = await page.locator('main').innerText();
+    expect(text).toContain('ne fixe ni franchise, ni poids maximal, ni supplément');
+    expect(text).toContain('Seules les conditions communiquées pour votre départ');
+    expect(text).not.toMatch(/\b\d+(?:[.,]\d+)?\s*(?:kg|kilos?|€|EUR|XOF|bagages?)\b/i);
+  });
+
+  test('FAQPage mirrors the five visible FAQ questions and answers', async ({ page }) => {
+    await page.goto(appUrl(web, '/faq'));
+    const scripts = await page.locator('script[type="application/ld+json"]').allTextContents();
+    const faq = scripts
+      .map((value) => JSON.parse(value) as { '@type'?: string; mainEntity?: unknown[] })
+      .find((value) => value['@type'] === 'FAQPage');
+    expect(faq).toBeDefined();
+
+    const entities = faq!.mainEntity as Array<{
+      name: string;
+      acceptedAnswer: { text: string };
+    }>;
+    expect(entities).toHaveLength(5);
+    for (const entity of entities) {
+      await expect(page.locator('main')).toContainText(entity.name);
+      await expect(page.locator('main')).toContainText(entity.acceptedAnswer.text);
+    }
+  });
+});

@@ -232,7 +232,11 @@ test.describe('ops website content editor', () => {
     await signedIn(page.context(), 'contentEditor');
     await page.goto(appUrl(ops, '/contenus'));
     const create = page.getByRole('form', { name: 'Créer une page' });
-    await create.getByLabel('Modèle').selectOption({ label: 'Voyage Paris → Dakar' });
+    const templates = create.getByLabel('Modèle');
+    for (const label of ['Bagages', 'Comment ça marche', 'FAQ', 'À propos']) {
+      await expect(templates.locator('option', { hasText: label })).toHaveCount(1);
+    }
+    await templates.selectOption({ label: 'Voyage Paris → Dakar' });
     // The template pre-fills the page; the editor keeps the last word.
     await expect(create.getByLabel('Chemin public')).toHaveValue('/paris-dakar');
     await expect(create.getByLabel('Titre')).toHaveValue('Paris → Dakar');

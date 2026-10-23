@@ -352,6 +352,10 @@ describe('content model', () => {
       '/dakar-paris',
       '/nos-bus',
       '/services',
+      '/bagages',
+      '/comment-ca-marche',
+      '/faq',
+      '/a-propos',
       '/fret',
     ]);
     for (const template of PAGE_TEMPLATES) {

@@ -1,4 +1,9 @@
-import { contentPathSchema, mediaIdsOf } from '@euroteranga/content';
+import {
+  contentPathSchema,
+  mediaIdsOf,
+  type ContentBlock,
+  type RichText,
+} from '@euroteranga/content';
 import { SitePage, type SiteMedia } from '@euroteranga/site';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -134,10 +139,45 @@ function BreadcrumbData({ path, title }: { path: string; title: string }) {
   return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(data) }} />;
 }
 
+function richTextPlain(value: RichText): string {
+  return value
+    .flatMap((node) => {
+      if (node.kind === 'heading') return [node.text];
+      if (node.kind === 'list') {
+        return node.items.map((item) => item.map((span) => span.text).join(''));
+      }
+      return [node.spans.map((span) => span.text).join('')];
+    })
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * WEB-2A: FAQPage exists only on the real /faq page and mirrors the visible
+ * FAQ block exactly. No hidden questions, ratings, offers or invented facts.
+ */
+function FaqData({ items }: { items: Extract<ContentBlock, { type: 'faq' }>['items'] }) {
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: items.map((item) => ({
+      '@type': 'Question',
+      name: item.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: richTextPlain(item.answer),
+      },
+    })),
+  };
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(data) }} />;
+}
+
 export default async function ContentPage({ params }: Params) {
   const { path, page } = await pageOrNotFound(params);
   const document = page.document;
   const hero = document.blocks.find((block) => block.type === 'hero');
+  const faq = path === '/faq' ? document.blocks.find((block) => block.type === 'faq') : undefined;
   const ctx = await loadSiteContext({
     prices: document.blocks.some(
       (block) =>
@@ -161,6 +201,7 @@ export default async function ContentPage({ params }: Params) {
       ) : hero?.variant === 'page' ? (
         <BreadcrumbData path={path} title={document.title} />
       ) : null}
+      {faq ? <FaqData items={faq.items} /> : null}
       <SitePage title={document.title} blocks={document.blocks} ctx={ctx} />
     </>
   );
