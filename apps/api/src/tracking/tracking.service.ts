@@ -18,6 +18,7 @@ import {
   type OperatorActor,
 } from '../auth/session/auth-principal.js';
 import { AuditService } from '../authorization/audit.service.js';
+import { ComfortService } from '../comfort/comfort.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import type {
   trackingConfigSchema,
@@ -153,6 +154,7 @@ export class TrackingService {
   constructor(
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
+    private readonly comfort: ComfortService,
     @Inject(GPS_PROVIDER) private readonly gpsProvider: GpsProvider,
   ) {}
 
@@ -812,6 +814,12 @@ export class TrackingService {
         tripId,
         routeWaypointId: { not: null },
         source: { in: ['CHECKPOINT', 'CREW', 'OPS', 'SYSTEM'] },
+        routeWaypoint: {
+          OR: [
+            { stopId: { not: null } },
+            { checkpoint: { is: { travellerVisible: true } } },
+          ],
+        },
       },
       orderBy: [{ observedAt: 'desc' }, { id: 'desc' }],
       select: {
@@ -876,7 +884,7 @@ export class TrackingService {
     if (!config) throw TrackingErrors.tokenNotFound();
     const visibility: TrackingVisibility = config.visibility;
 
-    const [checkpoint, position, providerStatus] = await Promise.all([
+    const [checkpoint, position, providerStatus, comfort] = await Promise.all([
       this.publicCheckpoint(trip.id),
       visibility === 'APPROXIMATE' || visibility === 'PRECISE'
         ? this.database.client.trackingObservation.findFirst({
@@ -895,6 +903,7 @@ export class TrackingService {
           })
         : Promise.resolve(null),
       this.providerStatus(trip.id, config.trackingDevice),
+      this.comfort.publicProjection(trip.id),
     ]);
 
     const exactLat = numberOrNull(position?.latitude);
@@ -915,7 +924,7 @@ export class TrackingService {
 
     const checkpointProjection = checkpointView(checkpoint);
     const lastUpdatedAt =
-      [checkpointProjection?.observedAt, publicPosition?.observedAt]
+      [checkpointProjection?.observedAt, publicPosition?.observedAt, comfort.lastUpdatedAt]
         .filter((value): value is Date => value instanceof Date)
         .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
 
@@ -930,6 +939,7 @@ export class TrackingService {
       lastUpdatedAt,
       checkpoint: checkpointProjection,
       position: publicPosition,
+      comfort,
     };
   }
 }
