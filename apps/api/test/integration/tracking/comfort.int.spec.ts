@@ -236,109 +236,102 @@ describe('TERANGA-COMFORT-1 traveller comfort projection', () => {
     expect(serialized).not.toContain('recordedByIdentityId');
     expect(serialized).not.toContain(manager.email);
     expect(serialized).not.toContain(alice.email);
-
   }, 120_000);
 
-  it(
-    'uses the real departure lifecycle for completed, cancelled and skipped waypoint progress',
-    async () => {
-      const item = await departureFixture(t.app, env, alice, director, manager);
-      const departure = departureApi(manager);
-  
-      const policy = await departure.publishPolicy(item.tripReference, []);
-      expect(policy.status, policy.text).toBe(201);
-  
-      const authorization = await departure.authorize(item.tripReference);
-      expect(authorization.status, authorization.text).toBe(200);
-  
-      const departed = await departure.depart(item.tripReference);
-      expect(departed.status, departed.text).toBe(200);
-      expect(departed.body.trip.status).toBe('IN_PROGRESS');
-  
-      const trip = await db(t.app).trip.findUniqueOrThrow({
-        where: { id: item.tripId },
-        select: {
-          routeVersion: {
-            select: {
-              waypoints: {
-                orderBy: { sequence: 'asc' },
-                select: { id: true, sequence: true },
-              },
+  it('uses the real departure lifecycle for completed, cancelled and skipped waypoint progress', async () => {
+    const item = await departureFixture(t.app, env, alice, director, manager);
+    const departure = departureApi(manager);
+
+    const policy = await departure.publishPolicy(item.tripReference, []);
+    expect(policy.status, policy.text).toBe(201);
+
+    const authorization = await departure.authorize(item.tripReference);
+    expect(authorization.status, authorization.text).toBe(200);
+
+    const departed = await departure.depart(item.tripReference);
+    expect(departed.status, departed.text).toBe(200);
+    expect(departed.body.trip.status).toBe('IN_PROGRESS');
+
+    const trip = await db(t.app).trip.findUniqueOrThrow({
+      where: { id: item.tripId },
+      select: {
+        routeVersion: {
+          select: {
+            waypoints: {
+              orderBy: { sequence: 'asc' },
+              select: { id: true, sequence: true },
             },
           },
         },
-      });
-      const waypoints = trip.routeVersion.waypoints;
-      expect(waypoints.length).toBeGreaterThanOrEqual(4);
-  
-      const completedWaypoint = waypoints[0]!;
-      const cancelledWaypoint = waypoints[1]!;
-      const skippedWaypoint = waypoints[2]!;
-      const expectedNextWaypoint = waypoints[3]!;
-  
-      const completed = await adminApi(manager).post(
-        '/tracking/trips/' + item.tripId + '/comfort/events',
-        {
-          clientEventId: 'comfort-integration-complete-0001',
-          routeWaypointId: completedWaypoint.id,
-          type: 'COMPLETED',
-          occurredAt: new Date().toISOString(),
-          actualFacilities: ['FOOD'],
-        },
-      );
-      expect(completed.status, completed.text).toBe(201);
-  
-      const cancelled = await adminApi(manager).post(
-        '/tracking/trips/' + item.tripId + '/comfort/events',
-        {
-          clientEventId: 'comfort-integration-cancel-0001',
-          routeWaypointId: cancelledWaypoint.id,
-          type: 'CANCELLED',
-          occurredAt: new Date().toISOString(),
-          actualFacilities: [],
-        },
-      );
-      expect(cancelled.status, cancelled.text).toBe(201);
-  
-      const skipped = await adminApi(manager).post(
-        '/tracking/trips/' + item.tripId + '/comfort/events',
-        {
-          clientEventId: 'comfort-integration-skip-0001',
-          routeWaypointId: skippedWaypoint.id,
-          type: 'SKIPPED',
-          occurredAt: new Date().toISOString(),
-          actualFacilities: [],
-        },
-      );
-      expect(skipped.status, skipped.text).toBe(201);
-  
-      const projection = await adminApi(manager).get('/tracking/trips/' + item.tripId + '/comfort');
-      expect(projection.status, projection.text).toBe(200);
-      expect(projection.body).toMatchObject({
-        currentStep: {
-          sequence: completedWaypoint.sequence,
-          status: 'COMPLETED',
-          actualFacilities: ['FOOD'],
-        },
-        nextStep: {
-          sequence: expectedNextWaypoint.sequence,
-          status: 'PLANNED',
-        },
-        steps: expect.arrayContaining([
-          expect.objectContaining({
-            sequence: cancelledWaypoint.sequence,
-            status: 'CANCELLED',
-          }),
-          expect.objectContaining({
-            sequence: skippedWaypoint.sequence,
-            status: 'SKIPPED',
-          }),
-        ]),
-      });
-      expect(projection.body.nextStep.sequence).toBeGreaterThan(
-        projection.body.currentStep.sequence,
-      );
-    },
-    120_000,
-  );
+      },
+    });
+    const waypoints = trip.routeVersion.waypoints;
+    expect(waypoints.length).toBeGreaterThanOrEqual(4);
+
+    const completedWaypoint = waypoints[0]!;
+    const cancelledWaypoint = waypoints[1]!;
+    const skippedWaypoint = waypoints[2]!;
+    const expectedNextWaypoint = waypoints[3]!;
+
+    const completed = await adminApi(manager).post(
+      '/tracking/trips/' + item.tripId + '/comfort/events',
+      {
+        clientEventId: 'comfort-integration-complete-0001',
+        routeWaypointId: completedWaypoint.id,
+        type: 'COMPLETED',
+        occurredAt: new Date().toISOString(),
+        actualFacilities: ['FOOD'],
+      },
+    );
+    expect(completed.status, completed.text).toBe(201);
+
+    const cancelled = await adminApi(manager).post(
+      '/tracking/trips/' + item.tripId + '/comfort/events',
+      {
+        clientEventId: 'comfort-integration-cancel-0001',
+        routeWaypointId: cancelledWaypoint.id,
+        type: 'CANCELLED',
+        occurredAt: new Date().toISOString(),
+        actualFacilities: [],
+      },
+    );
+    expect(cancelled.status, cancelled.text).toBe(201);
+
+    const skipped = await adminApi(manager).post(
+      '/tracking/trips/' + item.tripId + '/comfort/events',
+      {
+        clientEventId: 'comfort-integration-skip-0001',
+        routeWaypointId: skippedWaypoint.id,
+        type: 'SKIPPED',
+        occurredAt: new Date().toISOString(),
+        actualFacilities: [],
+      },
+    );
+    expect(skipped.status, skipped.text).toBe(201);
+
+    const projection = await adminApi(manager).get('/tracking/trips/' + item.tripId + '/comfort');
+    expect(projection.status, projection.text).toBe(200);
+    expect(projection.body).toMatchObject({
+      currentStep: {
+        sequence: completedWaypoint.sequence,
+        status: 'COMPLETED',
+        actualFacilities: ['FOOD'],
+      },
+      nextStep: {
+        sequence: expectedNextWaypoint.sequence,
+        status: 'PLANNED',
+      },
+      steps: expect.arrayContaining([
+        expect.objectContaining({
+          sequence: cancelledWaypoint.sequence,
+          status: 'CANCELLED',
+        }),
+        expect.objectContaining({
+          sequence: skippedWaypoint.sequence,
+          status: 'SKIPPED',
+        }),
+      ]),
+    });
+    expect(projection.body.nextStep.sequence).toBeGreaterThan(projection.body.currentStep.sequence);
+  }, 120_000);
 });
