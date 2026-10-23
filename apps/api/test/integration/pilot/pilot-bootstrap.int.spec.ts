@@ -21,10 +21,7 @@ import {
 import { PricingService } from '../../../src/pricing/pricing.service.js';
 import { SeatMapService } from '../../../src/seat-maps/seat-map.service.js';
 import { TrackingService } from '../../../src/tracking/tracking.service.js';
-import {
-  tripCreateSchema,
-  tripTimetableSchema,
-} from '../../../src/trips/trip.dto.js';
+import { tripCreateSchema, tripTimetableSchema } from '../../../src/trips/trip.dto.js';
 import { TripService } from '../../../src/trips/trip.service.js';
 import {
   adminApi,
@@ -434,8 +431,7 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
       expect(tracking).toHaveLength(8);
       expect(
         tracking.every(
-          (line) =>
-            line.outcome === 'skipped' && line.detail === 'depends on operator:tracking',
+          (line) => line.outcome === 'skipped' && line.detail === 'depends on operator:tracking',
         ),
       ).toBe(true);
       expect(await snapshot(isolated)).toEqual(before);
@@ -521,7 +517,9 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
 
     // Existing SCHEDULED trip using the operator-owned conflicting route.
     // Its pilot-looking reference must not make it eligible for bootstrap Tracking.
-    const slot = pilotTripSlots(today(), 4).find((candidate) => candidate.routeCode === 'ET-DKR-PAR')!;
+    const slot = pilotTripSlots(today(), 4).find(
+      (candidate) => candidate.routeCode === 'ET-DKR-PAR',
+    )!;
     const departure = new Date(`${slot.departureDate}T08:00:00Z`);
     const arrival = new Date(departure.getTime() + 48 * 60 * 60 * 1000);
     const tripService = h.t.app.get(TripService);
