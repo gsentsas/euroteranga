@@ -4240,38 +4240,38 @@ export function createAuthClient(baseUrl: string) {
         list: (options: BaggagePolicyListOptions = {}) =>
           call<Page<BaggagePolicy>>(
             'GET',
-            `/v1/admin/baggage/policies?${query({
+            `/v1/admin/baggage-policies?${query({
               cursor: options.cursor,
               limit: options.limit,
               active: options.active === undefined ? undefined : String(options.active),
             })}`,
           ),
         detail: (policyId: string) =>
-          call<BaggagePolicy>('GET', `/v1/admin/baggage/policies/${encodeURIComponent(policyId)}`),
+          call<BaggagePolicy>('GET', `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}`),
         create: (input: BaggagePolicyCreateInput) =>
-          withCsrf<BaggagePolicy>('staff', '/v1/admin/baggage/policies', input),
+          withCsrf<BaggagePolicy>('staff', '/v1/admin/baggage-policies', input),
         update: (policyId: string, input: BaggagePolicyUpdateInput) =>
           withCsrf<BaggagePolicy>(
             'staff',
-            `/v1/admin/baggage/policies/${encodeURIComponent(policyId)}`,
+            `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}`,
             input,
           ),
         createVersion: (policyId: string, input: BaggagePolicyVersionCreateInput) =>
           withCsrf<BaggagePolicy>(
             'staff',
-            `/v1/admin/baggage/policies/${encodeURIComponent(policyId)}/versions`,
+            `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}/versions`,
             input,
           ),
         replaceTiers: (policyId: string, versionId: string, input: BaggagePolicyTiersInput) =>
           withCsrf<BaggagePolicy>(
             'staff',
-            `/v1/admin/baggage/policies/${encodeURIComponent(policyId)}/versions/${encodeURIComponent(versionId)}/tiers`,
+            `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}/versions/${encodeURIComponent(versionId)}/tiers`,
             input,
           ),
         publishVersion: (policyId: string, versionId: string) =>
           withCsrf<BaggagePolicy>(
             'staff',
-            `/v1/admin/baggage/policies/${encodeURIComponent(policyId)}/versions/${encodeURIComponent(versionId)}/publish`,
+            `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}/versions/${encodeURIComponent(versionId)}/publish`,
           ),
       },
       bookings: {
