@@ -1666,7 +1666,6 @@ model Baggage {
 
   @@index([bookingId, passengerId, id])
   @@index([baggagePolicyVersionId])
-  @@index([bookingId, passengerId, allowancePieceOrdinal])
   @@index([lifecycleStatus, id])
   @@index([exceptionStatus, id])
   @@index([createdAt, id])
