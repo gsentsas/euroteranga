@@ -1,7 +1,8 @@
 # EURO TERANGA — Full product audit (October 2026)
 
 - **Audit date:** 2026-10-18
-- **Audited commit:** `main` = `7259e1915d163dd1cf444de1df7b1e1e3d06846c` (PR #51, OPS-3A)
+- **Original audited commit:** `main` = `7259e1915d163dd1cf444de1df7b1e1e3d06846c` (PR #51, OPS-3A)
+- **Last status refresh:** 2026-10-24 on `main` = `bdfd2bb458a72f163ccec34deb484c50e6466b95`
 - **Production observed:** `https://euroteranga.com` and its six sub-domains, read-only probes only
 - **Scope:** repository, CI, documentation, public production surface. No production write.
 
@@ -24,33 +25,38 @@ A green CI never implies `PRODUCTION_READY` on its own.
 
 ## Executive summary
 
-The technical platform is broad and well protected. It covers 23 migrations,
-three authentication realms, RBAC, an append-only audit trail and every
-operational domain from network to reporting. Every domain has server-side
-invariants (SQL triggers and constraints) and integration and browser tests.
-The CI on `main` is green, CodeQL included.
+The current `main` contains the full pilot product surface: operational
+domains, DATA-1/DATA-1B bootstrap, CMS/media/public pages, SEO controls,
+responsive UX guards, Tracking documentation, backup/restore checks and the
+OPS-DEPLOY-2 release hardening. The latest merged changes were validated with
+Quality, Database, unit and PostgreSQL integration tests, Build, Browser /
+Playwright, Security, CodeQL and Pilot-acceptance.
 
-The product is not yet exploitable as a transport company:
+The remaining blockers are no longer missing internal product implementations.
+They are owner, infrastructure or production-activation inputs:
 
-1. **Nothing can be booked in production.** The public API returns no trip,
-   in either direction. Only the Paris and Dakar stops exist publicly.
-2. **There is no way to initialize data reproducibly.** Every vehicle, seat
-   map, route, fare and trip must be typed by hand in OPS. There is no
-   reference dataset and no pilot dataset.
-3. **The public site is a single hard-coded page.** It has no CMS, no image,
-   no legal notice and no privacy policy. `robots.txt` and `sitemap.xml` are
-   missing. Indexing cannot be configured, and the advertised price (249 €)
-   exists nowhere in Pricing.
-4. **Production lags behind `main`.** It runs the code of PR #44 (inferred),
-   while `main` has six more merged PRs, OPS-3A included.
-5. **External blockers stay closed:**
-   - no real payment provider;
-   - no private object storage;
-   - ClamAV is not installed in production;
-   - no off-site backup;
-   - no external monitoring.
+1. **Production data is not initialized by the repository.** DATA-1/DATA-1B
+   provides an idempotent pilot bootstrap, but production execution remains an
+   explicit owner action guarded by `--confirm-production`.
+2. **Real payments remain blocked.** The provider abstraction exists, but no
+   real PSP contract and credentials have been supplied (B1).
+3. **Passenger document production storage remains blocked.** Private
+   S3-compatible storage and production ClamAV are external inputs (B2/B3).
+4. **Contact, Legal and Privacy are complete in code but fail closed without
+   owner values.** B4, B5 and B7 must be supplied before those pages can be
+   published.
+5. **Production operations still require external decisions/actions:** final
+   commercial data (B6), monitoring/on-call (B8), off-site backup (B9), root
+   deployment (B10) and repository-admin branch protection updates (B11).
+
+At the start of AUDIT-2 there were no other open product or maintenance PRs
+or issues.
 
 ## Production observations (2026-10-18, read-only)
+
+These probes are a historical production baseline. They must not be read as a
+statement about the currently deployed SHA. Repository-only access cannot
+verify the live release; F-INF-01 / B10 remains the deployment truth.
 
 | Probe                                                 | Result                                                                                                                 |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
@@ -88,16 +94,23 @@ Strengths:
 - **Errors:** stable error codes (`PublicApiError`) and request ids in every
   error body.
 
-Weaknesses:
+Residual gaps at this refresh:
 
-- **Hard-coded hosts:** the public site and `JourneyShell` (`packages/ui`)
-  hard-code the production host names. A local, CI or staging build links to
-  production (F-ARCH-01).
-- **Marketing content:** all of it is JSX inside the `web` application.
-  There is no content domain (F-CMS-01).
-- **Scripted mutations:** domain services require an HTTP `AuthPrincipal`
-  even though the audit trail already supports system actors. An operator
-  CLI therefore cannot reuse the domain rules (F-ARCH-02).
+- **Production activation:** the repository cannot prove which validated SHA
+  is currently live; root deployment remains an explicit owner operation
+  (F-INF-01 / B10).
+- **External resilience:** off-site backup and external monitoring are still
+  not configured (B8/B9).
+- **Production documents:** private object storage and production malware
+  scanning still depend on B2/B3.
+- **Owner-backed public content:** Contact, Legal and Privacy templates exist
+  and fail closed until B4/B5/B7 are supplied.
+- **Transport commercial data:** final fares, terms, baggage allowance and
+  timetable remain owner inputs (B6).
+
+The historical architecture findings for hard-coded hosts, missing CMS and
+scripted system actors are closed by WEB-1/ARCH-1B, CMS-1/CMS-2 and
+DATA-1/DATA-1B respectively.
 
 ## Existing functionality (verified on `main`)
 
@@ -346,23 +359,32 @@ See F-OBS-01 and F-INF-02.
 
 ## Technical debt
 
-- The remaining public WEB-2 page set is incomplete: FAQ, About, Contact,
-  Legal and Privacy are not yet demonstrated by the repository.
-- The README and architecture overview had drifted (F-DOC-01 to F-DOC-03).
-- No dead code, `TODO`, `FIXME` or stray `console.*` call was found in
-  application sources (grep on `apps/` and `packages/`).
+- No unblocked product-code finding from this audit remains open at this
+  refresh.
+- OPS-DEPLOY-2 replaced the obsolete release-hardening branch with current-main
+  systemd, readiness and release-tree hygiene changes.
+- The dependency train is current for the reviewed updates: Busboy types,
+  SWC, React/React DOM, NestJS and Nodemailer; Zod and body-parser advisories
+  were patched separately.
+- A complete manual WCAG semantic/contrast/screen-reader audit remains a
+  separate review activity; the existing browser checks are regression guards,
+  not a conformance claim.
+- Append-only retention/maintenance policy remains an owner/privacy decision,
+  not an implementation defect.
 
 ## Risks
 
-1. A real customer could be exposed to the site before the legal notice and
-   privacy policy exist (F-WEB-01).
+1. Owner-backed Contact, Legal and Privacy pages remain unavailable until
+   B4/B5/B7 are supplied; publication guards intentionally fail closed rather
+   than expose placeholder information.
 2. A host or disk loss can still destroy PostgreSQL and its local backups
    until an off-site target is chosen (F-INF-02 / B9).
 3. Validated `main` can remain ahead of the live server until root performs
    the explicit deployment (F-INF-01 / B10).
-4. Confusion between pilot data and real operations: pilot records must stay
-   clearly marked, and real bookings must stay impossible while payments are
-   `DISABLED`.
+4. Real bookings must remain impossible while payments are `DISABLED` and
+   B1/B6 are unresolved.
+5. Passenger document production activation must not occur until both private
+   storage and production malware scanning are configured (B2/B3).
 
 ## Blockers for exploitation (owner input required)
 
@@ -383,13 +405,12 @@ See F-OBS-01 and F-INF-02.
 ## Pull request roadmap
 
 The table below is the original dependency roadmap. Current state on
-2026-10-23: FLEET-1 (#53), SEO-1 (#55), CMS-1 (#56), WEB-1 (#66), CMS-2
-(#67), MEDIA-1 (#68), UI-PUBLIC-2 (#70), DATA-1/DATA-1B (#54/#106),
-UX-1A/UX-1B (#110/#112), OPS-4 local (#108), ARCH-1B (#114) and WEB-2A
-(#118) are merged. WEB-2B (#119) completes the page infrastructure while
-B4/B5/B7 owner values remain external blockers. OPS-3B, PAY-1, off-site
-backup, external monitoring and root deployment remain blocked by
-owner/external inputs.
+2026-10-24: the planned internal product work is merged, including WEB-2B
+(#120) and OPS-DEPLOY-2 (#123). The reviewed dependency train is also merged:
+@types/busboy (#62), SWC (#59), React/React DOM (#89), NestJS (#81) and
+Nodemailer (#61). Security follow-ups Zod 4.6.6 (#121) and body-parser 2.4.0
+(#124) are merged. B1-B11 remain the authoritative external/owner blockers
+where applicable.
 
 The PRs are ordered by dependency. Each starts from the current `origin/main`
 and is merged only when CI and CodeQL are green.
@@ -410,16 +431,25 @@ and is merged only when CI and CodeQL are green.
 | 12    | OPS-3B  | Private document storage activation                                                                                                                        | B2, B3         | Yes                                                        |
 | 13    | PAY-1   | Real PSP adapter                                                                                                                                           | B1             | Yes                                                        |
 
-## Readiness matrix (current code state, 2026-10-23)
+### Maintenance train status (2026-10-24)
+
+- Dependabot updates merged: #62, #59, #89, #81 and #61.
+- Security dependency patches merged: Zod 4.6.6 (#121) and body-parser 2.4.0
+  (#124).
+- Obsolete historical deployment work was replaced by OPS-DEPLOY-2 (#123).
+- At the start of AUDIT-2 there were no other open PRs or issues.
+- No production deployment was performed by these maintenance changes.
+
+## Readiness matrix (current code state, 2026-10-24)
 
 | Domain    | Code | UI  | Data | Tests | Docs | Exploitable | Why not                                                                |
 | --------- | ---- | --- | ---- | ----- | ---- | ----------- | ---------------------------------------------------------------------- |
-| Public    | ✅   | ✅  | ⚠️   | ✅    | ⚠️   | ❌          | WEB-2 legal/contact incomplete; no production trips or real PSP        |
-| CMS       | ✅   | ✅  | ⚠️   | ✅    | ✅   | ⚠️          | Code/UI ready; production content/media still depend on owner data     |
-| SEO       | ✅   | —   | —    | ✅    | ✅   | ⚠️          | Code ready; indexing stays off unless production flag is enabled       |
+| Public | ✅   | ✅   | ⚠️  | ✅   | ✅   | ❌   | Code ready; B4/B5/B7 owner values, B6 commercial data, B1 PSP and B10 deployment remain |
+| CMS | ✅   | ✅   | ⚠️  | ✅   | ✅   | ⚠️  | Code/UI ready; real owner content and production activation remain external |
+| SEO | ✅   | —   | —   | ✅   | ✅   | ⚠️  | Code ready; production indexing and deployment remain explicitly controlled |
 | Booking   | ✅   | ✅  | ❌   | ✅    | ✅   | ❌          | No trip in production (F-DATA-01), no PSP (F-PAY-01)                   |
 | Client    | ✅   | ✅  | —    | ✅    | ✅   | ⚠️          | Depends on bookings; documents blocked (F-INF-03)                      |
-| OPS       | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Code ready; live state still depends on root deployment (F-INF-01)     |
+| OPS | ✅   | ✅   | ❌   | ✅   | ✅   | ⚠️  | Code and release hardening ready; live state still depends on root deployment B10 |
 | Crew      | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Needs trips and assignments                                            |
 | Fleet     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No vehicle in production (F-DATA-01)                                   |
 | Trips     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No trip in production (F-DATA-01)                                      |
