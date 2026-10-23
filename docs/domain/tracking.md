@@ -9,12 +9,12 @@ directly.
 
 ## Domain model
 
-| Model | Purpose |
-| --- | --- |
-| `tracking_device` | Provider device identity attached to one vehicle. `provider_key + external_id` is unique. |
-| `trip_tracking_config` | One mutable tracking policy per trip: enabled state, public visibility and optional tracking device. |
-| `tracking_observation` | Append-only operational evidence from GPS, checkpoint, Crew, OPS or SYSTEM sources. |
-| `tracking_public_token` | Revocable hash-only public capability for one trip. The raw token is returned only when issued. |
+| Model                   | Purpose                                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------------------------- |
+| `tracking_device`       | Provider device identity attached to one vehicle. `provider_key + external_id` is unique.            |
+| `trip_tracking_config`  | One mutable tracking policy per trip: enabled state, public visibility and optional tracking device. |
+| `tracking_observation`  | Append-only operational evidence from GPS, checkpoint, Crew, OPS or SYSTEM sources.                  |
+| `tracking_public_token` | Revocable hash-only public capability for one trip. The raw token is returned only when issued.      |
 
 Tracking observations are evidence, not mutable current state. PostgreSQL rejects observation
 updates/deletes and rejects truncation of the tracking history tables. Public-token identity is
@@ -65,12 +65,12 @@ permissions are deliberately separate from generic `trip.read`.
 
 The public capability has four visibility levels:
 
-| Visibility | Public result |
-| --- | --- |
-| `HIDDEN` | The public token behaves as unavailable and returns the generic tracking-not-found response. |
-| `CHECKPOINT_ONLY` | Traveller-visible stop/checkpoint progress may be shown; no coordinates are returned. |
-| `APPROXIMATE` | Public coordinates are rounded to one decimal degree. Exact provider accuracy is not exposed. |
-| `PRECISE` | The latest stored coordinates may be returned with `accuracyMeters`. |
+| Visibility        | Public result                                                                                 |
+| ----------------- | --------------------------------------------------------------------------------------------- |
+| `HIDDEN`          | The public token behaves as unavailable and returns the generic tracking-not-found response.  |
+| `CHECKPOINT_ONLY` | Traveller-visible stop/checkpoint progress may be shown; no coordinates are returned.         |
+| `APPROXIMATE`     | Public coordinates are rounded to one decimal degree. Exact provider accuracy is not exposed. |
+| `PRECISE`         | The latest stored coordinates may be returned with `accuracyMeters`.                          |
 
 A public checkpoint may come from `CHECKPOINT`, `CREW`, `OPS` or `SYSTEM`, but a checkpoint
 with `travellerVisible=false` is never projected. Stops remain traveller-visible.
