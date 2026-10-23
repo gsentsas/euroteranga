@@ -1,9 +1,6 @@
 import type { PrismaClient } from '@euroteranga/database';
 import { PublicApiError } from '../auth/http/public-api-error.js';
-import type {
-  SystemActor,
-  SystemOperatorActor,
-} from '../auth/session/auth-principal.js';
+import type { SystemActor, SystemOperatorActor } from '../auth/session/auth-principal.js';
 import type { AuditService } from '../authorization/audit.service.js';
 import {
   vehicleCreateSchema,
