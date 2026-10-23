@@ -22,6 +22,14 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
     hostAddress: null,
     hostContact: null,
   },
+  privacy: {
+    dataController: null,
+    privacyContact: null,
+    purposesAndLegalBases: null,
+    retentionPeriods: null,
+    processors: null,
+    transfersOutsideEu: null,
+  },
   social: [],
   apps: {
     bookingUrl: 'https://booking.euroteranga.com/',
