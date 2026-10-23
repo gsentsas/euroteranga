@@ -1509,7 +1509,7 @@ model FareTableVersion {
   routeVersion RouteVersion @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
   entries               FareEntry[]
   trips                 Trip[]
-  baggagePolicyVersion  BaggagePolicyVersion?
+  baggagePolicyVersions BaggagePolicyVersion[]
 
   @@unique([fareTableId, version])
   @@index([routeVersionId])
@@ -1692,7 +1692,7 @@ model BaggagePolicy {
 model BaggagePolicyVersion {
   id                       String                     @id @default(uuid(7)) @db.Uuid
   baggagePolicyId          String                     @map("baggage_policy_id") @db.Uuid
-  fareTableVersionId       String                     @unique @map("fare_table_version_id") @db.Uuid
+  fareTableVersionId       String                     @map("fare_table_version_id") @db.Uuid
   version                  Int
   status                   BaggagePolicyVersionStatus @default(DRAFT)
   includedPieces           Int                        @map("included_pieces")
@@ -1708,6 +1708,7 @@ model BaggagePolicyVersion {
   baggage          Baggage[]
 
   @@unique([baggagePolicyId, version])
+  @@index([fareTableVersionId])
   @@index([status])
   @@map("baggage_policy_version")
 }
