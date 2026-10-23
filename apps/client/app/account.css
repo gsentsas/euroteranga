@@ -218,10 +218,6 @@
 }
 
 @media (max-width: 48rem) {
-  .et-comfort-grid {
-    grid-template-columns: 1fr;
-  }
-
   .et-client-home,
   .et-account-sections {
     margin-top: -2.4rem;
@@ -274,6 +270,12 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+@media (max-width: 48rem) {
+  .et-comfort-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .et-comfort-step {
