@@ -174,10 +174,6 @@
 }
 
 @media (max-width: 48rem) {
-  .tracking-comfort-grid {
-    grid-template-columns: 1fr;
-  }
-
   .tracking-access-card,
   .tracking-stack,
   [data-testid='tracking-unavailable'] {
@@ -209,6 +205,12 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.8rem;
   margin-top: 1rem;
+}
+
+@media (max-width: 48rem) {
+  .tracking-comfort-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .tracking-comfort-grid .tracking-event {
