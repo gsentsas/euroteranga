@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@euroteranga/database';
 import { PublicApiError } from '../auth/http/public-api-error.js';
-import type { SystemActor } from '../auth/session/auth-principal.js';
+import type { SystemActor, SystemOperatorActor } from '../auth/session/auth-principal.js';
+import type { AuditService } from '../authorization/audit.service.js';
 import {
   vehicleCreateSchema,
   vehicleSeatMapSchema,
@@ -21,6 +22,8 @@ import { fareTableCreateSchema, fareTableFaresSchema } from '../pricing/pricing.
 import type { PricingService } from '../pricing/pricing.service.js';
 import { seatMapCellsSchema, seatMapCreateSchema } from '../seat-maps/seat-map.dto.js';
 import type { SeatMapService } from '../seat-maps/seat-map.service.js';
+import { trackingConfigSchema } from '../tracking/tracking.dto.js';
+import type { TrackingService } from '../tracking/tracking.service.js';
 import {
   tripCreateSchema,
   tripFareTableSchema,
@@ -46,16 +49,24 @@ import {
 } from './pilot-dataset.js';
 
 export const PILOT_ACTOR: SystemActor = { kind: 'system', source: PILOT_SOURCE };
+export const PILOT_OPERATOR_EMAIL = 'pilot-bootstrap-operator@example.test';
 
 const HOUR = 3_600_000;
+const PILOT_TRACKING_CONFIG = {
+  enabled: true,
+  visibility: 'CHECKPOINT_ONLY',
+  trackingDeviceId: null,
+} as const;
 export const MAX_TRIPS_PER_DIRECTION = 8;
 
 export interface PilotBootstrapServices {
   db: PrismaClient;
+  audit: AuditService;
   network: NetworkService;
   seatMaps: SeatMapService;
   fleet: FleetService;
   pricing: PricingService;
+  tracking: TrackingService;
   trips: TripService;
 }
 
@@ -91,6 +102,8 @@ export interface PilotBootstrapReport {
 class PilotConflict extends Error {}
 
 type RouteVersionState = { routeVersionId: string; waypointIds: string[] };
+type PilotTripState = { id: string | null; reference: string };
+type TrackingOperatorState = SystemOperatorActor | 'planned';
 
 interface TripWithTimings {
   id: string;
@@ -192,16 +205,20 @@ export class PilotBootstrap {
 
     const now = options.now ?? new Date();
     const slots = pilotTripSlots(options.anchorDate, options.tripsPerDirection);
+    const pilotTrips: PilotTripState[] = [];
     for (const route of PILOT_ROUTES) {
-      await this.ensureTrips(
-        route,
-        slots.filter((slot) => slot.routeCode === route.code),
-        { routes, vehicles, fares, seatMapVersionId: seatMapVersionId ?? null },
-        options.tripsPerDirection,
-        now,
-        dry,
+      pilotTrips.push(
+        ...(await this.ensureTrips(
+          route,
+          slots.filter((slot) => slot.routeCode === route.code),
+          { routes, vehicles, fares, seatMapVersionId: seatMapVersionId ?? null },
+          options.tripsPerDirection,
+          now,
+          dry,
+        )),
       );
     }
+    await this.ensureTrackingConfigs(pilotTrips, dry);
 
     return {
       dryRun: dry,
@@ -758,6 +775,169 @@ export class PilotBootstrap {
     return draft.id;
   }
 
+  // -- tracking -------------------------------------------------------------
+
+  private async ensureTrackingConfigs(trips: readonly PilotTripState[], dry: boolean) {
+    const { db, tracking } = this.services;
+    const missing: Array<{ id: string; reference: string }> = [];
+    const pending: Array<{ reference: string }> = [];
+
+    for (const trip of trips) {
+      if (!trip.id) {
+        pending.push({ reference: trip.reference });
+        continue;
+      }
+      const tripId = trip.id;
+      await this.guarded('tracking', trip.reference, [], async () => {
+        const existing = await db.tripTrackingConfig.findUnique({
+          where: { tripId },
+          select: { enabled: true, visibility: true, trackingDeviceId: true },
+        });
+        if (existing) {
+          if (
+            existing.enabled !== PILOT_TRACKING_CONFIG.enabled ||
+            existing.visibility !== PILOT_TRACKING_CONFIG.visibility ||
+            existing.trackingDeviceId !== PILOT_TRACKING_CONFIG.trackingDeviceId
+          ) {
+            throw new PilotConflict(
+              `existing tracking is enabled=${existing.enabled}, visibility=${existing.visibility}, device=${existing.trackingDeviceId ? 'configured' : 'none'}`,
+            );
+          }
+          this.report('existing', 'tracking', trip.reference, 'CHECKPOINT_ONLY, no GPS device');
+          return trip.id;
+        }
+        missing.push({ id: tripId, reference: trip.reference });
+        return tripId;
+      });
+    }
+
+    if (missing.length === 0 && pending.length === 0) return;
+
+    const operator = await this.guarded('operator', 'tracking', [], () =>
+      this.ensureTrackingOperator(dry),
+    );
+    if (!operator) {
+      for (const trip of [...missing, ...pending]) {
+        this.report('skipped', 'tracking', trip.reference, 'depends on operator:tracking');
+      }
+      return;
+    }
+
+    if (dry || operator === 'planned') {
+      for (const trip of [...missing, ...pending]) {
+        this.report('planned', 'tracking', trip.reference, 'CHECKPOINT_ONLY, no GPS device');
+      }
+      return;
+    }
+
+    for (const trip of missing) {
+      await this.guarded('tracking', trip.reference, [], async () => {
+        await tracking.configure(
+          operator,
+          trip.id,
+          trackingConfigSchema.parse(PILOT_TRACKING_CONFIG),
+        );
+        this.report('created', 'tracking', trip.reference, 'CHECKPOINT_ONLY, no GPS device');
+        return trip.id;
+      });
+    }
+  }
+
+  private async ensureTrackingOperator(dry: boolean): Promise<TrackingOperatorState> {
+    const { db, audit } = this.services;
+    const existing = await db.authIdentity.findUnique({
+      where: {
+        realm_normalizedEmail: {
+          realm: 'STAFF',
+          normalizedEmail: PILOT_OPERATOR_EMAIL,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        passwordCredential: { select: { identityId: true } },
+        mfaTotpCredential: { select: { identityId: true } },
+        _count: {
+          select: {
+            roleAssignments: { where: { revokedAt: null } },
+            mfaRecoveryCodes: true,
+          },
+        },
+      },
+    });
+
+    if (existing) {
+      const seeded = await db.auditEvent.count({
+        where: {
+          resourceType: 'auth_identity',
+          resourceId: existing.id,
+          action: 'STAFF_IDENTITY_SEEDED',
+          metadata: { path: ['systemActor'], equals: PILOT_SOURCE },
+        },
+      });
+      if (seeded === 0) {
+        throw new PilotConflict(
+          `${PILOT_OPERATOR_EMAIL} was not created by the pilot bootstrap (kept, not used)`,
+        );
+      }
+      if (
+        existing.passwordCredential ||
+        existing.mfaTotpCredential ||
+        existing._count.roleAssignments > 0 ||
+        existing._count.mfaRecoveryCodes > 0
+      ) {
+        throw new PilotConflict(
+          `${PILOT_OPERATOR_EMAIL} now has a password, MFA factor or role (kept, not used)`,
+        );
+      }
+      if (existing.status !== 'ACTIVE') {
+        throw new PilotConflict(`pilot tracking operator is ${existing.status}`);
+      }
+      this.report('existing', 'operator', 'tracking', 'synthetic STAFF identity, no credentials');
+      return {
+        kind: 'system',
+        source: PILOT_SOURCE,
+        operatorIdentityId: existing.id,
+      };
+    }
+
+    if (dry) {
+      this.report('planned', 'operator', 'tracking', 'synthetic STAFF identity, no credentials');
+      return 'planned';
+    }
+
+    const operatorIdentityId = await db.$transaction(async (tx) => {
+      const identity = await tx.authIdentity.create({
+        data: {
+          realm: 'STAFF',
+          email: PILOT_OPERATOR_EMAIL,
+          normalizedEmail: PILOT_OPERATOR_EMAIL,
+          status: 'ACTIVE',
+          emailVerifiedAt: new Date(),
+        },
+        select: { id: true },
+      });
+      await audit.record(
+        {
+          actor: PILOT_ACTOR,
+          action: 'STAFF_IDENTITY_SEEDED',
+          resourceType: 'auth_identity',
+          resourceId: identity.id,
+          after: { realm: 'STAFF', status: 'ACTIVE' },
+          metadata: { synthetic: true, credential: 'none', roles: 'none' },
+        },
+        tx,
+      );
+      return identity.id;
+    });
+    this.report('created', 'operator', 'tracking', 'synthetic STAFF identity, no credentials');
+    return {
+      kind: 'system',
+      source: PILOT_SOURCE,
+      operatorIdentityId,
+    };
+  }
+
   // -- trips ----------------------------------------------------------------
 
   private async ensureTrips(
@@ -772,8 +952,9 @@ export class PilotBootstrap {
     wanted: number,
     now: Date,
     dry: boolean,
-  ): Promise<void> {
+  ): Promise<PilotTripState[]> {
     const { db } = this.services;
+    const validated: PilotTripState[] = [];
     const routeVersion = context.routes.get(route.code);
     const fareTableVersionId = context.fares.get(route.code);
     const directionDependency = !routeVersion
@@ -817,12 +998,13 @@ export class PilotBootstrap {
           this.report('conflict', 'trip', trip.reference, divergence);
         } else {
           upcoming += 1;
+          validated.push({ id: trip.id, reference: trip.reference });
         }
       }
       if (divergent) {
         this.blocked.add(`trips:${route.code}`);
         this.report('skipped', 'trips', route.code, 'depends on the conflicting pilot trips');
-        return;
+        return [];
       }
     }
 
@@ -852,6 +1034,14 @@ export class PilotBootstrap {
       if (existing?.status === 'SCHEDULED') {
         // Already verified and counted above, or in the past.
         this.report('existing', 'trip', slot.reference);
+        if (
+          !directionDependency &&
+          existing.plannedDepartureAt &&
+          existing.plannedDepartureAt > now &&
+          !validated.some((trip) => trip.id === existing.id)
+        ) {
+          validated.push({ id: existing.id, reference: existing.reference });
+        }
         continue;
       }
       if (existing && existing.status !== 'DRAFT') {
@@ -865,6 +1055,7 @@ export class PilotBootstrap {
           slot.reference,
           dependency ? `depends on ${dependency}` : undefined,
         );
+        if (dry && !refused) validated.push({ id: null, reference: slot.reference });
         remaining -= 1;
         continue;
       }
@@ -876,8 +1067,12 @@ export class PilotBootstrap {
           fareTableVersionId: fareTableVersionId!,
         }),
       );
-      if (result) remaining -= 1;
+      if (result) {
+        validated.push({ id: result, reference: slot.reference });
+        remaining -= 1;
+      }
     }
+    return validated;
   }
 
   /** UTC departure of a slot: its local departure time at the first stop. */

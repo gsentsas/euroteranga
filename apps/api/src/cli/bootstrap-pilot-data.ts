@@ -11,9 +11,13 @@
  * 1 error. Nothing secret is printed (no connection string, no identifier
  * other than business codes).
  */
+import 'reflect-metadata';
 import { ConfigValidationError, loadApiEnv } from '@euroteranga/config';
 import { createLogger, redactString } from '@euroteranga/logger';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from '../app.module.js';
 import { AuditService } from '../authorization/audit.service.js';
+import { NestJsonLogger } from '../common/logging.js';
 import { DatabaseService } from '../database/database.service.js';
 import { FleetService } from '../fleet/fleet.service.js';
 import { NetworkService } from '../network/network.service.js';
@@ -22,6 +26,7 @@ import { PilotBootstrap } from '../pilot/pilot-bootstrap.js';
 import { PILOT_DATASET_VERSION } from '../pilot/pilot-dataset.js';
 import { PricingService } from '../pricing/pricing.service.js';
 import { SeatMapService } from '../seat-maps/seat-map.service.js';
+import { TrackingService } from '../tracking/tracking.service.js';
 import { TripService } from '../trips/trip.service.js';
 
 const out = (line: string) => process.stdout.write(`${line}\n`);
@@ -44,16 +49,21 @@ async function main(): Promise<number> {
   }
 
   const logger = createLogger({ service: 'pilot-bootstrap-cli', level: 'warn' });
-  const database = new DatabaseService(env, logger);
+  const app = await NestFactory.createApplicationContext(AppModule.forRoot({ env, logger }), {
+    logger: new NestJsonLogger(logger),
+    abortOnError: false,
+  });
   try {
-    const audit = new AuditService(database);
+    const database = app.get(DatabaseService);
     const bootstrap = new PilotBootstrap({
       db: database.client,
-      network: new NetworkService(database, audit),
-      seatMaps: new SeatMapService(database, audit),
-      fleet: new FleetService(database, audit),
-      pricing: new PricingService(database, audit),
-      trips: new TripService(database, audit),
+      audit: app.get(AuditService),
+      network: app.get(NetworkService),
+      seatMaps: app.get(SeatMapService),
+      fleet: app.get(FleetService),
+      pricing: app.get(PricingService),
+      tracking: app.get(TrackingService),
+      trips: app.get(TripService),
     });
     out(
       `Pilot dataset ${PILOT_DATASET_VERSION} — APP_ENV=${env.APP_ENV}, anchor ${parsed.args.anchorDate}, ` +
@@ -74,7 +84,7 @@ async function main(): Promise<number> {
     }
     return 0;
   } finally {
-    await database.client.$disconnect();
+    await app.close();
   }
 }
 

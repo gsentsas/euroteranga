@@ -1,19 +1,27 @@
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { AuditService } from '../../../src/authorization/audit.service.js';
 import { vehicleCreateSchema, vehicleUpdateSchema } from '../../../src/fleet/fleet.dto.js';
 import { FleetService } from '../../../src/fleet/fleet.service.js';
 import { vehicleIdentifierCollision } from '../../../src/fleet/vehicle-identifiers.js';
 import { NetworkService } from '../../../src/network/network.service.js';
 import {
   PILOT_ACTOR,
+  PILOT_OPERATOR_EMAIL,
   PilotBootstrap,
   type PilotBootstrapOptions,
   type PilotBootstrapReport,
 } from '../../../src/pilot/pilot-bootstrap.js';
-import { PILOT_VEHICLES, type PilotVehicle } from '../../../src/pilot/pilot-dataset.js';
+import {
+  PILOT_VEHICLES,
+  pilotTripSlots,
+  type PilotVehicle,
+} from '../../../src/pilot/pilot-dataset.js';
 import { PricingService } from '../../../src/pricing/pricing.service.js';
 import { SeatMapService } from '../../../src/seat-maps/seat-map.service.js';
+import { TrackingService } from '../../../src/tracking/tracking.service.js';
+import { tripCreateSchema, tripTimetableSchema } from '../../../src/trips/trip.dto.js';
 import { TripService } from '../../../src/trips/trip.service.js';
 import {
   adminApi,
@@ -46,10 +54,12 @@ async function harness(): Promise<Harness> {
   const run = (overrides: Partial<PilotBootstrapOptions> = {}) =>
     new PilotBootstrap({
       db: db(t.app),
+      audit: t.app.get(AuditService),
       network: t.app.get(NetworkService),
       seatMaps: t.app.get(SeatMapService),
       fleet: t.app.get(FleetService),
       pricing: t.app.get(PricingService),
+      tracking: t.app.get(TrackingService),
       trips: t.app.get(TripService),
     }).run(options(overrides));
   return {
@@ -79,6 +89,8 @@ async function snapshot(h: Harness) {
     fareTables: await client.fareTable.count(),
     fareTableVersions: await client.fareTableVersion.count(),
     trips: await client.trip.count(),
+    identities: await client.authIdentity.count(),
+    trackingConfigs: await client.tripTrackingConfig.count(),
     audit: await client.auditEvent.count(),
   };
 }
@@ -185,6 +197,49 @@ describe('pilot data bootstrap: complete dataset (isolated database)', () => {
       expect(trip.plannedDepartureAt!.getTime()).toBeGreaterThan(Date.now());
     }
     expect(trips.filter((trip) => trip.routeVersion.route.code === 'ET-PAR-DKR')).toHaveLength(4);
+
+    const operator = await client.authIdentity.findUniqueOrThrow({
+      where: {
+        realm_normalizedEmail: {
+          realm: 'STAFF',
+          normalizedEmail: PILOT_OPERATOR_EMAIL,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        passwordCredential: true,
+        mfaTotpCredential: true,
+        _count: {
+          select: {
+            roleAssignments: { where: { revokedAt: null } },
+            mfaRecoveryCodes: true,
+          },
+        },
+      },
+    });
+    expect(operator).toMatchObject({
+      status: 'ACTIVE',
+      passwordCredential: null,
+      mfaTotpCredential: null,
+      _count: { roleAssignments: 0, mfaRecoveryCodes: 0 },
+    });
+
+    const trackingConfigs = await client.tripTrackingConfig.findMany({
+      orderBy: { trip: { reference: 'asc' } },
+    });
+    expect(trackingConfigs).toHaveLength(8);
+    expect(
+      trackingConfigs.every(
+        (row) =>
+          row.enabled &&
+          row.visibility === 'CHECKPOINT_ONLY' &&
+          row.trackingDeviceId === null &&
+          row.createdByIdentityId === operator.id &&
+          row.updatedByIdentityId === operator.id,
+      ),
+    ).toBe(true);
+
     // Each coach alternates directions and never serves two overlapping trips.
     for (const code of ['ET-COACH-001', 'ET-COACH-002']) {
       const own = trips.filter((trip) => trip.vehicle?.code === code);
@@ -202,7 +257,17 @@ describe('pilot data bootstrap: complete dataset (isolated database)', () => {
     const events = await db(h.t.app).auditEvent.findMany({
       where: {
         resourceType: {
-          in: ['country', 'stop', 'checkpoint', 'route', 'route_version', 'vehicle', 'trip'],
+          in: [
+            'country',
+            'stop',
+            'checkpoint',
+            'route',
+            'route_version',
+            'vehicle',
+            'trip',
+            'auth_identity',
+            'trip_tracking_config',
+          ],
         },
       },
     });
@@ -277,6 +342,43 @@ describe('pilot data bootstrap: complete dataset (isolated database)', () => {
     });
     expect(hold.status, hold.text).toBe(201);
   });
+
+  it('refuses to overwrite a pilot tracking configuration changed in OPS', async () => {
+    const client = db(h.t.app);
+    const trip = await client.trip.findFirstOrThrow({
+      where: { reference: { startsWith: 'ET-PILOT-PARDKR-' }, status: 'SCHEDULED' },
+      orderBy: { plannedDepartureAt: 'asc' },
+      select: { id: true, reference: true },
+    });
+    const admin = await staffActor(h.t.app, ['OPS_MANAGER']);
+    const changed = await adminApi(admin).post(`/tracking/trips/${trip.id}/config`, {
+      enabled: true,
+      visibility: 'HIDDEN',
+      trackingDeviceId: null,
+    });
+    expect(changed.status, changed.text).toBe(201);
+
+    const before = await client.tripTrackingConfig.findUniqueOrThrow({
+      where: { tripId: trip.id },
+    });
+    expect(before.visibility).toBe('HIDDEN');
+
+    const report = await h.run();
+    expect(report.hasConflicts).toBe(true);
+    expect(report.lines).toContainEqual(
+      expect.objectContaining({
+        outcome: 'conflict',
+        entity: 'tracking',
+        key: trip.reference,
+      }),
+    );
+
+    const after = await client.tripTrackingConfig.findUniqueOrThrow({
+      where: { tripId: trip.id },
+    });
+    expect(after.visibility).toBe('HIDDEN');
+    expect(after.updatedAt).toEqual(before.updatedAt);
+  });
 });
 
 describe('pilot data bootstrap: dry run, resume and conflicts (isolated databases)', () => {
@@ -299,6 +401,43 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
     expect(outcomes(report)).toEqual(['planned']);
     expect(report.lines.filter((line) => line.entity === 'trip')).toHaveLength(8);
     expect(await snapshot(h)).toEqual(before);
+  });
+
+  it('dry run validates the reserved tracking operator without writing', async () => {
+    const isolated = await harness();
+    try {
+      const client = db(isolated.t.app);
+      await client.authIdentity.create({
+        data: {
+          realm: 'STAFF',
+          email: PILOT_OPERATOR_EMAIL,
+          normalizedEmail: PILOT_OPERATOR_EMAIL,
+          status: 'ACTIVE',
+          emailVerifiedAt: new Date(),
+        },
+      });
+      const before = await snapshot(isolated);
+
+      const report = await isolated.run({ dryRun: true });
+      expect(report.hasConflicts).toBe(true);
+      expect(report.lines).toContainEqual(
+        expect.objectContaining({
+          outcome: 'conflict',
+          entity: 'operator',
+          key: 'tracking',
+        }),
+      );
+      const tracking = report.lines.filter((line) => line.entity === 'tracking');
+      expect(tracking).toHaveLength(8);
+      expect(
+        tracking.every(
+          (line) => line.outcome === 'skipped' && line.detail === 'depends on operator:tracking',
+        ),
+      ).toBe(true);
+      expect(await snapshot(isolated)).toEqual(before);
+    } finally {
+      await isolated.drop();
+    }
   });
 
   it('completes data left half-way and refuses to overwrite operator data', async () => {
@@ -368,9 +507,48 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
       {},
     );
     expect(published.status).toBe(200);
-    const operatorWaypoints = await db(h.t.app).routeWaypoint.count({
+    const client = db(h.t.app);
+    const routeWaypoints = await client.routeWaypoint.findMany({
       where: { routeVersionId: version.body.id },
+      orderBy: { sequence: 'asc' },
+      select: { id: true },
     });
+    const operatorWaypoints = routeWaypoints.length;
+
+    // Existing SCHEDULED trip using the operator-owned conflicting route.
+    // Its pilot-looking reference must not make it eligible for bootstrap Tracking.
+    const slot = pilotTripSlots(today(), 4).find(
+      (candidate) => candidate.routeCode === 'ET-DKR-PAR',
+    )!;
+    const departure = new Date(`${slot.departureDate}T08:00:00Z`);
+    const arrival = new Date(departure.getTime() + 48 * 60 * 60 * 1000);
+    const tripService = h.t.app.get(TripService);
+    const operatorTrip = await tripService.createTrip(
+      tripCreateSchema.parse({
+        reference: slot.reference,
+        routeVersionId: version.body.id,
+      }),
+      PILOT_ACTOR,
+    );
+    await tripService.replaceTimetable(
+      operatorTrip.id,
+      tripTimetableSchema.parse({
+        timings: [
+          {
+            routeWaypointId: routeWaypoints[0]!.id,
+            plannedArrivalAt: null,
+            plannedDepartureAt: departure.toISOString(),
+          },
+          {
+            routeWaypointId: routeWaypoints[1]!.id,
+            plannedArrivalAt: arrival.toISOString(),
+            plannedDepartureAt: null,
+          },
+        ],
+      }),
+      PILOT_ACTOR,
+    );
+    await tripService.schedule(operatorTrip.id, PILOT_ACTOR);
 
     const report = await h.run();
     const line = (entity: string, key: string) =>
@@ -390,18 +568,20 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
       detail: 'depends on route:ET-DKR-PAR',
     });
 
-    const client = db(h.t.app);
     expect(
       await client.vehicle.findUniqueOrThrow({ where: { code: 'ET-COACH-001' } }),
     ).toMatchObject({ status: 'ACTIVE', name: 'Teranga Pilote 01' });
-    // The operator route is untouched and no Dakar -> Paris trip was created.
+    // The operator route and its existing trip are untouched; no Tracking is added beside them.
     expect(await client.routeVersion.count({ where: { routeId: route.body.id } })).toBe(1);
     expect(await client.routeWaypoint.count({ where: { routeVersionId: version.body.id } })).toBe(
       operatorWaypoints,
     );
     expect(
       await client.trip.count({ where: { reference: { startsWith: 'ET-PILOT-DKRPAR-' } } }),
-    ).toBe(0);
+    ).toBe(1);
+    expect(
+      await client.tripTrackingConfig.findUnique({ where: { tripId: operatorTrip.id } }),
+    ).toBeNull();
     expect(
       await client.trip.count({
         where: { reference: { startsWith: 'ET-PILOT-PARDKR-' }, status: 'SCHEDULED' },
@@ -934,7 +1114,7 @@ describe('pilot data bootstrap: pilot-corridor/2 coaches (isolated database)', (
       {
         key: 'ET-COACH-001',
         outcome,
-        detail: 'renamed from "Teranga 01" for pilot-corridor/3',
+        detail: 'renamed from "Teranga 01" for pilot-corridor/4',
       },
       {
         key: 'ET-COACH-002',

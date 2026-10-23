@@ -107,10 +107,12 @@ async function main(): Promise<number> {
     );
     const seed = new RealisticSeed({
       db: database.client,
+      audit: app.get(AuditService),
       network: app.get(NetworkService),
       seatMaps: app.get(SeatMapService),
       fleet: app.get(FleetService),
       pricing: app.get(PricingService),
+      tracking: app.get(TrackingService),
       trips: app.get(TripService),
       content: app.get(ContentService),
       commerce: unavailable
