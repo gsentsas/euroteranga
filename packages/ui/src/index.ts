@@ -16,8 +16,4 @@ export {
 } from './payment-choice.js';
 export { SessionPanel, type SessionPanelData, type SessionPanelProps } from './session-panel.js';
 
-export {
-  JourneyShell,
-  type JourneyShellLinks,
-  type JourneyShellProps,
-} from './journey-shell.js';
+export { JourneyShell, type JourneyShellLinks, type JourneyShellProps } from './journey-shell.js';
