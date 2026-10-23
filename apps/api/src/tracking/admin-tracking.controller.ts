@@ -8,6 +8,8 @@ import { ZodValidationPipe } from '../auth/http/zod-validation.pipe.js';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { AuthorizationGuard, RequirePermissions } from '../authorization/authorization.guard.js';
 import { PERMISSIONS } from '../authorization/permissions.js';
+import { comfortEventSchema, comfortUuidSchema } from '../comfort/comfort.dto.js';
+import { ComfortService } from '../comfort/comfort.service.js';
 import {
   trackingConfigSchema,
   trackingDeviceCreateSchema,
@@ -25,7 +27,10 @@ import { TrackingService } from './tracking.service.js';
 @AuthRealmRoute('staff')
 @UseGuards(AuthRequestGuard, SessionGuard, AuthorizationGuard)
 export class AdminTrackingController {
-  constructor(private readonly tracking: TrackingService) {}
+  constructor(
+    private readonly tracking: TrackingService,
+    private readonly comfort: ComfortService,
+  ) {}
 
   @Get('trips')
   @Header('Cache-Control', 'no-store')
@@ -39,6 +44,28 @@ export class AdminTrackingController {
   @RequirePermissions(PERMISSIONS.TRACKING_READ)
   trip(@Param('tripId', new ZodValidationPipe(trackingUuidSchema)) tripId: string) {
     return this.tracking.tripDetail(tripId);
+  }
+
+  @Get('trips/:tripId/comfort')
+  @Header('Cache-Control', 'no-store')
+  @RequirePermissions(PERMISSIONS.TRACKING_READ)
+  comfortProjection(
+    @Param('tripId', new ZodValidationPipe(comfortUuidSchema)) tripId: string,
+  ) {
+    return this.comfort.adminProjection(tripId);
+  }
+
+  @Post('trips/:tripId/comfort/events')
+  @UseGuards(CsrfGuard)
+  @Header('Cache-Control', 'no-store')
+  @RequirePermissions(PERMISSIONS.TRACKING_MANAGE)
+  comfortEvent(
+    @CurrentPrincipal() actor: AuthPrincipal,
+    @Param('tripId', new ZodValidationPipe(comfortUuidSchema)) tripId: string,
+    @Body(new ZodValidationPipe(comfortEventSchema))
+    body: z.infer<typeof comfortEventSchema>,
+  ) {
+    return this.comfort.record(actor, tripId, body);
   }
 
   @Get('devices')
