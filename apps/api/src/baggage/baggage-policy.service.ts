@@ -193,7 +193,11 @@ export class BaggagePolicyService {
       await this.database.client.$transaction(async (tx) => {
         await lockPolicy(tx, id);
         const before = await tx.baggagePolicy.findUniqueOrThrow({ where: { id } });
-        const after = await tx.baggagePolicy.update({ where: { id }, data: input });
+        const data: Prisma.BaggagePolicyUpdateInput = {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.active !== undefined ? { active: input.active } : {}),
+        };
+        const after = await tx.baggagePolicy.update({ where: { id }, data });
         await this.audit.record(
           {
             actor,
