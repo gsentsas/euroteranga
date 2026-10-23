@@ -63,6 +63,23 @@ tickets. A resolved fare alone is **not a quote or a booking**.
     currencies with minor unit 0), then displays the server total after
     creation.
 
+## Baggage allowance integration (BAGGAGE-PLUS-1)
+
+Baggage pricing reuses the historical Pricing context rather than inventing a
+second route/fare authority. A `BaggagePolicyVersion` points to a
+`FareTableVersion`. At most one policy version is PUBLISHED for a given fare
+version; older versions may remain RETIRED because bags that already snapshot
+them must continue to resolve exactly as originally registered.
+
+The current repository does not yet model several simultaneous fare classes
+(ECO/STANDARD/PLUS/FLEX) within one trip. Policy catalogue codes can represent
+those commercial products, but only the policy linked to the booking's actual
+fare-table version is authoritative for a bag. Adding true selectable fare
+classes belongs to Pricing, not to Baggage.
+
+Policy tiers store `chargeMinor` as BIGINT and are edited as exact decimal
+input in OPS. No example product amount is seeded or hard-coded.
+
 ## Booking snapshot (PR-09)
 
 Hold creation resolves the `FareEntry` from the trip's own historical

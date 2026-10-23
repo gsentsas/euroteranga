@@ -1,6 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { appByName, appUrl } from '../apps.js';
-import { baggageSeed, preauthenticatedSession } from '../fixtures.js';
+import { baggageSeed, bookingSeed, preauthenticatedSession } from '../fixtures.js';
 import { BROWSER_API_URL, directAdminApi } from '../staff.js';
 
 const clientApp = appByName('client');
@@ -34,8 +34,9 @@ async function addSessionCookie(
 }
 
 /**
- * PR-13. A dedicated customer, trip, booking and traveller: nothing is shared
- * with the PR-10/PR-11/PR-12 scenarios. No tariff, payment or allowance.
+ * PR-13 + BAGGAGE-PLUS-1. Dedicated customer, trip, booking and traveller.
+ * The scenario creates a synthetic allowance policy through authenticated OPS;
+ * no payment or production tariff is introduced.
  */
 test.describe('PR-13 baggage', () => {
   test.describe.configure({ mode: 'serial' });
@@ -46,11 +47,76 @@ test.describe('PR-13 baggage', () => {
   }) => {
     const errors = trackPageErrors(page);
     const seed = baggageSeed();
+
+    // BAGGAGE-PLUS-1: configure a synthetic policy like an OPS_MANAGER would.
+    await addSessionCookie(page.context(), 'staff', preauthenticatedSession('permitManager'));
+    const admin = directAdminApi(page.request);
+    const fares = await admin.get('/pricing/fare-tables?limit=100');
+    expect(fares.status()).toBe(200);
+    const farePage = (await fares.json()) as {
+      items: Array<{
+        code: string;
+        currencyCode: string;
+        currencyMinorUnit: number;
+        versions: Array<{ id: string; status: string }>;
+      }>;
+    };
+    const fareTable = farePage.items.find((item) => item.code === bookingSeed().fareTableCode);
+    expect(fareTable).toBeTruthy();
+    const fareVersion = fareTable!.versions.find((version) => version.status === 'PUBLISHED');
+    expect(fareVersion).toBeTruthy();
+
+    const policyCode = `E2E_BAG_${seed.run}`;
+    const createdPolicy = await admin.post('/baggage-policies', {
+      code: policyCode,
+      name: 'Standard navigateur',
+      currencyCode: fareTable!.currencyCode,
+      currencyMinorUnit: fareTable!.currencyMinorUnit,
+      active: true,
+    });
+    expect(createdPolicy.status()).toBe(201);
+    const policy = (await createdPolicy.json()) as { id: string };
+    const createdVersion = await admin.post(`/baggage-policies/${policy.id}/versions`, {
+      fareTableVersionId: fareVersion!.id,
+      includedPieces: 2,
+      includedWeightKgPerPiece: '23.000',
+    });
+    expect(createdVersion.status()).toBe(201);
+    const policyWithDraft = (await createdVersion.json()) as {
+      versions: Array<{ id: string; status: string }>;
+    };
+    const draft = policyWithDraft.versions.find((version) => version.status === 'DRAFT');
+    expect(draft).toBeTruthy();
+
+    const tiers = await admin.post(`/baggage-policies/${policy.id}/versions/${draft!.id}/tiers`, {
+      tiers: [
+        {
+          code: 'E2E_OVERWEIGHT',
+          label: 'Palier synthétique navigateur',
+          maxExcessWeightKg: '50.000',
+          chargeMinor: '1234',
+          position: 0,
+        },
+      ],
+    });
+    expect(tiers.status()).toBe(201);
+    const published = await admin.post(
+      `/baggage-policies/${policy.id}/versions/${draft!.id}/publish`,
+      {},
+    );
+    expect(published.status()).toBe(201);
+
+    await page.goto(appUrl(opsApp, '/pricing'));
+    const policyWorkspace = page.getByTestId('baggage-policy-workspace');
+    await expect(policyWorkspace).toContainText('Franchises & bagages supplémentaires');
+    await expect(policyWorkspace).toContainText(policyCode);
+    await expect(policyWorkspace).toContainText('2 × 23,000 kg');
+
     await addSessionCookie(page.context(), 'customer', preauthenticatedSession('baggageCustomer'));
     await page.goto(appUrl(clientApp, '/compte'));
 
     const section = page.getByTestId('customer-baggage');
-    await expect(section).toContainText('Aucune franchise ni aucun supplément bagage');
+    await expect(section).toContainText('Aucun paiement n’est déclenché depuis cet espace');
     await section
       .getByLabel('Voyageur et réservation')
       .selectOption(`${seed.bookingReference}|${seed.passengerReference}`);
@@ -66,6 +132,11 @@ test.describe('PR-13 baggage', () => {
     await expect(card).toContainText('Enregistré');
     await expect(card).toContainText('Valise de Coumba Bagages');
     await expect(card).toContainText('poids mesuré : Non pesé');
+    await expect(card).toContainText('Franchise Standard navigateur : pièce 1');
+    await expect(card).toContainText('jusqu’à 23,000 kg inclus');
+    await expect(card).toContainText(
+      'Le supplément éventuel sera déterminé après la pesée officielle',
+    );
     // The customer has no weight or event control.
     await expect(section.getByLabel(/Poids/)).toHaveCount(0);
 
@@ -143,14 +214,18 @@ test.describe('PR-13 baggage', () => {
     await expect(detail).toContainText('Coumba Bagages');
     await expect(detail).toContainText(seed.bookingReference);
     await expect(detail).toContainText(seed.tripReference);
-    await expect(detail).toContainText('Aucune franchise ni aucun supplément');
+    await expect(detail.getByTestId('baggage-allowance')).toContainText('Standard navigateur');
+    await expect(detail.getByTestId('baggage-allowance')).toContainText('2 pièce(s) de 23,000 kg');
 
-    await detail.getByLabel('Poids mesuré (kg)').fill('12,345');
+    await detail.getByLabel('Poids mesuré (kg)').fill('30,000');
     await detail.getByRole('button', { name: 'Enregistrer le poids' }).click();
     await expect(workspace.getByRole('status')).toContainText(
       'Événement « Pesée » enregistré (n° 2).',
     );
-    await expect(detail.getByTestId('baggage-weight')).toHaveText('12,345 kg');
+    await expect(detail.getByTestId('baggage-weight')).toHaveText('30,000 kg');
+    await expect(detail.getByTestId('baggage-allowance')).toContainText('2 pièce(s) de 23,000 kg');
+    await expect(detail).toContainText('7,000 kg d’excédent');
+    await expect(detail).toContainText('12,34 EUR');
 
     await detail.getByLabel('Événement', { exact: true }).selectOption('CHECKED_IN');
     await detail.getByRole('button', { name: 'Enregistrer l’événement' }).click();
@@ -170,7 +245,7 @@ test.describe('PR-13 baggage', () => {
     await expect(timeline.locator('tbody tr')).toHaveCount(3);
     await expect(timeline.locator('tbody tr').nth(0)).toContainText('Enregistré');
     await expect(timeline.locator('tbody tr').nth(1)).toContainText('Pesée');
-    await expect(timeline.locator('tbody tr').nth(1)).toContainText('12,345 kg');
+    await expect(timeline.locator('tbody tr').nth(1)).toContainText('30,000 kg');
     await expect(timeline.locator('tbody tr').nth(2)).toContainText('Pris en charge');
 
     await detail.getByRole('button', { name: 'Afficher l’étiquette QR' }).click();
@@ -182,7 +257,16 @@ test.describe('PR-13 baggage', () => {
     await workspace.getByLabel('Code QR scanné').fill(`ETG1:${baggageReference}`);
     await workspace.getByRole('button', { name: 'Rechercher le bagage' }).click();
     await expect(detail).toContainText(`Bagage ${baggageReference}`);
-    await expect(detail.getByTestId('baggage-weight')).toHaveText('12,345 kg');
+    await expect(detail.getByTestId('baggage-weight')).toHaveText('30,000 kg');
+
+    // The customer reads the exact result but has no payment action.
+    await addSessionCookie(page.context(), 'customer', preauthenticatedSession('baggageCustomer'));
+    await page.goto(appUrl(clientApp, '/compte'));
+    const customerCard = page.getByTestId(`baggage-${baggageReference}`);
+    await expect(customerCard).toContainText('Excédent : 7,000 kg');
+    await expect(customerCard).toContainText('12,34 EUR');
+    await expect(customerCard).toContainText('Aucun paiement n’est déclenché');
+    await expect(customerCard.getByRole('button', { name: /Payer/i })).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 

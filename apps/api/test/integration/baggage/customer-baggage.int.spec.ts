@@ -88,6 +88,9 @@ describe('customer baggage registration and ownership', () => {
       expect(serialized).not.toContain(forbidden);
     }
     expect(detail.body.allowance).toEqual({
+      status: 'NOT_CONFIGURED',
+      pieceOrdinal: null,
+      policy: null,
       includedWeightKg: null,
       excessWeightKg: null,
       excessCharge: null,

@@ -1571,9 +1571,23 @@ export interface Baggage {
   /** Exact kilograms, always three decimals; null before STAFF measurement. */
   measuredWeightKg: string | null;
   allowance: {
+    status: 'NOT_CONFIGURED' | 'PENDING_WEIGHT' | 'INCLUDED' | 'EXCESS_PRICED' | 'EXCESS_UNPRICED';
+    pieceOrdinal: number | null;
+    policy: {
+      code: string;
+      name: string;
+      version: number;
+      includedPieces: number;
+      includedWeightKgPerPiece: string;
+      fareTable: { code: string; version: number };
+    } | null;
     includedWeightKg: string | null;
     excessWeightKg: string | null;
-    excessCharge: { amountMinor: string; currencyCode: string } | null;
+    excessCharge: {
+      amountMinor: string;
+      currencyCode: string;
+      currencyMinorUnit: number;
+    } | null;
   };
   passenger: { reference: string; givenName: string; familyName: string };
   booking: {
@@ -1632,6 +1646,92 @@ export interface BaggageListOptions {
   exceptionStatus?: BaggageExceptionStatus;
   createdFrom?: string;
   createdTo?: string;
+}
+
+export type BaggagePolicyVersionStatus = 'DRAFT' | 'PUBLISHED' | 'RETIRED';
+
+export interface BaggageExcessTier {
+  id: string;
+  code: string;
+  label: string;
+  maxExcessWeightKg: string;
+  chargeMinor: string;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BaggagePolicyVersion {
+  id: string;
+  version: number;
+  status: BaggagePolicyVersionStatus;
+  includedPieces: number;
+  includedWeightKgPerPiece: string;
+  publishedAt: string | null;
+  retiredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  fareTableVersion: {
+    id: string;
+    version: number;
+    status: FareTableVersionStatus;
+    fareTable: {
+      id: string;
+      code: string;
+      name: string;
+      currencyCode: string;
+      currencyMinorUnit: number;
+    };
+  };
+  tiers: BaggageExcessTier[];
+  baggageCount: number;
+}
+
+export interface BaggagePolicy {
+  id: string;
+  code: string;
+  name: string;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  versions: BaggagePolicyVersion[];
+}
+
+export interface BaggagePolicyListOptions {
+  cursor?: string;
+  limit?: number;
+  active?: boolean;
+}
+
+export interface BaggagePolicyCreateInput {
+  code: string;
+  name: string;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  active: boolean;
+}
+
+export interface BaggagePolicyUpdateInput {
+  name?: string;
+  active?: boolean;
+}
+
+export interface BaggagePolicyVersionCreateInput {
+  fareTableVersionId: string;
+  includedPieces: number;
+  includedWeightKgPerPiece: string;
+}
+
+export interface BaggagePolicyTiersInput {
+  tiers: Array<{
+    code: string;
+    label: string;
+    maxExcessWeightKg: string;
+    chargeMinor: string;
+    position: number;
+  }>;
 }
 
 export type RoadFreightDirection = 'PAR_DKR' | 'DKR_PAR';
@@ -4242,6 +4342,44 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<AdminFareTable>(
             'staff',
             `/v1/admin/pricing/fare-tables/${encodeURIComponent(fareTableId)}/versions/${encodeURIComponent(versionId)}/publish`,
+          ),
+      },
+      baggagePolicies: {
+        list: (options: BaggagePolicyListOptions = {}) =>
+          call<Page<BaggagePolicy>>(
+            'GET',
+            `/v1/admin/baggage-policies?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              active: options.active === undefined ? undefined : String(options.active),
+            })}`,
+          ),
+        detail: (policyId: string) =>
+          call<BaggagePolicy>('GET', `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}`),
+        create: (input: BaggagePolicyCreateInput) =>
+          withCsrf<BaggagePolicy>('staff', '/v1/admin/baggage-policies', input),
+        update: (policyId: string, input: BaggagePolicyUpdateInput) =>
+          withCsrf<BaggagePolicy>(
+            'staff',
+            `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}`,
+            input,
+          ),
+        createVersion: (policyId: string, input: BaggagePolicyVersionCreateInput) =>
+          withCsrf<BaggagePolicy>(
+            'staff',
+            `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}/versions`,
+            input,
+          ),
+        replaceTiers: (policyId: string, versionId: string, input: BaggagePolicyTiersInput) =>
+          withCsrf<BaggagePolicy>(
+            'staff',
+            `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}/versions/${encodeURIComponent(versionId)}/tiers`,
+            input,
+          ),
+        publishVersion: (policyId: string, versionId: string) =>
+          withCsrf<BaggagePolicy>(
+            'staff',
+            `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}/versions/${encodeURIComponent(versionId)}/publish`,
           ),
       },
       bookings: {

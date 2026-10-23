@@ -258,13 +258,13 @@ describe('baggage PostgreSQL invariants, idempotence and true concurrency', () =
     ).rejects.toThrow(/Unique constraint failed/);
     await expect(
       db(t.app).baggage.update({ where: { id: row.id }, data: { reference: 'ETG-111111111111' } }),
-    ).rejects.toThrow(/identity, subject, type and reference are immutable/);
+    ).rejects.toThrow(/identity, subject, type and policy snapshot are immutable/);
     await expect(
       db(t.app).baggage.update({ where: { id: row.id }, data: { type: 'BOX' } }),
-    ).rejects.toThrow(/identity, subject, type and reference are immutable/);
+    ).rejects.toThrow(/identity, subject, type and policy snapshot are immutable/);
     await expect(
       db(t.app).baggage.update({ where: { id: row.id }, data: { includedWeightKg: '20.000' } }),
-    ).rejects.toThrow(/no PR-13 policy/);
+    ).rejects.toThrow(/commercial snapshots change only with an official weight/);
     await expect(
       db(t.app).baggage.update({ where: { id: row.id }, data: { lifecycleStatus: 'CHECKED_IN' } }),
     ).rejects.toThrow(/matching event/);
