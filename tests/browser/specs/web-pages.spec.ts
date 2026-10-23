@@ -175,27 +175,22 @@ test.describe('public help pages (WEB-2A)', () => {
   ] as const;
 
   for (const item of pages) {
-    test(
-      `${item.path} renders the real CMS template at desktop and 400 px`,
-      async ({ page }) => {
-        const response = await page.goto(appUrl(web, item.path));
-        expect(response?.status()).toBe(200);
-        await expect(page.getByRole('heading', { level: 1 })).toHaveText(item.heading);
-        await expectPublicPageStructure(page);
+    test(`${item.path} renders the real CMS template at desktop and 400 px`, async ({ page }) => {
+      const response = await page.goto(appUrl(web, item.path));
+      expect(response?.status()).toBe(200);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(item.heading);
+      await expectPublicPageStructure(page);
 
-        const structured = await page
-          .locator('script[type="application/ld+json"]')
-          .allTextContents();
-        if (item.path === '/faq') {
-          expect(structured.some((text) => text.includes('"FAQPage"'))).toBe(true);
-        } else {
-          expect(structured.some((text) => text.includes('"FAQPage"'))).toBe(false);
-        }
+      const structured = await page.locator('script[type="application/ld+json"]').allTextContents();
+      if (item.path === '/faq') {
+        expect(structured.some((text) => text.includes('"FAQPage"'))).toBe(true);
+      } else {
+        expect(structured.some((text) => text.includes('"FAQPage"'))).toBe(false);
+      }
 
-        await page.setViewportSize({ width: 400, height: 844 });
-        await expectPublicPageStructure(page);
-      },
-    );
+      await page.setViewportSize({ width: 400, height: 844 });
+      await expectPublicPageStructure(page);
+    });
   }
 
   test(
