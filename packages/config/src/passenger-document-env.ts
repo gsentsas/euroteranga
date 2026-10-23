@@ -82,7 +82,14 @@ export function refinePassengerDocumentEnv(
     } else {
       for (const problem of localRootProblems(root)) issue('OBJECT_STORAGE_LOCAL_ROOT', problem);
     }
-    if (deployed && root && (root === '/tmp' || root.startsWith('/tmp/') || root === '/var/tmp' || root.startsWith('/var/tmp/'))) {
+    if (
+      deployed &&
+      root &&
+      (root === '/tmp' ||
+        root.startsWith('/tmp/') ||
+        root === '/var/tmp' ||
+        root.startsWith('/var/tmp/'))
+    ) {
       issue(
         'OBJECT_STORAGE_LOCAL_ROOT',
         'must use a persistent private directory outside temporary storage in staging and production',
