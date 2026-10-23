@@ -29,6 +29,13 @@ const STATUS_LABELS: Record<PublicRoadFreightTrackingStatus, string> = {
   CANCELLED: 'Annulé',
 };
 
+const QUOTE_STATUS_LABELS: Record<CustomerRoadFreightQuote['status'], string> = {
+  ISSUED: 'Émis',
+  ACCEPTED: 'Accepté',
+  SUPERSEDED: 'Remplacé',
+  CANCELLED: 'Annulé',
+};
+
 function exactMoney(amountMinor: string, currencyCode: string, minorUnit: number): string {
   const amount = BigInt(amountMinor);
   if (minorUnit === 0) return `${amount.toString()} ${currencyCode}`;
@@ -47,9 +54,11 @@ function formatAt(value: string | null): string {
 }
 
 function quoteAmount(quote: CustomerRoadFreightQuote | null): string {
-  return quote
-    ? exactMoney(quote.totalMinor, quote.currencyCode, quote.currencyMinorUnit)
-    : 'Devis en préparation';
+  if (!quote) return 'Devis en préparation';
+  if (quote.status === 'CANCELLED' || quote.status === 'SUPERSEDED') {
+    return 'Devis en préparation';
+  }
+  return exactMoney(quote.totalMinor, quote.currencyCode, quote.currencyMinorUnit);
 }
 
 export function CustomerCargo() {
@@ -449,7 +458,7 @@ export function CustomerCargo() {
             >
               <div className="et-actions">
                 <strong className="et-code">{quote.reference}</strong>
-                <span className="et-tag">{quote.status}</span>
+                <span className="et-tag">{QUOTE_STATUS_LABELS[quote.status]}</span>
               </div>
               <p>
                 Total :{' '}
