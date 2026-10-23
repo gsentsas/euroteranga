@@ -240,10 +240,7 @@ async function assertFreightPublicContact(tx: DatabaseTransaction): Promise<void
     select: { document: true },
   });
   const settings = published ? siteSettingsSchema.safeParse(published.document) : null;
-  if (
-    !settings?.success ||
-    (!settings.data.contact.email && !settings.data.contact.phone)
-  ) {
+  if (!settings?.success || (!settings.data.contact.email && !settings.data.contact.phone)) {
     throw ContentErrors.publicContactRequired();
   }
 }
