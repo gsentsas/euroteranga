@@ -67,7 +67,7 @@ test.describe('PR-13 baggage', () => {
     expect(fareVersion).toBeTruthy();
 
     const policyCode = `E2E_BAG_${seed.run}`;
-    const createdPolicy = await admin.post('/baggage/policies', {
+    const createdPolicy = await admin.post('/baggage-policies', {
       code: policyCode,
       name: 'Standard navigateur',
       currencyCode: fareTable!.currencyCode,
@@ -76,7 +76,7 @@ test.describe('PR-13 baggage', () => {
     });
     expect(createdPolicy.status()).toBe(201);
     const policy = (await createdPolicy.json()) as { id: string };
-    const createdVersion = await admin.post(`/baggage/policies/${policy.id}/versions`, {
+    const createdVersion = await admin.post(`/baggage-policies/${policy.id}/versions`, {
       fareTableVersionId: fareVersion!.id,
       includedPieces: 2,
       includedWeightKgPerPiece: '23.000',
@@ -88,7 +88,7 @@ test.describe('PR-13 baggage', () => {
     const draft = policyWithDraft.versions.find((version) => version.status === 'DRAFT');
     expect(draft).toBeTruthy();
 
-    const tiers = await admin.post(`/baggage/policies/${policy.id}/versions/${draft!.id}/tiers`, {
+    const tiers = await admin.post(`/baggage-policies/${policy.id}/versions/${draft!.id}/tiers`, {
       tiers: [
         {
           code: 'E2E_OVERWEIGHT',
@@ -101,7 +101,7 @@ test.describe('PR-13 baggage', () => {
     });
     expect(tiers.status()).toBe(201);
     const published = await admin.post(
-      `/baggage/policies/${policy.id}/versions/${draft!.id}/publish`,
+      `/baggage-policies/${policy.id}/versions/${draft!.id}/publish`,
       {},
     );
     expect(published.status()).toBe(201);
