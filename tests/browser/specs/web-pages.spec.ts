@@ -166,7 +166,6 @@ test.describe('public inner pages (UI-PUBLIC-2)', () => {
   });
 });
 
-
 test.describe('public help pages (WEB-2A)', () => {
   const pages = [
     { path: '/bagages', heading: 'Préparez vos bagages' },
