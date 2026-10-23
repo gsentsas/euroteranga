@@ -815,10 +815,7 @@ export class TrackingService {
         routeWaypointId: { not: null },
         source: { in: ['CHECKPOINT', 'CREW', 'OPS', 'SYSTEM'] },
         routeWaypoint: {
-          OR: [
-            { stopId: { not: null } },
-            { checkpoint: { is: { travellerVisible: true } } },
-          ],
+          OR: [{ stopId: { not: null } }, { checkpoint: { is: { travellerVisible: true } } }],
         },
       },
       orderBy: [{ observedAt: 'desc' }, { id: 'desc' }],
