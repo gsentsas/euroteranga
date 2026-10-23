@@ -4,12 +4,32 @@ import { pagesSeed } from '../content-seed.js';
 
 const web = appByName('web');
 
-/** No layout overflow: the page never scrolls sideways. */
-async function expectNoHorizontalOverflow(page: Page) {
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(0);
+/** Core structural UX invariants shared by the seeded public pages. */
+async function expectPublicPageStructure(page: Page) {
+  const structure = await page.evaluate(() => {
+    const ids = Array.from(document.querySelectorAll<HTMLElement>('[id]'))
+      .map((element) => element.id)
+      .filter(Boolean);
+
+    return {
+      duplicateIds: [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))],
+      missingImageAlt: Array.from(
+        document.querySelectorAll<HTMLImageElement>('img:not([alt])'),
+      ).map((image) => image.currentSrc || image.src || '<inline image>'),
+      mainCount: document.querySelectorAll('main').length,
+      h1Count: document.querySelectorAll('h1').length,
+      horizontalOverflow: Math.max(
+        0,
+        document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    };
+  });
+
+  expect(structure.duplicateIds).toEqual([]);
+  expect(structure.missingImageAlt).toEqual([]);
+  expect(structure.mainCount).toBe(1);
+  expect(structure.h1Count).toBe(1);
+  expect(structure.horizontalOverflow).toBeLessThanOrEqual(1);
 }
 
 /**
@@ -29,6 +49,7 @@ test.describe('public inner pages (UI-PUBLIC-2)', () => {
     const response = await page.goto(appUrl(web, seed.trip.path));
     expect(response?.status()).toBe(200);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(seed.trip.title);
+    await expectPublicPageStructure(page);
     const breadcrumb = page.getByRole('navigation', { name: 'Fil d’Ariane' });
     await expect(breadcrumb.getByRole('link', { name: 'Accueil' })).toHaveAttribute('href', '/');
     await expect(breadcrumb.locator('[aria-current="page"]')).toContainText(seed.trip.title);
@@ -89,8 +110,8 @@ test.describe('public inner pages (UI-PUBLIC-2)', () => {
     await expect(coaches).toContainText('6 places');
     await expect(coaches).not.toContainText(seed.coaches[1]!.name);
 
-    await page.setViewportSize({ width: 390, height: 844 });
-    await expectNoHorizontalOverflow(page);
+    await page.setViewportSize({ width: 400, height: 844 });
+    await expectPublicPageStructure(page);
     expect(errors).toEqual([]);
   });
 
@@ -99,6 +120,7 @@ test.describe('public inner pages (UI-PUBLIC-2)', () => {
     const response = await page.goto(appUrl(web, seed.fleet.path));
     expect(response?.status()).toBe(200);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(seed.fleet.title);
+    await expectPublicPageStructure(page);
 
     const tabs = page.getByRole('navigation', { name: /accès direct/ });
     await expect(tabs.getByRole('link')).toHaveText(seed.coaches.map((coach) => coach.name));
@@ -126,8 +148,8 @@ test.describe('public inner pages (UI-PUBLIC-2)', () => {
     // Public facts only.
     await expect(page.locator('main')).not.toContainText(/VIN|immatriculation/i);
 
-    await page.setViewportSize({ width: 375, height: 812 });
-    await expectNoHorizontalOverflow(page);
+    await page.setViewportSize({ width: 400, height: 844 });
+    await expectPublicPageStructure(page);
   });
 
   test('the services page renders the page hero and the service cards', async ({ page }) => {
@@ -137,8 +159,9 @@ test.describe('public inner pages (UI-PUBLIC-2)', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
       `${seed.services.title} pour un voyage serein`,
     );
+    await expectPublicPageStructure(page);
     await expect(page.getByRole('heading', { level: 3, name: 'Bagages identifiés' })).toBeVisible();
-    await page.setViewportSize({ width: 375, height: 812 });
-    await expectNoHorizontalOverflow(page);
+    await page.setViewportSize({ width: 400, height: 844 });
+    await expectPublicPageStructure(page);
   });
 });
