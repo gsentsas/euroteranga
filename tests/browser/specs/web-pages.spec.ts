@@ -231,7 +231,9 @@ test.describe('owner-dependent public pages (WEB-2B)', () => {
   ] as const;
 
   for (const item of pages) {
-    test(`${item.path} renders published owner settings at desktop and 400 px`, async ({ page }) => {
+    test(`${item.path} renders published owner settings at desktop and 400 px`, async ({
+      page,
+    }) => {
       const response = await page.goto(appUrl(web, item.path));
       expect(response?.status()).toBe(200);
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(item.heading);
@@ -251,10 +253,9 @@ test.describe('owner-dependent public pages (WEB-2B)', () => {
     await expect(main).toContainText('contact@example.test');
     await expect(main).toContainText('+33100000000');
     await expect(main).toContainText('Lun-Ven 09:00-18:00');
-    await expect(main.getByRole('link', { name: 'https://example.test/euro-teranga' })).toHaveAttribute(
-      'href',
-      'https://example.test/euro-teranga',
-    );
+    await expect(
+      main.getByRole('link', { name: 'https://example.test/euro-teranga' }),
+    ).toHaveAttribute('href', 'https://example.test/euro-teranga');
   });
 
   test('Legal and Privacy expose their owner groups without placeholders', async ({ page }) => {
@@ -269,4 +270,3 @@ test.describe('owner-dependent public pages (WEB-2B)', () => {
     await expect(privacy).not.toContainText(/TBD|TODO|à compléter/i);
   });
 });
-
