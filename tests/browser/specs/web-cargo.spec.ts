@@ -115,10 +115,7 @@ test.describe('public cargo and freight page (WEB-CARGO-1)', () => {
 
     const noIndexResponse = await page.goto(appUrl(web, seed.noIndexPath));
     expect(noIndexResponse?.status()).toBe(200);
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-      'content',
-      'noindex, follow',
-    );
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, follow');
 
     for (const hidden of [seed.draftPath, seed.archivedPath]) {
       const hiddenResponse = await page.goto(appUrl(web, hidden));
