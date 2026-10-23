@@ -141,7 +141,7 @@ describe('passenger-document configuration', () => {
             CLAMAV_HOST: '127.0.0.1',
           }),
         ),
-      ).toThrow(/OBJECT_STORAGE_LOCAL_ROOT: must use a persistent private directory/);
+      ).toThrow(\n        /OBJECT_STORAGE_LOCAL_ROOT: must use a persistent private directory/,\n      );
     },
   );
 
