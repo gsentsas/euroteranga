@@ -15,7 +15,7 @@ typing them into OPS or writing SQL.
 | Pilot     | Coaches:<br>• `ET-COACH-001` « Teranga Pilote 01 »;<br>• `ET-COACH-002` « Teranga Pilote 02 ».<br>Both are `ACTIVE`, on the pilot seat map, with plates `DEMO-ET-001` and `DEMO-ET-002`, and no VIN. Their make and model stay neutral ("Autocar grand tourisme", "Modèle à confirmer", no year) until the owner confirms the real coaches. |
 | Pilot     | Fare tables `ET-FT-PAR-DKR-EUR` and `ET-FT-DKR-PAR-EUR`: 249,00 EUR (`24900` minor units) from the first stop to the last.                                                                                                                                                                                                                  |
 | Pilot     | Future trips `ET-PILOT-<PARDKR or DKRPAR>-<YYYYMMDD>`:<br>• departures every 14 days from the anchor date (J+14, J+28…), 08:00 local time at the departure stop;<br>• both coaches alternate directions;<br>• every trip is `SCHEDULED` with its historical seat map and pricing.                                                           |
-| Pilot     | Tracking on every upcoming pilot trip: `enabled=true`, `visibility=CHECKPOINT_ONLY`, no GPS device. The author is the reserved STAFF identity `pilot-bootstrap-operator@example.test`, which has no password, MFA, role or session; audit events still record the `pilot-bootstrap` system actor.                                      |
+| Pilot     | Tracking on every upcoming pilot trip: `enabled=true`, `visibility=CHECKPOINT_ONLY`, no GPS device. The author is the reserved STAFF identity `pilot-bootstrap-operator@example.test`, which has no password, MFA, role or session; audit events still record the `pilot-bootstrap` system actor.                                           |
 
 Pilot records are fictitious and clearly marked:
 
@@ -118,11 +118,11 @@ belongs to OPS-NAME`. The VIN of another vehicle is never printed. The
 
 ## Upgrading a database from an earlier dataset version
 
-| Version            | Coaches / tracking                                                                                   |
-| ------------------ | ---------------------------------------------------------------------------------------------------- |
-| `pilot-corridor/1` | « Teranga 01 » and « Teranga 02 », Setra S 516 HD (2023 and 2024)                                     |
-| `pilot-corridor/2` | « Teranga 01 » and « Teranga 02 », neutral make and model                                             |
-| `pilot-corridor/3` | « Teranga Pilote 01 » and « Teranga Pilote 02 », neutral make and model                               |
+| Version            | Coaches / tracking                                                                                  |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| `pilot-corridor/1` | « Teranga 01 » and « Teranga 02 », Setra S 516 HD (2023 and 2024)                                   |
+| `pilot-corridor/2` | « Teranga 01 » and « Teranga 02 », neutral make and model                                           |
+| `pilot-corridor/3` | « Teranga Pilote 01 » and « Teranga Pilote 02 », neutral make and model                             |
 | `pilot-corridor/4` | Same neutral coaches; every upcoming pilot trip gets `CHECKPOINT_ONLY` tracking, with no GPS device |
 
 On every upgrade, the codes, `DEMO-*` plates, seat map, fares and trips stay
