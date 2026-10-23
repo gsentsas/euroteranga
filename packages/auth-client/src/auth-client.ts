@@ -2534,6 +2534,103 @@ export interface BorderEventResult {
   event: BorderTripView['events'][number];
 }
 
+export type ComfortWaypointStatus =
+  | 'PLANNED'
+  | 'CONFIRMED'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'SKIPPED';
+
+export type ComfortFacility = 'RESTROOM' | 'SHOWER' | 'FOOD' | 'SECURE_PARKING' | 'FUEL';
+
+export type ComfortWaypointKind =
+  | 'STOP'
+  | 'BREAK'
+  | 'MEAL'
+  | 'SHOWER'
+  | 'REST'
+  | 'OVERNIGHT'
+  | 'FUEL'
+  | 'BORDER'
+  | 'FERRY'
+  | 'TECHNICAL';
+
+export interface ComfortStep {
+  sequence: number;
+  kind: ComfortWaypointKind;
+  code: string;
+  name: string;
+  locality: string;
+  status: ComfortWaypointStatus;
+  isPast: boolean;
+  plannedArrivalAt: string | null;
+  plannedDepartureAt: string | null;
+  suggestedDwellMinutes: number | null;
+  plannedFacilities: ComfortFacility[];
+  actualFacilities: ComfortFacility[];
+  statusUpdatedAt: string | null;
+}
+
+export interface ComfortProjection {
+  tripReference: string;
+  tripStatus: TripStatus;
+  route: { code: string; name: string };
+  plannedDepartureAt: string | null;
+  plannedArrivalAt: string | null;
+  progressSequence: number;
+  lastUpdatedAt: string | null;
+  currentStep: ComfortStep | null;
+  nextStep: ComfortStep | null;
+  nextPause: ComfortStep | null;
+  steps: ComfortStep[];
+}
+
+export interface CustomerComfortProjection extends ComfortProjection {
+  bookingReference: string;
+}
+
+export interface AdminComfortStep extends ComfortStep {
+  routeWaypointId: string;
+  travellerVisible: boolean;
+}
+
+export interface ComfortEvent {
+  id: string;
+  tripId: string;
+  routeWaypointId: string;
+  type: Exclude<ComfortWaypointStatus, 'PLANNED'>;
+  actualFacilities: ComfortFacility[];
+  clientEventId: string;
+  occurredAt: string;
+  recordedAt: string;
+  recordedByIdentityId: string;
+  waypoint: {
+    sequence: number;
+    code: string | null;
+    name: string | null;
+    locality: string | null;
+  };
+}
+
+export interface AdminComfortProjection extends Omit<ComfortProjection, 'steps'> {
+  tripId: string;
+  steps: AdminComfortStep[];
+  events: ComfortEvent[];
+}
+
+export interface ComfortEventInput {
+  clientEventId: string;
+  routeWaypointId: string;
+  type: Exclude<ComfortWaypointStatus, 'PLANNED'>;
+  occurredAt: string;
+  actualFacilities?: ComfortFacility[];
+}
+
+export interface ComfortEventResult {
+  created: boolean;
+  event: ComfortEvent;
+}
+
 export type TrackingVisibility = 'HIDDEN' | 'CHECKPOINT_ONLY' | 'APPROXIMATE' | 'PRECISE';
 export type TrackingProviderStatus = 'UP' | 'DEGRADED' | 'STALE' | 'UNAVAILABLE';
 export type TrackingObservationSource = 'GPS' | 'CHECKPOINT' | 'CREW' | 'OPS' | 'SYSTEM';
@@ -2659,6 +2756,7 @@ export interface PublicTrackingProjection {
   providerStatus: TrackingProviderStatus;
   lastUpdatedAt: string | null;
   checkpoint: TrackingCheckpointProjection | null;
+  comfort: ComfortProjection;
   position: {
     observedAt: string;
     latitude: number;
@@ -3770,6 +3868,11 @@ export function createAuthClient(baseUrl: string) {
           ),
         booking: (reference: string) =>
           call<CustomerBooking>('GET', `/v1/booking/bookings/${encodeURIComponent(reference)}`),
+        comfort: (reference: string) =>
+          call<CustomerComfortProjection>(
+            'GET',
+            `/v1/booking/bookings/${encodeURIComponent(reference)}/comfort`,
+          ),
         cancel: (reference: string) =>
           withCsrf<CustomerBooking>(
             'customer',
@@ -5051,6 +5154,17 @@ export function createAuthClient(baseUrl: string) {
         trips: () => call<{ items: TrackingTripSummary[] }>('GET', '/v1/admin/tracking/trips'),
         trip: (tripId: string) =>
           call<TrackingTripDetail>('GET', '/v1/admin/tracking/trips/' + encodeURIComponent(tripId)),
+        comfort: (tripId: string) =>
+          call<AdminComfortProjection>(
+            'GET',
+            '/v1/admin/tracking/trips/' + encodeURIComponent(tripId) + '/comfort',
+          ),
+        recordComfort: (tripId: string, input: ComfortEventInput) =>
+          withCsrf<ComfortEventResult>(
+            'staff',
+            '/v1/admin/tracking/trips/' + encodeURIComponent(tripId) + '/comfort/events',
+            input,
+          ),
         devices: () => call<{ items: TrackingDevice[] }>('GET', '/v1/admin/tracking/devices'),
         createDevice: (input: { vehicleId: string; providerKey: string; externalId: string }) =>
           withCsrf<TrackingDevice>('staff', '/v1/admin/tracking/devices', input),
