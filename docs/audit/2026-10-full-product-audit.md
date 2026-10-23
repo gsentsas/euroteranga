@@ -258,18 +258,13 @@ separate review task.
 
 - The public homepage is a Server Component with no client JavaScript of its
   own; the shared Next.js runtime chunks still load.
-- There are no images, so there is no LCP image and no layout-shift risk yet.
-- When media arrive (MEDIA-1):
-  - the hero gets an explicit priority and fixed ratios;
-  - lazy loading applies below the fold;
-  - images are served in AVIF and WebP.
-
-  _Status (MEDIA-1):_ done for WebP. Every image has explicit dimensions
-  and a `srcset` of 480–2400 px renditions with `sizes` per section. The
-  hero image is `fetchpriority="high"` and the others are lazy. AVIF was
-  left out: WebP covers the target browsers and AVIF encoding is much
-  slower on the pilot server (`docs/domain/media.md`).
-
+- MEDIA-1 public image rendering is implemented. Real owner photos remain an
+  editorial input rather than a code blocker.
+- Every rendered public image has explicit dimensions and a `srcset` of
+  480–2400 px WebP renditions with `sizes` per section. The hero image uses
+  `fetchpriority="high"`; images below the fold are lazy. AVIF remains out
+  because WebP covers the target browsers and AVIF encoding is much slower on
+  the pilot server (`docs/domain/media.md`).
 - CMS pages are rendered on the server with time-based revalidation, so the
   site does not depend on the API being reachable at build time.
 
@@ -413,12 +408,12 @@ and is merged only when CI and CodeQL are green.
 
 | Domain    | Code | UI  | Data | Tests | Docs | Exploitable | Why not                                                                |
 | --------- | ---- | --- | ---- | ----- | ---- | ----------- | ---------------------------------------------------------------------- |
-| Public    | ⚠️   | ⚠️  | ❌   | ⚠️    | ❌   | ❌          | One hard-coded page, no legal pages (F-WEB-01, F-WEB-02)               |
-| CMS       | ❌   | ❌  | ❌   | ❌    | ❌   | ❌          | Does not exist (F-CMS-01)                                              |
-| SEO       | ❌   | —   | —    | ❌    | ❌   | ❌          | F-SEO-01 to F-SEO-05                                                   |
+| Public    | ✅    | ✅   | ⚠️  | ✅     | ⚠️  | ❌          | WEB-2 legal/contact incomplete; no production trips or real PSP        |
+| CMS       | ✅   | ✅  | ⚠️  | ✅    | ✅   | ⚠️         | Code/UI ready; production content/media still depend on owner data     |
+| SEO       | ✅   | —   | —    | ✅    | ✅   | ⚠️         | Code ready; indexing stays off unless production flag is enabled       |
 | Booking   | ✅   | ✅  | ❌   | ✅    | ✅   | ❌          | No trip in production (F-DATA-01), no PSP (F-PAY-01)                   |
 | Client    | ✅   | ✅  | —    | ✅    | ✅   | ⚠️          | Depends on bookings; documents blocked (F-INF-03)                      |
-| OPS       | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Usable; production lags behind `main` (F-INF-01)                       |
+| OPS       | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Code ready; live state still depends on root deployment (F-INF-01)     |
 | Crew      | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Needs trips and assignments                                            |
 | Fleet     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No vehicle in production (F-DATA-01)                                   |
 | Trips     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No trip in production (F-DATA-01)                                      |
