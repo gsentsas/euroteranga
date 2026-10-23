@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { AuditService } from '../../../src/authorization/audit.service.js';
 import { vehicleCreateSchema, vehicleUpdateSchema } from '../../../src/fleet/fleet.dto.js';
 import { FleetService } from '../../../src/fleet/fleet.service.js';
 import { vehicleIdentifierCollision } from '../../../src/fleet/vehicle-identifiers.js';
 import { NetworkService } from '../../../src/network/network.service.js';
 import {
   PILOT_ACTOR,
+  PILOT_OPERATOR_EMAIL,
   PilotBootstrap,
   type PilotBootstrapOptions,
   type PilotBootstrapReport,
@@ -14,6 +16,7 @@ import {
 import { PILOT_VEHICLES, type PilotVehicle } from '../../../src/pilot/pilot-dataset.js';
 import { PricingService } from '../../../src/pricing/pricing.service.js';
 import { SeatMapService } from '../../../src/seat-maps/seat-map.service.js';
+import { TrackingService } from '../../../src/tracking/tracking.service.js';
 import { TripService } from '../../../src/trips/trip.service.js';
 import {
   adminApi,
@@ -46,10 +49,12 @@ async function harness(): Promise<Harness> {
   const run = (overrides: Partial<PilotBootstrapOptions> = {}) =>
     new PilotBootstrap({
       db: db(t.app),
+      audit: t.app.get(AuditService),
       network: t.app.get(NetworkService),
       seatMaps: t.app.get(SeatMapService),
       fleet: t.app.get(FleetService),
       pricing: t.app.get(PricingService),
+      tracking: t.app.get(TrackingService),
       trips: t.app.get(TripService),
     }).run(options(overrides));
   return {
@@ -79,6 +84,8 @@ async function snapshot(h: Harness) {
     fareTables: await client.fareTable.count(),
     fareTableVersions: await client.fareTableVersion.count(),
     trips: await client.trip.count(),
+    identities: await client.authIdentity.count(),
+    trackingConfigs: await client.tripTrackingConfig.count(),
     audit: await client.auditEvent.count(),
   };
 }
@@ -185,6 +192,49 @@ describe('pilot data bootstrap: complete dataset (isolated database)', () => {
       expect(trip.plannedDepartureAt!.getTime()).toBeGreaterThan(Date.now());
     }
     expect(trips.filter((trip) => trip.routeVersion.route.code === 'ET-PAR-DKR')).toHaveLength(4);
+
+    const operator = await client.authIdentity.findUniqueOrThrow({
+      where: {
+        realm_normalizedEmail: {
+          realm: 'STAFF',
+          normalizedEmail: PILOT_OPERATOR_EMAIL,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        passwordCredential: true,
+        mfaTotpCredential: true,
+        _count: {
+          select: {
+            roleAssignments: { where: { revokedAt: null } },
+            mfaRecoveryCodes: true,
+          },
+        },
+      },
+    });
+    expect(operator).toMatchObject({
+      status: 'ACTIVE',
+      passwordCredential: null,
+      mfaTotpCredential: null,
+      _count: { roleAssignments: 0, mfaRecoveryCodes: 0 },
+    });
+
+    const trackingConfigs = await client.tripTrackingConfig.findMany({
+      orderBy: { trip: { reference: 'asc' } },
+    });
+    expect(trackingConfigs).toHaveLength(8);
+    expect(
+      trackingConfigs.every(
+        (row) =>
+          row.enabled &&
+          row.visibility === 'CHECKPOINT_ONLY' &&
+          row.trackingDeviceId === null &&
+          row.createdByIdentityId === operator.id &&
+          row.updatedByIdentityId === operator.id,
+      ),
+    ).toBe(true);
+
     // Each coach alternates directions and never serves two overlapping trips.
     for (const code of ['ET-COACH-001', 'ET-COACH-002']) {
       const own = trips.filter((trip) => trip.vehicle?.code === code);
@@ -202,7 +252,17 @@ describe('pilot data bootstrap: complete dataset (isolated database)', () => {
     const events = await db(h.t.app).auditEvent.findMany({
       where: {
         resourceType: {
-          in: ['country', 'stop', 'checkpoint', 'route', 'route_version', 'vehicle', 'trip'],
+          in: [
+            'country',
+            'stop',
+            'checkpoint',
+            'route',
+            'route_version',
+            'vehicle',
+            'trip',
+            'auth_identity',
+            'trip_tracking_config',
+          ],
         },
       },
     });
@@ -276,6 +336,43 @@ describe('pilot data bootstrap: complete dataset (isolated database)', () => {
       seatMapCellIds: [seat.id],
     });
     expect(hold.status, hold.text).toBe(201);
+  });
+
+  it('refuses to overwrite a pilot tracking configuration changed in OPS', async () => {
+    const client = db(h.t.app);
+    const trip = await client.trip.findFirstOrThrow({
+      where: { reference: { startsWith: 'ET-PILOT-PARDKR-' }, status: 'SCHEDULED' },
+      orderBy: { plannedDepartureAt: 'asc' },
+      select: { id: true, reference: true },
+    });
+    const admin = await staffActor(h.t.app, ['OPS_MANAGER']);
+    const changed = await adminApi(admin).post(`/tracking/trips/${trip.id}/config`, {
+      enabled: true,
+      visibility: 'HIDDEN',
+      trackingDeviceId: null,
+    });
+    expect(changed.status, changed.text).toBe(201);
+
+    const before = await client.tripTrackingConfig.findUniqueOrThrow({
+      where: { tripId: trip.id },
+    });
+    expect(before.visibility).toBe('HIDDEN');
+
+    const report = await h.run();
+    expect(report.hasConflicts).toBe(true);
+    expect(report.lines).toContainEqual(
+      expect.objectContaining({
+        outcome: 'conflict',
+        entity: 'tracking',
+        key: trip.reference,
+      }),
+    );
+
+    const after = await client.tripTrackingConfig.findUniqueOrThrow({
+      where: { tripId: trip.id },
+    });
+    expect(after.visibility).toBe('HIDDEN');
+    expect(after.updatedAt).toEqual(before.updatedAt);
   });
 });
 
