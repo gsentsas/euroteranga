@@ -129,23 +129,18 @@ describe('passenger-document configuration', () => {
     },
   );
 
-  it.each(['staging', 'production'] as const)(
-    'refuses temporary LOCAL storage in %s',
-    (appEnv) => {
-      expect(() =>
-        loadApiEnv(
-          deployed(appEnv, {
-            OBJECT_STORAGE_PROVIDER: 'LOCAL',
-            OBJECT_STORAGE_LOCAL_ROOT: '/tmp/euroteranga-private-documents',
-            MALWARE_SCANNER: 'CLAMAV',
-            CLAMAV_HOST: '127.0.0.1',
-          }),
-        ),
-      ).toThrow(
-        /OBJECT_STORAGE_LOCAL_ROOT: must use a persistent private directory/,
-      );
-    },
-  );
+  it.each(['staging', 'production'] as const)('refuses temporary LOCAL storage in %s', (appEnv) => {
+    expect(() =>
+      loadApiEnv(
+        deployed(appEnv, {
+          OBJECT_STORAGE_PROVIDER: 'LOCAL',
+          OBJECT_STORAGE_LOCAL_ROOT: '/tmp/euroteranga-private-documents',
+          MALWARE_SCANNER: 'CLAMAV',
+          CLAMAV_HOST: '127.0.0.1',
+        }),
+      ),
+    ).toThrow(/OBJECT_STORAGE_LOCAL_ROOT: must use a persistent private directory/);
+  });
 
   it.each(['staging', 'production'] as const)(
     'refuses the TEST scanner with LOCAL storage in %s',
