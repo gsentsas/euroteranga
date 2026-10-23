@@ -467,9 +467,20 @@ describe('realistic seed: no bookings outside local and CI (isolated database)',
       expect.objectContaining({ layer: 'commerce', outcome: 'skipped', detail: 'APP_ENV=staging' }),
     );
     expect(await db(h.t.app).booking.count()).toBe(0);
-    expect(await db(h.t.app).authIdentity.count()).toBe(0);
-    // The catalogue (public site) is still complete.
+    const identities = await db(h.t.app).authIdentity.findMany({
+      include: { passwordCredential: true, mfaTotpCredential: true, roleAssignments: true },
+    });
+    expect(identities).toHaveLength(1);
+    expect(identities[0]).toMatchObject({
+      realm: 'STAFF',
+      normalizedEmail: 'pilot-bootstrap-operator@example.test',
+      passwordCredential: null,
+      mfaTotpCredential: null,
+      roleAssignments: [],
+    });
+    // The catalogue (public site) and checkpoint-only pilot tracking are still complete.
     expect(await db(h.t.app).trip.count()).toBe(12);
+    expect(await db(h.t.app).tripTrackingConfig.count()).toBe(12);
   });
 });
 
@@ -652,10 +663,21 @@ describe('realistic seed: never reuses an identity it did not create (isolated d
       outcome: 'conflict',
       detail: expect.stringContaining('not created by the seed'),
     });
-    // Nothing is recorded under that identity, and the identity is untouched.
+    // Nothing operational is recorded under that identity. DATA-1 still configures
+    // checkpoint-only tracking under its own separate pilot operator identity.
     expect(await client.crewTripAssignment.count()).toBe(0);
     expect(await client.incident.count()).toBe(0);
-    expect(await client.tripTrackingConfig.count()).toBe(0);
+    const trackingConfigs = await client.tripTrackingConfig.findMany();
+    expect(trackingConfigs).toHaveLength(12);
+    expect(
+      trackingConfigs.every(
+        (row) =>
+          row.visibility === 'CHECKPOINT_ONLY' &&
+          row.trackingDeviceId === null &&
+          row.createdByIdentityId !== person.id &&
+          row.updatedByIdentityId !== person.id,
+      ),
+    ).toBe(true);
     expect(await client.auditEvent.count({ where: { resourceId: person.id } })).toBe(0);
     expect(await client.authIdentity.findUniqueOrThrow({ where: { id: person.id } })).toEqual(
       person,
@@ -1041,6 +1063,18 @@ describe('realistic seed: resumes the partial production apply (isolated databas
     expect(pending.filter((key) => !key.startsWith('trip '))).toEqual([
       'amenities ET-COACH-001',
       'amenities ET-COACH-002',
+      'tracking ET-PILOT-DKRPAR-20261106',
+      'tracking ET-PILOT-DKRPAR-20261120',
+      'tracking ET-PILOT-DKRPAR-20261204',
+      'tracking ET-PILOT-DKRPAR-20261218',
+      'tracking ET-PILOT-DKRPAR-20270101',
+      'tracking ET-PILOT-DKRPAR-20270115',
+      'tracking ET-PILOT-PARDKR-20261106',
+      'tracking ET-PILOT-PARDKR-20261120',
+      'tracking ET-PILOT-PARDKR-20261204',
+      'tracking ET-PILOT-PARDKR-20261218',
+      'tracking ET-PILOT-PARDKR-20270101',
+      'tracking ET-PILOT-PARDKR-20270115',
       'vehicle ET-COACH-001',
       'vehicle ET-COACH-002',
     ]);
@@ -1059,10 +1093,17 @@ describe('realistic seed: resumes the partial production apply (isolated databas
       detail: 'operator navigation kept',
     });
 
-    // The apply then creates exactly what the dry run planned, nothing else.
+    // The apply creates what the dry run planned plus the synthetic tracking
+    // operator identity. The dry run never creates identities by design.
     const applied = await h.run(staging);
     expect(applied.hasConflicts).toBe(false);
-    expect(keysOf(applied, ['created', 'updated'])).toEqual(pending);
+    expect(
+      keysOf(applied, ['created', 'updated']).filter((key) => key !== 'operator tracking'),
+    ).toEqual(pending);
+    expect(line(applied, 'operator', 'tracking')).toMatchObject({
+      layer: 'catalogue',
+      outcome: 'created',
+    });
     expect(keysOf(applied, ['existing'])).toEqual(keysOf(dry, ['existing']));
     expect(
       (
