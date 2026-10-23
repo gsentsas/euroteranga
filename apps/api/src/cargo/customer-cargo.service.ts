@@ -322,11 +322,11 @@ export class CustomerCargoService {
       if (!ownedBooking) throw CargoErrors.bookingNotFound();
     }
 
-    const created = await this.cargo.create(actor, {
+    const reference = await this.cargo.createReference(actor, {
       ...input,
       customerIdentityId: actor.identityId,
     });
-    return this.detail(actor, created.reference, 'CUSTOMER_CREATE_RESULT');
+    return this.detail(actor, reference, 'CUSTOMER_CREATE_RESULT');
   }
 
   async list(actor: AuthPrincipal, query: CustomerCargoListQuery) {
