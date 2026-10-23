@@ -6,6 +6,7 @@ import {
   STRIPE_COLLECTION_WINDOW_SECONDS,
   STRIPE_HOLD_MARGIN_SECONDS,
 } from '../../../src/payments/payment-capability.registry.js';
+import { STRIPE_SIGNATURE_TOLERANCE_SECONDS } from '../../../src/payments/providers/stripe-payment.provider.js';
 import { isolatedDatabase } from '../../support/admin-helpers.js';
 import { db } from '../../support/auth-helpers.js';
 import {
@@ -392,7 +393,11 @@ describe('Stripe Europe adapter (isolated database, fake Stripe API)', () => {
       ['another secret', { secret: syntheticStripeWebhookSecret() }, 401],
       ['no signature', { signature: null }, 401],
       ['an old timestamp', { timestampOffset: -301 }, 401],
-      ['a timestamp from the future', { timestampOffset: 301 }, 401],
+      [
+        'a timestamp from the future',
+        { timestampOffset: STRIPE_SIGNATURE_TOLERANCE_SECONDS * 2 },
+        401,
+      ],
       ['another content type', { contentType: 'text/plain' }, 415],
     ] as const)('refuses %s and records nothing', async (_label, options, status) => {
       const { payment } = await start(alice);
