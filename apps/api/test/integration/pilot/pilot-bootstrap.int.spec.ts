@@ -1031,7 +1031,7 @@ describe('pilot data bootstrap: pilot-corridor/2 coaches (isolated database)', (
       {
         key: 'ET-COACH-001',
         outcome,
-        detail: 'renamed from "Teranga 01" for pilot-corridor/3',
+        detail: 'renamed from "Teranga 01" for pilot-corridor/4',
       },
       {
         key: 'ET-COACH-002',
