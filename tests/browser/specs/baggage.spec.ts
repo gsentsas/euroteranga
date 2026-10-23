@@ -215,7 +215,8 @@ test.describe('PR-13 baggage', () => {
     await expect(detail).toContainText('Coumba Bagages');
     await expect(detail).toContainText(seed.bookingReference);
     await expect(detail).toContainText(seed.tripReference);
-    await expect(detail).toContainText('Non configurée pour cette tarification historique');
+    await expect(detail.getByTestId('baggage-allowance')).toContainText('Standard navigateur');
+    await expect(detail.getByTestId('baggage-allowance')).toContainText('2 pièce(s) de 23,000 kg');
 
     await detail.getByLabel('Poids mesuré (kg)').fill('30,000');
     await detail.getByRole('button', { name: 'Enregistrer le poids' }).click();
