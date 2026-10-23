@@ -402,7 +402,7 @@ BEGIN
     SELECT pv."id" INTO expected_policy_id
     FROM "baggage_policy_version" pv
     WHERE pv."fare_table_version_id" = subject."fare_table_version_id"
-      AND pv."status" = 'PUBLISHED';
+      AND pv."status" IN ('PUBLISHED', 'RETIRED');
 
     IF expected_policy_id IS NULL THEN
       IF NEW."baggage_policy_version_id" IS NOT NULL
