@@ -86,6 +86,16 @@ enum TerangaFacility {
   @@map("teranga_facility")
 }
 
+
+enum ComfortWaypointEventType {
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  SKIPPED
+
+  @@map("comfort_waypoint_event_type")
+}
+
 enum FareTableVersionStatus {
   DRAFT
   PUBLISHED
@@ -771,6 +781,7 @@ model AuthIdentity {
   trackingConfigsCreated           TripTrackingConfig[]     @relation("TrackingConfigCreator")
   trackingConfigsUpdated           TripTrackingConfig[]     @relation("TrackingConfigUpdater")
   trackingObservationsCreated      TrackingObservation[]    @relation("TrackingObservationActor")
+  comfortEventsRecorded             ComfortWaypointEvent[]   @relation("ComfortWaypointEventRecorder")
   trackingTokensCreated            TrackingPublicToken[]    @relation("TrackingPublicTokenCreator")
   trackingTokensRevoked            TrackingPublicToken[]    @relation("TrackingPublicTokenRevoker")
   trackingDevicesCreated           TrackingDevice[]         @relation("TrackingDeviceCreator")
@@ -1203,6 +1214,7 @@ model RouteWaypoint {
   baggageEvents        BaggageEvent[]
   roadFreightEvents     RoadFreightShipmentEvent[]
   trackingObservations TrackingObservation[]
+  comfortEvents        ComfortWaypointEvent[]
   borderEvents         BorderEvent[]
   incidents            Incident[]
 
@@ -1332,6 +1344,7 @@ model Trip {
   trackingConfig          TripTrackingConfig?
   trackingObservations    TrackingObservation[]
   trackingPublicTokens    TrackingPublicToken[]
+  comfortEvents           ComfortWaypointEvent[]
   borderEvents            BorderEvent[]
   incidents               Incident[]
   financeRevenues         TripRevenue[]
@@ -1406,6 +1419,32 @@ model TripWaypointTiming {
   @@unique([tripId, routeWaypointId])
   @@index([routeWaypointId])
   @@map("trip_waypoint_timing")
+}
+
+/// TERANGA-COMFORT-1: append-only operational truth for one trip waypoint.
+/// PLANNED is derived when no event exists; this stream only records explicit
+/// confirmations, completions, cancellations and skips.
+model ComfortWaypointEvent {
+  id                   String                   @id @default(uuid(7)) @db.Uuid
+  tripId               String                   @map("trip_id") @db.Uuid
+  routeWaypointId      String                   @map("route_waypoint_id") @db.Uuid
+  type                 ComfortWaypointEventType
+  actualFacilities     TerangaFacility[]        @default([]) @map("actual_facilities")
+  clientEventId        String                   @map("client_event_id") @db.VarChar(64)
+  payloadFingerprint   String                   @map("payload_fingerprint") @db.Char(64)
+  occurredAt           DateTime                 @map("occurred_at") @db.Timestamptz(3)
+  recordedAt           DateTime                 @default(now()) @map("recorded_at") @db.Timestamptz(3)
+  recordedByIdentityId String                   @map("recorded_by_identity_id") @db.Uuid
+
+  trip          Trip          @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  routeWaypoint RouteWaypoint @relation(fields: [routeWaypointId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  recordedBy    AuthIdentity  @relation("ComfortWaypointEventRecorder", fields: [recordedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tripId, clientEventId])
+  @@index([tripId, routeWaypointId, recordedAt, id])
+  @@index([routeWaypointId])
+  @@index([recordedByIdentityId])
+  @@map("comfort_waypoint_event")
 }
 
 /// Stable identity of a seat-map model (PR-07). Its physical layout belongs

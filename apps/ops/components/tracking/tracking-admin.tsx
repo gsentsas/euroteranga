@@ -14,6 +14,7 @@ import { FormAlert, FormStatus } from '@euroteranga/ui';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useCan } from '../staff-access';
+import { ComfortAdmin } from './comfort-admin';
 
 const VISIBILITY_LABELS: Record<TrackingVisibility, string> = {
   HIDDEN: 'Masqué',
@@ -508,6 +509,7 @@ function TrackingDetail({
       <ConfigPanel detail={detail} devices={devices} disabled={busy} onChanged={reload} />
       <DevicePanel detail={detail} disabled={busy} onCreated={reload} />
       <TokenPanel detail={detail} disabled={busy} onChanged={reload} />
+      <ComfortAdmin tripId={detail.id} tripStatus={detail.status} />
       <BorderPanel tripId={detail.id} tripStatus={detail.status} />
 
       <h3>Timeline des observations</h3>

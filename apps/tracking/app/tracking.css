@@ -199,3 +199,26 @@
     grid-template-columns: 1fr;
   }
 }
+
+.tracking-comfort-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 48rem) {
+  .tracking-comfort-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tracking-comfort-grid .tracking-event {
+  margin-top: 0;
+  border: 1px solid #e3eae6;
+}
+
+.tracking-comfort-grid .tracking-event > span:not(.tracking-kicker) {
+  color: #46554f;
+  font-size: 0.9rem;
+}

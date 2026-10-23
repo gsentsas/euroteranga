@@ -26,6 +26,7 @@ import { AuthRequestGuard, CsrfGuard, SessionGuard } from '../auth/http/auth.gua
 import { AuthRealmRoute, CurrentPrincipal } from '../auth/http/request-context.js';
 import { ZodValidationPipe } from '../auth/http/zod-validation.pipe.js';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
+import { ComfortService } from '../comfort/comfort.service.js';
 import {
   BookingCreateBody,
   bookingCreateSchema,
@@ -47,7 +48,10 @@ import { BookingService } from './booking.service.js';
 @AuthRealmRoute('customer')
 @UseGuards(AuthRequestGuard, SessionGuard)
 export class CustomerBookingController {
-  constructor(private readonly bookings: BookingService) {}
+  constructor(
+    private readonly bookings: BookingService,
+    private readonly comfort: ComfortService,
+  ) {}
 
   @Post()
   @UseGuards(CsrfGuard)
@@ -82,6 +86,17 @@ export class CustomerBookingController {
     query: z.infer<typeof customerBookingListQuerySchema>,
   ) {
     return this.bookings.customerBookings(principal, query);
+  }
+
+  @Get(':reference/comfort')
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ description: 'Traveller-safe comfort and next-step projection.' })
+  @ApiNotFoundResponse({ type: ErrorBody, description: 'COMFORT_BOOKING_NOT_FOUND' })
+  comfortProjection(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('reference') reference: string,
+  ) {
+    return this.comfort.customerProjection(principal, reference);
   }
 
   @Get(':reference')
