@@ -49,9 +49,7 @@ export class AdminTrackingController {
   @Get('trips/:tripId/comfort')
   @Header('Cache-Control', 'no-store')
   @RequirePermissions(PERMISSIONS.TRACKING_READ)
-  comfortProjection(
-    @Param('tripId', new ZodValidationPipe(comfortUuidSchema)) tripId: string,
-  ) {
+  comfortProjection(@Param('tripId', new ZodValidationPipe(comfortUuidSchema)) tripId: string) {
     return this.comfort.adminProjection(tripId);
   }
 
