@@ -187,7 +187,11 @@ export function CustomerCargo() {
     <section aria-labelledby="customer-cargo-title" data-testid="customer-cargo">
       <div className="et-actions">
         <h2 id="customer-cargo-title">Mes colis</h2>
-        <button type="button" className="et-button et-button--secondary" onClick={() => void load()}>
+        <button
+          type="button"
+          className="et-button et-button--secondary"
+          onClick={() => void load()}
+        >
           Actualiser
         </button>
       </div>
@@ -210,14 +214,20 @@ export function CustomerCargo() {
         <h3>Nouvelle demande</h3>
         <label>
           Sens
-          <select value={direction} onChange={(event) => setDirection(event.target.value as RoadFreightDirection)}>
+          <select
+            value={direction}
+            onChange={(event) => setDirection(event.target.value as RoadFreightDirection)}
+          >
             <option value="PAR_DKR">Paris → Dakar</option>
             <option value="DKR_PAR">Dakar → Paris</option>
           </select>
         </label>
         <label>
           Réservation passager facultative
-          <select value={bookingReference} onChange={(event) => setBookingReference(event.target.value)}>
+          <select
+            value={bookingReference}
+            onChange={(event) => setBookingReference(event.target.value)}
+          >
             <option value="">Sans réservation passager</option>
             {bookings.map((booking) => (
               <option key={booking.reference} value={booking.reference}>
@@ -228,50 +238,110 @@ export function CustomerCargo() {
         </label>
         <label>
           Expéditeur
-          <input required maxLength={160} value={senderName} onChange={(event) => setSenderName(event.target.value)} />
+          <input
+            required
+            maxLength={160}
+            value={senderName}
+            onChange={(event) => setSenderName(event.target.value)}
+          />
         </label>
         <label>
           Contact expéditeur
-          <input required maxLength={200} value={senderContact} onChange={(event) => setSenderContact(event.target.value)} />
+          <input
+            required
+            maxLength={200}
+            value={senderContact}
+            onChange={(event) => setSenderContact(event.target.value)}
+          />
         </label>
         <label>
           Destinataire
-          <input required maxLength={160} value={recipientName} onChange={(event) => setRecipientName(event.target.value)} />
+          <input
+            required
+            maxLength={160}
+            value={recipientName}
+            onChange={(event) => setRecipientName(event.target.value)}
+          />
         </label>
         <label>
           Contact destinataire
-          <input required maxLength={200} value={recipientContact} onChange={(event) => setRecipientContact(event.target.value)} />
+          <input
+            required
+            maxLength={200}
+            value={recipientContact}
+            onChange={(event) => setRecipientContact(event.target.value)}
+          />
         </label>
         <label>
           Poids (kg)
-          <input required inputMode="decimal" value={weightKg} onChange={(event) => setWeightKg(event.target.value)} />
+          <input
+            required
+            inputMode="decimal"
+            value={weightKg}
+            onChange={(event) => setWeightKg(event.target.value)}
+          />
         </label>
         <label>
           Volume (litres)
-          <input required type="number" min={1} max={1_000_000} value={volumeLiters} onChange={(event) => setVolumeLiters(event.target.value)} />
+          <input
+            required
+            type="number"
+            min={1}
+            max={1_000_000}
+            value={volumeLiters}
+            onChange={(event) => setVolumeLiters(event.target.value)}
+          />
         </label>
         <label>
           Nombre de pièces
-          <input required type="number" min={1} max={9_999} value={packageCount} onChange={(event) => setPackageCount(event.target.value)} />
+          <input
+            required
+            type="number"
+            min={1}
+            max={9_999}
+            value={packageCount}
+            onChange={(event) => setPackageCount(event.target.value)}
+          />
         </label>
         <label>
           Contenu déclaré
-          <textarea required maxLength={500} value={declaredContents} onChange={(event) => setDeclaredContents(event.target.value)} />
+          <textarea
+            required
+            maxLength={500}
+            value={declaredContents}
+            onChange={(event) => setDeclaredContents(event.target.value)}
+          />
         </label>
         <label>
-          <input type="checkbox" checked={fragile} onChange={(event) => setFragile(event.target.checked)} />
+          <input
+            type="checkbox"
+            checked={fragile}
+            onChange={(event) => setFragile(event.target.checked)}
+          />
           Envoi fragile
         </label>
         <label>
-          <input type="checkbox" checked={professional} onChange={(event) => setProfessional(event.target.checked)} />
+          <input
+            type="checkbox"
+            checked={professional}
+            onChange={(event) => setProfessional(event.target.checked)}
+          />
           Envoi professionnel
         </label>
         <label>
-          <input type="checkbox" checked={pickupRequired} onChange={(event) => setPickupRequired(event.target.checked)} />
+          <input
+            type="checkbox"
+            checked={pickupRequired}
+            onChange={(event) => setPickupRequired(event.target.checked)}
+          />
           Collecte souhaitée
         </label>
         <label>
-          <input type="checkbox" checked={deliveryRequired} onChange={(event) => setDeliveryRequired(event.target.checked)} />
+          <input
+            type="checkbox"
+            checked={deliveryRequired}
+            onChange={(event) => setDeliveryRequired(event.target.checked)}
+          />
           Livraison souhaitée
         </label>
         <button type="submit" className="et-button" disabled={busy !== null}>
@@ -280,11 +350,17 @@ export function CustomerCargo() {
       </form>
 
       {!items ? <p role="status">Chargement de vos colis…</p> : null}
-      {items?.length === 0 ? <p>Vous n’avez encore aucune demande de colis ou de fret.</p> : null}
+      {items?.length === 0 ? (
+        <p>Vous n’avez encore aucune demande de colis ou de fret.</p>
+      ) : null}
       {items && items.length > 0 ? (
         <div className="et-passenger-list" aria-label="Liste de mes colis">
           {items.map((item) => (
-            <article key={item.reference} className="et-customer-booking" data-testid={`customer-cargo-${item.reference}`}>
+            <article
+              key={item.reference}
+              className="et-customer-booking"
+              data-testid={`customer-cargo-${item.reference}`}
+            >
               <div className="et-actions">
                 <h3 className="et-code">{item.reference}</h3>
                 <span className="et-tag">{STATUS_LABELS[item.status]}</span>
@@ -368,13 +444,20 @@ export function CustomerCargo() {
           <h4>Devis</h4>
           {quotes.length === 0 ? <p>Aucun devis n’a encore été émis.</p> : null}
           {quotes.map((quote) => (
-            <div key={quote.reference} className="et-customer-booking" data-testid={`customer-cargo-quote-${quote.reference}`}>
+            <div
+              key={quote.reference}
+              className="et-customer-booking"
+              data-testid={`customer-cargo-quote-${quote.reference}`}
+            >
               <div className="et-actions">
                 <strong className="et-code">{quote.reference}</strong>
                 <span className="et-tag">{quote.status}</span>
               </div>
               <p>
-                Total : <strong>{exactMoney(quote.totalMinor, quote.currencyCode, quote.currencyMinorUnit)}</strong>
+                Total :{' '}
+                <strong>
+                  {exactMoney(quote.totalMinor, quote.currencyCode, quote.currencyMinorUnit)}
+                </strong>
               </p>
               <ul>
                 {quote.lines.map((line) => (
