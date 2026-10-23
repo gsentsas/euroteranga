@@ -2534,8 +2534,7 @@ export interface BorderEventResult {
   event: BorderTripView['events'][number];
 }
 
-export type ComfortWaypointStatus =
-  'PLANNED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'SKIPPED';
+export type ComfortWaypointStatus = 'PLANNED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'SKIPPED';
 
 export type ComfortFacility = 'RESTROOM' | 'SHOWER' | 'FOOD' | 'SECURE_PARKING' | 'FUEL';
 
