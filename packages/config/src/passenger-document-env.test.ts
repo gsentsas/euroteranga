@@ -110,33 +110,53 @@ describe('passenger-document configuration', () => {
   });
 
   it.each(['staging', 'production'] as const)(
-    'refuses LOCAL storage and the TEST scanner in %s',
+    'accepts persistent LOCAL storage with CLAMAV in %s',
+    (appEnv) => {
+      expect(
+        loadApiEnv(
+          deployed(appEnv, {
+            OBJECT_STORAGE_PROVIDER: 'LOCAL',
+            OBJECT_STORAGE_LOCAL_ROOT: '/var/lib/euroteranga/passenger-documents',
+            MALWARE_SCANNER: 'CLAMAV',
+            CLAMAV_HOST: '127.0.0.1',
+          }),
+        ),
+      ).toMatchObject({
+        OBJECT_STORAGE_PROVIDER: 'LOCAL',
+        OBJECT_STORAGE_LOCAL_ROOT: '/var/lib/euroteranga/passenger-documents',
+        MALWARE_SCANNER: 'CLAMAV',
+      });
+    },
+  );
+
+  it.each(['staging', 'production'] as const)(
+    'refuses temporary LOCAL storage in %s',
     (appEnv) => {
       expect(() =>
         loadApiEnv(
           deployed(appEnv, {
             OBJECT_STORAGE_PROVIDER: 'LOCAL',
             OBJECT_STORAGE_LOCAL_ROOT: '/tmp/euroteranga-private-documents',
-            MALWARE_SCANNER: 'TEST',
+            MALWARE_SCANNER: 'CLAMAV',
+            CLAMAV_HOST: '127.0.0.1',
           }),
         ),
-      ).toThrow(/OBJECT_STORAGE_PROVIDER: LOCAL is refused|MALWARE_SCANNER: TEST is refused/);
+      ).toThrow(/OBJECT_STORAGE_LOCAL_ROOT: must use a persistent private directory/);
     },
   );
 
   it.each(['staging', 'production'] as const)(
-    'refuses LOCAL storage on its own in %s, even with a real scanner',
+    'refuses the TEST scanner with LOCAL storage in %s',
     (appEnv) => {
       expect(() =>
         loadApiEnv(
           deployed(appEnv, {
             OBJECT_STORAGE_PROVIDER: 'LOCAL',
-            OBJECT_STORAGE_LOCAL_ROOT: '/srv/euroteranga-private-documents',
-            MALWARE_SCANNER: 'CLAMAV',
-            CLAMAV_HOST: 'clamav.internal',
+            OBJECT_STORAGE_LOCAL_ROOT: '/var/lib/euroteranga/passenger-documents',
+            MALWARE_SCANNER: 'TEST',
           }),
         ),
-      ).toThrow(/OBJECT_STORAGE_PROVIDER: LOCAL is refused in staging and production/);
+      ).toThrow(/MALWARE_SCANNER: TEST is refused in staging and production/);
     },
   );
 
