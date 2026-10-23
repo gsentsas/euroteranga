@@ -146,6 +146,38 @@ describe('public website rendering', () => {
     );
     expect(contact).toContain('contact@example.org');
   });
+  it('renders owner information only from published settings and never invents a fallback', () => {
+    const page = pageDocumentSchema.parse({
+      title: 'Contact',
+      seo: { description: 'Description.' },
+      blocks: [{ type: 'ownerInfo', kind: 'contact', title: 'Nous contacter' }],
+    });
+    const empty = render(page);
+    expect(empty).toContain('Ces informations ne sont pas disponibles pour le moment.');
+    expect(empty).not.toMatch(/contact@|\+33|Facebook/i);
+
+    const html = render(
+      page,
+      ctx({
+        settings: {
+          ...DEFAULT_SITE_SETTINGS,
+          contact: {
+            email: 'contact@example.test',
+            phone: '+33100000000',
+            address: null,
+            hours: 'Lun-Ven 09:00-18:00',
+          },
+          social: [{ network: 'facebook', url: 'https://example.test/euro-teranga' }],
+        },
+      }),
+    );
+    expect(html).toContain('contact@example.test');
+    expect(html).toContain('+33100000000');
+    expect(html).toContain('Lun-Ven 09:00-18:00');
+    expect(html).toContain('href="https://example.test/euro-teranga"');
+    expect(html).not.toContain('Ces informations ne sont pas disponibles pour le moment.');
+  });
+
   it('renders responsive WebP images with focal point, caption and credit (MEDIA-1)', () => {
     const id = '01900000-0000-7000-8000-000000000001';
     const media = siteMediaOf(

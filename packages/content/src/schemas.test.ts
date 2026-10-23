@@ -8,6 +8,7 @@ import {
   linkSchema,
   mediaIdsOf,
   mediaReferencesOf,
+  missingOwnerInfoInputs,
   missingOwnerInputs,
   navigationSchema,
   pageDocumentSchema,
@@ -40,7 +41,16 @@ describe('content model', () => {
     expect(missing).toContain('contact.email');
     expect(missing).toContain('legal.companyName');
     expect(missing).toContain('legal.hostName');
-    expect(missing).toHaveLength(14);
+    expect(missing).toContain('privacy.dataController');
+    expect(missing).toContain('social');
+    expect(missing).toHaveLength(21);
+    expect(missingOwnerInfoInputs(DEFAULT_SITE_SETTINGS, 'contact')).toEqual([
+      'contact.email',
+      'contact.phone',
+      'contact.hours',
+      'social',
+    ]);
+    expect(missingOwnerInfoInputs(DEFAULT_SITE_SETTINGS, 'privacy')).toHaveLength(6);
   });
 
   it('accepts lowercase public paths and refuses reserved, odd or unsafe ones', () => {
@@ -154,6 +164,7 @@ describe('content model', () => {
       'stats',
       'gallery',
       'banner',
+      'ownerInfo',
       'sectionNav',
       'itinerary',
       'fleet',
@@ -356,6 +367,9 @@ describe('content model', () => {
       '/comment-ca-marche',
       '/faq',
       '/a-propos',
+      '/contact',
+      '/mentions-legales',
+      '/confidentialite',
       '/fret',
     ]);
     for (const template of PAGE_TEMPLATES) {
@@ -387,5 +401,9 @@ describe('content model', () => {
         social: [{ network: 'facebook', url: 'javascript:alert(1)' }],
       }).success,
     ).toBe(false);
+
+    const legacy = structuredClone(DEFAULT_SITE_SETTINGS) as Record<string, unknown>;
+    delete legacy.privacy;
+    expect(siteSettingsSchema.parse(legacy).privacy).toEqual(DEFAULT_SITE_SETTINGS.privacy);
   });
 });

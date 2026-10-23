@@ -1,5 +1,5 @@
 import { createDatabaseClient } from '@euroteranga/database';
-import { DEFAULT_HOME_PAGE } from '@euroteranga/content';
+import { DEFAULT_HOME_PAGE, PAGE_TEMPLATES } from '@euroteranga/content';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -394,8 +394,68 @@ describe('content management (isolated database)', () => {
       });
       expect(settingsWithContact.status, settingsWithContact.text).toBe(200);
 
-      await publish(director, settingsWithContact.body);
+      const publishedContactSettings = await publish(director, settingsWithContact.body);
       expect((await publish(editor, freightDraft.body)).status).toBe(200);
+
+      const ownerPages = await Promise.all(
+        [
+          ['contact', 'contact'],
+          ['legal-notice', 'legal'],
+          ['privacy', 'privacy'],
+        ].map(async ([templateId, kind]) => {
+          const template = PAGE_TEMPLATES.find((candidate) => candidate.id === templateId)!;
+          const page = await createPage(director, template.path);
+          const saved = await saveDraft(director, page, template.document);
+          expect(saved.status, saved.text).toBe(200);
+          const blocked = await publish(director, saved.body);
+          expect(blocked.status).toBe(422);
+          expect(blocked.body).toMatchObject({
+            code: 'CONTENT_OWNER_INFO_REQUIRED',
+            details: { kind },
+          });
+          expect(blocked.body.details.missing.length).toBeGreaterThan(0);
+          return saved.body as EntryView;
+        }),
+      );
+
+      const settingsComplete = await saveDraft(director, publishedContactSettings.body, {
+        ...publishedContactSettings.body.published.document,
+        contact: {
+          email: 'contact@example.test',
+          phone: '+33100000000',
+          address: null,
+          hours: 'Lun-Ven 09:00-18:00',
+        },
+        legal: {
+          companyName: 'Société synthétique E2E',
+          legalForm: 'Forme synthétique',
+          registeredAddress: '1 rue de Test, 00000 Test',
+          shareCapital: 'Capital synthétique',
+          registrationNumber: 'REG-E2E-001',
+          vatNumber: 'VAT-E2E-001',
+          publicationDirector: 'Direction synthétique',
+          hostName: 'Hébergeur synthétique',
+          hostAddress: '2 rue de Test, 00000 Test',
+          hostContact: 'host@example.test',
+        },
+        privacy: {
+          dataController: 'Responsable synthétique E2E',
+          privacyContact: 'privacy@example.test',
+          purposesAndLegalBases: 'Finalités et bases légales synthétiques pour le test.',
+          retentionPeriods: 'Durées de conservation synthétiques pour le test.',
+          processors: 'Sous-traitants synthétiques pour le test.',
+          transfersOutsideEu: 'Politique de transferts synthétique pour le test.',
+        },
+        social: [{ network: 'facebook', url: 'https://example.test/euro-teranga' }],
+      });
+      expect(settingsComplete.status, settingsComplete.text).toBe(200);
+      expect((await publish(director, settingsComplete.body)).status).toBe(200);
+
+      for (const page of ownerPages) {
+        expect((await publish(director, page)).status).toBe(200);
+        expect((await publicApi().get(`/pages?path=${page.key}`)).status).toBe(200);
+      }
+
       await publish(director, navigation.body);
       const site = await publicApi().get('/site');
       expect(site.body.settings).toMatchObject({ brandName: 'EURO TERANGA' });

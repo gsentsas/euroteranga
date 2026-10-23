@@ -112,3 +112,38 @@ describe('public help page templates (WEB-2A)', () => {
     expect(new Set(blocks[0]!.items.map((item) => item.question)).size).toBe(5);
   });
 });
+
+const OWNER_TEMPLATE_EXPECTATIONS = [
+  ['contact', 'Contact', '/contact', 'contact'],
+  ['legal-notice', 'Mentions légales', '/mentions-legales', 'legal'],
+  ['privacy', 'Confidentialité', '/confidentialite', 'privacy'],
+] as const;
+
+describe('owner-dependent public page templates (WEB-2B)', () => {
+  it('offers three valid indexable templates backed by one dynamic ownerInfo block each', () => {
+    for (const [id, label, path, kind] of OWNER_TEMPLATE_EXPECTATIONS) {
+      const template = PAGE_TEMPLATES.find((candidate) => candidate.id === id);
+      expect(template).toBeDefined();
+      expect(template).toMatchObject({ id, label, path });
+      const document = pageDocumentSchema.parse(template!.document);
+      expect(document.seo.indexable).toBe(true);
+      expect(document.blocks[0]).toMatchObject({ type: 'hero', variant: 'page' });
+      expect(document.blocks.filter((block) => block.type === 'ownerInfo')).toEqual([
+        expect.objectContaining({ type: 'ownerInfo', kind }),
+      ]);
+    }
+  });
+
+  it('contains no owner identity, contact, privacy commitment or placeholder value', () => {
+    const serialized = JSON.stringify(
+      OWNER_TEMPLATE_EXPECTATIONS.map(([id]) =>
+        pageDocumentSchema.parse(PAGE_TEMPLATES.find((template) => template.id === id)!.document),
+      ),
+    );
+
+    expect(serialized).not.toMatch(/mailto:|tel:|\+33|\+221|@euroteranga|SIREN|SIRET|RCS|NINEA/i);
+    expect(serialized).not.toMatch(/\b\d+\s*(?:jours?|mois|ans?)\b/i);
+    expect(serialized).not.toMatch(/à compléter|TBD|TODO|exemple\.com|example\.com/i);
+    expect(serialized).not.toContain('"kind":"url"');
+  });
+});

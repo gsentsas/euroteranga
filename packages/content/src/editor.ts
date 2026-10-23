@@ -25,6 +25,7 @@ export const BLOCK_LABELS: Record<ContentBlockType, string> = {
   stats: 'Chiffres clés',
   gallery: 'Galerie',
   banner: 'Bandeau d’information',
+  ownerInfo: 'Informations propriétaire',
   sectionNav: 'Sommaire de la page',
   itinerary: 'Itinéraire',
   fleet: 'Nos autocars',
@@ -46,6 +47,8 @@ export const BLOCK_DESCRIPTIONS: Record<ContentBlockType, string> = {
   stats: 'Quelques chiffres vérifiables. N’indiquez jamais un chiffre non prouvé.',
   gallery: 'Jusqu’à 12 images de la médiathèque.',
   banner: 'Une information courte : travaux, rappel, nouveauté.',
+  ownerInfo:
+    'Coordonnées, mentions légales ou informations de confidentialité lues depuis les réglages du site. La publication est refusée tant que les valeurs requises manquent.',
   sectionNav:
     'Des onglets vers les sections de la page (Vue d’ensemble, Horaires, Nos autocars…), chacune repérée par son ancre.',
   itinerary:
@@ -100,6 +103,8 @@ export function newBlock(type: ContentBlockType): ContentBlock {
       return { type, items: [] };
     case 'banner':
       return { type, tone: 'info', text: '' };
+    case 'ownerInfo':
+      return { type, kind: 'contact', title: '' };
     case 'sectionNav':
       return {
         type,

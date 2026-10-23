@@ -5,10 +5,13 @@ import {
   SINGLETON_KEYS,
   documentSchemaOf,
   mediaReferencesOf,
+  missingOwnerInfoInputs,
   pageDocumentSchema,
   siteSettingsSchema,
   type ContentKind,
+  type OwnerInfoKind,
   type PageDocument,
+  type SiteSettings,
 } from '@euroteranga/content';
 import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
@@ -216,7 +219,7 @@ function assertExpectedDraft(draft: { updatedAt: Date } | null, expected: string
   }
 }
 
-async function assertFreightPublicContact(tx: DatabaseTransaction): Promise<void> {
+async function publishedSiteSettings(tx: DatabaseTransaction): Promise<SiteSettings | null> {
   const settingsEntry = await tx.contentEntry.findUnique({
     where: {
       kind_key: {
@@ -226,7 +229,7 @@ async function assertFreightPublicContact(tx: DatabaseTransaction): Promise<void
     },
     select: { id: true },
   });
-  if (!settingsEntry) throw ContentErrors.publicContactRequired();
+  if (!settingsEntry) return null;
 
   await tx.$queryRaw`
     SELECT "id"
@@ -239,9 +242,38 @@ async function assertFreightPublicContact(tx: DatabaseTransaction): Promise<void
     where: { entryId: settingsEntry.id, status: 'PUBLISHED' },
     select: { document: true },
   });
-  const settings = published ? siteSettingsSchema.safeParse(published.document) : null;
-  if (!settings?.success || (!settings.data.contact.email && !settings.data.contact.phone)) {
+  if (!published) return null;
+  const parsed = siteSettingsSchema.safeParse(published.document);
+  return parsed.success ? parsed.data : null;
+}
+
+async function assertFreightPublicContact(tx: DatabaseTransaction): Promise<void> {
+  const settings = await publishedSiteSettings(tx);
+  if (!settings || (!settings.contact.email && !settings.contact.phone)) {
     throw ContentErrors.publicContactRequired();
+  }
+}
+
+async function assertOwnerInfoReady(
+  tx: DatabaseTransaction,
+  document: PageDocument,
+): Promise<void> {
+  const kinds = [
+    ...new Set(
+      document.blocks
+        .filter(
+          (block): block is Extract<PageDocument['blocks'][number], { type: 'ownerInfo' }> =>
+            block.type === 'ownerInfo',
+        )
+        .map((block) => block.kind),
+    ),
+  ] as OwnerInfoKind[];
+  if (kinds.length === 0) return;
+
+  const settings = await publishedSiteSettings(tx);
+  for (const kind of kinds) {
+    const missing = settings ? missingOwnerInfoInputs(settings, kind) : ['siteSettings'];
+    if (missing.length > 0) throw ContentErrors.ownerInfoRequired(kind, missing);
   }
 }
 
@@ -436,9 +468,11 @@ export class ContentService {
         if (!draft) throw ContentErrors.noDraft();
         assertExpectedDraft(draft, input.expectedDraftUpdatedAt);
         // The model may have evolved since the draft was saved: check it again.
-        await assertMediaUsable(tx, entry.kind, validate(entry.kind, draft.document));
-        if (entry.kind === 'PAGE' && entry.key === '/fret') {
-          await assertFreightPublicContact(tx);
+        const document = validate(entry.kind, draft.document);
+        await assertMediaUsable(tx, entry.kind, document);
+        if (entry.kind === 'PAGE') {
+          await assertOwnerInfoReady(tx, document as PageDocument);
+          if (entry.key === '/fret') await assertFreightPublicContact(tx);
         }
         if (published) {
           await tx.contentRevision.update({

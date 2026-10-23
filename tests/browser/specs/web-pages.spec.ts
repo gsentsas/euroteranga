@@ -222,3 +222,51 @@ test.describe('public help pages (WEB-2A)', () => {
     }
   });
 });
+
+test.describe('owner-dependent public pages (WEB-2B)', () => {
+  const pages = [
+    { path: '/contact', heading: 'Contact' },
+    { path: '/mentions-legales', heading: 'Mentions légales' },
+    { path: '/confidentialite', heading: 'Confidentialité' },
+  ] as const;
+
+  for (const item of pages) {
+    test(`${item.path} renders published owner settings at desktop and 400 px`, async ({
+      page,
+    }) => {
+      const response = await page.goto(appUrl(web, item.path));
+      expect(response?.status()).toBe(200);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(item.heading);
+      await expectPublicPageStructure(page);
+      await expect(page.locator('main')).not.toContainText(
+        'Ces informations ne sont pas disponibles pour le moment.',
+      );
+
+      await page.setViewportSize({ width: 400, height: 844 });
+      await expectPublicPageStructure(page);
+    });
+  }
+
+  test('Contact exposes only the synthetic published B7 values', async ({ page }) => {
+    await page.goto(appUrl(web, '/contact'));
+    const main = page.locator('main');
+    await expect(main).toContainText('contact@example.test');
+    await expect(main).toContainText('+33100000000');
+    await expect(main).toContainText('Lun-Ven 09:00-18:00');
+    await expect(
+      main.getByRole('link', { name: 'https://example.test/euro-teranga' }),
+    ).toHaveAttribute('href', 'https://example.test/euro-teranga');
+  });
+
+  test('Legal and Privacy expose their owner groups without placeholders', async ({ page }) => {
+    await page.goto(appUrl(web, '/mentions-legales'));
+    await expect(page.locator('main')).toContainText('Société synthétique E2E');
+    await expect(page.locator('main')).toContainText('Hébergeur synthétique');
+
+    await page.goto(appUrl(web, '/confidentialite'));
+    const privacy = page.locator('main');
+    await expect(privacy).toContainText('Responsable synthétique E2E');
+    await expect(privacy).toContainText('Durées de conservation synthétiques pour le test.');
+    await expect(privacy).not.toContainText(/TBD|TODO|à compléter/i);
+  });
+});
