@@ -1,0 +1,26 @@
+[Unit]
+Description=EURO TERANGA isolated PostgreSQL restore check
+After=postgresql.service euroteranga-postgres-backup.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/var/www/vhosts/euroteranga.com/current
+Environment=PATH=/opt/plesk/node/24/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/var/www/vhosts/euroteranga.com/current/infrastructure/plesk/restore-check-postgres.sh
+UMask=0077
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/www/vhosts/euroteranga.com/backups
+
+[Install]
+WantedBy=multi-user.target
