@@ -41,6 +41,12 @@ export const ContentErrors = {
       'Le brouillon a été modifié entre-temps. Rechargez-le avant de continuer.',
     ),
   noDraft: () => new PublicApiError(409, 'CONTENT_NO_DRAFT', 'Aucun brouillon à publier.'),
+  publicContactRequired: () =>
+    new PublicApiError(
+      422,
+      'CONTENT_PUBLIC_CONTACT_REQUIRED',
+      'Publiez au moins un e-mail ou un téléphone dans les réglages du site avant de publier la page fret.',
+    ),
   draftExists: () =>
     new PublicApiError(
       409,
