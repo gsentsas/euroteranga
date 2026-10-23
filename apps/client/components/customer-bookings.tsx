@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { auth } from '../lib/auth';
 import { paymentTestEnvironment } from '../lib/env';
+import { CustomerComfort } from './customer-comfort';
 import { CustomerPaymentChoice } from './customer-payment-choice';
 
 const STATUS_LABELS: Record<CustomerBookingStatus, string> = {
@@ -249,6 +250,9 @@ export function CustomerBookings() {
                     </>
                   )}
                 </dl>
+                {booking.status === 'CONFIRMED' ? (
+                  <CustomerComfort bookingReference={booking.reference} />
+                ) : null}
                 {paying && payment ? (
                   <div className="et-customer-booking-payment" role="status">
                     <p>
