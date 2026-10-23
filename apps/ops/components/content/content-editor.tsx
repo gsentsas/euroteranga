@@ -438,8 +438,8 @@ export function ContentEditor({ entryId }: { entryId: string }) {
       {missing.length > 0 ? (
         <p className="ops-content-warning" data-testid="content-owner-missing">
           {missing.length} information{missing.length > 1 ? 's' : ''} de l’exploitant à compléter
-          (contact, mentions légales, confidentialité). Elles ne sont pas affichées tant qu’elles
-          ne sont pas renseignées.
+          (contact, mentions légales, confidentialité). Elles ne sont pas affichées tant qu’elles ne
+          sont pas renseignées.
         </p>
       ) : null}
 
