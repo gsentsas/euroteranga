@@ -87,8 +87,8 @@ const comfortTripSelect = {
       source: { in: ['CHECKPOINT', 'CREW', 'OPS', 'SYSTEM'] as const },
     },
     orderBy: [{ observedAt: 'desc' as const }, { id: 'desc' as const }],
-    take: 1,
     select: {
+      routeWaypointId: true,
       observedAt: true,
       routeWaypoint: { select: { sequence: true } },
     },
@@ -268,7 +268,21 @@ export class ComfortService {
     const nextStep = future[0] ?? null;
     const nextPause =
       future.find((step) => step.kind !== 'STOP' && PAUSE_KINDS.has(step.kind)) ?? null;
-    const lastUpdatedAt = maxDate([
+    const visibleWaypointIds = new Set(
+      allSteps.filter((step) => step.travellerVisible).map((step) => step.routeWaypointId),
+    );
+    const latestVisibleObservation = row.trackingObservations.find(
+      (observation) =>
+        observation.routeWaypointId !== null &&
+        visibleWaypointIds.has(observation.routeWaypointId),
+    );
+    const publicLastUpdatedAt = maxDate([
+      latestVisibleObservation?.observedAt,
+      ...row.comfortEvents
+        .filter((event) => visibleWaypointIds.has(event.routeWaypointId))
+        .map((event) => event.occurredAt),
+    ]);
+    const adminLastUpdatedAt = maxDate([
       row.trackingObservations[0]?.observedAt,
       ...row.comfortEvents.map((event) => event.occurredAt),
     ]);
@@ -280,7 +294,7 @@ export class ComfortService {
       plannedDepartureAt: row.plannedDepartureAt,
       plannedArrivalAt: row.plannedArrivalAt,
       progressSequence,
-      lastUpdatedAt,
+      lastUpdatedAt: publicLastUpdatedAt,
       currentStep,
       nextStep,
       nextPause,
@@ -292,6 +306,7 @@ export class ComfortService {
       admin: {
         tripId: row.id,
         ...projection,
+        lastUpdatedAt: adminLastUpdatedAt,
         steps: allSteps,
         events: row.comfortEvents.map(eventView),
       },
