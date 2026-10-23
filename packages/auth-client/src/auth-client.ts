@@ -1998,10 +1998,7 @@ export interface CustomerRoadFreightShipmentDetail extends CustomerRoadFreightSh
   timeline: CustomerRoadFreightTimelineEvent[];
 }
 
-export type CustomerRoadFreightCreateInput = Omit<
-  RoadFreightCreateInput,
-  'customerIdentityId'
->;
+export type CustomerRoadFreightCreateInput = Omit<RoadFreightCreateInput, 'customerIdentityId'>;
 
 /** PR-14: the six server-derived check-in gates of one BookingPassenger. */
 export type CheckInGate = 'BOOKING' | 'PAYMENT' | 'DOCUMENTS' | 'COMPLIANCE' | 'SEAT' | 'BAGGAGE';
@@ -3790,11 +3787,7 @@ export function createAuthClient(baseUrl: string) {
               'GET',
               `/v1/booking/cargo/${encodeURIComponent(reference)}/quotes`,
             ),
-          acceptQuote: (
-            reference: string,
-            quoteReference: string,
-            expectedUpdatedAt?: string,
-          ) =>
+          acceptQuote: (reference: string, quoteReference: string, expectedUpdatedAt?: string) =>
             withCsrf<CustomerRoadFreightQuote>(
               'customer',
               `/v1/booking/cargo/${encodeURIComponent(reference)}/quotes/${encodeURIComponent(quoteReference)}/accept`,
