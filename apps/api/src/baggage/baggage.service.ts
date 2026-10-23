@@ -258,11 +258,19 @@ export class BaggageService {
               FOR UPDATE OF bp, b
             `;
 
-            const policyVersion = await tx.baggagePolicyVersion.findFirst({
+            let policyVersion = await tx.baggagePolicyVersion.findFirst({
               where: {
                 fareTableVersionId: subject.booking.fareEntry.fareTableVersionId,
-                status: { in: ['PUBLISHED', 'RETIRED'] },
+                status: 'PUBLISHED',
               },
+              select: { id: true },
+            });
+            policyVersion ??= await tx.baggagePolicyVersion.findFirst({
+              where: {
+                fareTableVersionId: subject.booking.fareEntry.fareTableVersionId,
+                status: 'RETIRED',
+              },
+              orderBy: { publishedAt: 'desc' },
               select: { id: true },
             });
             const latestAllowance = policyVersion
