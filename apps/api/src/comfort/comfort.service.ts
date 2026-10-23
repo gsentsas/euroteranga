@@ -273,8 +273,7 @@ export class ComfortService {
     );
     const latestVisibleObservation = row.trackingObservations.find(
       (observation) =>
-        observation.routeWaypointId !== null &&
-        visibleWaypointIds.has(observation.routeWaypointId),
+        observation.routeWaypointId !== null && visibleWaypointIds.has(observation.routeWaypointId),
     );
     const publicLastUpdatedAt = maxDate([
       latestVisibleObservation?.observedAt,
