@@ -65,13 +65,13 @@ CREATE UNIQUE INDEX "baggage_policy_version_one_draft_per_policy"
 CREATE UNIQUE INDEX "baggage_policy_version_one_published_per_policy"
   ON "baggage_policy_version"("baggage_policy_id") WHERE "status" = 'PUBLISHED';
 
-CREATE UNIQUE INDEX "baggage_excess_tier_version_code_key"
+CREATE UNIQUE INDEX "baggage_excess_tier_baggage_policy_version_id_code_key"
   ON "baggage_excess_tier"("baggage_policy_version_id", "code");
-CREATE UNIQUE INDEX "baggage_excess_tier_version_max_weight_key"
+CREATE UNIQUE INDEX "baggage_excess_tier_baggage_policy_version_id_max_excess_we_key"
   ON "baggage_excess_tier"("baggage_policy_version_id", "max_excess_weight_kg");
-CREATE UNIQUE INDEX "baggage_excess_tier_version_position_key"
+CREATE UNIQUE INDEX "baggage_excess_tier_baggage_policy_version_id_position_key"
   ON "baggage_excess_tier"("baggage_policy_version_id", "position");
-CREATE INDEX "baggage_excess_tier_version_max_weight_idx"
+CREATE INDEX "baggage_excess_tier_baggage_policy_version_id_max_excess_we_idx"
   ON "baggage_excess_tier"("baggage_policy_version_id", "max_excess_weight_kg");
 
 CREATE INDEX "baggage_baggage_policy_version_id_idx"
@@ -145,20 +145,20 @@ ALTER TABLE "baggage"
   );
 
 ALTER TABLE "baggage_policy_version"
-  ADD CONSTRAINT "baggage_policy_version_policy_fkey"
+  ADD CONSTRAINT "baggage_policy_version_baggage_policy_id_fkey"
   FOREIGN KEY ("baggage_policy_id") REFERENCES "baggage_policy"("id")
   ON DELETE RESTRICT ON UPDATE CASCADE,
-  ADD CONSTRAINT "baggage_policy_version_fare_table_version_fkey"
+  ADD CONSTRAINT "baggage_policy_version_fare_table_version_id_fkey"
   FOREIGN KEY ("fare_table_version_id") REFERENCES "fare_table_version"("id")
   ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "baggage_excess_tier"
-  ADD CONSTRAINT "baggage_excess_tier_version_fkey"
+  ADD CONSTRAINT "baggage_excess_tier_baggage_policy_version_id_fkey"
   FOREIGN KEY ("baggage_policy_version_id") REFERENCES "baggage_policy_version"("id")
   ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "baggage"
-  ADD CONSTRAINT "baggage_policy_version_fkey"
+  ADD CONSTRAINT "baggage_baggage_policy_version_id_fkey"
   FOREIGN KEY ("baggage_policy_version_id") REFERENCES "baggage_policy_version"("id")
   ON DELETE RESTRICT ON UPDATE CASCADE;
 
