@@ -679,6 +679,27 @@ function BlockFields({ block, path }: { block: ContentBlock; path: DocumentPath 
           />
         </>
       );
+    case 'ownerInfo':
+      return (
+        <>
+          <p className="ops-content-warning">
+            Cette section lit uniquement les valeurs propriétaire publiées dans les réglages du
+            site. La page ne peut pas être publiée tant que les champs requis de ce groupe sont
+            incomplets.
+          </p>
+          <SelectField
+            path={[...path, 'kind']}
+            label="Groupe d’informations"
+            options={[
+              ['contact', 'Contact public'],
+              ['legal', 'Mentions légales'],
+              ['privacy', 'Confidentialité'],
+            ]}
+          />
+          <TextField path={[...path, 'title']} label="Titre (H2)" max={160} required />
+          <TextField path={[...path, 'intro']} label="Introduction" max={400} multiline />
+        </>
+      );
     case 'banner':
       return (
         <>
