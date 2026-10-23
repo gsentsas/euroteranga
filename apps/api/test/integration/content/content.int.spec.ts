@@ -404,10 +404,10 @@ describe('content management (isolated database)', () => {
           ['privacy', 'privacy'],
         ].map(async ([templateId, kind]) => {
           const template = PAGE_TEMPLATES.find((candidate) => candidate.id === templateId)!;
-          const page = await createPage(editor, template.path);
-          const saved = await saveDraft(editor, page, template.document);
+          const page = await createPage(director, template.path);
+          const saved = await saveDraft(director, page, template.document);
           expect(saved.status, saved.text).toBe(200);
-          const blocked = await publish(editor, saved.body);
+          const blocked = await publish(director, saved.body);
           expect(blocked.status).toBe(422);
           expect(blocked.body).toMatchObject({
             code: 'CONTENT_OWNER_INFO_REQUIRED',
@@ -452,7 +452,7 @@ describe('content management (isolated database)', () => {
       expect((await publish(director, settingsComplete.body)).status).toBe(200);
 
       for (const page of ownerPages) {
-        expect((await publish(editor, page)).status).toBe(200);
+        expect((await publish(director, page)).status).toBe(200);
         expect((await publicApi().get(`/pages?path=${page.key}`)).status).toBe(200);
       }
 
