@@ -109,6 +109,8 @@ credential is present (`PAYMENT_STRIPE_SECRET_KEY`,
 [wave-senegal.md](../payments/wave-senegal.md) et
 [orange-money-senegal.md](../payments/orange-money-senegal.md).
 
-A complete business pilot requiring real payment or passenger-document upload
-remains NO-GO until a real PSP adapter, private S3-compatible storage and
-CLAMAV (or another supported approved scanner) are provisioned.
+A complete business pilot requiring real payment remains NO-GO until a real
+PSP adapter is provisioned. Passenger-document upload remains NO-GO until the
+dedicated persistent LOCAL private root, backup coverage and CLAMAV (or another
+supported approved scanner) are provisioned and verified. No S3 service is
+required.
