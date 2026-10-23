@@ -252,8 +252,8 @@ catalogs:
       specifier: 16.4.2
       version: 16.4.2
     nodemailer:
-      specifier: 10.0.15
-      version: 10.0.15
+      specifier: 10.1.2
+      version: 10.1.2
     otpauth:
       specifier: 9.5.2
       version: 9.5.2
@@ -376,7 +376,7 @@ importers:
         version: 8.3.0
       nodemailer:
         specifier: 'catalog:'
-        version: 10.0.15
+        version: 10.1.2
       otpauth:
         specifier: 'catalog:'
         version: 9.5.2
@@ -2992,8 +2992,8 @@ packages:
       sass:
         optional: true
 
-  nodemailer@10.0.15:
-    resolution: {integrity: sha512-EUqp5PhtcsYXs9Fq/lS7s/8zlTrnBqmzZWzFFROrNikMiz+om/YRKMwqN907t+0A1KKyT8jd39CBUbFZmaZmcA==}
+  nodemailer@10.1.2:
+    resolution: {integrity: sha512-rnQn9Rzh8RAwcp42MVsIvxbsv6YZ2a2/av+uyJ/LPU1+2QSlrRgFsWWZTKenyRUqkIl8urOI0c4+CEcmFdsvQw==}
     engines: {node: '>=20.0.0'}
 
   object-assign@4.1.1:
@@ -5839,7 +5839,7 @@ snapshots:
       - '@types/node'
       - babel-plugin-macros
 
-  nodemailer@10.0.15: {}
+  nodemailer@10.1.2: {}
 
   object-assign@4.1.1: {}
 
