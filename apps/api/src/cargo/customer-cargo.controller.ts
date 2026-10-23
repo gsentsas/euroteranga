@@ -24,10 +24,7 @@ import { AuthRealmRoute, CurrentPrincipal } from '../auth/http/request-context.j
 import { ZodValidationPipe } from '../auth/http/zod-validation.pipe.js';
 import type { AuthPrincipal } from '../auth/session/auth-principal.js';
 import { cargoQuoteTransitionSchema } from './cargo-quote.dto.js';
-import {
-  customerCargoCreateSchema,
-  customerCargoListQuerySchema,
-} from './cargo.dto.js';
+import { customerCargoCreateSchema, customerCargoListQuerySchema } from './cargo.dto.js';
 import { CustomerCargoService } from './customer-cargo.service.js';
 
 @ApiTags('booking: cargo')
@@ -66,14 +63,9 @@ export class CustomerCargoController {
 
   @Get(':reference/quotes')
   @Header('Cache-Control', 'no-store')
-  @ApiOkResponse({
-    description: 'Commercial quotes actually issued for an owned freight request.',
-  })
+  @ApiOkResponse({ description: 'Commercial quotes actually issued for an owned freight request.' })
   @ApiNotFoundResponse({ type: ErrorBody })
-  quotes(
-    @CurrentPrincipal() principal: AuthPrincipal,
-    @Param('reference') reference: string,
-  ) {
+  quotes(@CurrentPrincipal() principal: AuthPrincipal, @Param('reference') reference: string) {
     return this.cargo.quotes(principal, reference);
   }
 
@@ -81,9 +73,7 @@ export class CustomerCargoController {
   @HttpCode(200)
   @UseGuards(CsrfGuard)
   @Header('Cache-Control', 'no-store')
-  @ApiOkResponse({
-    description: 'Accepts an owned ISSUED freight quote without creating payment.',
-  })
+  @ApiOkResponse({ description: 'Accepts an owned ISSUED freight quote without creating payment.' })
   @ApiNotFoundResponse({ type: ErrorBody })
   acceptQuote(
     @CurrentPrincipal() principal: AuthPrincipal,
