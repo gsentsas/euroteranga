@@ -204,12 +204,12 @@ Criticality:
 
 ### Documentation
 
-| ID       | Category | Description                                                                                                                       | Evidence                       | Impact                                             | Crit. | Solution                                                                  | Effort | Status             | PR      |
-| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------- | ----- | ------------------------------------------------------------------------- | ------ | ------------------ | ------- |
-| F-DOC-01 | Docs     | The README states "NOT PRODUCTION DEPLOYED", contains literal `\n` sequences, a truncated sentence and broken table rows          | `README.md`                    | Misleading status; broken rendering                | P2    | Rewrite the status and fix the formatting                                 | S      | FIXED              | AUDIT-0 |
-| F-DOC-02 | Docs     | The pilot deployment runbook shows escaped backticks (`` \`bash …\` ``), so the commands cannot be copied as rendered             | `pilot-deployment.md`          | Operator error during a deployment                 | P2    | Use real code spans and blocks                                            | S      | FIXED              | AUDIT-0 |
-| F-DOC-04 | Docs     | Tracking (PR-19) now has a domain document covering visibility, public capabilities, RBAC, Crew provenance and privacy boundaries | `docs/domain/tracking.md`         | Visibility levels and token rules are documented   | P2    | `docs/domain/tracking.md`                                                 | S      | FIXED              | DOCS-1  |
-| F-DOC-03 | Docs     | The architecture overview still says "Implementation starts in PR-01… No business feature is implemented yet", and stops at PR-16 | `docs/architecture/README.md`  | Stale reference document                           | P2    | Update the header, and add a current domain map and the ADR index entries | S      | FIXED              | AUDIT-0 |
+| ID       | Category | Description                                                                                                                       | Evidence                      | Impact                                           | Crit. | Solution                                                                  | Effort | Status | PR      |
+| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------ | ----- | ------------------------------------------------------------------------- | ------ | ------ | ------- |
+| F-DOC-01 | Docs     | The README states "NOT PRODUCTION DEPLOYED", contains literal `\n` sequences, a truncated sentence and broken table rows          | `README.md`                   | Misleading status; broken rendering              | P2    | Rewrite the status and fix the formatting                                 | S      | FIXED  | AUDIT-0 |
+| F-DOC-02 | Docs     | The pilot deployment runbook shows escaped backticks (`` \`bash …\` ``), so the commands cannot be copied as rendered             | `pilot-deployment.md`         | Operator error during a deployment               | P2    | Use real code spans and blocks                                            | S      | FIXED  | AUDIT-0 |
+| F-DOC-04 | Docs     | Tracking (PR-19) now has a domain document covering visibility, public capabilities, RBAC, Crew provenance and privacy boundaries | `docs/domain/tracking.md`     | Visibility levels and token rules are documented | P2    | `docs/domain/tracking.md`                                                 | S      | FIXED  | DOCS-1  |
+| F-DOC-03 | Docs     | The architecture overview still says "Implementation starts in PR-01… No business feature is implemented yet", and stops at PR-16 | `docs/architecture/README.md` | Stale reference document                         | P2    | Update the header, and add a current domain map and the ADR index entries | S      | FIXED  | AUDIT-0 |
 
 ## UI and UX
 
@@ -392,18 +392,18 @@ and is merged only when CI and CodeQL are green.
 
 ## Readiness matrix (baseline, 2026-10-18)
 
-| Domain    | Code | UI  | Data | Tests | Docs | Exploitable | Why not                                                    |
-| --------- | ---- | --- | ---- | ----- | ---- | ----------- | ---------------------------------------------------------- |
-| Public    | ⚠️   | ⚠️  | ❌   | ⚠️    | ❌   | ❌          | One hard-coded page, no legal pages (F-WEB-01, F-WEB-02)   |
-| CMS       | ❌   | ❌  | ❌   | ❌    | ❌   | ❌          | Does not exist (F-CMS-01)                                  |
-| SEO       | ❌   | —   | —    | ❌    | ❌   | ❌          | F-SEO-01 to F-SEO-05                                       |
-| Booking   | ✅   | ✅  | ❌   | ✅    | ✅   | ❌          | No trip in production (F-DATA-01), no PSP (F-PAY-01)       |
-| Client    | ✅   | ✅  | —    | ✅    | ✅   | ⚠️          | Depends on bookings; documents blocked (F-INF-03)          |
-| OPS       | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Usable; production lags behind `main` (F-INF-01)           |
-| Crew      | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Needs trips and assignments                                |
-| Fleet     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No vehicle in production (F-DATA-01)                       |
-| Trips     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No trip in production (F-DATA-01)                          |
-| Payment   | ⚠️   | ✅  | —    | ✅    | ✅   | ❌          | SANDBOX only (F-PAY-01)                                    |
-| Documents | ✅   | ✅  | —    | ✅    | ✅   | ❌          | Storage and scanner disabled (F-INF-03)                    |
+| Domain    | Code | UI  | Data | Tests | Docs | Exploitable | Why not                                                                |
+| --------- | ---- | --- | ---- | ----- | ---- | ----------- | ---------------------------------------------------------------------- |
+| Public    | ⚠️   | ⚠️  | ❌   | ⚠️    | ❌   | ❌          | One hard-coded page, no legal pages (F-WEB-01, F-WEB-02)               |
+| CMS       | ❌   | ❌  | ❌   | ❌    | ❌   | ❌          | Does not exist (F-CMS-01)                                              |
+| SEO       | ❌   | —   | —    | ❌    | ❌   | ❌          | F-SEO-01 to F-SEO-05                                                   |
+| Booking   | ✅   | ✅  | ❌   | ✅    | ✅   | ❌          | No trip in production (F-DATA-01), no PSP (F-PAY-01)                   |
+| Client    | ✅   | ✅  | —    | ✅    | ✅   | ⚠️          | Depends on bookings; documents blocked (F-INF-03)                      |
+| OPS       | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Usable; production lags behind `main` (F-INF-01)                       |
+| Crew      | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Needs trips and assignments                                            |
+| Fleet     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No vehicle in production (F-DATA-01)                                   |
+| Trips     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No trip in production (F-DATA-01)                                      |
+| Payment   | ⚠️   | ✅  | —    | ✅    | ✅   | ❌          | SANDBOX only (F-PAY-01)                                                |
+| Documents | ✅   | ✅  | —    | ✅    | ✅   | ❌          | Storage and scanner disabled (F-INF-03)                                |
 | Tracking  | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Needs trips; public availability still depends on configured trip data |
-| Finance   | ✅   | ✅  | —    | ✅    | ✅   | ⚠️          | Operational finance only; no statutory accounting          |
+| Finance   | ✅   | ✅  | —    | ✅    | ✅   | ⚠️          | Operational finance only; no statutory accounting                      |
