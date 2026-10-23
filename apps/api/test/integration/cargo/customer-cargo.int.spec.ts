@@ -83,9 +83,7 @@ describe('CLIENT-CARGO-1 authenticated customer cargo', () => {
     expect(withoutCsrf.status).toBe(403);
   });
 
-  it(
-    'creates an owner-scoped request and exposes only its authenticated customer projection',
-    async () => {
+  it('creates an owner-scoped request with a private customer projection', async () => {
     const created = await customerCargoApi(customerA).create(customerCargoBody());
     expect(created.status, created.text).toBe(201);
     const reference = created.body.reference as string;
@@ -146,8 +144,7 @@ describe('CLIENT-CARGO-1 authenticated customer cargo', () => {
         },
       }),
     ).rejects.toThrow(/only active STAFF may record road freight events/);
-    },
-  );
+  });
 
   it('keeps foreign, unowned, unknown and malformed freight indistinguishable', async () => {
     const owned = await customerCargoApi(customerA).create(customerCargoBody({ packageCount: 3 }));
@@ -183,9 +180,7 @@ describe('CLIENT-CARGO-1 authenticated customer cargo', () => {
     expect(malformed.body.code).toBe('CARGO_NOT_FOUND');
   });
 
-  it(
-    'accepts an optional owned booking reference but rejects a foreign booking before Cargo creation',
-    async () => {
+  it('accepts an owned booking reference and rejects a foreign booking', async () => {
     const fixture = await bookableFixture(t.app);
     const ownHold = await bookingApi(customerA).post('/bookings', holdBody(fixture, 1, 5, ['1A']));
     expect(ownHold.status, ownHold.text).toBe(201);
@@ -209,8 +204,7 @@ describe('CLIENT-CARGO-1 authenticated customer cargo', () => {
     );
     expect(own.status).toBe(409);
     expect(own.body.code).toBe('CARGO_ASSIGNMENT_INVALID');
-    },
-  );
+  });
 
   it('hides DRAFT quotes and exposes issued commercial terms without STAFF metadata', async () => {
     const created = await customerCargoApi(customerA).create(customerCargoBody());
@@ -259,9 +253,7 @@ describe('CLIENT-CARGO-1 authenticated customer cargo', () => {
     expect(json).not.toContain('issuedBy');
   });
 
-  it(
-    'allows only the owner to accept an ISSUED quote and creates no payment or Finance revenue',
-    async () => {
+  it('lets only the owner accept an ISSUED quote without creating payment', async () => {
     const created = await customerCargoApi(customerA).create(customerCargoBody());
     const reference = created.body.reference as string;
     const quote = await staffCargoApi(manager).createQuote(reference, {
@@ -333,12 +325,9 @@ describe('CLIENT-CARGO-1 authenticated customer cargo', () => {
       paymentQuoteBefore,
       revenueBefore,
     ]);
-    },
-  );
+  });
 
-  it(
-    'audits customer reads and acceptance without copying contacts or tracking capabilities',
-    async () => {
+  it('audits customer reads without copying contacts or tracking capabilities', async () => {
     const created = await customerCargoApi(customerA).create(
       customerCargoBody({
         senderContact: 'CUSTOMER-SENSITIVE-SENDER',
@@ -365,6 +354,5 @@ describe('CLIENT-CARGO-1 authenticated customer cargo', () => {
     expect(json).not.toContain('CUSTOMER-SENSITIVE-SENDER');
     expect(json).not.toContain('CUSTOMER-SENSITIVE-RECIPIENT');
     expect(json).not.toContain('tokenHash');
-    },
-  );
+  });
 });
