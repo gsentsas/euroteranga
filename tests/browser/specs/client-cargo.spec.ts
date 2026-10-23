@@ -109,7 +109,7 @@ test.describe('CLIENT-CARGO-1 customer workspace', () => {
     const customerQuote = cargo.getByTestId(`customer-cargo-quote-${quoteReference}`);
     await expect(customerQuote).toBeVisible();
     await expect(customerQuote).toContainText('175,00 EUR');
-    await expect(customerQuote).toContainText('ISSUED');
+    await expect(customerQuote).toContainText('Émis');
     await expect(page.locator('body')).not.toContainText('BROWSER-PRIVATE-OPS-NOTE');
 
     await customerQuote
@@ -118,7 +118,7 @@ test.describe('CLIENT-CARGO-1 customer workspace', () => {
     await expect(cargo.getByRole('status')).toContainText(
       `Devis ${quoteReference} accepté. Aucun paiement n’a été déclenché.`,
     );
-    await expect(customerQuote).toContainText('ACCEPTED');
+    await expect(customerQuote).toContainText('Accepté');
 
     const body = await cargo.innerText();
     expect(body).not.toContain('customerIdentityId');
