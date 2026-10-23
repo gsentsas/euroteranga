@@ -193,9 +193,7 @@ export class ComfortService {
   }
 
   private build(row: ComfortTripRow) {
-    const timingByWaypoint = new Map(
-      row.timings.map((timing) => [timing.routeWaypointId, timing]),
-    );
+    const timingByWaypoint = new Map(row.timings.map((timing) => [timing.routeWaypointId, timing]));
     const latestByWaypoint = new Map<string, ComfortEventRow>();
     for (const event of row.comfortEvents) latestByWaypoint.set(event.routeWaypointId, event);
 
@@ -205,9 +203,7 @@ export class ComfortService {
       .reduce((maximum, event) => Math.max(maximum, event.routeWaypoint.sequence), 0);
     const routeEndSequence = row.routeVersion.waypoints.at(-1)?.sequence ?? 0;
     const progressSequence =
-      row.status === 'COMPLETED'
-        ? routeEndSequence
-        : Math.max(observedSequence, completedSequence);
+      row.status === 'COMPLETED' ? routeEndSequence : Math.max(observedSequence, completedSequence);
 
     const allSteps = row.routeVersion.waypoints.map((waypoint) => {
       const timing = timingByWaypoint.get(waypoint.id);
