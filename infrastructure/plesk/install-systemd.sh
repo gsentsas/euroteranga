@@ -11,5 +11,6 @@ systemctl daemon-reload
 systemctl enable euroteranga-web.service euroteranga-booking.service \
   euroteranga-client.service euroteranga-tracking.service euroteranga-ops.service \
   euroteranga-crew.service euroteranga-api.service
-systemctl enable --now euroteranga-auth-purge.timer
-echo "EURO TERANGA runtime units installed/enabled; auth purge timer started."
+systemctl enable --now euroteranga-auth-purge.timer \
+  euroteranga-postgres-backup.timer euroteranga-postgres-restore-check.timer
+echo "EURO TERANGA runtime units installed/enabled; auth purge and PostgreSQL backup timers started."
