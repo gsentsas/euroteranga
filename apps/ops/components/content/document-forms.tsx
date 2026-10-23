@@ -119,6 +119,49 @@ function SettingsForm() {
         <OwnerTextField path={['legal', 'hostAddress']} label="Adresse de l’hébergeur" max={300} />
         <OwnerTextField path={['legal', 'hostContact']} label="Contact de l’hébergeur" max={120} />
       </section>
+      <section className="ops-content-section" aria-labelledby="content-settings-privacy">
+        <h3 id="content-settings-privacy">Confidentialité</h3>
+        <p className="et-hint">
+          Ces valeurs sont des engagements du responsable du traitement. Laissez un champ vide
+          tant que sa valeur n’a pas été explicitement validée : elle ne sera jamais inventée.
+        </p>
+        <OwnerTextField
+          path={['privacy', 'dataController']}
+          label="Responsable du traitement"
+          max={200}
+          multiline
+        />
+        <OwnerTextField
+          path={['privacy', 'privacyContact']}
+          label="DPO ou contact confidentialité"
+          max={200}
+          multiline
+        />
+        <OwnerTextField
+          path={['privacy', 'purposesAndLegalBases']}
+          label="Finalités et bases légales"
+          max={1200}
+          multiline
+        />
+        <OwnerTextField
+          path={['privacy', 'retentionPeriods']}
+          label="Durées de conservation"
+          max={1200}
+          multiline
+        />
+        <OwnerTextField
+          path={['privacy', 'processors']}
+          label="Sous-traitants"
+          max={1200}
+          multiline
+        />
+        <OwnerTextField
+          path={['privacy', 'transfersOutsideEu']}
+          label="Transferts hors Union européenne"
+          max={1200}
+          multiline
+        />
+      </section>
       <section className="ops-content-section" aria-labelledby="content-settings-social">
         <h3 id="content-settings-social">Réseaux sociaux</h3>
         <ListField
