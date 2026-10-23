@@ -55,3 +55,61 @@ describe('cargo and freight public page template (WEB-CARGO-1)', () => {
     expect(serialized).not.toMatch(/\b\d+(?:[.,]\d+)?\s*(?:€|euros?|francs?|kg|m(?:³|3))\b/i);
   });
 });
+
+
+const HELP_TEMPLATE_EXPECTATIONS = [
+  ['baggage', 'Bagages', '/bagages'],
+  ['how-it-works', 'Comment ça marche', '/comment-ca-marche'],
+  ['faq', 'FAQ', '/faq'],
+  ['about', 'À propos', '/a-propos'],
+] as const;
+
+describe('public help page templates (WEB-2A)', () => {
+  it('offers four valid indexable CMS templates on the expected public paths', () => {
+    for (const [id, label, path] of HELP_TEMPLATE_EXPECTATIONS) {
+      const template = PAGE_TEMPLATES.find((candidate) => candidate.id === id);
+      expect(template).toBeDefined();
+      expect(template).toMatchObject({ id, label, path });
+      const document = pageDocumentSchema.parse(template!.document);
+      expect(document.seo.indexable).toBe(true);
+      expect(document.seo.title).toBeTruthy();
+      expect(document.seo.description).toBeTruthy();
+      expect(document.blocks[0]).toMatchObject({ type: 'hero', variant: 'page' });
+    }
+  });
+
+  it('contains no hard-coded owner contact, legal identity, amount or quantitative baggage promise', () => {
+    const serialized = JSON.stringify(
+      HELP_TEMPLATE_EXPECTATIONS.map(([id]) =>
+        pageDocumentSchema.parse(PAGE_TEMPLATES.find((template) => template.id === id)!.document),
+      ),
+    );
+
+    expect(serialized).not.toMatch(/https?:\/\/|mailto:|tel:|\+\d{6,}/i);
+    expect(serialized).not.toMatch(
+      /SIREN|SIRET|RCS|numéro de TVA|capital social|directeur de publication/i,
+    );
+    expect(serialized).not.toMatch(/\b\d+(?:[.,]\d+)?\s*(?:€|EUR|XOF|kg|kilos?|bagages?)\b/i);
+    expect(serialized).not.toMatch(/24\s*\/\s*7|garanti(?:e)?|illimité(?:e)?|bagage gratuit/i);
+    expect(serialized).not.toContain('"kind":"url"');
+  });
+
+  it('keeps baggage limits explicitly outside the template rather than inventing them', () => {
+    const baggage = pageDocumentSchema.parse(
+      PAGE_TEMPLATES.find((template) => template.id === 'baggage')!.document,
+    );
+    const serialized = JSON.stringify(baggage);
+    expect(serialized).toContain('ne fixe ni franchise, ni poids maximal, ni supplément');
+    expect(serialized).toContain('Seules les conditions communiquées pour votre départ');
+  });
+
+  it('has one visible FAQ block whose questions are suitable for FAQPage structured data', () => {
+    const faq = pageDocumentSchema.parse(
+      PAGE_TEMPLATES.find((template) => template.id === 'faq')!.document,
+    );
+    const blocks = faq.blocks.filter((block) => block.type === 'faq');
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.items).toHaveLength(5);
+    expect(new Set(blocks[0]!.items.map((item) => item.question)).size).toBe(5);
+  });
+});
