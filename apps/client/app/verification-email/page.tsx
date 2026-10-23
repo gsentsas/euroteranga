@@ -1,7 +1,7 @@
 import { JourneyShell } from '@euroteranga/ui';
 import type { Metadata } from 'next';
 import { VerifyEmailForm } from '../../components/verify-email-form';
-import { publicEnv } from '../../lib/env';
+import { journeyLinks, publicEnv } from '../../lib/env';
 
 export const metadata: Metadata = { title: 'Confirmer votre adresse e-mail — EURO TERANGA' };
 
@@ -12,6 +12,7 @@ export default function Page() {
       title="Confirmez votre adresse e-mail."
       subtitle="Cette étape protège votre compte avant votre première connexion."
       environment={publicEnv.NEXT_PUBLIC_APP_ENV}
+      links={journeyLinks}
       current="client"
     >
       <section className="et-auth-panel" aria-labelledby="verify-email-panel">
