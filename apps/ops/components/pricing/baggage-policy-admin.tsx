@@ -144,11 +144,7 @@ function DraftEditor({
         code: tier.code,
         label: tier.label,
         maxExcessWeightKg: tier.maxExcessWeightKg,
-        amount: formatMoney(
-          BigInt(tier.chargeMinor),
-          policy.currencyCode,
-          policy.currencyMinorUnit,
-        ).replace(/s[A-Z]{3}$/, ''),
+        amount: moneyInputValue(tier.chargeMinor, policy.currencyMinorUnit),
       })),
     );
     setNextKey(draft.tiers.length + 1);
