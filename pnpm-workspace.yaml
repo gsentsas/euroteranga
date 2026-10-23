@@ -65,6 +65,7 @@ allowBuilds:
 # Security overrides for vulnerable transitive dependencies of the Prisma CLI
 # (development tooling). See docs/security/dependency-audit.md.
 overrides:
+  body-parser: 2.4.0
   deepmerge-ts: 8.0.2
   mysql2: 3.24.5
 
