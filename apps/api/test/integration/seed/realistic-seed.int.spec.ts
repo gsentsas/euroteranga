@@ -52,10 +52,12 @@ async function harness(): Promise<Harness> {
   const seed = (layers: { operations?: boolean } = {}) =>
     new RealisticSeed({
       db: db(t.app),
+      audit: t.app.get(AuditService),
       network: t.app.get(NetworkService),
       seatMaps: t.app.get(SeatMapService),
       fleet: t.app.get(FleetService),
       pricing: t.app.get(PricingService),
+      tracking: t.app.get(TrackingService),
       trips: t.app.get(TripService),
       content: t.app.get(ContentService),
       commerce: {
@@ -148,7 +150,7 @@ describe('realistic seed: catalogue layer (isolated database)', () => {
   it('creates the pilot corridor, the demo fleet additions and the public pages', async () => {
     expect(first.hasConflicts).toBe(false);
     expect(new Set(first.lines.map((line) => line.outcome))).toEqual(
-      new Set(['created', 'updated', 'skipped']),
+      new Set(['created', 'updated', 'existing', 'skipped']),
     );
     expect(
       first.lines.filter((line) => line.outcome === 'skipped').map((line) => line.entity),
@@ -363,10 +365,13 @@ describe('realistic seed: catalogue layer (isolated database)', () => {
     );
 
     const trackings = await client.tripTrackingConfig.findMany();
-    expect(trackings).toHaveLength(2);
-    expect(trackings.every((row) => row.enabled && row.visibility === 'CHECKPOINT_ONLY')).toBe(
-      true,
-    );
+    expect(trackings).toHaveLength(12);
+    expect(
+      trackings.every(
+        (row) =>
+          row.enabled && row.visibility === 'CHECKPOINT_ONLY' && row.trackingDeviceId === null,
+      ),
+    ).toBe(true);
 
     const incidents = await client.incident.findMany();
     expect(incidents.map((row) => [row.type, row.severity, row.source]).sort()).toEqual([
