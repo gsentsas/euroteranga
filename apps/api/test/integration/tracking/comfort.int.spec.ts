@@ -224,9 +224,7 @@ describe('TERANGA-COMFORT-1 traveller comfort projection', () => {
       },
       select: { recordedAt: true },
     });
-    expect(orderedTerminal.recordedAt.getTime()).toBeGreaterThan(
-      orderedFirst.recordedAt.getTime(),
-    );
+    expect(orderedTerminal.recordedAt.getTime()).toBeGreaterThan(orderedFirst.recordedAt.getTime());
   }, 120_000);
 
   it('publishes traveller-safe comfort with a public tracking capability', async () => {
