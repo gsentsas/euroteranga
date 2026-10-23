@@ -139,6 +139,11 @@ export class CargoService {
   }
 
   async create(actor: AuthPrincipal, input: CargoCreateInput) {
+    const reference = await this.createReference(actor, input);
+    return this.detail(actor, reference, 'CREATE_RESULT');
+  }
+
+  async createReference(actor: AuthPrincipal, input: CargoCreateInput): Promise<string> {
     await this.rateLimits.consume(RATE_LIMITS.cargoOperationIdentity, actor.identityId);
     let reference: string;
     try {
@@ -242,7 +247,7 @@ export class CargoService {
       if (error instanceof PublicApiError) throw error;
       return databaseDomainError(error);
     }
-    return this.detail(actor, reference, 'CREATE_RESULT');
+    return reference;
   }
 
   async list(actor: AuthPrincipal, query: CargoListQuery) {
