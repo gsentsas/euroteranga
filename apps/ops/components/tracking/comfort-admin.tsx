@@ -208,12 +208,12 @@ export function ComfortAdmin({
                       <td>
                         {step.status === 'COMPLETED' && step.actualFacilities.length > 0 ? (
                           <>
-                            Constatés:{' '}
+                            Constatés :{' '}
                             {step.actualFacilities.map((item) => FACILITY_LABELS[item]).join(', ')}
                           </>
                         ) : step.plannedFacilities.length > 0 ? (
                           <>
-                            Prévus:{' '}
+                            Prévus :{' '}
                             {step.plannedFacilities.map((item) => FACILITY_LABELS[item]).join(', ')}
                           </>
                         ) : (
