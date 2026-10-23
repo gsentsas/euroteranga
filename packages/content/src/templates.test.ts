@@ -56,7 +56,6 @@ describe('cargo and freight public page template (WEB-CARGO-1)', () => {
   });
 });
 
-
 const HELP_TEMPLATE_EXPECTATIONS = [
   ['baggage', 'Bagages', '/bagages'],
   ['how-it-works', 'Comment ça marche', '/comment-ca-marche'],
