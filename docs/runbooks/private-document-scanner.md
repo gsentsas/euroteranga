@@ -5,15 +5,20 @@
 This step provisions only the production-grade malware-scanning half of the
 passenger-document pipeline. It does **not** enable uploads.
 
-The API must remain:
+The API must remain disabled until both the private local directory and ClamAV
+are provisioned and verified. The selected production target is:
 
 ```
-OBJECT_STORAGE_PROVIDER=DISABLED
-MALWARE_SCANNER=DISABLED
+OBJECT_STORAGE_PROVIDER=LOCAL
+OBJECT_STORAGE_LOCAL_ROOT=/var/www/vhosts/euroteranga.com/private/passenger-documents
+MALWARE_SCANNER=CLAMAV
+CLAMAV_HOST=127.0.0.1
+CLAMAV_PORT=3310
 ```
 
-until approved private S3-compatible storage, encryption-at-rest, backup and
-retention are separately provisioned and reviewed.
+The local root must be outside `current`, `releases`, `httpdocs`,
+`public`, `static` and upload/web trees. Create it owner-only and include it
+in backup/restore and retention procedures before enabling uploads.
 
 ## Runtime
 
@@ -56,6 +61,6 @@ ClamAV is trusted only as a technical malware scanner. A clean result never
 means that a passenger document is legally valid, authentic or sufficient for
 travel.
 
-The scanner is intentionally not enabled in the API before private object
-storage is ready because the configuration contract requires storage and
-scanner to be enabled together.
+The scanner is intentionally not enabled in the API before the private local
+directory is ready because the configuration contract requires storage and
+scanner to be enabled together. No S3 service is required.
