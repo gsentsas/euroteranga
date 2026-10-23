@@ -442,18 +442,18 @@ and is merged only when CI and CodeQL are green.
 
 ## Readiness matrix (current code state, 2026-10-24)
 
-| Domain    | Code | UI  | Data | Tests | Docs | Exploitable | Why not                                                                |
-| --------- | ---- | --- | ---- | ----- | ---- | ----------- | ---------------------------------------------------------------------- |
-| Public | ✅   | ✅   | ⚠️  | ✅   | ✅   | ❌   | Code ready; B4/B5/B7 owner values, B6 commercial data, B1 PSP and B10 deployment remain |
-| CMS | ✅   | ✅   | ⚠️  | ✅   | ✅   | ⚠️  | Code/UI ready; real owner content and production activation remain external |
-| SEO | ✅   | —   | —   | ✅   | ✅   | ⚠️  | Code ready; production indexing and deployment remain explicitly controlled |
-| Booking   | ✅   | ✅  | ❌   | ✅    | ✅   | ❌          | No trip in production (F-DATA-01), no PSP (F-PAY-01)                   |
-| Client    | ✅   | ✅  | —    | ✅    | ✅   | ⚠️          | Depends on bookings; documents blocked (F-INF-03)                      |
-| OPS | ✅   | ✅   | ❌   | ✅   | ✅   | ⚠️  | Code and release hardening ready; live state still depends on root deployment B10 |
-| Crew      | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Needs trips and assignments                                            |
-| Fleet     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No vehicle in production (F-DATA-01)                                   |
-| Trips     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No trip in production (F-DATA-01)                                      |
-| Payment   | ⚠️   | ✅  | —    | ✅    | ✅   | ❌          | SANDBOX only (F-PAY-01)                                                |
-| Documents | ✅   | ✅  | —    | ✅    | ✅   | ❌          | Storage and scanner disabled (F-INF-03)                                |
-| Tracking  | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Needs trips; public availability still depends on configured trip data |
-| Finance   | ✅   | ✅  | —    | ✅    | ✅   | ⚠️          | Operational finance only; no statutory accounting                      |
+| Domain    | Code | UI  | Data | Tests | Docs | Exploitable | Why not                                                                                 |
+| --------- | ---- | --- | ---- | ----- | ---- | ----------- | --------------------------------------------------------------------------------------- |
+| Public    | ✅   | ✅  | ⚠️   | ✅    | ✅   | ❌          | Code ready; B4/B5/B7 owner values, B6 commercial data, B1 PSP and B10 deployment remain |
+| CMS       | ✅   | ✅  | ⚠️   | ✅    | ✅   | ⚠️          | Code/UI ready; real owner content and production activation remain external             |
+| SEO       | ✅   | —   | —    | ✅    | ✅   | ⚠️          | Code ready; production indexing and deployment remain explicitly controlled             |
+| Booking   | ✅   | ✅  | ❌   | ✅    | ✅   | ❌          | No trip in production (F-DATA-01), no PSP (F-PAY-01)                                    |
+| Client    | ✅   | ✅  | —    | ✅    | ✅   | ⚠️          | Depends on bookings; documents blocked (F-INF-03)                                       |
+| OPS       | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Code and release hardening ready; live state still depends on root deployment B10       |
+| Crew      | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Needs trips and assignments                                                             |
+| Fleet     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No vehicle in production (F-DATA-01)                                                    |
+| Trips     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No trip in production (F-DATA-01)                                                       |
+| Payment   | ⚠️   | ✅  | —    | ✅    | ✅   | ❌          | SANDBOX only (F-PAY-01)                                                                 |
+| Documents | ✅   | ✅  | —    | ✅    | ✅   | ❌          | Storage and scanner disabled (F-INF-03)                                                 |
+| Tracking  | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Needs trips; public availability still depends on configured trip data                  |
+| Finance   | ✅   | ✅  | —    | ✅    | ✅   | ⚠️          | Operational finance only; no statutory accounting                                       |
