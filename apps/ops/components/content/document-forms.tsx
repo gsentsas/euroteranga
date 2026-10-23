@@ -122,8 +122,8 @@ function SettingsForm() {
       <section className="ops-content-section" aria-labelledby="content-settings-privacy">
         <h3 id="content-settings-privacy">Confidentialité</h3>
         <p className="et-hint">
-          Ces valeurs sont des engagements du responsable du traitement. Laissez un champ vide
-          tant que sa valeur n’a pas été explicitement validée : elle ne sera jamais inventée.
+          Ces valeurs sont des engagements du responsable du traitement. Laissez un champ vide tant
+          que sa valeur n’a pas été explicitement validée : elle ne sera jamais inventée.
         </p>
         <OwnerTextField
           path={['privacy', 'dataController']}
