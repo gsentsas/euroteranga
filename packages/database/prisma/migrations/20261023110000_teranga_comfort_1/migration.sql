@@ -20,7 +20,7 @@ CREATE TABLE "comfort_waypoint_event" (
 
 CREATE UNIQUE INDEX "comfort_waypoint_event_trip_id_client_event_id_key"
   ON "comfort_waypoint_event"("trip_id", "client_event_id");
-CREATE INDEX "comfort_waypoint_event_trip_id_route_waypoint_id_recorded_at_id_idx"
+CREATE INDEX "comfort_waypoint_event_trip_id_route_waypoint_id_recorded_a_idx"
   ON "comfort_waypoint_event"("trip_id", "route_waypoint_id", "recorded_at", "id");
 CREATE INDEX "comfort_waypoint_event_route_waypoint_id_idx"
   ON "comfort_waypoint_event"("route_waypoint_id");
