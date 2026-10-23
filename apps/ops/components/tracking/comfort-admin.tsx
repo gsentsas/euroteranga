@@ -8,7 +8,7 @@ import type {
   TrackingTripDetail,
 } from '@euroteranga/auth-client';
 import { FormAlert, FormStatus } from '@euroteranga/ui';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { auth } from '../../lib/auth';
 import { useCan } from '../staff-access';
 
@@ -79,10 +79,13 @@ export function ComfortAdmin({
   const [facilities, setFacilities] = useState<Record<string, ComfortFacility[]>>({});
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const requestSeq = useRef(0);
 
   const load = useCallback(async () => {
+    const seq = ++requestSeq.current;
     setError(null);
     const result = await auth.admin.tracking.comfort(tripId);
+    if (seq !== requestSeq.current) return;
     if (!result.ok) {
       setError(result.error.message);
       return;
@@ -95,6 +98,9 @@ export function ComfortAdmin({
     setFacilities({});
     setNotice(null);
     void load();
+    return () => {
+      requestSeq.current += 1;
+    };
   }, [load]);
 
   const toggleFacility = (routeWaypointId: string, facility: ComfortFacility) => {
