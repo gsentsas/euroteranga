@@ -68,7 +68,7 @@ describe('pilot dataset', () => {
   });
 
   it('names its coaches "Teranga Pilote", never a name historical vehicles may hold (pilot-corridor/3)', () => {
-    expect(PILOT_DATASET_VERSION).toBe('pilot-corridor/3');
+    expect(PILOT_DATASET_VERSION).toBe('pilot-corridor/4');
     expect(PILOT_VEHICLES.map((vehicle) => [vehicle.code, vehicle.name])).toEqual([
       ['ET-COACH-001', 'Teranga Pilote 01'],
       ['ET-COACH-002', 'Teranga Pilote 02'],
