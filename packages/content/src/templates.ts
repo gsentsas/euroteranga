@@ -276,6 +276,333 @@ export const PAGE_TEMPLATES: readonly PageTemplate[] = [
     },
   },
   {
+    id: 'baggage',
+    label: 'Bagages',
+    description:
+      'Préparer, enregistrer et retrouver les bagages associés au voyage, sans inventer de franchise ni de poids.',
+    path: '/bagages',
+    document: {
+      title: 'Bagages',
+      seo: {
+        title: 'Bagages — EURO TERANGA',
+        description:
+          'Préparez vos bagages pour votre voyage EURO TERANGA : enregistrement au départ, identification et informations de suivi associées au trajet.',
+        indexable: true,
+      },
+      blocks: [
+        {
+          type: 'hero',
+          variant: 'page',
+          title: 'Préparez vos bagages',
+          lead: 'Les bagages pris en charge sont enregistrés au départ, identifiés et associés à votre voyage.',
+          journeyCard: false,
+        },
+        {
+          type: 'cards',
+          variant: 'steps',
+          title: 'Du départ à l’arrivée.',
+          intro:
+            'Cette page décrit le suivi dans la plateforme. Elle ne fixe ni franchise, ni poids maximal, ni supplément.',
+          items: [
+            {
+              title: 'Préparez votre départ',
+              text: 'Gardez les informations de votre voyage disponibles lorsque vous présentez vos bagages.',
+            },
+            {
+              title: 'Enregistrement',
+              text: 'Les bagages pris en charge au départ sont enregistrés et associés au voyage concerné.',
+            },
+            {
+              title: 'Identification',
+              text: 'L’identification permet de rattacher chaque bagage enregistré aux informations du voyage.',
+            },
+            {
+              title: 'Suivi des événements',
+              text: 'Les événements enregistrés permettent de retrouver l’historique de prise en charge dans la plateforme.',
+            },
+          ],
+        },
+        {
+          type: 'richText',
+          title: 'Les conditions applicables à votre départ',
+          body: [
+            paragraph(
+              'Les quantités, limites de poids, éventuels suppléments et règles d’acceptation ne sont pas définis par cette page. Seules les conditions communiquées pour votre départ s’appliquent.',
+            ),
+            paragraph(
+              'Si une information n’est pas affichée dans votre réservation ou votre espace client, ne la déduisez pas à partir d’un autre voyage.',
+            ),
+          ],
+        },
+        {
+          type: 'faq',
+          title: 'Questions sur les bagages',
+          items: [
+            {
+              question: 'Pourquoi les bagages sont-ils enregistrés ?',
+              answer: [
+                paragraph(
+                  'L’enregistrement relie le bagage au voyage et permet de conserver les événements de prise en charge associés.',
+                ),
+              ],
+            },
+            {
+              question: 'Cette page indique-t-elle une franchise ou un poids maximum ?',
+              answer: [
+                paragraph(
+                  'Non. Cette page ne fixe aucune franchise ni limite. Consultez uniquement les conditions communiquées pour votre départ.',
+                ),
+              ],
+            },
+            {
+              question: 'Où retrouver les informations de mon voyage ?',
+              answer: [
+                paragraph(
+                  'Votre espace client réunit votre réservation, vos passagers, vos bagages enregistrés et les informations utiles du voyage.',
+                ),
+              ],
+            },
+          ],
+        },
+        {
+          type: 'cta',
+          kicker: 'Votre voyage',
+          title: 'Retrouvez vos informations dans votre espace client.',
+          button: { label: 'Ouvrir mon espace', target: { kind: 'app', app: 'client' } },
+          tone: 'light',
+        },
+      ],
+    },
+  },
+  {
+    id: 'how-it-works',
+    label: 'Comment ça marche',
+    description: 'Le parcours voyageur, de la recherche du départ au suivi du trajet.',
+    path: '/comment-ca-marche',
+    document: {
+      title: 'Comment ça marche',
+      seo: {
+        title: 'Comment ça marche — EURO TERANGA',
+        description:
+          'Découvrez le parcours EURO TERANGA : rechercher un départ, choisir son siège, retrouver son voyage et suivre le trajet lorsqu’un suivi est activé.',
+        indexable: true,
+      },
+      blocks: [
+        {
+          type: 'hero',
+          variant: 'page',
+          title: 'Comment ça marche',
+          lead: 'De la recherche du départ à l’arrivée, la plateforme réunit les étapes utiles de votre voyage.',
+          journeyCard: false,
+        },
+        {
+          type: 'cards',
+          variant: 'steps',
+          title: 'Votre voyage, étape par étape.',
+          items: [
+            {
+              icon: 'route',
+              title: 'Trouvez votre départ',
+              text: 'La réservation affiche les départs programmés et ouverts avec leurs informations disponibles.',
+            },
+            {
+              icon: 'seat',
+              title: 'Choisissez votre place',
+              text: 'Le plan du car indique les sièges disponibles pour le voyage que vous préparez.',
+            },
+            {
+              icon: 'ticket',
+              title: 'Retrouvez votre réservation',
+              text: 'Votre espace client rassemble les informations de votre voyage et de vos passagers.',
+            },
+            {
+              icon: 'luggage',
+              title: 'Préparez vos bagages',
+              text: 'Les bagages pris en charge au départ sont enregistrés et associés au voyage.',
+              link: { label: 'Voir la page Bagages', target: { kind: 'page', path: '/bagages' } },
+            },
+            {
+              icon: 'pin',
+              title: 'Suivez le trajet',
+              text: 'Lorsqu’un suivi est activé pour le départ, le lien transmis permet de consulter sa progression.',
+            },
+          ],
+        },
+        {
+          type: 'cta',
+          kicker: 'Prochain départ',
+          title: 'Commencez par rechercher votre voyage.',
+          text: 'Consultez les départs ouverts et les places disponibles.',
+          button: { label: 'Rechercher un voyage', target: { kind: 'app', app: 'booking' } },
+          tone: 'light',
+        },
+      ],
+    },
+  },
+  {
+    id: 'faq',
+    label: 'FAQ',
+    description: 'Les réponses aux questions fréquentes sur la réservation et le voyage.',
+    path: '/faq',
+    document: {
+      title: 'Questions fréquentes',
+      seo: {
+        title: 'Questions fréquentes — EURO TERANGA',
+        description:
+          'Retrouvez les réponses aux questions fréquentes sur les départs, le choix du siège, l’espace client, les bagages et le suivi du trajet.',
+        indexable: true,
+      },
+      blocks: [
+        {
+          type: 'hero',
+          variant: 'page',
+          title: 'Questions fréquentes',
+          lead: 'Les réponses essentielles pour préparer et retrouver les informations de votre voyage.',
+          journeyCard: false,
+        },
+        {
+          type: 'faq',
+          anchor: 'questions',
+          title: 'Préparer votre voyage.',
+          items: [
+            {
+              question: 'Comment savoir si un départ est disponible ?',
+              answer: [
+                paragraph(
+                  'L’espace de réservation affiche les départs programmés et ouverts ainsi que les places encore disponibles.',
+                ),
+              ],
+            },
+            {
+              question: 'Puis-je choisir ma place ?',
+              answer: [
+                paragraph(
+                  'Oui. Pour un départ ouvert à la réservation, le plan du car indique les sièges disponibles.',
+                ),
+              ],
+            },
+            {
+              question: 'Où retrouver ma réservation ?',
+              answer: [
+                paragraph(
+                  'Votre espace client réunit votre réservation, vos passagers, vos bagages enregistrés et les informations utiles du voyage.',
+                ),
+              ],
+            },
+            {
+              question: 'Où consulter les conditions concernant mes bagages ?',
+              answer: [
+                paragraph(
+                  'La page Bagages explique le fonctionnement de l’enregistrement. Les conditions applicables restent celles communiquées pour votre départ.',
+                ),
+              ],
+            },
+            {
+              question: 'Comment suivre mon trajet ?',
+              answer: [
+                paragraph(
+                  'Lorsqu’un suivi est activé pour votre départ, ouvrez le lien de suivi qui vous a été transmis. Les informations affichées dépendent du suivi configuré pour ce voyage.',
+                ),
+              ],
+            },
+          ],
+        },
+        {
+          type: 'cta',
+          title: 'Vous préparez un départ ?',
+          text: 'Consultez les voyages ouverts à la réservation et leurs informations à jour.',
+          button: { label: 'Rechercher un voyage', target: { kind: 'app', app: 'booking' } },
+          tone: 'light',
+        },
+      ],
+    },
+  },
+  {
+    id: 'about',
+    label: 'À propos',
+    description: 'La liaison Paris ↔ Dakar et les services réunis dans la plateforme EURO TERANGA.',
+    path: '/a-propos',
+    document: {
+      title: 'À propos d’EURO TERANGA',
+      seo: {
+        title: 'À propos — EURO TERANGA',
+        description:
+          'Découvrez EURO TERANGA et son parcours voyageur entre Paris et Dakar : réservation, siège, espace client, bagages et suivi du trajet.',
+        indexable: true,
+      },
+      blocks: [
+        {
+          type: 'hero',
+          variant: 'page',
+          title: 'À propos d’EURO TERANGA',
+          lead: 'Une expérience de voyage pensée autour de la liaison Paris ↔ Dakar et des informations utiles avant, pendant et après le départ.',
+          journeyCard: false,
+        },
+        {
+          type: 'textImage',
+          kicker: 'Paris ↔ Dakar',
+          title: 'Une route, un parcours voyageur.',
+          body: [
+            paragraph(
+              'EURO TERANGA réunit dans une même plateforme la recherche des départs, la réservation, le choix du siège, l’espace client, les bagages enregistrés et le suivi du trajet lorsqu’il est activé.',
+            ),
+            paragraph(
+              'Les dates, places, tarifs, autocars et itinéraires affichés proviennent des données opérationnelles du voyage concerné.',
+            ),
+          ],
+          illustration: 'route',
+          imageSide: 'end',
+        },
+        {
+          type: 'cards',
+          variant: 'highlights',
+          title: 'Des informations reliées au voyage réel.',
+          items: [
+            {
+              icon: 'clock',
+              title: 'Départs programmés',
+              text: 'Les pages voyage affichent les départs réellement ouverts et leurs horaires prévus.',
+            },
+            {
+              icon: 'bus',
+              title: 'Autocars en service',
+              text: 'Places et équipements proviennent de la flotte enregistrée dans la plateforme.',
+            },
+            {
+              icon: 'luggage',
+              title: 'Bagages enregistrés',
+              text: 'Les bagages pris en charge sont associés au voyage et à leur historique d’événements.',
+            },
+            {
+              icon: 'pin',
+              title: 'Suivi configuré',
+              text: 'Le suivi public reflète uniquement les informations rendues visibles pour le trajet.',
+            },
+          ],
+        },
+        {
+          type: 'textImage',
+          tone: 'navy',
+          kicker: 'L’esprit Teranga',
+          title: 'La Teranga à chaque étape',
+          body: [
+            paragraph(
+              'Plus qu’un trajet : une route humaine entre l’Europe et l’Afrique, avec des informations réunies pour préparer le départ et suivre le voyage.',
+            ),
+          ],
+          illustration: 'coach',
+          imageSide: 'end',
+        },
+        {
+          type: 'cta',
+          title: 'Découvrez les prochains départs.',
+          button: { label: 'Rechercher un voyage', target: { kind: 'app', app: 'booking' } },
+          tone: 'light',
+        },
+      ],
+    },
+  },
+  {
     id: 'cargo-freight',
     label: 'Colis & fret',
     description:
