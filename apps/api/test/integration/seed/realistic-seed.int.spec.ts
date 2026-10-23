@@ -1065,6 +1065,7 @@ describe('realistic seed: resumes the partial production apply (isolated databas
     ).toEqual([
       'amenities ET-COACH-001',
       'amenities ET-COACH-002',
+      'operator tracking',
       'vehicle ET-COACH-001',
       'vehicle ET-COACH-002',
     ]);
@@ -1088,13 +1089,10 @@ describe('realistic seed: resumes the partial production apply (isolated databas
       detail: 'operator navigation kept',
     });
 
-    // The apply creates what the dry run planned plus the synthetic tracking
-    // operator identity. The dry run never creates identities by design.
+    // The apply creates exactly what the dry run planned.
     const applied = await h.run(staging);
     expect(applied.hasConflicts).toBe(false);
-    expect(
-      keysOf(applied, ['created', 'updated']).filter((key) => key !== 'operator tracking'),
-    ).toEqual(pending);
+    expect(keysOf(applied, ['created', 'updated'])).toEqual(pending);
     expect(line(applied, 'operator', 'tracking')).toMatchObject({
       layer: 'catalogue',
       outcome: 'created',
