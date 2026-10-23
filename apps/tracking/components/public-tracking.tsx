@@ -42,13 +42,7 @@ const formatAt = (value: string | null) =>
       }).format(new Date(value))
     : '—';
 
-function ComfortStepCard({
-  title,
-  step,
-}: {
-  title: string;
-  step: ComfortStep | null;
-}) {
+function ComfortStepCard({ title, step }: { title: string; step: ComfortStep | null }) {
   if (!step) {
     return (
       <div className="tracking-event">
