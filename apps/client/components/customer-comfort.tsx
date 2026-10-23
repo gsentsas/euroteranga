@@ -33,13 +33,7 @@ const formatAt = (value: string | null) =>
       }).format(new Date(value))
     : '—';
 
-function StepSummary({
-  title,
-  step,
-}: {
-  title: string;
-  step: ComfortStep | null;
-}) {
+function StepSummary({ title, step }: { title: string; step: ComfortStep | null }) {
   if (!step) {
     return (
       <div className="et-comfort-step">
@@ -67,9 +61,7 @@ function StepSummary({
       <span>
         {step.name} — {step.locality}
       </span>
-      <span>
-        Arrivée indicative : {formatAt(step.plannedArrivalAt)}
-      </span>
+      <span>Arrivée indicative : {formatAt(step.plannedArrivalAt)}</span>
       {step.suggestedDwellMinutes ? (
         <span>Pause indicative : {step.suggestedDwellMinutes} min</span>
       ) : null}
@@ -103,10 +95,7 @@ export function CustomerComfort({ bookingReference }: { bookingReference: string
   };
 
   return (
-    <div
-      className="et-comfort-summary"
-      data-testid={`customer-comfort-${bookingReference}`}
-    >
+    <div className="et-comfort-summary" data-testid={`customer-comfort-${bookingReference}`}>
       <div className="et-actions">
         <div>
           <h4>Suivi du voyage</h4>
