@@ -196,8 +196,8 @@ export function CustomerCargo() {
         </button>
       </div>
       <p>
-        Créez une demande de colis ou de fret Paris ↔ Dakar, avec ou sans réservation passager.
-        Le prix affiché ici provient uniquement d’un devis émis par EURO TERANGA.
+        Créez une demande de colis ou de fret Paris ↔ Dakar, avec ou sans réservation passager. Le
+        prix affiché ici provient uniquement d’un devis émis par EURO TERANGA.
       </p>
       <FormAlert message={error} />
       {notice ? (
