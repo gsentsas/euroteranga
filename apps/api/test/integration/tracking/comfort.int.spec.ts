@@ -194,6 +194,39 @@ describe('TERANGA-COMFORT-1 traveller comfort projection', () => {
         where: { id: first.body.event.id as string },
       }),
     ).rejects.toThrow();
+
+    const orderingWaypointId = fixture.wp[2]!;
+    const orderedFirst = await db(t.app).comfortWaypointEvent.create({
+      data: {
+        tripId,
+        routeWaypointId: orderingWaypointId,
+        type: 'CONFIRMED',
+        actualFacilities: [],
+        clientEventId: 'comfort-order-confirm-0001',
+        payloadFingerprint: '1'.repeat(64),
+        occurredAt: new Date(),
+        recordedAt: new Date('2099-01-01T00:00:00.000Z'),
+        recordedByIdentityId: manager.id,
+      },
+      select: { recordedAt: true },
+    });
+    const orderedTerminal = await db(t.app).comfortWaypointEvent.create({
+      data: {
+        tripId,
+        routeWaypointId: orderingWaypointId,
+        type: 'CANCELLED',
+        actualFacilities: [],
+        clientEventId: 'comfort-order-cancel-0001',
+        payloadFingerprint: '2'.repeat(64),
+        occurredAt: new Date(),
+        recordedAt: new Date('2000-01-01T00:00:00.000Z'),
+        recordedByIdentityId: manager.id,
+      },
+      select: { recordedAt: true },
+    });
+    expect(orderedTerminal.recordedAt.getTime()).toBeGreaterThan(
+      orderedFirst.recordedAt.getTime(),
+    );
   }, 120_000);
 
   it('publishes traveller-safe comfort with a public tracking capability', async () => {
@@ -236,6 +269,48 @@ describe('TERANGA-COMFORT-1 traveller comfort projection', () => {
     expect(serialized).not.toContain('recordedByIdentityId');
     expect(serialized).not.toContain(manager.email);
     expect(serialized).not.toContain(alice.email);
+
+    const checkpointWaypoint = await db(t.app).routeWaypoint.findUniqueOrThrow({
+      where: { id: fixture.checkpointWaypointId! },
+      select: {
+        checkpoint: {
+          select: { id: true, code: true },
+        },
+      },
+    });
+    await db(t.app).checkpoint.update({
+      where: { id: checkpointWaypoint.checkpoint!.id },
+      data: { travellerVisible: false },
+    });
+
+    const hiddenObservedAt = new Date(Date.now() + 1_000).toISOString();
+    const hiddenObservation = await adminApi(manager).post(
+      '/tracking/trips/' + fixture.tripId + '/observations',
+      {
+        source: 'CHECKPOINT',
+        clientEventId: 'comfort-hidden-checkpoint-0001',
+        observedAt: hiddenObservedAt,
+        routeWaypointId: fixture.checkpointWaypointId!,
+        label: 'Point technique interne',
+      },
+    );
+    expect(hiddenObservation.status, hiddenObservation.text).toBe(201);
+
+    const hiddenPublic = await client(t.app, 'staff').get(
+      '/v1/tracking/' + encodeURIComponent(token),
+    );
+    expect(hiddenPublic.status, hiddenPublic.text).toBe(200);
+    expect(hiddenPublic.body.comfort.lastUpdatedAt).toBe(publicResponse.body.comfort.lastUpdatedAt);
+    expect(hiddenPublic.body.lastUpdatedAt).toBe(publicResponse.body.lastUpdatedAt);
+    expect(JSON.stringify(hiddenPublic.body.comfort)).not.toContain(
+      checkpointWaypoint.checkpoint!.code,
+    );
+
+    const hiddenAdmin = await adminApi(manager).get(
+      '/tracking/trips/' + fixture.tripId + '/comfort',
+    );
+    expect(hiddenAdmin.status, hiddenAdmin.text).toBe(200);
+    expect(hiddenAdmin.body.lastUpdatedAt).toBe(hiddenObservedAt);
   }, 120_000);
 
   it('uses the real departure lifecycle for completed, cancelled and skipped waypoint progress', async () => {
