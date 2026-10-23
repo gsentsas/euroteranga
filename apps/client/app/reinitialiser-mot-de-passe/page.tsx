@@ -1,7 +1,7 @@
 import { JourneyShell } from '@euroteranga/ui';
 import type { Metadata } from 'next';
 import { ResetPasswordForm } from '../../components/reset-password-form';
-import { publicEnv } from '../../lib/env';
+import { journeyLinks, publicEnv } from '../../lib/env';
 
 export const metadata: Metadata = { title: 'Nouveau mot de passe — EURO TERANGA' };
 
@@ -12,6 +12,7 @@ export default function Page() {
       title="Choisissez un nouveau mot de passe."
       subtitle="Créez une phrase de passe longue et unique pour sécuriser votre espace voyage."
       environment={publicEnv.NEXT_PUBLIC_APP_ENV}
+      links={journeyLinks}
       current="client"
     >
       <section className="et-auth-panel" aria-labelledby="reset-password-panel">

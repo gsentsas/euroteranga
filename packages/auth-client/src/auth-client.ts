@@ -1571,9 +1571,23 @@ export interface Baggage {
   /** Exact kilograms, always three decimals; null before STAFF measurement. */
   measuredWeightKg: string | null;
   allowance: {
+    status: 'NOT_CONFIGURED' | 'PENDING_WEIGHT' | 'INCLUDED' | 'EXCESS_PRICED' | 'EXCESS_UNPRICED';
+    pieceOrdinal: number | null;
+    policy: {
+      code: string;
+      name: string;
+      version: number;
+      includedPieces: number;
+      includedWeightKgPerPiece: string;
+      fareTable: { code: string; version: number };
+    } | null;
     includedWeightKg: string | null;
     excessWeightKg: string | null;
-    excessCharge: { amountMinor: string; currencyCode: string } | null;
+    excessCharge: {
+      amountMinor: string;
+      currencyCode: string;
+      currencyMinorUnit: number;
+    } | null;
   };
   passenger: { reference: string; givenName: string; familyName: string };
   booking: {
@@ -1632,6 +1646,92 @@ export interface BaggageListOptions {
   exceptionStatus?: BaggageExceptionStatus;
   createdFrom?: string;
   createdTo?: string;
+}
+
+export type BaggagePolicyVersionStatus = 'DRAFT' | 'PUBLISHED' | 'RETIRED';
+
+export interface BaggageExcessTier {
+  id: string;
+  code: string;
+  label: string;
+  maxExcessWeightKg: string;
+  chargeMinor: string;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BaggagePolicyVersion {
+  id: string;
+  version: number;
+  status: BaggagePolicyVersionStatus;
+  includedPieces: number;
+  includedWeightKgPerPiece: string;
+  publishedAt: string | null;
+  retiredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  fareTableVersion: {
+    id: string;
+    version: number;
+    status: FareTableVersionStatus;
+    fareTable: {
+      id: string;
+      code: string;
+      name: string;
+      currencyCode: string;
+      currencyMinorUnit: number;
+    };
+  };
+  tiers: BaggageExcessTier[];
+  baggageCount: number;
+}
+
+export interface BaggagePolicy {
+  id: string;
+  code: string;
+  name: string;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  versions: BaggagePolicyVersion[];
+}
+
+export interface BaggagePolicyListOptions {
+  cursor?: string;
+  limit?: number;
+  active?: boolean;
+}
+
+export interface BaggagePolicyCreateInput {
+  code: string;
+  name: string;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  active: boolean;
+}
+
+export interface BaggagePolicyUpdateInput {
+  name?: string;
+  active?: boolean;
+}
+
+export interface BaggagePolicyVersionCreateInput {
+  fareTableVersionId: string;
+  includedPieces: number;
+  includedWeightKgPerPiece: string;
+}
+
+export interface BaggagePolicyTiersInput {
+  tiers: Array<{
+    code: string;
+    label: string;
+    maxExcessWeightKg: string;
+    chargeMinor: string;
+    position: number;
+  }>;
 }
 
 export type RoadFreightDirection = 'PAR_DKR' | 'DKR_PAR';
@@ -1917,6 +2017,88 @@ export interface PublicRoadFreightTracking {
     observedAt: string;
   } | null;
 }
+
+export interface CustomerRoadFreightTimelineEvent {
+  sequence: number;
+  status: PublicRoadFreightTrackingStatus;
+  occurredAt: string;
+  location: {
+    sequence: number;
+    kind: 'STOP' | 'CHECKPOINT';
+    code: string;
+    name: string;
+  } | null;
+}
+
+export interface CustomerRoadFreightQuoteLine {
+  kind: RoadFreightQuoteLineKind;
+  label: string;
+  amountMinor: string;
+  position: number;
+}
+
+export interface CustomerRoadFreightQuote {
+  reference: string;
+  version: number;
+  status: Exclude<RoadFreightQuoteStatus, 'DRAFT'>;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  totalMinor: string;
+  snapshot: {
+    direction: RoadFreightDirection;
+    weightKg: string;
+    volumeLiters: number;
+    packageCount: number;
+    fragile: boolean;
+    professional: boolean;
+    pickupRequired: boolean;
+    deliveryRequired: boolean;
+    shipmentUpdatedAt: string;
+  };
+  lines: CustomerRoadFreightQuoteLine[];
+  issuedAt: string;
+  acceptedAt: string | null;
+  cancelledAt: string | null;
+  supersededAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerRoadFreightShipment {
+  reference: string;
+  direction: RoadFreightDirection;
+  status: PublicRoadFreightTrackingStatus;
+  sender: { name: string; contact: string };
+  recipient: { name: string; contact: string };
+  weightKg: string;
+  volumeLiters: number;
+  packageCount: number;
+  dimensionsCm: { length: number; width: number; height: number } | null;
+  declaredContents: string;
+  declaredValue: RoadFreightDeclaredValue | null;
+  fragile: boolean;
+  professional: boolean;
+  pickupRequired: boolean;
+  deliveryRequired: boolean;
+  booking: { reference: string } | null;
+  trip: {
+    reference: string;
+    status: TripStatus;
+    route: { code: string; name: string };
+    plannedDepartureAt: string | null;
+    plannedArrivalAt: string | null;
+  } | null;
+  latestQuote: CustomerRoadFreightQuote | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerRoadFreightShipmentDetail extends CustomerRoadFreightShipment {
+  lastUpdatedAt: string;
+  timeline: CustomerRoadFreightTimelineEvent[];
+}
+
+export type CustomerRoadFreightCreateInput = Omit<RoadFreightCreateInput, 'customerIdentityId'>;
 
 /** PR-14: the six server-derived check-in gates of one BookingPassenger. */
 export type CheckInGate = 'BOOKING' | 'PAYMENT' | 'DOCUMENTS' | 'COMPLIANCE' | 'SEAT' | 'BAGGAGE';
@@ -2352,6 +2534,98 @@ export interface BorderEventResult {
   event: BorderTripView['events'][number];
 }
 
+export type ComfortWaypointStatus = 'PLANNED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'SKIPPED';
+
+export type ComfortFacility = 'RESTROOM' | 'SHOWER' | 'FOOD' | 'SECURE_PARKING' | 'FUEL';
+
+export type ComfortWaypointKind =
+  | 'STOP'
+  | 'BREAK'
+  | 'MEAL'
+  | 'SHOWER'
+  | 'REST'
+  | 'OVERNIGHT'
+  | 'FUEL'
+  | 'BORDER'
+  | 'FERRY'
+  | 'TECHNICAL';
+
+export interface ComfortStep {
+  sequence: number;
+  kind: ComfortWaypointKind;
+  code: string;
+  name: string;
+  locality: string;
+  status: ComfortWaypointStatus;
+  isPast: boolean;
+  plannedArrivalAt: string | null;
+  plannedDepartureAt: string | null;
+  suggestedDwellMinutes: number | null;
+  plannedFacilities: ComfortFacility[];
+  actualFacilities: ComfortFacility[];
+  statusUpdatedAt: string | null;
+}
+
+export interface ComfortProjection {
+  tripReference: string;
+  tripStatus: TripStatus;
+  route: { code: string; name: string };
+  plannedDepartureAt: string | null;
+  plannedArrivalAt: string | null;
+  progressSequence: number;
+  lastUpdatedAt: string | null;
+  currentStep: ComfortStep | null;
+  nextStep: ComfortStep | null;
+  nextPause: ComfortStep | null;
+  steps: ComfortStep[];
+}
+
+export interface CustomerComfortProjection extends ComfortProjection {
+  bookingReference: string;
+}
+
+export interface AdminComfortStep extends ComfortStep {
+  routeWaypointId: string;
+  travellerVisible: boolean;
+}
+
+export interface ComfortEvent {
+  id: string;
+  tripId: string;
+  routeWaypointId: string;
+  type: Exclude<ComfortWaypointStatus, 'PLANNED'>;
+  actualFacilities: ComfortFacility[];
+  clientEventId: string;
+  occurredAt: string;
+  recordedAt: string;
+  recordedByIdentityId: string;
+  waypoint: {
+    sequence: number;
+    code: string | null;
+    name: string | null;
+    locality: string | null;
+  };
+}
+
+export interface AdminComfortProjection extends Omit<ComfortProjection, 'steps'> {
+  tripId: string;
+  steps: AdminComfortStep[];
+  events: ComfortEvent[];
+}
+
+export interface ComfortEventInput {
+  clientEventId: string;
+  routeWaypointId: string;
+  type: Exclude<ComfortWaypointStatus, 'PLANNED'>;
+  occurredAt: string;
+  actualFacilities?: ComfortFacility[];
+}
+
+export interface ComfortEventResult {
+  created: boolean;
+  event: ComfortEvent;
+}
+
 export type TrackingVisibility = 'HIDDEN' | 'CHECKPOINT_ONLY' | 'APPROXIMATE' | 'PRECISE';
 export type TrackingProviderStatus = 'UP' | 'DEGRADED' | 'STALE' | 'UNAVAILABLE';
 export type TrackingObservationSource = 'GPS' | 'CHECKPOINT' | 'CREW' | 'OPS' | 'SYSTEM';
@@ -2477,6 +2751,7 @@ export interface PublicTrackingProjection {
   providerStatus: TrackingProviderStatus;
   lastUpdatedAt: string | null;
   checkpoint: TrackingCheckpointProjection | null;
+  comfort: ComfortProjection;
   position: {
     observedAt: string;
     latitude: number;
@@ -3588,6 +3863,11 @@ export function createAuthClient(baseUrl: string) {
           ),
         booking: (reference: string) =>
           call<CustomerBooking>('GET', `/v1/booking/bookings/${encodeURIComponent(reference)}`),
+        comfort: (reference: string) =>
+          call<CustomerComfortProjection>(
+            'GET',
+            `/v1/booking/bookings/${encodeURIComponent(reference)}/comfort`,
+          ),
         cancel: (reference: string) =>
           withCsrf<CustomerBooking>(
             'customer',
@@ -3686,6 +3966,32 @@ export function createAuthClient(baseUrl: string) {
           call<BaggageDetail>('GET', `/v1/booking/baggage/${encodeURIComponent(reference)}`),
         baggageQr: (reference: string) =>
           call<BaggageQr>('GET', `/v1/booking/baggage/${encodeURIComponent(reference)}/qr`),
+        /** CLIENT-CARGO-1: only freight owned by the authenticated CUSTOMER. */
+        cargo: {
+          list: (options: { cursor?: string; limit?: number } = {}) =>
+            call<Page<CustomerRoadFreightShipment>>(
+              'GET',
+              `/v1/booking/cargo?${query({ cursor: options.cursor, limit: options.limit })}`,
+            ),
+          detail: (reference: string) =>
+            call<CustomerRoadFreightShipmentDetail>(
+              'GET',
+              `/v1/booking/cargo/${encodeURIComponent(reference)}`,
+            ),
+          create: (input: CustomerRoadFreightCreateInput) =>
+            withCsrf<CustomerRoadFreightShipmentDetail>('customer', '/v1/booking/cargo', input),
+          quotes: (reference: string) =>
+            call<{ items: CustomerRoadFreightQuote[] }>(
+              'GET',
+              `/v1/booking/cargo/${encodeURIComponent(reference)}/quotes`,
+            ),
+          acceptQuote: (reference: string, quoteReference: string, expectedUpdatedAt?: string) =>
+            withCsrf<CustomerRoadFreightQuote>(
+              'customer',
+              `/v1/booking/cargo/${encodeURIComponent(reference)}/quotes/${encodeURIComponent(quoteReference)}/accept`,
+              expectedUpdatedAt ? { expectedUpdatedAt } : {},
+            ),
+        },
         /** PR-14: seats, six gates and check-ins of an owned booking (no side effect). */
         checkInOverview: (bookingReference: string) =>
           call<BookingCheckInOverview>(
@@ -4134,6 +4440,44 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<AdminFareTable>(
             'staff',
             `/v1/admin/pricing/fare-tables/${encodeURIComponent(fareTableId)}/versions/${encodeURIComponent(versionId)}/publish`,
+          ),
+      },
+      baggagePolicies: {
+        list: (options: BaggagePolicyListOptions = {}) =>
+          call<Page<BaggagePolicy>>(
+            'GET',
+            `/v1/admin/baggage-policies?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              active: options.active === undefined ? undefined : String(options.active),
+            })}`,
+          ),
+        detail: (policyId: string) =>
+          call<BaggagePolicy>('GET', `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}`),
+        create: (input: BaggagePolicyCreateInput) =>
+          withCsrf<BaggagePolicy>('staff', '/v1/admin/baggage-policies', input),
+        update: (policyId: string, input: BaggagePolicyUpdateInput) =>
+          withCsrf<BaggagePolicy>(
+            'staff',
+            `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}`,
+            input,
+          ),
+        createVersion: (policyId: string, input: BaggagePolicyVersionCreateInput) =>
+          withCsrf<BaggagePolicy>(
+            'staff',
+            `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}/versions`,
+            input,
+          ),
+        replaceTiers: (policyId: string, versionId: string, input: BaggagePolicyTiersInput) =>
+          withCsrf<BaggagePolicy>(
+            'staff',
+            `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}/versions/${encodeURIComponent(versionId)}/tiers`,
+            input,
+          ),
+        publishVersion: (policyId: string, versionId: string) =>
+          withCsrf<BaggagePolicy>(
+            'staff',
+            `/v1/admin/baggage-policies/${encodeURIComponent(policyId)}/versions/${encodeURIComponent(versionId)}/publish`,
           ),
       },
       bookings: {
@@ -4805,6 +5149,17 @@ export function createAuthClient(baseUrl: string) {
         trips: () => call<{ items: TrackingTripSummary[] }>('GET', '/v1/admin/tracking/trips'),
         trip: (tripId: string) =>
           call<TrackingTripDetail>('GET', '/v1/admin/tracking/trips/' + encodeURIComponent(tripId)),
+        comfort: (tripId: string) =>
+          call<AdminComfortProjection>(
+            'GET',
+            '/v1/admin/tracking/trips/' + encodeURIComponent(tripId) + '/comfort',
+          ),
+        recordComfort: (tripId: string, input: ComfortEventInput) =>
+          withCsrf<ComfortEventResult>(
+            'staff',
+            '/v1/admin/tracking/trips/' + encodeURIComponent(tripId) + '/comfort/events',
+            input,
+          ),
         devices: () => call<{ items: TrackingDevice[] }>('GET', '/v1/admin/tracking/devices'),
         createDevice: (input: { vehicleId: string; providerKey: string; externalId: string }) =>
           withCsrf<TrackingDevice>('staff', '/v1/admin/tracking/devices', input),

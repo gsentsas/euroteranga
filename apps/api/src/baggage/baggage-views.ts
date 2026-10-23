@@ -22,6 +22,27 @@ const subjectSelect = {
 
 export const baggageSummaryInclude = {
   bookingPassenger: { select: subjectSelect },
+  baggagePolicyVersion: {
+    select: {
+      version: true,
+      includedPieces: true,
+      includedWeightKgPerPiece: true,
+      baggagePolicy: {
+        select: {
+          code: true,
+          name: true,
+          currencyCode: true,
+          currencyMinorUnit: true,
+        },
+      },
+      fareTableVersion: {
+        select: {
+          version: true,
+          fareTable: { select: { code: true } },
+        },
+      },
+    },
+  },
 } as const satisfies Prisma.BaggageInclude;
 
 export const baggageEventSelect = {
@@ -71,14 +92,40 @@ export function baggageSummaryView(row: BaggageSummaryRow) {
     exceptionStatus: row.exceptionStatus,
     measuredWeightKg: decimal(row.measuredWeightKg),
     allowance: {
+      status: !row.baggagePolicyVersion
+        ? ('NOT_CONFIGURED' as const)
+        : row.measuredWeightKg === null
+          ? ('PENDING_WEIGHT' as const)
+          : row.excessWeightKg?.toFixed(3) === '0.000'
+            ? ('INCLUDED' as const)
+            : row.excessChargeMinor !== null
+              ? ('EXCESS_PRICED' as const)
+              : ('EXCESS_UNPRICED' as const),
+      pieceOrdinal: row.allowancePieceOrdinal,
+      policy: row.baggagePolicyVersion
+        ? {
+            code: row.baggagePolicyVersion.baggagePolicy.code,
+            name: row.baggagePolicyVersion.baggagePolicy.name,
+            version: row.baggagePolicyVersion.version,
+            includedPieces: row.baggagePolicyVersion.includedPieces,
+            includedWeightKgPerPiece: row.baggagePolicyVersion.includedWeightKgPerPiece.toFixed(3),
+            fareTable: {
+              code: row.baggagePolicyVersion.fareTableVersion.fareTable.code,
+              version: row.baggagePolicyVersion.fareTableVersion.version,
+            },
+          }
+        : null,
       includedWeightKg: decimal(row.includedWeightKg),
       excessWeightKg: decimal(row.excessWeightKg),
       excessCharge:
-        row.excessChargeMinor === null || row.excessChargeCurrencyCode === null
+        row.excessChargeMinor === null ||
+        row.excessChargeCurrencyCode === null ||
+        row.excessChargeCurrencyMinorUnit === null
           ? null
           : {
               amountMinor: row.excessChargeMinor.toString(),
               currencyCode: row.excessChargeCurrencyCode,
+              currencyMinorUnit: row.excessChargeCurrencyMinorUnit,
             },
     },
     passenger: row.bookingPassenger.passenger,

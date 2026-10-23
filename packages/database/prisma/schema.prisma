@@ -86,6 +86,16 @@ enum TerangaFacility {
   @@map("teranga_facility")
 }
 
+
+enum ComfortWaypointEventType {
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  SKIPPED
+
+  @@map("comfort_waypoint_event_type")
+}
+
 enum FareTableVersionStatus {
   DRAFT
   PUBLISHED
@@ -554,6 +564,15 @@ enum BaggageEventType {
   @@map("baggage_event_type")
 }
 
+
+enum BaggagePolicyVersionStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+
+  @@map("baggage_policy_version_status")
+}
+
 /// PR-16: administrative lifecycle of one operational regulatory permit.
 /// Expiration is derived from the validity dates and is never persisted.
 
@@ -762,6 +781,7 @@ model AuthIdentity {
   trackingConfigsCreated           TripTrackingConfig[]     @relation("TrackingConfigCreator")
   trackingConfigsUpdated           TripTrackingConfig[]     @relation("TrackingConfigUpdater")
   trackingObservationsCreated      TrackingObservation[]    @relation("TrackingObservationActor")
+  comfortEventsRecorded             ComfortWaypointEvent[]   @relation("ComfortWaypointEventRecorder")
   trackingTokensCreated            TrackingPublicToken[]    @relation("TrackingPublicTokenCreator")
   trackingTokensRevoked            TrackingPublicToken[]    @relation("TrackingPublicTokenRevoker")
   trackingDevicesCreated           TrackingDevice[]         @relation("TrackingDeviceCreator")
@@ -1194,6 +1214,7 @@ model RouteWaypoint {
   baggageEvents        BaggageEvent[]
   roadFreightEvents     RoadFreightShipmentEvent[]
   trackingObservations TrackingObservation[]
+  comfortEvents        ComfortWaypointEvent[]
   borderEvents         BorderEvent[]
   incidents            Incident[]
 
@@ -1323,6 +1344,7 @@ model Trip {
   trackingConfig          TripTrackingConfig?
   trackingObservations    TrackingObservation[]
   trackingPublicTokens    TrackingPublicToken[]
+  comfortEvents           ComfortWaypointEvent[]
   borderEvents            BorderEvent[]
   incidents               Incident[]
   financeRevenues         TripRevenue[]
@@ -1397,6 +1419,32 @@ model TripWaypointTiming {
   @@unique([tripId, routeWaypointId])
   @@index([routeWaypointId])
   @@map("trip_waypoint_timing")
+}
+
+/// TERANGA-COMFORT-1: append-only operational truth for one trip waypoint.
+/// PLANNED is derived when no event exists; this stream only records explicit
+/// confirmations, completions, cancellations and skips.
+model ComfortWaypointEvent {
+  id                   String                   @id @default(uuid(7)) @db.Uuid
+  tripId               String                   @map("trip_id") @db.Uuid
+  routeWaypointId      String                   @map("route_waypoint_id") @db.Uuid
+  type                 ComfortWaypointEventType
+  actualFacilities     TerangaFacility[]        @default([]) @map("actual_facilities")
+  clientEventId        String                   @map("client_event_id") @db.VarChar(64)
+  payloadFingerprint   String                   @map("payload_fingerprint") @db.Char(64)
+  occurredAt           DateTime                 @map("occurred_at") @db.Timestamptz(3)
+  recordedAt           DateTime                 @default(now()) @map("recorded_at") @db.Timestamptz(3)
+  recordedByIdentityId String                   @map("recorded_by_identity_id") @db.Uuid
+
+  trip          Trip          @relation(fields: [tripId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  routeWaypoint RouteWaypoint @relation(fields: [routeWaypointId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  recordedBy    AuthIdentity  @relation("ComfortWaypointEventRecorder", fields: [recordedByIdentityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tripId, clientEventId])
+  @@index([tripId, routeWaypointId, recordedAt, id])
+  @@index([routeWaypointId])
+  @@index([recordedByIdentityId])
+  @@map("comfort_waypoint_event")
 }
 
 /// Stable identity of a seat-map model (PR-07). Its physical layout belongs
@@ -1498,8 +1546,9 @@ model FareTableVersion {
 
   fareTable    FareTable    @relation(fields: [fareTableId], references: [id], onDelete: Restrict)
   routeVersion RouteVersion @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
-  entries      FareEntry[]
-  trips        Trip[]
+  entries               FareEntry[]
+  trips                 Trip[]
+  baggagePolicyVersions BaggagePolicyVersion[]
 
   @@unique([fareTableId, version])
   @@index([routeVersionId])
@@ -1640,21 +1689,86 @@ model Baggage {
   /// never populates them and never creates a payment from them.
   includedWeightKg         Decimal?                @map("included_weight_kg") @db.Decimal(6, 3)
   excessWeightKg           Decimal?                @map("excess_weight_kg") @db.Decimal(6, 3)
-  excessChargeMinor        BigInt?                 @map("excess_charge_minor")
-  excessChargeCurrencyCode String?                 @map("excess_charge_currency_code") @db.VarChar(3)
-  createdAt                DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  baggagePolicyVersionId         String?                 @map("baggage_policy_version_id") @db.Uuid
+  allowancePieceOrdinal          Int?                    @map("allowance_piece_ordinal")
+  excessChargeMinor              BigInt?                 @map("excess_charge_minor")
+  excessChargeCurrencyCode       String?                 @map("excess_charge_currency_code") @db.VarChar(3)
+  excessChargeCurrencyMinorUnit  Int?                    @map("excess_charge_currency_minor_unit")
+  createdAt                      DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  bookingPassenger BookingPassenger @relation(fields: [bookingId, passengerId], references: [bookingId, passengerId], onDelete: Restrict, map: "baggage_booking_passenger_fkey")
-  events           BaggageEvent[]
+  bookingPassenger    BookingPassenger      @relation(fields: [bookingId, passengerId], references: [bookingId, passengerId], onDelete: Restrict, map: "baggage_booking_passenger_fkey")
+  baggagePolicyVersion BaggagePolicyVersion? @relation(fields: [baggagePolicyVersionId], references: [id], onDelete: Restrict)
+  events              BaggageEvent[]
   incidents        Incident[]
   financeRevenues  TripRevenue[]
 
   @@index([bookingId, passengerId, id])
+  @@index([baggagePolicyVersionId])
   @@index([lifecycleStatus, id])
   @@index([exceptionStatus, id])
   @@index([createdAt, id])
   @@map("baggage")
+}
+
+model BaggagePolicy {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  code              String   @unique @db.VarChar(32)
+  name              String   @db.VarChar(160)
+  currencyCode      String   @map("currency_code") @db.VarChar(3)
+  currencyMinorUnit Int      @map("currency_minor_unit")
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  versions BaggagePolicyVersion[]
+
+  @@index([active, id])
+  @@map("baggage_policy")
+}
+
+model BaggagePolicyVersion {
+  id                       String                     @id @default(uuid(7)) @db.Uuid
+  baggagePolicyId          String                     @map("baggage_policy_id") @db.Uuid
+  fareTableVersionId       String                     @map("fare_table_version_id") @db.Uuid
+  version                  Int
+  status                   BaggagePolicyVersionStatus @default(DRAFT)
+  includedPieces           Int                        @map("included_pieces")
+  includedWeightKgPerPiece Decimal                    @map("included_weight_kg_per_piece") @db.Decimal(6, 3)
+  publishedAt              DateTime?                  @map("published_at") @db.Timestamptz(3)
+  retiredAt                DateTime?                  @map("retired_at") @db.Timestamptz(3)
+  createdAt                DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  baggagePolicy    BaggagePolicy     @relation(fields: [baggagePolicyId], references: [id], onDelete: Restrict)
+  fareTableVersion FareTableVersion  @relation(fields: [fareTableVersionId], references: [id], onDelete: Restrict)
+  tiers            BaggageExcessTier[]
+  baggage          Baggage[]
+
+  @@unique([baggagePolicyId, version])
+  @@index([fareTableVersionId])
+  @@index([status])
+  @@map("baggage_policy_version")
+}
+
+model BaggageExcessTier {
+  id                     String   @id @default(uuid(7)) @db.Uuid
+  baggagePolicyVersionId String   @map("baggage_policy_version_id") @db.Uuid
+  code                   String   @db.VarChar(32)
+  label                  String   @db.VarChar(160)
+  maxExcessWeightKg      Decimal  @map("max_excess_weight_kg") @db.Decimal(6, 3)
+  chargeMinor            BigInt   @map("charge_minor")
+  position               Int
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  baggagePolicyVersion BaggagePolicyVersion @relation(fields: [baggagePolicyVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([baggagePolicyVersionId, code])
+  @@unique([baggagePolicyVersionId, maxExcessWeightKg])
+  @@unique([baggagePolicyVersionId, position])
+  @@index([baggagePolicyVersionId, maxExcessWeightKg])
+  @@map("baggage_excess_tier")
 }
 
 /// PR-13: immutable event stream and resulting projection snapshots. The

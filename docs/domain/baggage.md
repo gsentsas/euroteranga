@@ -1,4 +1,4 @@
-# Baggage (PR-13)
+# Baggage (PR-13 + BAGGAGE-PLUS-1)
 
 PR-13 gives each bag a public identity, a printable QR code, an exact
 STAFF-measured weight and an immutable operational history. A bag always
@@ -14,14 +14,17 @@ belongs to one **booking passenger**: one person on one confirmed booking.
 - incident workflows (PR-21);
 - finance (PR-22).
 
-There is **no baggage tariff, allowance, payment, revenue, refund or credit**.
+BAGGAGE-PLUS-1 adds a **versioned allowance and excess-price catalogue**. It still creates **no payment, revenue, refund or credit**. A calculated excess amount is a commercial snapshot only.
 
 ## Model
 
-| Table           | Role                                                                                    |
-| --------------- | --------------------------------------------------------------------------------------- |
-| `baggage`       | Identity, owning `BookingPassenger` (composite FK), type and the current projection.    |
-| `baggage_event` | Append-only history. Every change of the projection is one event with its own sequence. |
+| Table                    | Role                                                                                                |
+| ------------------------ | --------------------------------------------------------------------------------------------------- |
+| `baggage`                | Identity, owning `BookingPassenger`, current operational projection and frozen commercial snapshot. |
+| `baggage_event`          | Append-only operational history. Every projection change is one event.                              |
+| `baggage_policy`         | Stable commercial identity (code/name/currency/active).                                             |
+| `baggage_policy_version` | Historical allowance linked to a fare-table version: DRAFT → PUBLISHED → RETIRED.                   |
+| `baggage_excess_tier`    | Explicit maximum excess-weight tiers and exact charges in minor units.                              |
 
 `Baggage`:
 
@@ -29,7 +32,7 @@ There is **no baggage tariff, allowance, payment, revenue, refund or credit**.
 - **Owner:** `(booking_id, passenger_id)` references `booking_passenger`. The owner, the type and the reference never change.
 - **Type:** `SUITCASE`, `TRAVEL_BAG`, `BOX` or `OTHER`.
 - **Projection:** `lifecycle_status`, `exception_status` and `measured_weight_kg`. This is a controlled copy of the latest event, never written directly.
-- **Allowance and charge columns:** `included_weight_kg`, `excess_weight_kg`, `excess_charge_minor` and `excess_charge_currency_code` exist for a future decided policy. PR-13 keeps them `NULL`, and a trigger refuses any change ("no PR-13 policy").
+- **Commercial snapshot:** `baggage_policy_version_id` and `allowance_piece_ordinal` are frozen at registration. `included_weight_kg`, `excess_weight_kg`, `excess_charge_minor`, `excess_charge_currency_code` and `excess_charge_currency_minor_unit` are server-derived only when STAFF records an official weight.
 
 `BaggageEvent`:
 
@@ -56,6 +59,50 @@ There is **no baggage tariff, allowance, payment, revenue, refund or credit**.
 - **Representation:** the API reads and writes weights as **decimal strings**, for example `"12.345"`. Validation and normalization use string rules (`^(0|[1-9][0-9]{0,2})(\.[0-9]{1,3})?$`) and never `Number()` or `parseFloat()`. The API returns three decimals, and the UIs display the string with a decimal comma.
 - **Authority:** only STAFF holding `baggage.manage` record the official weight (`WEIGHT_UPDATED`). A CUSTOMER registration that carries a weight is refused (`400`, strict schema).
 - **Changes:** a weight event must change the weight. Recording the same value is refused.
+
+## Franchise et excédent (BAGGAGE-PLUS-1)
+
+The allowance is **pieces + maximum weight per included piece**, not a global
+weight envelope. The master product rules are represented by policy data, not
+constants in application code: for example ECO can be configured as one
+23 kg piece and STANDARD as two 23 kg pieces. PLUS/FLEX may reference the
+same allowance values through their own historical pricing context. Extra
+baggage and overweight amounts are configured by OPS; example business prices
+are never defaults in code.
+
+A policy version is linked to the historical `FareTableVersion` used by the
+booking. At baggage registration PostgreSQL and the API serialize on the
+`BookingPassenger`, choose the currently PUBLISHED policy version for that
+fare version (or the latest RETIRED historical version when no current version
+exists), and freeze:
+
+- the policy-version id;
+- the 1-based baggage ordinal for that passenger/booking.
+
+This is the **freeze moment**. Later policy publication never rewrites an old
+bag. The unique partial ordinal index plus row locks prevent two concurrent
+registrations from receiving the same place.
+
+Only a STAFF `WEIGHT_UPDATED` event can compute the commercial snapshot:
+
+1. included weight = the policy per-piece weight when
+   `allowance_piece_ordinal <= included_pieces`, otherwise 0;
+2. excess = `max(measured - included, 0)`, with exact three-decimal string
+   arithmetic;
+3. zero excess produces exact charge 0 in the policy currency;
+4. positive excess selects the **smallest configured tier whose
+   `max_excess_weight_kg` covers the excess**;
+5. if no tier covers it, the excess stays known but the charge is `NULL`
+   (UI: **tarif à confirmer**).
+
+PostgreSQL recomputes and verifies these values in `baggage_guard`, so direct
+SQL cannot invent a lower charge, a different allowance, or a different
+currency. Published/retired versions and their tiers are historical and
+immutable.
+
+There is deliberately **no Payment, PaymentQuote or TripRevenue creation** in
+this workflow. A displayed amount is not proof of payment and cannot unlock a
+payment/check-in gate.
 
 ## Lifecycle and exceptions
 
@@ -134,16 +181,21 @@ references, never internal UUIDs, actors, `client_event_id` or fingerprints.
 
 ## Interfaces
 
-- **Client (`/compte`, « Mes bagages »):** registration on an owned confirmed booking's traveller, with the `ETG-…` reference, type, status, any exception, the measured weight (« Non pesé » until STAFF weigh the bag), the QR code and the timeline. It states that no allowance or charge is computed, and that the QR gives no right.
+- **Client (`/compte`, « Mes bagages »):** registration on an owned confirmed booking's traveller, reference, type, status, measured weight, QR and timeline, plus the historical allowance, piece ordinal, exact excess and charge when a configured tier covers it. No payment action is exposed.
 - **OPS (« Bagages », `baggage.read`):**
   - bounded list with server-side filters (reference, booking, trip, type, status, exception);
   - authenticated QR lookup;
-  - detail with passenger, booking, trip, weight, QR label and the immutable timeline.
-  - With `baggage.manage`, weight and event forms. There is no status field to edit.
+  - detail with passenger, booking, trip, weight, frozen allowance, excess/charge result, QR label and immutable timeline;
+  - with `baggage.manage`, weight and event forms. There is no status or commercial-amount field to edit.
+- **OPS → Tarification (`pricing.read`):** baggage-policy catalogue and history. `pricing.manage` creates/updates the catalogue, DRAFT versions and tiers, then publishes.
 
-## Migration
+## Migrations
 
-`20261014150000_baggage` is additive:
+`20261014150000_baggage` introduced the PR-13 operational model.
+
+`20261023020000_baggage_plus_1` is additive: policy/version/tier tables, frozen policy/ordinal columns, exact currency-minor-unit snapshot, historical guards and commercial verification in `baggage_guard`.
+
+The original migration is additive:
 
 - 4 enums and 2 tables, with indexes, FKs and CHECKs;
 - 3 guard functions plus 1 no-truncate function, 4 triggers and 2 deferred constraint triggers;
@@ -153,8 +205,8 @@ There is no backfill. The PR-12 → PR-13 upgrade test proves that every populat
 
 ## Known limitations
 
-- There is no baggage allowance, tariff or excess charge. Introducing one needs a pricing decision and a new migration.
+- The current Pricing domain has one historical fare-table version per booking journey and no simultaneous ECO/STANDARD/PLUS/FLEX fare-class selection inside one trip. BAGGAGE-PLUS therefore attaches one published baggage policy to a fare-table version at a time; richer multi-class fares require a future Pricing evolution.
 - Registration does not depend on the trip's departure time. Only the trip status (`SCHEDULED`) and the booking state are checked.
 - The customer list returns at most 100 bags per booking.
 - `client_event_id` is scoped per bag. A device that reuses an id on another bag records a new event there.
-- Physical labels and printers, the offline Crew scanner and check-in/boarding are future PRs.
+- Excess amounts are informational commercial snapshots until a later explicit payment workflow is approved. Physical printers and richer special-baggage products remain future work.

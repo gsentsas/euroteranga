@@ -27,6 +27,24 @@ The deployment builds before switching, backs up PostgreSQL before migration,
 applies migrations, switches current atomically, restarts all services and
 performs loopback health checks. Proxy cutover validates nginx and public HTTPS.
 
+### Existing pilot environments after ARCH-1B
+
+A pilot created before ARCH-1B already has
+`/var/www/vhosts/euroteranga.com/.secrets/public.env`, but it does not have
+all four traveller navigation URLs. Before deploying an ARCH-1B-or-later SHA,
+root must add these public, non-secret values:
+
+```dotenv
+NEXT_PUBLIC_SITE_URL=https://euroteranga.com
+NEXT_PUBLIC_BOOKING_URL=https://booking.euroteranga.com
+NEXT_PUBLIC_CLIENT_URL=https://client.euroteranga.com
+NEXT_PUBLIC_TRACKING_URL=https://tracking.euroteranga.com
+```
+
+`deploy-release.sh` checks these values before fetching/building the release
+and fails closed if one is absent. New installations receive them from
+`bootstrap-pilot-env.sh`.
+
 ## Authentication retention
 
 `install-systemd.sh` installs and starts `euroteranga-auth-purge.timer`.
@@ -44,6 +62,16 @@ Useful checks:
 The purge deletes only expired/revoked temporary authentication artifacts. It
 does not delete identities, durable MFA credentials, security events or audit
 events.
+
+## PostgreSQL backups
+
+`install-systemd.sh` also installs and starts the OPS-4 PostgreSQL backup and
+restore-check timers. Daily custom-format dumps are kept separately from
+deployment pre-migration dumps, checksummed, rotated, and restored into an
+isolated temporary database as a control.
+
+See [postgres-backups.md](postgres-backups.md) for retention, freshness,
+manual execution, recovery evidence and the remaining off-site blocker.
 
 ## Observability
 

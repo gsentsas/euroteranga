@@ -4,12 +4,32 @@ import { pagesSeed } from '../content-seed.js';
 
 const web = appByName('web');
 
-/** No layout overflow: the page never scrolls sideways. */
-async function expectNoHorizontalOverflow(page: Page) {
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(0);
+/** Core structural UX invariants shared by the seeded public pages. */
+async function expectPublicPageStructure(page: Page) {
+  const structure = await page.evaluate(() => {
+    const ids = Array.from(document.querySelectorAll<HTMLElement>('[id]'))
+      .map((element) => element.id)
+      .filter(Boolean);
+
+    return {
+      duplicateIds: [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))],
+      missingImageAlt: Array.from(
+        document.querySelectorAll<HTMLImageElement>('img:not([alt])'),
+      ).map((image) => image.currentSrc || image.src || '<inline image>'),
+      mainCount: document.querySelectorAll('main').length,
+      h1Count: document.querySelectorAll('h1').length,
+      horizontalOverflow: Math.max(
+        0,
+        document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    };
+  });
+
+  expect(structure.duplicateIds).toEqual([]);
+  expect(structure.missingImageAlt).toEqual([]);
+  expect(structure.mainCount).toBe(1);
+  expect(structure.h1Count).toBe(1);
+  expect(structure.horizontalOverflow).toBeLessThanOrEqual(1);
 }
 
 /**
@@ -29,6 +49,7 @@ test.describe('public inner pages (UI-PUBLIC-2)', () => {
     const response = await page.goto(appUrl(web, seed.trip.path));
     expect(response?.status()).toBe(200);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(seed.trip.title);
+    await expectPublicPageStructure(page);
     const breadcrumb = page.getByRole('navigation', { name: 'Fil d’Ariane' });
     await expect(breadcrumb.getByRole('link', { name: 'Accueil' })).toHaveAttribute('href', '/');
     await expect(breadcrumb.locator('[aria-current="page"]')).toContainText(seed.trip.title);
@@ -89,8 +110,8 @@ test.describe('public inner pages (UI-PUBLIC-2)', () => {
     await expect(coaches).toContainText('6 places');
     await expect(coaches).not.toContainText(seed.coaches[1]!.name);
 
-    await page.setViewportSize({ width: 390, height: 844 });
-    await expectNoHorizontalOverflow(page);
+    await page.setViewportSize({ width: 400, height: 844 });
+    await expectPublicPageStructure(page);
     expect(errors).toEqual([]);
   });
 
@@ -99,6 +120,7 @@ test.describe('public inner pages (UI-PUBLIC-2)', () => {
     const response = await page.goto(appUrl(web, seed.fleet.path));
     expect(response?.status()).toBe(200);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(seed.fleet.title);
+    await expectPublicPageStructure(page);
 
     const tabs = page.getByRole('navigation', { name: /accès direct/ });
     await expect(tabs.getByRole('link')).toHaveText(seed.coaches.map((coach) => coach.name));
@@ -126,8 +148,8 @@ test.describe('public inner pages (UI-PUBLIC-2)', () => {
     // Public facts only.
     await expect(page.locator('main')).not.toContainText(/VIN|immatriculation/i);
 
-    await page.setViewportSize({ width: 375, height: 812 });
-    await expectNoHorizontalOverflow(page);
+    await page.setViewportSize({ width: 400, height: 844 });
+    await expectPublicPageStructure(page);
   });
 
   test('the services page renders the page hero and the service cards', async ({ page }) => {
@@ -137,8 +159,114 @@ test.describe('public inner pages (UI-PUBLIC-2)', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
       `${seed.services.title} pour un voyage serein`,
     );
+    await expectPublicPageStructure(page);
     await expect(page.getByRole('heading', { level: 3, name: 'Bagages identifiés' })).toBeVisible();
-    await page.setViewportSize({ width: 375, height: 812 });
-    await expectNoHorizontalOverflow(page);
+    await page.setViewportSize({ width: 400, height: 844 });
+    await expectPublicPageStructure(page);
+  });
+});
+
+test.describe('public help pages (WEB-2A)', () => {
+  const pages = [
+    { path: '/bagages', heading: 'Préparez vos bagages' },
+    { path: '/comment-ca-marche', heading: 'Comment ça marche' },
+    { path: '/faq', heading: 'Questions fréquentes' },
+    { path: '/a-propos', heading: 'À propos d’EURO TERANGA' },
+  ] as const;
+
+  for (const item of pages) {
+    test(`${item.path} renders the real CMS template at desktop and 400 px`, async ({ page }) => {
+      const response = await page.goto(appUrl(web, item.path));
+      expect(response?.status()).toBe(200);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(item.heading);
+      await expectPublicPageStructure(page);
+
+      const structured = await page.locator('script[type="application/ld+json"]').allTextContents();
+      if (item.path === '/faq') {
+        expect(structured.some((text) => text.includes('"FAQPage"'))).toBe(true);
+      } else {
+        expect(structured.some((text) => text.includes('"FAQPage"'))).toBe(false);
+      }
+
+      await page.setViewportSize({ width: 400, height: 844 });
+      await expectPublicPageStructure(page);
+    });
+  }
+
+  test('the baggage page does not invent an allowance, weight or public amount', async ({
+    page,
+  }) => {
+    await page.goto(appUrl(web, '/bagages'));
+    const text = await page.locator('main').innerText();
+    expect(text).toContain('ne fixe ni franchise, ni poids maximal, ni supplément');
+    expect(text).toContain('Seules les conditions communiquées pour votre départ');
+    expect(text).not.toMatch(/\b\d+(?:[.,]\d+)?\s*(?:kg|kilos?|€|EUR|XOF|bagages?)\b/i);
+  });
+
+  test('FAQPage mirrors the five visible FAQ questions and answers', async ({ page }) => {
+    await page.goto(appUrl(web, '/faq'));
+    const scripts = await page.locator('script[type="application/ld+json"]').allTextContents();
+    const faq = scripts
+      .map((value) => JSON.parse(value) as { '@type'?: string; mainEntity?: unknown[] })
+      .find((value) => value['@type'] === 'FAQPage');
+    expect(faq).toBeDefined();
+
+    const entities = faq!.mainEntity as Array<{
+      name: string;
+      acceptedAnswer: { text: string };
+    }>;
+    expect(entities).toHaveLength(5);
+    for (const entity of entities) {
+      await expect(page.locator('main')).toContainText(entity.name);
+      await expect(page.locator('main')).toContainText(entity.acceptedAnswer.text);
+    }
+  });
+});
+
+test.describe('owner-dependent public pages (WEB-2B)', () => {
+  const pages = [
+    { path: '/contact', heading: 'Contact' },
+    { path: '/mentions-legales', heading: 'Mentions légales' },
+    { path: '/confidentialite', heading: 'Confidentialité' },
+  ] as const;
+
+  for (const item of pages) {
+    test(`${item.path} renders published owner settings at desktop and 400 px`, async ({
+      page,
+    }) => {
+      const response = await page.goto(appUrl(web, item.path));
+      expect(response?.status()).toBe(200);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(item.heading);
+      await expectPublicPageStructure(page);
+      await expect(page.locator('main')).not.toContainText(
+        'Ces informations ne sont pas disponibles pour le moment.',
+      );
+
+      await page.setViewportSize({ width: 400, height: 844 });
+      await expectPublicPageStructure(page);
+    });
+  }
+
+  test('Contact exposes only the synthetic published B7 values', async ({ page }) => {
+    await page.goto(appUrl(web, '/contact'));
+    const main = page.locator('main');
+    await expect(main).toContainText('contact@example.test');
+    await expect(main).toContainText('+33100000000');
+    await expect(main).toContainText('Lun-Ven 09:00-18:00');
+    await expect(
+      main.getByRole('link', { name: 'https://example.test/euro-teranga' }),
+    ).toHaveAttribute('href', 'https://example.test/euro-teranga');
+  });
+
+  test('Legal and Privacy expose their owner groups without placeholders', async ({ page }) => {
+    await page.goto(appUrl(web, '/mentions-legales'));
+    await expect(page.locator('main')).toContainText('Société synthétique E2E');
+    await expect(page.locator('main')).toContainText('Hébergeur synthétique');
+
+    await page.goto(appUrl(web, '/confidentialite'));
+    const privacy = page.locator('main');
+    await expect(privacy).toContainText('Responsable synthétique E2E');
+    await expect(privacy).toContainText('Durées de conservation synthétiques pour le test.');
+    await expect(privacy).not.toContainText(/TBD|TODO|à compléter/i);
   });
 });

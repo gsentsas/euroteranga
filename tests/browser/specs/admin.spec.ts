@@ -141,14 +141,25 @@ test('ops: SUPER_ADMIN signs in with MFA, invites, manages roles and status, rea
       page.getByRole('row').filter({ hasText: action }).filter({ hasText: admin.email }).first(),
     ).toBeVisible();
   }
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 400, height: 844 });
   const menuButton = page.getByRole('button', { name: 'Menu', exact: true });
   await expect(menuButton).toBeVisible();
   await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+  const menuButtonBox = await menuButton.boundingBox();
+  expect(menuButtonBox?.height).toBeGreaterThanOrEqual(44);
   await menuButton.click();
   await expect(menuButton).toHaveAttribute('aria-expanded', 'true');
   await expect(mainNav(page)).toBeVisible();
-  await mainNav(page).getByRole('link', { name: 'Vue d’ensemble' }).click();
+
+  const closeButton = page.getByRole('button', { name: 'Fermer le menu' }).first();
+  const closeButtonBox = await closeButton.boundingBox();
+  expect(closeButtonBox?.width).toBeGreaterThanOrEqual(44);
+  expect(closeButtonBox?.height).toBeGreaterThanOrEqual(44);
+
+  const overviewLink = mainNav(page).getByRole('link', { name: 'Vue d’ensemble' });
+  const overviewBox = await overviewLink.boundingBox();
+  expect(overviewBox?.height).toBeGreaterThanOrEqual(44);
+  await overviewLink.click();
   await expect(page).toHaveURL(appUrl(ops, '/'));
   await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
 

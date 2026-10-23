@@ -24,6 +24,10 @@ set -a
 . "$API_ENV"
 . "$PUBLIC_ENV"
 set +a
+: "${NEXT_PUBLIC_SITE_URL:?NEXT_PUBLIC_SITE_URL missing from public.env}"
+: "${NEXT_PUBLIC_BOOKING_URL:?NEXT_PUBLIC_BOOKING_URL missing from public.env}"
+: "${NEXT_PUBLIC_CLIENT_URL:?NEXT_PUBLIC_CLIENT_URL missing from public.env}"
+: "${NEXT_PUBLIC_TRACKING_URL:?NEXT_PUBLIC_TRACKING_URL missing from public.env}"
 # APP_ENV=staging, PAYMENT_PROVIDER=DISABLED, Stripe DISABLED without credentials.
 . "$(dirname "${BASH_SOURCE[0]}")/pilot-env-guard.sh"
 pilot_env_guard || exit 1
@@ -76,12 +80,18 @@ trap - EXIT"
   runuser -u "$APP_USER" -- env HOME="$APP_ROOT" PATH="$NODE_PATH" \
     NEXT_PUBLIC_APP_ENV="$NEXT_PUBLIC_APP_ENV" \
     NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" \
+    NEXT_PUBLIC_SITE_URL="$NEXT_PUBLIC_SITE_URL" \
+    NEXT_PUBLIC_BOOKING_URL="$NEXT_PUBLIC_BOOKING_URL" \
     NEXT_PUBLIC_CLIENT_URL="$NEXT_PUBLIC_CLIENT_URL" \
+    NEXT_PUBLIC_TRACKING_URL="$NEXT_PUBLIC_TRACKING_URL" \
     bash -c "cd '$TMP' && pnpm install --frozen-lockfile --prefer-offline"
   runuser -u "$APP_USER" -- env HOME="$APP_ROOT" PATH="$NODE_PATH" \
     NEXT_PUBLIC_APP_ENV="$NEXT_PUBLIC_APP_ENV" \
     NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" \
+    NEXT_PUBLIC_SITE_URL="$NEXT_PUBLIC_SITE_URL" \
+    NEXT_PUBLIC_BOOKING_URL="$NEXT_PUBLIC_BOOKING_URL" \
     NEXT_PUBLIC_CLIENT_URL="$NEXT_PUBLIC_CLIENT_URL" \
+    NEXT_PUBLIC_TRACKING_URL="$NEXT_PUBLIC_TRACKING_URL" \
     bash -c "cd '$TMP' && pnpm build"
   mv "$TMP" "$RELEASE"
   trap - EXIT

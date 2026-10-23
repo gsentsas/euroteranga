@@ -1,20 +1,21 @@
 import type { ReactNode } from 'react';
 
+export interface JourneyShellLinks {
+  home: string;
+  booking: string;
+  client: string;
+  tracking: string;
+}
+
 export interface JourneyShellProps {
   area: string;
   title: string;
   subtitle?: string;
   environment: string;
   current?: 'booking' | 'client' | 'tracking';
+  links: JourneyShellLinks;
   children?: ReactNode;
 }
-
-const nav = [
-  { key: 'home', href: 'https://euroteranga.com/', label: 'Accueil' },
-  { key: 'booking', href: 'https://booking.euroteranga.com/', label: 'Réserver' },
-  { key: 'client', href: 'https://client.euroteranga.com/compte', label: 'Mon espace' },
-  { key: 'tracking', href: 'https://tracking.euroteranga.com/', label: 'Suivi' },
-] as const;
 
 function JourneyBrand() {
   return (
@@ -41,8 +42,16 @@ export function JourneyShell({
   subtitle,
   environment,
   current,
+  links,
   children,
 }: JourneyShellProps) {
+  const nav = [
+    { key: 'home', href: links.home, label: 'Accueil' },
+    { key: 'booking', href: links.booking, label: 'Réserver' },
+    { key: 'client', href: links.client, label: 'Mon espace' },
+    { key: 'tracking', href: links.tracking, label: 'Suivi' },
+  ] as const;
+
   return (
     <div className="et-journey-page">
       <a className="et-skip-link" href="#main">
@@ -51,11 +60,7 @@ export function JourneyShell({
 
       <header className="et-journey-header">
         <div className="et-journey-container et-journey-header__inner">
-          <a
-            className="et-journey-home"
-            href="https://euroteranga.com/"
-            aria-label="EURO TERANGA — Accueil"
-          >
+          <a className="et-journey-home" href={links.home} aria-label="EURO TERANGA — Accueil">
             <JourneyBrand />
           </a>
           <nav className="et-journey-nav" aria-label="Navigation voyageur">

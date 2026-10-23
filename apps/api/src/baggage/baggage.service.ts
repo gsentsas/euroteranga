@@ -1,4 +1,4 @@
-import { Prisma } from '@euroteranga/database';
+import { Prisma, type DatabaseTransaction } from '@euroteranga/database';
 import { Injectable } from '@nestjs/common';
 import {
   customerIdentityOf,
@@ -42,6 +42,89 @@ const FIVE_MINUTES = 5 * 60_000;
 
 function uniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+function weightToMilliKg(value: string): bigint {
+  const [whole, fraction = ''] = value.split('.');
+  return BigInt(whole!) * 1000n + BigInt(fraction.padEnd(3, '0'));
+}
+
+function milliKgToWeight(value: bigint): string {
+  const whole = value / 1000n;
+  const fraction = (value % 1000n).toString().padStart(3, '0');
+  return `${whole}.${fraction}`;
+}
+
+async function commercialSnapshot(
+  tx: DatabaseTransaction,
+  baggage: {
+    baggagePolicyVersionId: string | null;
+    allowancePieceOrdinal: number | null;
+  },
+  measuredWeightKg: string | null,
+) {
+  if (!baggage.baggagePolicyVersionId || !measuredWeightKg) {
+    return {
+      includedWeightKg: null,
+      excessWeightKg: null,
+      excessChargeMinor: null,
+      excessChargeCurrencyCode: null,
+      excessChargeCurrencyMinorUnit: null,
+    };
+  }
+
+  const version = await tx.baggagePolicyVersion.findUnique({
+    where: { id: baggage.baggagePolicyVersionId },
+    select: {
+      status: true,
+      includedPieces: true,
+      includedWeightKgPerPiece: true,
+      baggagePolicy: {
+        select: { currencyCode: true, currencyMinorUnit: true },
+      },
+    },
+  });
+  if (!version || !['PUBLISHED', 'RETIRED'].includes(version.status)) {
+    throw new Error('baggage allowance policy snapshot is not historical');
+  }
+  if (!baggage.allowancePieceOrdinal) {
+    throw new Error('baggage allowance piece ordinal is missing');
+  }
+
+  const measuredMilli = weightToMilliKg(measuredWeightKg);
+  const includedMilli =
+    baggage.allowancePieceOrdinal <= version.includedPieces
+      ? weightToMilliKg(version.includedWeightKgPerPiece.toFixed(3))
+      : 0n;
+  const excessMilli = measuredMilli > includedMilli ? measuredMilli - includedMilli : 0n;
+  const includedWeightKg = milliKgToWeight(includedMilli);
+  const excessWeightKg = milliKgToWeight(excessMilli);
+
+  if (excessMilli === 0n) {
+    return {
+      includedWeightKg,
+      excessWeightKg,
+      excessChargeMinor: 0n,
+      excessChargeCurrencyCode: version.baggagePolicy.currencyCode,
+      excessChargeCurrencyMinorUnit: version.baggagePolicy.currencyMinorUnit,
+    };
+  }
+
+  const tier = await tx.baggageExcessTier.findFirst({
+    where: {
+      baggagePolicyVersionId: baggage.baggagePolicyVersionId,
+      maxExcessWeightKg: { gte: excessWeightKg },
+    },
+    orderBy: { maxExcessWeightKg: 'asc' },
+    select: { chargeMinor: true },
+  });
+  return {
+    includedWeightKg,
+    excessWeightKg,
+    excessChargeMinor: tier?.chargeMinor ?? null,
+    excessChargeCurrencyCode: tier ? version.baggagePolicy.currencyCode : null,
+    excessChargeCurrencyMinorUnit: tier ? version.baggagePolicy.currencyMinorUnit : null,
+  };
 }
 
 function databaseDomainError(error: unknown): never {
@@ -151,19 +234,67 @@ export class BaggageService {
               select: {
                 bookingId: true,
                 passengerId: true,
-                booking: { select: { confirmedAt: true, cancelledAt: true } },
+                booking: {
+                  select: {
+                    confirmedAt: true,
+                    cancelledAt: true,
+                    fareEntry: { select: { fareTableVersionId: true } },
+                  },
+                },
               },
             });
             if (!subject) throw BaggageErrors.subjectNotFound();
             if (!subject.booking.confirmedAt || subject.booking.cancelledAt) {
               throw BaggageErrors.bookingNotEligible();
             }
+
+            await tx.$queryRaw<Array<{ booking_id: string }>>`
+              SELECT bp."booking_id"
+              FROM "booking_passenger" bp
+              JOIN "booking" b ON b."id" = bp."booking_id"
+              WHERE bp."booking_id" = ${subject.bookingId}::uuid
+                AND bp."passenger_id" = ${subject.passengerId}::uuid
+              FOR UPDATE OF bp, b
+            `;
+
+            let policyVersion = await tx.baggagePolicyVersion.findFirst({
+              where: {
+                fareTableVersionId: subject.booking.fareEntry.fareTableVersionId,
+                status: 'PUBLISHED',
+              },
+              select: { id: true },
+            });
+            policyVersion ??= await tx.baggagePolicyVersion.findFirst({
+              where: {
+                fareTableVersionId: subject.booking.fareEntry.fareTableVersionId,
+                status: 'RETIRED',
+              },
+              orderBy: { publishedAt: 'desc' },
+              select: { id: true },
+            });
+            const latestAllowance = policyVersion
+              ? await tx.baggage.findFirst({
+                  where: {
+                    bookingId: subject.bookingId,
+                    passengerId: subject.passengerId,
+                    allowancePieceOrdinal: { not: null },
+                  },
+                  orderBy: { allowancePieceOrdinal: 'desc' },
+                  select: { allowancePieceOrdinal: true },
+                })
+              : null;
+            const allowancePieceOrdinal = policyVersion
+              ? (latestAllowance?.allowancePieceOrdinal ?? 0) + 1
+              : null;
+
             const baggage = await tx.baggage.create({
               data: {
                 reference: candidate,
                 bookingId: subject.bookingId,
                 passengerId: subject.passengerId,
                 type,
+                baggagePolicyVersionId: policyVersion?.id ?? null,
+                allowancePieceOrdinal,
               },
               select: { id: true },
             });
@@ -197,6 +328,8 @@ export class BaggageService {
                   passengerReference,
                   type,
                   lifecycleStatus: 'REGISTERED',
+                  allowancePolicyApplied: policyVersion !== null,
+                  allowancePieceOrdinal,
                 },
               },
               tx,
@@ -436,12 +569,24 @@ export class BaggageService {
           },
           select: baggageEventSelect,
         });
+        const pricing =
+          input.type === 'WEIGHT_UPDATED'
+            ? await commercialSnapshot(
+                tx,
+                {
+                  baggagePolicyVersionId: baggage.baggagePolicyVersionId,
+                  allowancePieceOrdinal: baggage.allowancePieceOrdinal,
+                },
+                projection.measuredWeightKg,
+              )
+            : null;
         await tx.baggage.update({
           where: { id: baggage.id },
           data: {
             lifecycleStatus: projection.lifecycleStatus,
             exceptionStatus: projection.exceptionStatus,
             measuredWeightKg: projection.measuredWeightKg,
+            ...(pricing ?? {}),
           },
         });
         const action =
@@ -463,6 +608,14 @@ export class BaggageService {
               lifecycleStatus: event.lifecycleStatus,
               exceptionStatus: event.exceptionStatus,
               measuredWeightKg: event.measuredWeightKg?.toFixed(3) ?? null,
+              ...(pricing
+                ? {
+                    includedWeightKg: pricing.includedWeightKg,
+                    excessWeightKg: pricing.excessWeightKg,
+                    excessChargeMinor: pricing.excessChargeMinor?.toString() ?? null,
+                    excessChargeCurrencyCode: pricing.excessChargeCurrencyCode,
+                  }
+                : {}),
             },
           },
           tx,

@@ -251,6 +251,47 @@ Les statuts internes et exceptions sont projetés vers :
 Les catégories d'exception sensibles sont volontairement réduites à
 `ATTENTION`.
 
+## Espace client — CLIENT-CARGO-1
+
+L'espace authentifié `CUSTOMER` ajoute **Mes colis** sans fusionner Cargo avec
+les bagages passagers. **Mes bagages** reste le domaine Baggage existant.
+
+Un CUSTOMER peut créer une demande Cargo en état `QUOTE`, avec ou sans
+réservation passager. L'identité propriétaire vient exclusivement de la
+session (`principal.identityId`) : le navigateur ne fournit jamais de
+`customerIdentityId`. Lorsqu'une `bookingReference` est fournie, elle doit
+appartenir au même CUSTOMER ; une réservation étrangère ou inconnue est
+traitée comme absente.
+
+Toutes les lectures sont bornées par `customerIdentityId`. Une référence
+mal formée, inconnue, sans propriétaire ou appartenant à un autre compte
+retourne le même 404. La projection CUSTOMER est distincte de la vue OPS :
+elle peut restituer au propriétaire les coordonnées et le contenu déclaré de
+son propre dossier, mais jamais les UUID internes, l'identité des agents, les
+capacités véhicule, l'audit, les notes internes de devis ou les secrets de
+tracking.
+
+Le suivi dans **Mes colis** est authentifié et réutilise la projection de
+statut coarse-grained de CARGO-TRACK-1. Les lieux ne sont affichés que pour les
+stops ou checkpoints explicitement visibles aux voyageurs. L'espace client ne
+liste, ne récupère et ne régénère aucun `RoadFreightPublicToken` : le lien
+public par capability token reste un canal séparé.
+
+Les devis `DRAFT` sont invisibles. Dès qu'un devis a été réellement émis,
+le client peut consulter ses lignes et son total exact, sans métadonnées STAFF,
+puis accepter un devis `ISSUED`. PostgreSQL autorise cette transition
+uniquement à un STAFF actif ou au CUSTOMER actif propriétaire du fret ; les
+autres CUSTOMER sont rejetés même en SQL direct. Création, émission et
+annulation de devis restent STAFF-only.
+
+L'acceptation d'un devis ne crée ni `Payment`, ni `PaymentQuote`, ni
+`TripRevenue`. Les paiements Cargo réels restent hors périmètre.
+
+CLIENT-CARGO-1 ne crée pas encore de domaine documentaire Cargo privé. Les
+pièces éventuellement nécessaires sont confirmées par l'équipe selon le
+dossier, la direction et les formalités applicables ; aucune liste
+réglementaire ou exigence documentaire n'est inventée par l'interface.
+
 ## API STAFF
 
 Toutes les routes sont sous `/v1/admin/cargo`.

@@ -1,5 +1,5 @@
 import { JourneyShell } from '@euroteranga/ui';
-import { publicEnv } from '../lib/env';
+import { journeyLinks, publicEnv } from '../lib/env';
 
 export default function HomePage() {
   return (
@@ -8,6 +8,7 @@ export default function HomePage() {
       title="Gardez un œil sur votre trajet."
       subtitle="Le suivi public montre uniquement les informations autorisées pour votre voyage."
       environment={publicEnv.NEXT_PUBLIC_APP_ENV}
+      links={journeyLinks}
       current="tracking"
     >
       <section className="tracking-access-card">

@@ -27,8 +27,10 @@ export {
 } from './public-media-env.js';
 export {
   assertNoSensitivePublicEnv,
+  loadJourneyPublicUrls,
   loadPublicEnv,
   publicEnvSchema,
+  type JourneyPublicUrls,
   type PublicEnv,
 } from './public-env.js';
 export {

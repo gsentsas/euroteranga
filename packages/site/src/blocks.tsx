@@ -1293,6 +1293,88 @@ function Section({
   );
 }
 
+const SOCIAL_LABELS: Record<string, string> = {
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  linkedin: 'LinkedIn',
+  x: 'X',
+  youtube: 'YouTube',
+  whatsapp: 'WhatsApp',
+};
+
+function OwnerInfo({
+  block,
+  index,
+  ctx,
+  titleId,
+}: {
+  block: Extract<ContentBlock, { type: 'ownerInfo' }>;
+  index: number;
+  ctx: SiteContext;
+  titleId: string;
+}) {
+  const rows: Array<{ label: string; value: ReactNode }> = [];
+  const add = (label: string, value: string | null | undefined) => {
+    if (value) rows.push({ label, value });
+  };
+
+  if (block.kind === 'contact') {
+    add('Adresse e-mail', ctx.settings.contact.email);
+    add('Téléphone', ctx.settings.contact.phone);
+    add('Adresse', ctx.settings.contact.address);
+    add('Horaires', ctx.settings.contact.hours);
+    for (const account of ctx.settings.social) {
+      rows.push({
+        label: SOCIAL_LABELS[account.network] ?? account.network,
+        value: (
+          <a href={account.url} rel="noreferrer">
+            {account.url}
+          </a>
+        ),
+      });
+    }
+  } else if (block.kind === 'legal') {
+    add('Raison sociale', ctx.settings.legal.companyName);
+    add('Forme juridique', ctx.settings.legal.legalForm);
+    add('Siège social', ctx.settings.legal.registeredAddress);
+    add('Capital social', ctx.settings.legal.shareCapital);
+    add('Immatriculation', ctx.settings.legal.registrationNumber);
+    add('Numéro de TVA', ctx.settings.legal.vatNumber);
+    add('Directeur de la publication', ctx.settings.legal.publicationDirector);
+    add('Hébergeur', ctx.settings.legal.hostName);
+    add('Adresse de l’hébergeur', ctx.settings.legal.hostAddress);
+    add('Contact de l’hébergeur', ctx.settings.legal.hostContact);
+  } else {
+    add('Responsable du traitement', ctx.settings.privacy.dataController);
+    add('DPO ou contact confidentialité', ctx.settings.privacy.privacyContact);
+    add('Finalités et bases légales', ctx.settings.privacy.purposesAndLegalBases);
+    add('Durées de conservation', ctx.settings.privacy.retentionPeriods);
+    add('Sous-traitants', ctx.settings.privacy.processors);
+    add('Transferts hors Union européenne', ctx.settings.privacy.transfersOutsideEu);
+  }
+
+  return (
+    <Section block={block} index={index} ctx={ctx}>
+      <SectionHead id={titleId} kicker={block.kicker} title={block.title} intro={block.intro} />
+      {rows.length > 0 ? (
+        <dl className="public-owner-info">
+          {rows.map((row) => (
+            <div key={row.label}>
+              <dt>{row.label}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="public-owner-info__unavailable" role="status">
+          Ces informations ne sont pas disponibles pour le moment.
+        </p>
+      )}
+    </Section>
+  );
+}
+
 export function Block({
   block,
   index,
@@ -1530,6 +1612,8 @@ export function Block({
           </div>
         </Section>
       );
+    case 'ownerInfo':
+      return <OwnerInfo block={block} index={index} ctx={ctx} titleId={titleId} />;
     case 'banner':
       return (
         <div className="public-container" {...(block.anchor ? { id: block.anchor } : {})}>

@@ -1,7 +1,7 @@
 import { JourneyShell } from '@euroteranga/ui';
 import type { Metadata } from 'next';
 import { RegisterForm } from '../../components/register-form';
-import { publicEnv } from '../../lib/env';
+import { journeyLinks, publicEnv } from '../../lib/env';
 
 export const metadata: Metadata = { title: 'Créer un compte — EURO TERANGA' };
 
@@ -12,6 +12,7 @@ export default function Page() {
       title="Créez votre espace voyage."
       subtitle="Une adresse e-mail et une phrase de passe suffisent pour commencer."
       environment={publicEnv.NEXT_PUBLIC_APP_ENV}
+      links={journeyLinks}
       current="client"
     >
       <section className="et-auth-panel" aria-labelledby="client-register-panel">

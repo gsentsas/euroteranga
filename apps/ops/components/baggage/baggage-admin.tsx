@@ -66,6 +66,38 @@ const formatAt = (value: string) =>
 const formatWeight = (value: string | null) =>
   value === null ? 'Non pesé' : `${value.replace('.', ',')} kg`;
 
+function formatExactMoney(amountMinor: string, currencyCode: string, minorUnit: number): string {
+  const amount = BigInt(amountMinor);
+  if (minorUnit === 0) return `${amount.toString()} ${currencyCode}`;
+  const scale = 10n ** BigInt(minorUnit);
+  const major = amount / scale;
+  const minor = (amount % scale).toString().padStart(minorUnit, '0');
+  return `${major.toString()},${minor} ${currencyCode}`;
+}
+
+function allowanceLabel(baggage: Baggage): string {
+  const allowance = baggage.allowance;
+  if (!allowance.policy || allowance.status === 'NOT_CONFIGURED') return 'Non configurée';
+  if (allowance.status === 'PENDING_WEIGHT') {
+    return `${allowance.policy.code} · pièce ${allowance.pieceOrdinal ?? '—'} · en attente de pesée`;
+  }
+  if (allowance.status === 'INCLUDED') {
+    return `${allowance.policy.code} · inclus`;
+  }
+  if (allowance.status === 'EXCESS_UNPRICED') {
+    return `${allowance.policy.code} · excédent ${formatWeight(allowance.excessWeightKg)} · tarif à confirmer`;
+  }
+  return `${allowance.policy.code} · ${formatWeight(allowance.excessWeightKg)} d’excédent · ${
+    allowance.excessCharge
+      ? formatExactMoney(
+          allowance.excessCharge.amountMinor,
+          allowance.excessCharge.currencyCode,
+          allowance.excessCharge.currencyMinorUnit,
+        )
+      : '—'
+  }`;
+}
+
 function Detail({
   baggage,
   canManage,
@@ -158,12 +190,28 @@ function Detail({
         <dd>{TYPE_LABELS[baggage.type]}</dd>
         <dt>Poids mesuré</dt>
         <dd data-testid="baggage-weight">{formatWeight(baggage.measuredWeightKg)}</dd>
+        <dt>Franchise</dt>
+        <dd data-testid="baggage-allowance">
+          {baggage.allowance.policy ? (
+            <>
+              {baggage.allowance.policy.name} · version {baggage.allowance.policy.version} ·{' '}
+              {baggage.allowance.policy.includedPieces} pièce(s) de{' '}
+              {formatWeight(baggage.allowance.policy.includedWeightKgPerPiece)}
+              {' · '}rang du bagage {baggage.allowance.pieceOrdinal ?? '—'}
+            </>
+          ) : (
+            'Non configurée pour cette tarification historique'
+          )}
+        </dd>
+        <dt>Résultat commercial</dt>
+        <dd>{allowanceLabel(baggage)}</dd>
         <dt>Code QR</dt>
         <dd className="et-code">{baggage.qrPayload}</dd>
       </dl>
       <p>
         Le code QR identifie seulement le bagage : chaque action exige une session STAFF et la
-        permission correspondante. Aucune franchise ni aucun supplément n’est calculé.
+        permission correspondante. La franchise est historique et le supplément éventuel est
+        recalculé uniquement lorsqu’un poids officiel est enregistré. Aucun paiement n’est créé.
       </p>
       <FormAlert message={error} />
       <button
@@ -470,6 +518,7 @@ export function BaggageAdmin() {
                   <th>Statut</th>
                   <th>Incident</th>
                   <th>Poids</th>
+                  <th>Franchise · excédent</th>
                   <th>Créé le</th>
                   <th>Action</th>
                 </tr>
@@ -492,6 +541,7 @@ export function BaggageAdmin() {
                     <td>{LIFECYCLE_LABELS[item.lifecycleStatus]}</td>
                     <td>{item.exceptionStatus ? EXCEPTION_LABELS[item.exceptionStatus] : '—'}</td>
                     <td>{formatWeight(item.measuredWeightKg)}</td>
+                    <td>{allowanceLabel(item)}</td>
                     <td>{formatAt(item.createdAt)}</td>
                     <td>
                       <button

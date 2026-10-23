@@ -19,6 +19,19 @@ export class ContentDocumentInvalidError extends PublicApiError {
   }
 }
 
+export class ContentOwnerInfoRequiredError extends PublicApiError {
+  override readonly publicDetails: Readonly<Record<string, unknown>>;
+
+  constructor(kind: string, missing: readonly string[]) {
+    super(
+      422,
+      'CONTENT_OWNER_INFO_REQUIRED',
+      'Les informations propriétaire requises doivent être publiées dans les réglages du site avant de publier cette page.',
+    );
+    this.publicDetails = { kind, missing: [...missing] };
+  }
+}
+
 export const ContentErrors = {
   entryNotFound: () => new PublicApiError(404, 'CONTENT_ENTRY_NOT_FOUND', 'Contenu introuvable.'),
   revisionNotFound: () =>
@@ -47,6 +60,8 @@ export const ContentErrors = {
       'CONTENT_PUBLIC_CONTACT_REQUIRED',
       'Publiez au moins un e-mail ou un téléphone dans les réglages du site avant de publier la page fret.',
     ),
+  ownerInfoRequired: (kind: string, missing: readonly string[]) =>
+    new ContentOwnerInfoRequiredError(kind, missing),
   draftExists: () =>
     new PublicApiError(
       409,

@@ -1,5 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { PAGE_TEMPLATES, pageDocumentSchema } from '@euroteranga/content';
+import {
+  DEFAULT_SITE_SETTINGS,
+  PAGE_TEMPLATES,
+  pageDocumentSchema,
+  siteSettingsSchema,
+} from '@euroteranga/content';
 import { createDatabaseClient, type DatabaseTransaction } from '@euroteranga/database';
 import { hash } from '@node-rs/argon2';
 import { cargoPageSeed, contentSeed, homeSeed, pagesSeed } from './content-seed.js';
@@ -1139,6 +1144,54 @@ async function seedPricingData(
  * content fallback.
  */
 async function seedContentData(db: ReturnType<typeof createDatabaseClient>): Promise<void> {
+  // WEB-2B: disposable owner data for real Contact/Legal/Privacy rendering.
+  // These values are test-only and never leave local/CI databases.
+  const ownerSettings = siteSettingsSchema.parse({
+    ...DEFAULT_SITE_SETTINGS,
+    contact: {
+      email: 'contact@example.test',
+      phone: '+33100000000',
+      address: '1 rue de Test, 00000 Test',
+      hours: 'Lun-Ven 09:00-18:00',
+    },
+    legal: {
+      companyName: 'Société synthétique E2E',
+      legalForm: 'Forme synthétique',
+      registeredAddress: '1 rue de Test, 00000 Test',
+      shareCapital: 'Capital synthétique',
+      registrationNumber: 'REG-E2E-001',
+      vatNumber: 'VAT-E2E-001',
+      publicationDirector: 'Direction synthétique',
+      hostName: 'Hébergeur synthétique',
+      hostAddress: '2 rue de Test, 00000 Test',
+      hostContact: 'host@example.test',
+    },
+    privacy: {
+      dataController: 'Responsable synthétique E2E',
+      privacyContact: 'privacy@example.test',
+      purposesAndLegalBases: 'Finalités et bases légales synthétiques pour le test.',
+      retentionPeriods: 'Durées de conservation synthétiques pour le test.',
+      processors: 'Sous-traitants synthétiques pour le test.',
+      transfersOutsideEu: 'Politique de transferts synthétique pour le test.',
+    },
+    social: [{ network: 'facebook', url: 'https://example.test/euro-teranga' }],
+  });
+  const existingSettings = await db.contentEntry.findUnique({
+    where: { kind_key: { kind: 'SITE_SETTINGS', key: 'site' } },
+  });
+  if (!existingSettings) {
+    const settingsEntry = await db.contentEntry.create({
+      data: { kind: 'SITE_SETTINGS', key: 'site' },
+    });
+    const settingsRevision = await db.contentRevision.create({
+      data: { entryId: settingsEntry.id, revision: 1, document: ownerSettings },
+    });
+    await db.contentRevision.update({
+      where: { id: settingsRevision.id },
+      data: { status: 'PUBLISHED' },
+    });
+  }
+
   const { path, title } = contentSeed();
   const entry = await db.contentEntry.create({ data: { kind: 'PAGE', key: path } });
   const revision = await db.contentRevision.create({
@@ -1569,4 +1622,28 @@ async function seedPublicPagesData(db: ReturnType<typeof createDatabaseClient>):
       { type: 'cards', variant: 'services', title: 'Ce qui vous accompagne', items: services },
     ],
   });
+
+  // WEB-2A/2B: publish the real help and owner-dependent templates in the
+  // disposable browser database. Owner values above are synthetic and test-only.
+  for (const id of [
+    'baggage',
+    'how-it-works',
+    'faq',
+    'about',
+    'contact',
+    'legal-notice',
+    'privacy',
+  ] as const) {
+    const template = PAGE_TEMPLATES.find((candidate) => candidate.id === id);
+    if (!template) throw new Error(`Missing public page template: ${id}`);
+    const existing = await db.contentEntry.findUnique({
+      where: { kind_key: { kind: 'PAGE', key: template.path } },
+    });
+    if (existing) continue;
+    const document = pageDocumentSchema.parse(template.document);
+    await publish(template.path, {
+      ...document,
+      seo: { ...document.seo, indexable: false },
+    });
+  }
 }

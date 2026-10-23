@@ -21,8 +21,9 @@ export const PILOT_SOURCE = 'pilot-bootstrap';
  * /2: neutral make and model for the coaches (no Setra claim).
  * /3: coach names "Teranga Pilote 01/02": "Teranga 01/02" can belong to
  * historical operator vehicles (unique names, see PILOT_PREVIOUS_VEHICLE_NAMES).
+ * /4: every future pilot trip receives CHECKPOINT_ONLY tracking with no GPS device.
  */
-export const PILOT_DATASET_VERSION = 'pilot-corridor/3';
+export const PILOT_DATASET_VERSION = 'pilot-corridor/4';
 
 export interface PilotCountry {
   iso2: string;

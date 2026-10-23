@@ -345,13 +345,15 @@ editor (`/contenus/edition?entree=<id>`) works on one entry.
   the active vehicles of the public fleet read. Times, stops, seats and
   equipment are never typed: the preview reads them from the same public
   API as the website (one search per direction).
-- **Page templates (UI-PUBLIC-2):** "Créer une page" offers templates
-  (`PAGE_TEMPLATES`): Voyage Paris → Dakar, Voyage Dakar → Paris, Nos bus
-  and Services. A template pre-fills the path, title and description, and
-  brings its sections. The SEO of the created draft is kept (not indexed):
-  indexing stays a `seo.manage` decision. Templates state only what the
-  platform provides; no fare, figure, luggage allowance or assistance
-  promise is written in them.
+- **Page templates (UI-PUBLIC-2 / WEB-2A):** "Créer une page" offers
+  templates (`PAGE_TEMPLATES`): Voyage Paris → Dakar, Voyage Dakar → Paris,
+  Nos bus, Services, Bagages, Comment ça marche, FAQ, À propos and Colis &
+  fret. A template pre-fills the path, title and description, and brings its
+  sections. The SEO of the created draft is kept (not indexed): indexing
+  stays a `seo.manage` decision. Templates state only what the platform
+  provides; no fare, luggage allowance, weight limit, legal identity,
+  contact detail or assistance promise is invented. Contact, legal notice
+  and privacy remain separate owner-input work.
 - **Home page:** while no `/` page exists, the website shows the default
   content. "Créer la page d’accueil à partir du contenu actuel" creates it
   as a draft from that default content, so editing starts from what

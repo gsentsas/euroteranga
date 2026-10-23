@@ -75,7 +75,10 @@ cat >"$PUBLIC_ENV" <<EOF
 NODE_ENV=production
 NEXT_PUBLIC_APP_ENV=staging
 NEXT_PUBLIC_API_BASE_URL=https://api.euroteranga.com
+NEXT_PUBLIC_SITE_URL=https://euroteranga.com
+NEXT_PUBLIC_BOOKING_URL=https://booking.euroteranga.com
 NEXT_PUBLIC_CLIENT_URL=https://client.euroteranga.com
+NEXT_PUBLIC_TRACKING_URL=https://tracking.euroteranga.com
 EOF
 chown "$APP_USER":psacln "$API_ENV" "$PUBLIC_ENV"
 chmod 0600 "$API_ENV" "$PUBLIC_ENV"

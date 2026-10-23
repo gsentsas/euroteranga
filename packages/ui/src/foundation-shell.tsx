@@ -43,7 +43,7 @@ export function FoundationShell({
       </main>
       <footer className="et-footer">
         <p>
-          <strong className="et-status">Platform under development</strong>
+          <strong className="et-status">Plateforme en cours de développement</strong>
           <span aria-hidden="true"> · </span>
           <span>Environnement : {environment}</span>
         </p>

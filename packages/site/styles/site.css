@@ -1221,6 +1221,68 @@ body {
   font-weight: 850;
 }
 
+/* ----------------------------------------------------- Owner information */
+
+.public-owner-info {
+  display: grid;
+  gap: 0;
+  max-width: 56rem;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--public-line);
+  border-radius: var(--public-radius-lg);
+  background: #fff;
+  box-shadow: var(--public-shadow-sm);
+}
+
+.public-owner-info > div {
+  display: grid;
+  grid-template-columns: minmax(11rem, 0.42fr) minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid var(--public-line);
+}
+
+.public-owner-info > div:last-child {
+  border-bottom: 0;
+}
+
+.public-owner-info dt {
+  color: var(--public-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.public-owner-info dd {
+  margin: 0;
+  color: var(--public-ink);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.public-owner-info a {
+  color: var(--public-royal-600);
+  font-weight: 650;
+}
+
+.public-owner-info__unavailable {
+  max-width: 42rem;
+  margin: 0;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--public-line);
+  border-radius: var(--public-radius);
+  background: #fff;
+  color: var(--public-muted);
+}
+
+@media (max-width: 600px) {
+  .public-owner-info > div {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
+}
+
 /* -------------------------------------------------------- Tracking and CTA */
 
 .public-tracking {
