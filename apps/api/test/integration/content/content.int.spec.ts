@@ -379,7 +379,23 @@ describe('content management (isolated database)', () => {
       expect(again.body.code).toBe('CONTENT_SINGLETON_EXISTS');
       const navigation = await adminApi(director).post('/content/entries', { kind: 'NAVIGATION' });
 
-      await publish(director, settings.body);
+      const freight = await createPage(editor, '/fret');
+      const freightDraft = await saveDraft(editor, freight, pageDocument());
+      const blockedFreight = await publish(editor, freightDraft.body);
+      expect(blockedFreight.status).toBe(422);
+      expect(blockedFreight.body.code).toBe('CONTENT_PUBLIC_CONTACT_REQUIRED');
+
+      const settingsWithContact = await saveDraft(director, settings.body, {
+        ...settings.body.draft.document,
+        contact: {
+          ...settings.body.draft.document.contact,
+          email: 'contact@example.test',
+        },
+      });
+      expect(settingsWithContact.status, settingsWithContact.text).toBe(200);
+
+      await publish(director, settingsWithContact.body);
+      expect((await publish(editor, freightDraft.body)).status).toBe(200);
       await publish(director, navigation.body);
       const site = await publicApi().get('/site');
       expect(site.body.settings).toMatchObject({ brandName: 'EURO TERANGA' });
