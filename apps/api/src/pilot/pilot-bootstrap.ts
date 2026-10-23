@@ -103,6 +103,7 @@ class PilotConflict extends Error {}
 
 type RouteVersionState = { routeVersionId: string; waypointIds: string[] };
 type PilotTripState = { id: string | null; reference: string };
+type TrackingOperatorState = SystemOperatorActor | 'planned';
 
 interface TripWithTimings {
   id: string;
@@ -779,10 +780,11 @@ export class PilotBootstrap {
   private async ensureTrackingConfigs(trips: readonly PilotTripState[], dry: boolean) {
     const { db, tracking } = this.services;
     const missing: Array<{ id: string; reference: string }> = [];
+    const pending: Array<{ reference: string }> = [];
 
     for (const trip of trips) {
       if (!trip.id) {
-        this.report('planned', 'tracking', trip.reference, 'CHECKPOINT_ONLY, no GPS device');
+        pending.push({ reference: trip.reference });
         continue;
       }
       await this.guarded('tracking', trip.reference, [], async () => {
@@ -803,23 +805,26 @@ export class PilotBootstrap {
           this.report('existing', 'tracking', trip.reference, 'CHECKPOINT_ONLY, no GPS device');
           return trip.id;
         }
-        if (dry) {
-          this.report('planned', 'tracking', trip.reference, 'CHECKPOINT_ONLY, no GPS device');
-          return null;
-        }
-        missing.push({ id: trip.id!, reference: trip.reference });
+        missing.push({ id: trip.id, reference: trip.reference });
         return trip.id;
       });
     }
 
-    if (dry || missing.length === 0) return;
+    if (missing.length === 0 && pending.length === 0) return;
 
     const operator = await this.guarded('operator', 'tracking', [], () =>
-      this.ensureTrackingOperator(),
+      this.ensureTrackingOperator(dry),
     );
     if (!operator) {
-      for (const trip of missing) {
+      for (const trip of [...missing, ...pending]) {
         this.report('skipped', 'tracking', trip.reference, 'depends on operator:tracking');
+      }
+      return;
+    }
+
+    if (dry || operator === 'planned') {
+      for (const trip of [...missing, ...pending]) {
+        this.report('planned', 'tracking', trip.reference, 'CHECKPOINT_ONLY, no GPS device');
       }
       return;
     }
@@ -837,7 +842,7 @@ export class PilotBootstrap {
     }
   }
 
-  private async ensureTrackingOperator(): Promise<SystemOperatorActor> {
+  private async ensureTrackingOperator(dry: boolean): Promise<TrackingOperatorState> {
     const { db, audit } = this.services;
     const existing = await db.authIdentity.findUnique({
       where: {
@@ -893,6 +898,11 @@ export class PilotBootstrap {
         source: PILOT_SOURCE,
         operatorIdentityId: existing.id,
       };
+    }
+
+    if (dry) {
+      this.report('planned', 'operator', 'tracking', 'synthetic STAFF identity, no credentials');
+      return 'planned';
     }
 
     const operatorIdentityId = await db.$transaction(async (tx) => {
@@ -1024,6 +1034,7 @@ export class PilotBootstrap {
         // Already verified and counted above, or in the past.
         this.report('existing', 'trip', slot.reference);
         if (
+          !directionDependency &&
           existing.plannedDepartureAt &&
           existing.plannedDepartureAt > now &&
           !validated.some((trip) => trip.id === existing.id)
