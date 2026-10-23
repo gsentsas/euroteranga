@@ -147,4 +147,3 @@ describe('owner-dependent public page templates (WEB-2B)', () => {
     expect(serialized).not.toContain('"kind":"url"');
   });
 });
-
