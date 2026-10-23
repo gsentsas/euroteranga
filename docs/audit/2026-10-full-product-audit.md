@@ -227,8 +227,10 @@ The UI-1 to UI-4 phases redesigned:
 
 `ui-final.spec.ts` covers a cross-app responsive acceptance. UX-1A
 extends that baseline at desktop and exactly 400 px on all six frontends and
-on the seeded public inner pages. A later UX-1B can still do a manual
-screen-by-screen visual review where screenshots add value.
+on the seeded public inner pages. UX-1B then fixes the first interaction
+review findings: traveller, Crew and OPS mobile navigation targets are at
+least 44 px high, the OPS drawer close target is 44 × 44 px, and the public
+OPS foundation status is consistently French.
 
 ## Mobile and accessibility
 

@@ -63,6 +63,31 @@ for (const app of frontendApps) {
       expect(structure.h1Count).toBe(1);
       expect(structure.horizontalOverflow).toBeLessThanOrEqual(1);
 
+      if (viewport.name === 'mobile') {
+        const tapTargetSelector =
+          app.name === 'crew'
+            ? '.crew-topbar__nav a'
+            : ['booking', 'client', 'tracking'].includes(app.name)
+              ? '.et-journey-nav a'
+              : null;
+
+        if (tapTargetSelector) {
+          const tapTargetHeights = await page
+            .locator(tapTargetSelector)
+            .evaluateAll((elements) =>
+              elements.map((element) => element.getBoundingClientRect().height),
+            );
+          expect(tapTargetHeights.length).toBeGreaterThan(0);
+          for (const height of tapTargetHeights) {
+            expect(height).toBeGreaterThanOrEqual(44);
+          }
+        }
+      }
+
+      if (app.name === 'ops') {
+        await expect(page.locator('.et-status')).toHaveText('Plateforme en cours de développement');
+      }
+
       await page.keyboard.press('Tab');
       const focused = await page.evaluate(() => {
         const active = document.activeElement;
