@@ -408,9 +408,9 @@ and is merged only when CI and CodeQL are green.
 
 | Domain    | Code | UI  | Data | Tests | Docs | Exploitable | Why not                                                                |
 | --------- | ---- | --- | ---- | ----- | ---- | ----------- | ---------------------------------------------------------------------- |
-| Public    | ✅    | ✅   | ⚠️  | ✅     | ⚠️  | ❌          | WEB-2 legal/contact incomplete; no production trips or real PSP        |
-| CMS       | ✅   | ✅  | ⚠️  | ✅    | ✅   | ⚠️         | Code/UI ready; production content/media still depend on owner data     |
-| SEO       | ✅   | —   | —    | ✅    | ✅   | ⚠️         | Code ready; indexing stays off unless production flag is enabled       |
+| Public    | ✅   | ✅  | ⚠️   | ✅    | ⚠️   | ❌          | WEB-2 legal/contact incomplete; no production trips or real PSP        |
+| CMS       | ✅   | ✅  | ⚠️   | ✅    | ✅   | ⚠️          | Code/UI ready; production content/media still depend on owner data     |
+| SEO       | ✅   | —   | —    | ✅    | ✅   | ⚠️          | Code ready; indexing stays off unless production flag is enabled       |
 | Booking   | ✅   | ✅  | ❌   | ✅    | ✅   | ❌          | No trip in production (F-DATA-01), no PSP (F-PAY-01)                   |
 | Client    | ✅   | ✅  | —    | ✅    | ✅   | ⚠️          | Depends on bookings; documents blocked (F-INF-03)                      |
 | OPS       | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Code ready; live state still depends on root deployment (F-INF-01)     |
