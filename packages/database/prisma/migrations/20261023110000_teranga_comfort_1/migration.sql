@@ -45,7 +45,9 @@ LANGUAGE plpgsql AS $$
 DECLARE
   trip_row RECORD;
   waypoint_row RECORD;
-  latest RECORD;
+  latest_type "comfort_waypoint_event_type";
+  latest_recorded_at TIMESTAMPTZ(3);
+  assigned_recorded_at TIMESTAMPTZ(3);
 BEGIN
   IF TG_OP = 'UPDATE' OR TG_OP = 'DELETE' THEN
     RAISE EXCEPTION 'comfort waypoint events are append-only'
@@ -90,8 +92,8 @@ BEGIN
       USING ERRCODE = 'object_not_in_prerequisite_state';
   END IF;
 
-  SELECT e."type"
-    INTO latest
+  SELECT e."type", e."recorded_at"
+    INTO latest_type, latest_recorded_at
   FROM "comfort_waypoint_event" e
   WHERE e."trip_id" = NEW."trip_id"
     AND e."route_waypoint_id" = NEW."route_waypoint_id"
@@ -99,15 +101,21 @@ BEGIN
   LIMIT 1;
 
   IF FOUND THEN
-    IF latest."type" IN ('COMPLETED', 'CANCELLED', 'SKIPPED') THEN
+    IF latest_type IN ('COMPLETED', 'CANCELLED', 'SKIPPED') THEN
       RAISE EXCEPTION 'comfort waypoint terminal status is immutable'
         USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
-    IF latest."type" = 'CONFIRMED' AND NEW."type" = 'CONFIRMED' THEN
+    IF latest_type = 'CONFIRMED' AND NEW."type" = 'CONFIRMED' THEN
       RAISE EXCEPTION 'comfort waypoint is already confirmed'
         USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
   END IF;
+
+  assigned_recorded_at := clock_timestamp()::timestamptz(3);
+  IF latest_recorded_at IS NOT NULL AND assigned_recorded_at <= latest_recorded_at THEN
+    assigned_recorded_at := latest_recorded_at + INTERVAL '1 millisecond';
+  END IF;
+  NEW."recorded_at" := assigned_recorded_at;
 
   RETURN NEW;
 END;
