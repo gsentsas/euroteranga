@@ -350,9 +350,7 @@ export function CustomerCargo() {
       </form>
 
       {!items ? <p role="status">Chargement de vos colis…</p> : null}
-      {items?.length === 0 ? (
-        <p>Vous n’avez encore aucune demande de colis ou de fret.</p>
-      ) : null}
+      {items?.length === 0 ? <p>Vous n’avez encore aucune demande de colis ou de fret.</p> : null}
       {items && items.length > 0 ? (
         <div className="et-passenger-list" aria-label="Liste de mes colis">
           {items.map((item) => (
