@@ -203,7 +203,7 @@
 .ops-nav-toggle {
   align-items: center;
   gap: 0.45rem;
-  min-height: 2.6rem;
+  min-height: 2.75rem;
   padding: 0.5rem 0.7rem;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 0.7rem;
@@ -369,7 +369,7 @@
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  min-height: 2.55rem;
+  min-height: 2.75rem;
   padding: 0.55rem 0.65rem;
   border-radius: 0.7rem;
   color: #31403b;
@@ -840,8 +840,8 @@
   }
 
   .ops-sidebar__mobile-heading button {
-    width: 2.4rem;
-    height: 2.4rem;
+    width: 2.75rem;
+    height: 2.75rem;
     display: grid;
     place-items: center;
     border: 1px solid var(--ops-line);
