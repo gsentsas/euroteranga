@@ -113,6 +113,13 @@ test.describe('public cargo and freight page (WEB-CARGO-1)', () => {
     expect(sitemap).not.toContain(seed.archivedPath);
     expect(sitemap).not.toContain(seed.noIndexPath);
 
+    const noIndexResponse = await page.goto(appUrl(web, seed.noIndexPath));
+    expect(noIndexResponse?.status()).toBe(200);
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+      'content',
+      'noindex, follow',
+    );
+
     for (const hidden of [seed.draftPath, seed.archivedPath]) {
       const hiddenResponse = await page.goto(appUrl(web, hidden));
       expect(hiddenResponse?.status(), hidden).toBe(404);
