@@ -173,7 +173,6 @@ function FaqData({ items }: { items: Extract<ContentBlock, { type: 'faq' }>['ite
   return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(data) }} />;
 }
 
-
 export default async function ContentPage({ params }: Params) {
   const { path, page } = await pageOrNotFound(params);
   const document = page.document;
