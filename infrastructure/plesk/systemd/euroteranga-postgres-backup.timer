@@ -1,0 +1,12 @@
+[Unit]
+Description=Run EURO TERANGA PostgreSQL backup daily
+
+[Timer]
+OnCalendar=*-*-* 02:15:00
+RandomizedDelaySec=30m
+Persistent=true
+AccuracySec=5m
+Unit=euroteranga-postgres-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -256,6 +256,15 @@ jobs:
         run: |
           bash -n infrastructure/plesk/deploy-release.sh
           bash -n infrastructure/plesk/pilot-env-guard.sh
+          bash -n infrastructure/plesk/backup-postgres.sh
+          bash -n infrastructure/plesk/restore-check-postgres.sh
+          bash -n infrastructure/plesk/check-backup-freshness.sh
+          grep -Fq 'Persistent=true' infrastructure/plesk/systemd/euroteranga-postgres-backup.timer
+          grep -Fq 'Persistent=true' infrastructure/plesk/systemd/euroteranga-postgres-restore-check.timer
+          grep -Fq 'User=euroteranga.com_5p804yhows7' infrastructure/plesk/systemd/euroteranga-postgres-backup.service
+          grep -Fq 'User=root' infrastructure/plesk/systemd/euroteranga-postgres-restore-check.service
+          grep -Fq 'ReadWritePaths=/var/www/vhosts/euroteranga.com/backups' infrastructure/plesk/systemd/euroteranga-postgres-backup.service
+          grep -Fq 'ReadWritePaths=/var/www/vhosts/euroteranga.com/backups' infrastructure/plesk/systemd/euroteranga-postgres-restore-check.service
           if grep -RFn '\\n' infrastructure/plesk/nginx --include='*.conf'; then
             echo "::error::Literal \\n sequence found in Plesk nginx fragment"
             exit 1
