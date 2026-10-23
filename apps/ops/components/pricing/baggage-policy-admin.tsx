@@ -99,6 +99,7 @@ function CreatePolicy({
         name="baggagePolicyCode"
         value={code}
         onChange={setCode}
+        autoComplete="off"
         maxLength={32}
       />
       <TextField
@@ -106,6 +107,7 @@ function CreatePolicy({
         name="baggagePolicyName"
         value={name}
         onChange={setName}
+        autoComplete="off"
         maxLength={160}
       />
       <TextField
@@ -113,6 +115,7 @@ function CreatePolicy({
         name="baggagePolicyCurrency"
         value={currencyCode}
         onChange={setCurrencyCode}
+        autoComplete="off"
         maxLength={3}
       />
       <div className="et-field">
@@ -250,6 +253,7 @@ function DraftEditor({
                 current.map((row) => (row.key === tier.key ? { ...row, code: value } : row)),
               )
             }
+            autoComplete="off"
             maxLength={32}
           />
           <TextField
@@ -261,6 +265,7 @@ function DraftEditor({
                 current.map((row) => (row.key === tier.key ? { ...row, label: value } : row)),
               )
             }
+            autoComplete="off"
             maxLength={160}
           />
           <TextField
@@ -274,6 +279,7 @@ function DraftEditor({
                 ),
               )
             }
+            autoComplete="off"
             maxLength={7}
           />
           <TextField
@@ -285,6 +291,7 @@ function DraftEditor({
                 current.map((row) => (row.key === tier.key ? { ...row, amount: value } : row)),
               )
             }
+            autoComplete="off"
             maxLength={32}
           />
           <button
@@ -429,6 +436,7 @@ function PolicyDetail({
             name="includedPieces"
             value={includedPieces}
             onChange={setIncludedPieces}
+            autoComplete="off"
             maxLength={2}
           />
           <TextField
@@ -436,6 +444,7 @@ function PolicyDetail({
             name="includedWeight"
             value={includedWeight}
             onChange={setIncludedWeight}
+            autoComplete="off"
             maxLength={7}
           />
           <button type="submit" className="et-button" disabled={busy}>
