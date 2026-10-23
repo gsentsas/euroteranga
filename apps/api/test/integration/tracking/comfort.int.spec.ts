@@ -1,5 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { adminApi, isolatedDatabase, staffActor, type StaffActor } from '../../support/admin-helpers.js';
+import {
+  adminApi,
+  isolatedDatabase,
+  staffActor,
+  type StaffActor,
+} from '../../support/admin-helpers.js';
 import {
   bookableFixture,
   bookingApi,
@@ -109,8 +114,12 @@ describe('TERANGA-COMFORT-1 traveller comfort projection', () => {
     const tripId = fixture.tripId;
     const checkpointWaypointId = fixture.checkpointWaypointId!;
 
-    expect((await adminApi(manager).get('/tracking/trips/' + tripId + '/comfort')).status).toBe(200);
-    expect((await adminApi(auditor).get('/tracking/trips/' + tripId + '/comfort')).status).toBe(200);
+    expect((await adminApi(manager).get('/tracking/trips/' + tripId + '/comfort')).status).toBe(
+      200,
+    );
+    expect((await adminApi(auditor).get('/tracking/trips/' + tripId + '/comfort')).status).toBe(
+      200,
+    );
     expect((await adminApi(denied).get('/tracking/trips/' + tripId + '/comfort')).status).toBe(403);
 
     const event = {
@@ -155,10 +164,10 @@ describe('TERANGA-COMFORT-1 traveller comfort projection', () => {
     expect(replay.body.created).toBe(false);
     expect(replay.body.event.id).toBe(first.body.event.id);
 
-    const conflict = await adminApi(manager).post(
-      '/tracking/trips/' + tripId + '/comfort/events',
-      { ...event, type: 'CANCELLED' },
-    );
+    const conflict = await adminApi(manager).post('/tracking/trips/' + tripId + '/comfort/events', {
+      ...event,
+      type: 'CANCELLED',
+    });
     expect(conflict.status).toBe(409);
     expect(conflict.body.code).toBe('COMFORT_CLIENT_EVENT_ID_REUSED');
 
@@ -185,11 +194,14 @@ describe('TERANGA-COMFORT-1 traveller comfort projection', () => {
   }, 120_000);
 
   it('publishes traveller-safe comfort with a public tracking capability', async () => {
-    const configured = await adminApi(manager).post('/tracking/trips/' + fixture.tripId + '/config', {
-      enabled: true,
-      visibility: 'CHECKPOINT_ONLY',
-      trackingDeviceId: null,
-    });
+    const configured = await adminApi(manager).post(
+      '/tracking/trips/' + fixture.tripId + '/config',
+      {
+        enabled: true,
+        visibility: 'CHECKPOINT_ONLY',
+        trackingDeviceId: null,
+      },
+    );
     expect(configured.status, configured.text).toBe(201);
 
     const issued = await adminApi(manager).post(
