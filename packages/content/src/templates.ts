@@ -603,6 +603,102 @@ export const PAGE_TEMPLATES: readonly PageTemplate[] = [
     },
   },
   {
+    id: 'contact',
+    label: 'Contact',
+    description:
+      'Les coordonnées publiques confirmées dans les réglages du site, sans valeur de remplacement.',
+    path: '/contact',
+    document: {
+      title: 'Contact',
+      seo: {
+        title: 'Contact — EURO TERANGA',
+        description:
+          'Retrouvez les coordonnées publiques et les horaires de contact confirmés par EURO TERANGA.',
+        indexable: true,
+      },
+      blocks: [
+        {
+          type: 'hero',
+          variant: 'page',
+          title: 'Contact',
+          lead: 'Retrouvez uniquement les coordonnées publiques confirmées par l’équipe EURO TERANGA.',
+          journeyCard: false,
+        },
+        {
+          type: 'ownerInfo',
+          kind: 'contact',
+          title: 'Nous contacter',
+          intro:
+            'Ces informations proviennent des réglages publiés du site. Aucune coordonnée manquante n’est remplacée par une valeur fictive.',
+        },
+      ],
+    },
+  },
+  {
+    id: 'legal-notice',
+    label: 'Mentions légales',
+    description:
+      'L’identité de l’éditeur, la publication et l’hébergement, lus depuis les réglages validés.',
+    path: '/mentions-legales',
+    document: {
+      title: 'Mentions légales',
+      seo: {
+        title: 'Mentions légales — EURO TERANGA',
+        description:
+          'Consultez les informations légales publiées pour le site EURO TERANGA et son hébergement.',
+        indexable: true,
+      },
+      blocks: [
+        {
+          type: 'hero',
+          variant: 'page',
+          title: 'Mentions légales',
+          lead: 'Les informations ci-dessous sont celles validées et publiées dans les réglages du site.',
+          journeyCard: false,
+        },
+        {
+          type: 'ownerInfo',
+          kind: 'legal',
+          title: 'Éditeur et hébergement',
+          intro:
+            'La publication de cette page est refusée tant que les informations légales requises ne sont pas complètes.',
+        },
+      ],
+    },
+  },
+  {
+    id: 'privacy',
+    label: 'Confidentialité',
+    description:
+      'Responsable du traitement, contact, finalités, conservation, sous-traitants et transferts.',
+    path: '/confidentialite',
+    document: {
+      title: 'Confidentialité',
+      seo: {
+        title: 'Confidentialité — EURO TERANGA',
+        description:
+          'Consultez les informations de confidentialité publiées pour les services EURO TERANGA.',
+        indexable: true,
+      },
+      blocks: [
+        {
+          type: 'hero',
+          variant: 'page',
+          title: 'Confidentialité',
+          lead: 'Cette page présente les engagements de confidentialité explicitement validés par le responsable du traitement.',
+          journeyCard: false,
+        },
+        {
+          type: 'ownerInfo',
+          kind: 'privacy',
+          title: 'Traitement de vos données',
+          intro:
+            'Aucune durée, finalité, base légale, sous-traitant ou transfert n’est déduit automatiquement : seules les valeurs publiées dans les réglages sont affichées.',
+        },
+      ],
+    },
+  },
+  {
     id: 'cargo-freight',
     label: 'Colis & fret',
     description:
