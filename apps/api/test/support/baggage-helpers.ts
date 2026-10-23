@@ -29,22 +29,22 @@ export function customerBaggageApi(actor: CustomerActor) {
 export function staffBaggagePolicyApi(actor: StaffActor) {
   const api = adminApi(actor);
   return {
-    list: (query = '') => api.get(`/baggage/policies${query}`),
-    detail: (id: string) => api.get(`/baggage/policies/${id}`),
+    list: (query = '') => api.get(`/baggage-policies${query}`),
+    detail: (id: string) => api.get(`/baggage-policies/${id}`),
     create: (body: unknown, options: { csrf?: string | null } = {}) =>
-      api.post('/baggage/policies', body, options),
+      api.post('/baggage-policies', body, options),
     update: (id: string, body: unknown, options: { csrf?: string | null } = {}) =>
-      api.post(`/baggage/policies/${id}`, body, options),
+      api.post(`/baggage-policies/${id}`, body, options),
     createVersion: (id: string, body: unknown, options: { csrf?: string | null } = {}) =>
-      api.post(`/baggage/policies/${id}/versions`, body, options),
+      api.post(`/baggage-policies/${id}/versions`, body, options),
     replaceTiers: (
       id: string,
       versionId: string,
       body: unknown,
       options: { csrf?: string | null } = {},
-    ) => api.post(`/baggage/policies/${id}/versions/${versionId}/tiers`, body, options),
+    ) => api.post(`/baggage-policies/${id}/versions/${versionId}/tiers`, body, options),
     publish: (id: string, versionId: string, options: { csrf?: string | null } = {}) =>
-      api.post(`/baggage/policies/${id}/versions/${versionId}/publish`, {}, options),
+      api.post(`/baggage-policies/${id}/versions/${versionId}/publish`, {}, options),
   };
 }
 
