@@ -11,9 +11,10 @@ export const OBJECT_STORAGE_PROVIDERS = ['DISABLED', 'LOCAL', 'S3'] as const;
 export const MALWARE_SCANNERS = ['DISABLED', 'TEST', 'CLAMAV'] as const;
 
 /**
- * PR-11 private passenger-document settings. LOCAL and TEST are deterministic
- * development/CI adapters and are refused in deployed environments. S3 never
- * creates a bucket or changes its policy; provisioning stays outside PR-11.
+ * Private passenger-document settings. LOCAL is a production-capable private
+ * filesystem adapter when paired with CLAMAV and a dedicated persistent root.
+ * TEST remains local/CI only. S3 stays available as an optional adapter but is
+ * not required by the EURO TERANGA production architecture.
  */
 export const passengerDocumentEnvShape = {
   PASSENGER_DOCUMENT_MAX_BYTES: z.coerce
@@ -81,8 +82,11 @@ export function refinePassengerDocumentEnv(
     } else {
       for (const problem of localRootProblems(root)) issue('OBJECT_STORAGE_LOCAL_ROOT', problem);
     }
-    if (deployed) {
-      issue('OBJECT_STORAGE_PROVIDER', 'LOCAL is refused in staging and production');
+    if (deployed && root && (root === '/tmp' || root.startsWith('/tmp/') || root === '/var/tmp' || root.startsWith('/var/tmp/'))) {
+      issue(
+        'OBJECT_STORAGE_LOCAL_ROOT',
+        'must use a persistent private directory outside temporary storage in staging and production',
+      );
     }
   }
 
