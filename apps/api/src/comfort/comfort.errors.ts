@@ -1,8 +1,7 @@
 import { PublicApiError } from '../auth/http/public-api-error.js';
 
 export const ComfortErrors = {
-  tripNotFound: () =>
-    new PublicApiError(404, 'COMFORT_TRIP_NOT_FOUND', 'Voyage introuvable.'),
+  tripNotFound: () => new PublicApiError(404, 'COMFORT_TRIP_NOT_FOUND', 'Voyage introuvable.'),
   bookingNotFound: () =>
     new PublicApiError(404, 'COMFORT_BOOKING_NOT_FOUND', 'Réservation introuvable.'),
   tripUnavailable: () =>
