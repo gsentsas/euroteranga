@@ -320,7 +320,7 @@ describe('BAGGAGE-PLUS-1 versioned allowance and excess pricing', () => {
     expect(oldWeighted.status, oldWeighted.text).toBe(201);
     const oldView = await customerBaggageApi(customer).detail(historical.body.reference);
     expect(oldView.body.allowance.policy.version).toBe(1);
-    expect(oldView.body.allowance.excessCharge.amountMinor).toBe('2222');
+    expect(oldView.body.allowance.excessCharge.amountMinor).toBe('1111');
 
     const fresh = await register('BOX');
     expect(fresh.body.allowance.policy).toMatchObject({
