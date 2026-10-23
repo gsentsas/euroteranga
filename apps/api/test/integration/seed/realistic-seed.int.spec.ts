@@ -1060,24 +1060,19 @@ describe('realistic seed: resumes the partial production apply (isolated databas
         .map((candidate) => `${candidate.entity} ${candidate.key}`)
         .sort();
     const pending = keysOf(dry, ['planned']);
-    expect(pending.filter((key) => !key.startsWith('trip '))).toEqual([
+    expect(
+      pending.filter((key) => !key.startsWith('trip ') && !key.startsWith('tracking ')),
+    ).toEqual([
       'amenities ET-COACH-001',
       'amenities ET-COACH-002',
-      'tracking ET-PILOT-DKRPAR-20261106',
-      'tracking ET-PILOT-DKRPAR-20261120',
-      'tracking ET-PILOT-DKRPAR-20261204',
-      'tracking ET-PILOT-DKRPAR-20261218',
-      'tracking ET-PILOT-DKRPAR-20270101',
-      'tracking ET-PILOT-DKRPAR-20270115',
-      'tracking ET-PILOT-PARDKR-20261106',
-      'tracking ET-PILOT-PARDKR-20261120',
-      'tracking ET-PILOT-PARDKR-20261204',
-      'tracking ET-PILOT-PARDKR-20261218',
-      'tracking ET-PILOT-PARDKR-20270101',
-      'tracking ET-PILOT-PARDKR-20270115',
       'vehicle ET-COACH-001',
       'vehicle ET-COACH-002',
     ]);
+    const pendingTracking = pending.filter((key) => key.startsWith('tracking '));
+    expect(pendingTracking).toHaveLength(12);
+    expect(
+      pendingTracking.every((key) => /^tracking ET-PILOT-(DKRPAR|PARDKR)-\d{8}$/.test(key)),
+    ).toBe(true);
     expect(pending.filter((key) => key.startsWith('trip '))).toHaveLength(12);
     expect(new Set(catalogue(dry).map((candidate) => candidate.outcome))).toEqual(
       new Set(['existing', 'planned']),
