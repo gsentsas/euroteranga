@@ -8,7 +8,6 @@ import type { ApiEnv } from '@euroteranga/config';
 import { createDatabaseClient } from '@euroteranga/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminApi, staffActor, type StaffActor } from '../../support/admin-helpers.js';
-import { customerBaggageApi, staffBaggageApi } from '../../support/baggage-helpers.js';
 import {
   bookableFixture,
   bookingApi,
@@ -73,7 +72,12 @@ function deploy(config: string | null, url: string) {
   );
 }
 
-/** A real PR-13 database is populated through the API before only PR-14 runs. */
+/** A real PR-13 database is populated before later migrations run.
+ *
+ * Most fixtures use today's APIs. Baggage is seeded through the historical
+ * PR-13 tables themselves because the current Baggage API legitimately
+ * expects the newer BAGGAGE-PLUS schema to exist.
+ */
 describe('upgrade from a real PR-13 database', () => {
   let root: ReturnType<typeof createDatabaseClient>;
   let raw: ReturnType<typeof createDatabaseClient>;
@@ -197,17 +201,86 @@ describe('upgrade from a real PR-13 database', () => {
       },
     );
     if (reviewed.status !== 201) throw new Error(`review fixture failed: ${reviewed.text}`);
-    // Baggage with an event history, including a resolved exception.
-    const bag = await customerBaggageApi(customer).register(bookingReference, passengerReference);
-    for (const event of [
-      { type: 'CHECKED_IN' },
-      { type: 'DAMAGED' },
-      { type: 'EXCEPTION_RESOLVED' },
-    ]) {
-      const recorded = await staffBaggageApi(operator).event(bag.body.reference, event);
-      if (recorded.status !== 201) throw new Error(`baggage fixture failed: ${recorded.text}`);
-    }
-    await staffBaggageApi(operator).weight(bag.body.reference, { measuredWeightKg: '18.250' });
+    // Baggage with a real PR-13 event history, including a resolved exception.
+    // Seed it against the historical schema so this migration test does not
+    // require a newer application service to run on an older database.
+    const baggageReference = 'ETG-0123456789AB';
+    await raw.$transaction(async (tx) => {
+      const [subject] = await tx.$queryRawUnsafe<
+        Array<{ booking_id: string; passenger_id: string }>
+      >(
+        `SELECT b.id::text AS booking_id, p.id::text AS passenger_id
+         FROM booking b
+         JOIN booking_passenger bp ON bp.booking_id = b.id
+         JOIN passenger p ON p.id = bp.passenger_id
+         WHERE b.reference = $1 AND p.reference = $2`,
+        bookingReference,
+        passengerReference,
+      );
+      if (!subject) throw new Error('historical baggage subject fixture is missing');
+
+      const [bag] = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+        `INSERT INTO baggage (
+           id, reference, booking_id, passenger_id, type,
+           lifecycle_status, created_at, updated_at
+         ) VALUES (
+           gen_random_uuid(), $1, $2::uuid, $3::uuid, 'SUITCASE',
+           'REGISTERED', now(), now()
+         )
+         RETURNING id::text AS id`,
+        baggageReference,
+        subject.booking_id,
+        subject.passenger_id,
+      );
+      if (!bag) throw new Error('historical baggage row fixture was not created');
+
+      const record = async (
+        sequence: number,
+        type: string,
+        lifecycleStatus: string,
+        exceptionStatus: string | null,
+        measuredWeightKg: string | null,
+        actorIdentityId: string,
+        fingerprintChar: string,
+      ) => {
+        await tx.$executeRawUnsafe(
+          `INSERT INTO baggage_event (
+             id, baggage_id, sequence, type, lifecycle_status, exception_status,
+             measured_weight_kg, occurred_at, actor_identity_id, payload_fingerprint
+           ) VALUES (
+             gen_random_uuid(), $1::uuid, $2, $3::baggage_event_type,
+             $4::baggage_lifecycle_status, $5::baggage_exception_status,
+             $6::numeric, now(), $7::uuid, $8
+           )`,
+          bag.id,
+          sequence,
+          type,
+          lifecycleStatus,
+          exceptionStatus,
+          measuredWeightKg,
+          actorIdentityId,
+          fingerprintChar.repeat(64),
+        );
+        await tx.$executeRawUnsafe(
+          `UPDATE baggage
+           SET lifecycle_status = $2::baggage_lifecycle_status,
+               exception_status = $3::baggage_exception_status,
+               measured_weight_kg = $4::numeric,
+               updated_at = now()
+           WHERE id = $1::uuid`,
+          bag.id,
+          lifecycleStatus,
+          exceptionStatus,
+          measuredWeightKg,
+        );
+      };
+
+      await record(1, 'REGISTERED', 'REGISTERED', null, null, customer.id, 'a');
+      await record(2, 'CHECKED_IN', 'CHECKED_IN', null, null, operator.id, 'b');
+      await record(3, 'DAMAGED', 'CHECKED_IN', 'DAMAGED', null, operator.id, 'c');
+      await record(4, 'EXCEPTION_RESOLVED', 'CHECKED_IN', null, null, operator.id, 'd');
+      await record(5, 'WEIGHT_UPDATED', 'CHECKED_IN', null, '18.250', operator.id, 'e');
+    });
     // Other PR-10 states: a FAILED attempt, a PENDING retry, a cancelled hold.
     const fixture = await bookableFixture(t.app, { amount: () => 1_250 });
     const retried = await bookingApi(customer).post('/bookings', holdBody(fixture, 1, 3, ['2A']));
