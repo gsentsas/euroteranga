@@ -193,16 +193,15 @@ test.describe('public help pages (WEB-2A)', () => {
     });
   }
 
-  test(
-    'the baggage page does not invent an allowance, weight or public amount',
-    async ({ page }) => {
-      await page.goto(appUrl(web, '/bagages'));
-      const text = await page.locator('main').innerText();
-      expect(text).toContain('ne fixe ni franchise, ni poids maximal, ni supplément');
-      expect(text).toContain('Seules les conditions communiquées pour votre départ');
-      expect(text).not.toMatch(/\b\d+(?:[.,]\d+)?\s*(?:kg|kilos?|€|EUR|XOF|bagages?)\b/i);
-    },
-  );
+  test('the baggage page does not invent an allowance, weight or public amount', async ({
+    page,
+  }) => {
+    await page.goto(appUrl(web, '/bagages'));
+    const text = await page.locator('main').innerText();
+    expect(text).toContain('ne fixe ni franchise, ni poids maximal, ni supplément');
+    expect(text).toContain('Seules les conditions communiquées pour votre départ');
+    expect(text).not.toMatch(/\b\d+(?:[.,]\d+)?\s*(?:kg|kilos?|€|EUR|XOF|bagages?)\b/i);
+  });
 
   test('FAQPage mirrors the five visible FAQ questions and answers', async ({ page }) => {
     await page.goto(appUrl(web, '/faq'));
