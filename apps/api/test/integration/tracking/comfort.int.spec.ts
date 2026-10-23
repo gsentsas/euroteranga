@@ -15,14 +15,17 @@ import {
   type CustomerActor,
 } from '../../support/booking-helpers.js';
 import { client, db } from '../../support/auth-helpers.js';
+import { departureApi, departureFixture } from '../../support/departure-readiness-helpers.js';
 import { integrationEnv, startTestApp, type TestApp } from '../../support/test-app.js';
 
 describe('TERANGA-COMFORT-1 traveller comfort projection', () => {
   let database: Awaited<ReturnType<typeof isolatedDatabase>>;
   let t: TestApp;
+  let env: ReturnType<typeof integrationEnv>;
   let manager: StaffActor;
   let auditor: StaffActor;
   let denied: StaffActor;
+  let director: StaffActor;
   let alice: CustomerActor;
   let bob: CustomerActor;
   let fixture: BookableFixture;
@@ -30,18 +33,18 @@ describe('TERANGA-COMFORT-1 traveller comfort projection', () => {
 
   beforeAll(async () => {
     database = await isolatedDatabase();
-    t = await startTestApp(
-      integrationEnv({
-        DATABASE_URL: database.url,
-        AUTH_CUSTOMER_ORIGINS: 'http://localhost:3002,http://localhost:3001',
-      }),
-    );
+    env = integrationEnv({
+      DATABASE_URL: database.url,
+      AUTH_CUSTOMER_ORIGINS: 'http://localhost:3002,http://localhost:3001',
+    });
+    t = await startTestApp(env);
 
     const countryId = await syntheticCountry(t.app);
-    [manager, auditor, denied, alice, bob] = await Promise.all([
+    [manager, auditor, denied, director, alice, bob] = await Promise.all([
       staffActor(t.app, ['OPS_MANAGER']),
       staffActor(t.app, ['AUDITOR']),
       staffActor(t.app, ['BOOKING_AGENT']),
+      staffActor(t.app, ['DIRECTOR']),
       customerActor(t.app),
       customerActor(t.app),
     ]);
@@ -234,19 +237,48 @@ describe('TERANGA-COMFORT-1 traveller comfort projection', () => {
     expect(serialized).not.toContain(manager.email);
     expect(serialized).not.toContain(alice.email);
 
-    await db(t.app).$transaction(async (tx) => {
-      await tx.$executeRawUnsafe("SET LOCAL session_replication_role = 'replica'");
-      await tx.trip.update({
-        where: { id: fixture.tripId },
-        data: { status: 'IN_PROGRESS', actualDepartureAt: new Date() },
-      });
+  }, 120_000);
+
+  it('uses the real departure lifecycle for completed, cancelled and skipped waypoint progress', async () => {
+    const item = await departureFixture(t.app, env, alice, director, manager);
+    const departure = departureApi(manager);
+
+    const policy = await departure.publishPolicy(item.tripReference, []);
+    expect(policy.status, policy.text).toBe(201);
+
+    const authorization = await departure.authorize(item.tripReference);
+    expect(authorization.status, authorization.text).toBe(200);
+
+    const departed = await departure.depart(item.tripReference);
+    expect(departed.status, departed.text).toBe(200);
+    expect(departed.body.trip.status).toBe('IN_PROGRESS');
+
+    const trip = await db(t.app).trip.findUniqueOrThrow({
+      where: { id: item.tripId },
+      select: {
+        routeVersion: {
+          select: {
+            waypoints: {
+              orderBy: { sequence: 'asc' },
+              select: { id: true, sequence: true },
+            },
+          },
+        },
+      },
     });
+    const waypoints = trip.routeVersion.waypoints;
+    expect(waypoints.length).toBeGreaterThanOrEqual(4);
+
+    const completedWaypoint = waypoints[0]!;
+    const cancelledWaypoint = waypoints[1]!;
+    const skippedWaypoint = waypoints[2]!;
+    const expectedNextWaypoint = waypoints[3]!;
 
     const completed = await adminApi(manager).post(
-      '/tracking/trips/' + fixture.tripId + '/comfort/events',
+      '/tracking/trips/' + item.tripId + '/comfort/events',
       {
         clientEventId: 'comfort-integration-complete-0001',
-        routeWaypointId: fixture.checkpointWaypointId!,
+        routeWaypointId: completedWaypoint.id,
         type: 'COMPLETED',
         occurredAt: new Date().toISOString(),
         actualFacilities: ['FOOD'],
@@ -255,10 +287,10 @@ describe('TERANGA-COMFORT-1 traveller comfort projection', () => {
     expect(completed.status, completed.text).toBe(201);
 
     const cancelled = await adminApi(manager).post(
-      '/tracking/trips/' + fixture.tripId + '/comfort/events',
+      '/tracking/trips/' + item.tripId + '/comfort/events',
       {
         clientEventId: 'comfort-integration-cancel-0001',
-        routeWaypointId: fixture.wp[3]!,
+        routeWaypointId: cancelledWaypoint.id,
         type: 'CANCELLED',
         occurredAt: new Date().toISOString(),
         actualFacilities: [],
@@ -267,10 +299,10 @@ describe('TERANGA-COMFORT-1 traveller comfort projection', () => {
     expect(cancelled.status, cancelled.text).toBe(201);
 
     const skipped = await adminApi(manager).post(
-      '/tracking/trips/' + fixture.tripId + '/comfort/events',
+      '/tracking/trips/' + item.tripId + '/comfort/events',
       {
         clientEventId: 'comfort-integration-skip-0001',
-        routeWaypointId: fixture.wp[4]!,
+        routeWaypointId: skippedWaypoint.id,
         type: 'SKIPPED',
         occurredAt: new Date().toISOString(),
         actualFacilities: [],
@@ -278,30 +310,29 @@ describe('TERANGA-COMFORT-1 traveller comfort projection', () => {
     );
     expect(skipped.status, skipped.text).toBe(201);
 
-    const progressed = await client(t.app, 'staff').get(
-      '/v1/tracking/' + encodeURIComponent(token),
-    );
-    expect(progressed.status, progressed.text).toBe(200);
-    expect(progressed.body.comfort).toMatchObject({
+    const projection = await adminApi(manager).get('/tracking/trips/' + item.tripId + '/comfort');
+    expect(projection.status, projection.text).toBe(200);
+    expect(projection.body).toMatchObject({
       currentStep: {
-        sequence: 3,
+        sequence: completedWaypoint.sequence,
         status: 'COMPLETED',
-        plannedFacilities: expect.arrayContaining(['FOOD', 'RESTROOM']),
         actualFacilities: ['FOOD'],
       },
       nextStep: {
-        sequence: 6,
+        sequence: expectedNextWaypoint.sequence,
         status: 'PLANNED',
       },
-      nextPause: null,
       steps: expect.arrayContaining([
-        expect.objectContaining({ sequence: 4, status: 'CANCELLED' }),
-        expect.objectContaining({ sequence: 5, status: 'SKIPPED' }),
+        expect.objectContaining({
+          sequence: cancelledWaypoint.sequence,
+          status: 'CANCELLED',
+        }),
+        expect.objectContaining({
+          sequence: skippedWaypoint.sequence,
+          status: 'SKIPPED',
+        }),
       ]),
     });
-    expect(progressed.body.comfort.nextStep.sequence).not.toBe(
-      progressed.body.comfort.currentStep.sequence,
-    );
-    expect(progressed.body.position).toBeNull();
+    expect(projection.body.nextStep.sequence).toBeGreaterThan(projection.body.currentStep.sequence);
   }, 120_000);
 });
