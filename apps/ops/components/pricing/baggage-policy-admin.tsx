@@ -1,8 +1,6 @@
 'use client';
 
 import {
-  formatMoney,
-  parseMoneyToMinor,
   type AdminFareTableSummary,
   type BaggagePolicy,
   type BaggagePolicyVersion,
@@ -19,6 +17,36 @@ interface TierDraft {
   label: string;
   maxExcessWeightKg: string;
   amount: string;
+}
+
+
+function parseExactMoney(input: string, minorUnit: number): string | null {
+  const cleaned = input.replace(/[\s\u00a0\u202f]/g, '');
+  const match = /^(\d+)(?:[.,](\d+))?$/.exec(cleaned);
+  if (!match) return null;
+  const integer = match[1] ?? '0';
+  const fraction = match[2] ?? '';
+  if (fraction.length > minorUnit) return null;
+  const minor =
+    BigInt(integer) * 10n ** BigInt(minorUnit) +
+    BigInt(fraction.padEnd(minorUnit, '0') || '0');
+  return minor <= 9_223_372_036_854_775_807n ? minor.toString() : null;
+}
+
+function formatExactMoney(amountMinor: string, currencyCode: string, minorUnit: number): string {
+  const amount = BigInt(amountMinor);
+  const factor = 10n ** BigInt(minorUnit);
+  const integer = amount / factor;
+  const fraction = (amount % factor).toString().padStart(minorUnit, '0');
+  return `${integer.toString()}${minorUnit ? `,${fraction}` : ''} ${currencyCode}`;
+}
+
+function moneyInputValue(amountMinor: string, minorUnit: number): string {
+  const amount = BigInt(amountMinor);
+  const factor = 10n ** BigInt(minorUnit);
+  const integer = amount / factor;
+  const fraction = (amount % factor).toString().padStart(minorUnit, '0');
+  return `${integer.toString()}${minorUnit ? `,${fraction}` : ''}`;
 }
 
 function statusLabel(status: BaggagePolicyVersion['status']) {
@@ -140,7 +168,7 @@ function DraftEditor({
       return;
     }
     const parsed = tiers.map((tier, position) => {
-      const amountMinor = parseMoneyToMinor(tier.amount, policy.currencyMinorUnit);
+      const amountMinor = parseExactMoney(tier.amount, policy.currencyMinorUnit);
       return {
         ...tier,
         position,
@@ -167,7 +195,7 @@ function DraftEditor({
             code: tier.code,
             label: tier.label,
             maxExcessWeightKg: tier.maxExcessWeightKg.replace(',', '.'),
-            chargeMinor: String(tier.amountMinor!),
+            chargeMinor: tier.amountMinor!,
             position: tier.position,
           })),
         }),
@@ -388,7 +416,7 @@ function PolicyDetail({
                     <tr key={tier.id}>
                       <th>{tier.code} — {tier.label}</th>
                       <td>{tier.maxExcessWeightKg.replace('.', ',')} kg</td>
-                      <td>{formatMoney(BigInt(tier.chargeMinor), policy.currencyCode, policy.currencyMinorUnit)}</td>
+                      <td>{formatExactMoney(tier.chargeMinor, policy.currencyCode, policy.currencyMinorUnit)}</td>
                     </tr>
                   ))}
                 </tbody>
