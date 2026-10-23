@@ -311,3 +311,194 @@ BEGIN
   RETURN NEW;
 END;
 $quote$;
+
+
+-- The owner may create the immutable initial QUOTE event together with their
+-- request. Every later lifecycle/exception/assignment event remains STAFF-only.
+
+CREATE OR REPLACE FUNCTION "road_freight_event_guard"() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+  current RECORD;
+  previous_sequence INTEGER;
+  waypoint_version UUID;
+  trip_version UUID;
+  expected_next "road_freight_lifecycle_status";
+  actor_realm "auth_realm";
+  actor_status "auth_identity_status";
+  now_at TIMESTAMPTZ := clock_timestamp();
+BEGIN
+  IF TG_OP <> 'INSERT' THEN
+    RAISE EXCEPTION 'road freight event history is append-only'
+      USING ERRCODE = 'object_not_in_prerequisite_state';
+  END IF;
+
+  SELECT s.* INTO current
+  FROM "road_freight_shipment" s
+  WHERE s."id" = NEW."shipment_id"
+  FOR UPDATE;
+  IF NOT FOUND THEN RETURN NEW; END IF;
+
+  SELECT a."realm", a."status" INTO actor_realm, actor_status
+  FROM "auth_identity" a
+  WHERE a."id" = NEW."actor_identity_id"
+  FOR SHARE;
+  IF NOT FOUND
+     OR actor_status <> 'ACTIVE'
+     OR (
+       actor_realm <> 'STAFF'
+       AND NOT (
+         actor_realm = 'CUSTOMER'
+         AND current."customer_identity_id" = NEW."actor_identity_id"
+         AND NEW."type" = 'QUOTE'
+         AND NOT EXISTS (
+           SELECT 1
+           FROM "road_freight_shipment_event" existing
+           WHERE existing."shipment_id" = NEW."shipment_id"
+         )
+       )
+     ) THEN
+    RAISE EXCEPTION 'only active STAFF may record road freight events after customer creation'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF NEW."occurred_at" < GREATEST(current."created_at", now_at - interval '30 days')
+     OR NEW."occurred_at" > now_at + interval '5 minutes' THEN
+    RAISE EXCEPTION 'road freight event occurred_at is outside the accepted window'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  NEW."recorded_at" := now_at;
+
+  SELECT max(e."sequence") INTO previous_sequence
+  FROM "road_freight_shipment_event" e
+  WHERE e."shipment_id" = NEW."shipment_id";
+
+  IF NEW."sequence" <> COALESCE(previous_sequence, 0) + 1 THEN
+    RAISE EXCEPTION 'road freight event sequence must be gapless'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF previous_sequence IS NULL THEN
+    IF NEW."type" <> 'QUOTE'
+       OR NEW."lifecycle_status" <> 'QUOTE'
+       OR NEW."exception_status" IS NOT NULL
+       OR NEW."trip_id" IS NOT NULL
+       OR NEW."vehicle_id" IS NOT NULL THEN
+      RAISE EXCEPTION 'road freight first event must be QUOTE'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF current."lifecycle_status" IN ('DELIVERED', 'REFUSED', 'CANCELLED') THEN
+    RAISE EXCEPTION 'road freight lifecycle is terminal'
+      USING ERRCODE = 'object_not_in_prerequisite_state';
+  END IF;
+
+  IF NEW."route_waypoint_id" IS NOT NULL THEN
+    IF current."trip_id" IS NULL THEN
+      RAISE EXCEPTION 'road freight event waypoint requires an assigned trip'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    SELECT rw."route_version_id" INTO waypoint_version
+    FROM "route_waypoint" rw WHERE rw."id" = NEW."route_waypoint_id";
+    SELECT t."route_version_id" INTO trip_version FROM "trip" t WHERE t."id" = current."trip_id";
+    IF waypoint_version IS DISTINCT FROM trip_version THEN
+      RAISE EXCEPTION 'road freight event waypoint does not belong to assigned trip'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  IF NEW."trip_id" IS DISTINCT FROM current."trip_id"
+     OR NEW."vehicle_id" IS DISTINCT FROM current."vehicle_id" THEN
+    RAISE EXCEPTION 'road freight event assignment snapshot mismatch'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW."type" = 'ASSIGNMENT_UPDATED' THEN
+    IF current."lifecycle_status" <> 'ASSIGNED'
+       OR current."exception_status" IS NOT NULL
+       OR NEW."lifecycle_status" <> 'ASSIGNED'
+       OR NEW."exception_status" IS NOT NULL THEN
+      RAISE EXCEPTION 'road freight event projection invalid for assignment update'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF NEW."type" = 'EXCEPTION_RESOLVED' THEN
+    IF current."exception_status" IS NULL
+       OR NEW."lifecycle_status" <> current."lifecycle_status"
+       OR NEW."exception_status" IS NOT NULL THEN
+      RAISE EXCEPTION 'road freight exception resolution is invalid'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF NEW."type" IN ('HELD', 'CUSTOMS_HOLD', 'DAMAGED') THEN
+    IF current."exception_status" IS NOT NULL
+       OR current."lifecycle_status" NOT IN (
+         'BOOKED', 'RECEIVED', 'INSPECTED', 'ASSIGNED', 'LOADED',
+         'DEPARTED', 'IN_TRANSIT', 'ARRIVED', 'AVAILABLE'
+       )
+       OR NEW."lifecycle_status" <> current."lifecycle_status"
+       OR NEW."exception_status"::text <> NEW."type"::text THEN
+      RAISE EXCEPTION 'road freight exception opening is invalid'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF NEW."type" = 'REFUSED' THEN
+    IF NEW."lifecycle_status" <> 'REFUSED' OR NEW."exception_status" IS NOT NULL THEN
+      RAISE EXCEPTION 'road freight lifecycle REFUSED projection invalid'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF NEW."type" = 'CANCELLED' THEN
+    IF current."lifecycle_status" NOT IN ('QUOTE', 'BOOKED', 'RECEIVED', 'INSPECTED', 'ASSIGNED')
+       OR NEW."lifecycle_status" <> 'CANCELLED'
+       OR NEW."exception_status" IS NOT NULL THEN
+      RAISE EXCEPTION 'road freight lifecycle cancellation invalid'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF current."exception_status" IS NOT NULL THEN
+    RAISE EXCEPTION 'road freight exception must be resolved before progression'
+      USING ERRCODE = 'object_not_in_prerequisite_state';
+  END IF;
+
+  expected_next := CASE current."lifecycle_status"
+    WHEN 'QUOTE' THEN 'BOOKED'
+    WHEN 'BOOKED' THEN 'RECEIVED'
+    WHEN 'RECEIVED' THEN 'INSPECTED'
+    WHEN 'INSPECTED' THEN 'ASSIGNED'
+    WHEN 'ASSIGNED' THEN 'LOADED'
+    WHEN 'LOADED' THEN 'DEPARTED'
+    WHEN 'DEPARTED' THEN 'IN_TRANSIT'
+    WHEN 'IN_TRANSIT' THEN 'ARRIVED'
+    WHEN 'ARRIVED' THEN 'AVAILABLE'
+    WHEN 'AVAILABLE' THEN 'DELIVERED'
+    ELSE NULL
+  END;
+
+  IF expected_next IS NULL
+     OR NEW."type"::text <> expected_next::text
+     OR NEW."lifecycle_status" <> expected_next
+     OR NEW."exception_status" IS NOT NULL THEN
+    RAISE EXCEPTION 'road freight lifecycle transition invalid'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW."type" = 'ASSIGNED' AND (current."trip_id" IS NULL OR current."vehicle_id" IS NULL) THEN
+    RAISE EXCEPTION 'road freight assignment event requires trip and vehicle'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
