@@ -100,14 +100,19 @@ const customerCargoEventSelect = {
     select: {
       sequence: true,
       stop: { select: { code: true, name: true } },
-      checkpoint: { select: { code: true, name: true, travellerVisible: true } },
+      checkpoint: {
+        select: { code: true, name: true, travellerVisible: true },
+      },
     },
   },
 } as const satisfies Prisma.RoadFreightShipmentEventSelect;
 
 const customerCargoDetailSelect = {
   ...customerCargoSummarySelect,
-  events: { orderBy: { sequence: 'asc' as const }, select: customerCargoEventSelect },
+  events: {
+    orderBy: { sequence: 'asc' as const },
+    select: customerCargoEventSelect,
+  },
 } as const satisfies Prisma.RoadFreightShipmentSelect;
 
 type CustomerCargoSummaryRow = Prisma.RoadFreightShipmentGetPayload<{
@@ -217,7 +222,9 @@ function customerCargoDetailView(row: CustomerCargoDetailRow) {
   const base = customerCargoSummaryView(row);
   const timeline = row.events.map((event) => {
     const waypoint = event.routeWaypoint;
-    const visibleCheckpoint = waypoint?.checkpoint?.travellerVisible ? waypoint.checkpoint : null;
+    const visibleCheckpoint = waypoint?.checkpoint?.travellerVisible
+      ? waypoint.checkpoint
+      : null;
     const place = waypoint?.stop ?? visibleCheckpoint;
     return {
       sequence: event.sequence,
@@ -391,7 +398,10 @@ export class CustomerCargoService {
     const shipmentReference = normalizeCargoReference(rawShipmentReference);
     if (!shipmentReference) throw CargoErrors.notFound();
     const shipment = await this.database.client.roadFreightShipment.findFirst({
-      where: { reference: shipmentReference, customerIdentityId: actor.identityId },
+      where: {
+        reference: shipmentReference,
+        customerIdentityId: actor.identityId,
+      },
       select: { id: true },
     });
     if (!shipment) throw CargoErrors.notFound();
@@ -444,7 +454,10 @@ export class CustomerCargoService {
           select: customerQuoteSelect,
         });
 
-        if (input.expectedUpdatedAt && before.updatedAt.getTime() !== input.expectedUpdatedAt.getTime()) {
+        if (
+          input.expectedUpdatedAt &&
+          before.updatedAt.getTime() !== input.expectedUpdatedAt.getTime()
+        ) {
           throw CargoQuoteErrors.conflict();
         }
         if (before.status !== 'ISSUED') throw CargoQuoteErrors.invalidTransition();
