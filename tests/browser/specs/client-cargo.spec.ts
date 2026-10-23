@@ -102,10 +102,7 @@ test.describe('CLIENT-CARGO-1 customer workspace', () => {
     await expect(detail).toContainText('Aucun devis n’a encore été émis.');
     await expect(page.locator('body')).not.toContainText('BROWSER-PRIVATE-OPS-NOTE');
 
-    const issued = await admin.post(
-      `/cargo/${reference}/quotes/${quoteReference}/issue`,
-      {},
-    );
+    const issued = await admin.post(`/cargo/${reference}/quotes/${quoteReference}/issue`, {});
     expect(issued.status()).toBe(200);
 
     await cargo.getByRole('button', { name: `Consulter ${reference}` }).click();
