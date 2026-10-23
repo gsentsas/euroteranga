@@ -104,7 +104,7 @@ export function newBlock(type: ContentBlockType): ContentBlock {
     case 'banner':
       return { type, tone: 'info', text: '' };
     case 'ownerInfo':
-      return { type, kind: 'contact', title: 'Informations' };
+      return { type, kind: 'contact', title: '' };
     case 'sectionNav':
       return {
         type,
