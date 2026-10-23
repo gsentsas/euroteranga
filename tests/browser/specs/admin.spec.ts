@@ -150,7 +150,16 @@ test('ops: SUPER_ADMIN signs in with MFA, invites, manages roles and status, rea
   await menuButton.click();
   await expect(menuButton).toHaveAttribute('aria-expanded', 'true');
   await expect(mainNav(page)).toBeVisible();
-  await mainNav(page).getByRole('link', { name: 'Vue d’ensemble' }).click();
+
+  const closeButton = page.getByRole('button', { name: 'Fermer le menu' }).first();
+  const closeButtonBox = await closeButton.boundingBox();
+  expect(closeButtonBox?.width).toBeGreaterThanOrEqual(44);
+  expect(closeButtonBox?.height).toBeGreaterThanOrEqual(44);
+
+  const overviewLink = mainNav(page).getByRole('link', { name: 'Vue d’ensemble' });
+  const overviewBox = await overviewLink.boundingBox();
+  expect(overviewBox?.height).toBeGreaterThanOrEqual(44);
+  await overviewLink.click();
   await expect(page).toHaveURL(appUrl(ops, '/'));
   await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
 
