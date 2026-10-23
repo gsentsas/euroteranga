@@ -40,8 +40,9 @@ They are owner, infrastructure or production-activation inputs:
    explicit owner action guarded by `--confirm-production`.
 2. **Real payments remain blocked.** The provider abstraction exists, but no
    real PSP contract and credentials have been supplied (B1).
-3. **Passenger document production storage remains blocked.** Private
-   S3-compatible storage and production ClamAV are external inputs (B2/B3).
+3. **Passenger document storage architecture is decided.** Private LOCAL
+   filesystem storage is selected; production enablement now depends on
+   provisioning the dedicated directory plus ClamAV and backup coverage (B3/B9/B10).
 4. **Contact, Legal and Privacy are complete in code but fail closed without
    owner values.** B4, B5 and B7 must be supplied before those pages can be
    published.
@@ -383,15 +384,16 @@ See F-OBS-01 and F-INF-02.
    the explicit deployment (F-INF-01 / B10).
 4. Real bookings must remain impossible while payments are `DISABLED` and
    B1/B6 are unresolved.
-5. Passenger document production activation must not occur until both private
-   storage and production malware scanning are configured (B2/B3).
+5. Passenger document production activation must not occur until the private
+   local root, production malware scanning and backup coverage are configured
+   (B3/B9/B10).
 
 ## Blockers for exploitation (owner input required)
 
 | ID  | Decision or input                                                                                                                                | Blocks                                  |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
 | B1  | Payment provider (PSP), merchant contract and credentials                                                                                        | Real payments (F-PAY-01)                |
-| B2  | Private S3-compatible storage (encryption at rest, bucket policy, credentials, backups, retention)                                               | Passenger documents (F-INF-03)          |
+| B2  | **RESOLVED:** private LOCAL filesystem storage selected; no S3. Dedicated persistent root outside web/releases, owner-only permissions.          | —                                       |
 | B3  | Root action: install the ClamAV stack (OPS-3A runbook) and switch `MALWARE_SCANNER`                                                              | Passenger documents                     |
 | B4  | Legal identity: company name, legal form, registered address, share capital, registration number (RCS or NINEA), publication director, host, VAT | Legal notice, terms, privacy (F-WEB-01) |
 | B5  | Privacy: data controller, DPO or contact, retention periods, processors, transfers outside the EU                                                | Privacy policy                          |
@@ -454,6 +456,6 @@ and is merged only when CI and CodeQL are green.
 | Fleet     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No vehicle in production (F-DATA-01)                                                    |
 | Trips     | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | No trip in production (F-DATA-01)                                                       |
 | Payment   | ⚠️   | ✅  | —    | ✅    | ✅   | ❌          | SANDBOX only (F-PAY-01)                                                                 |
-| Documents | ✅   | ✅  | —    | ✅    | ✅   | ❌          | Storage and scanner disabled (F-INF-03)                                                 |
+| Documents | ✅   | ✅  | —    | ✅    | ✅   | ❌          | LOCAL architecture selected; ClamAV, backup coverage and production provisioning remain |
 | Tracking  | ✅   | ✅  | ❌   | ✅    | ✅   | ⚠️          | Needs trips; public availability still depends on configured trip data                  |
 | Finance   | ✅   | ✅  | —    | ✅    | ✅   | ⚠️          | Operational finance only; no statutory accounting                                       |
