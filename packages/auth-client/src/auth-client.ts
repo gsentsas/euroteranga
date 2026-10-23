@@ -2535,11 +2535,7 @@ export interface BorderEventResult {
 }
 
 export type ComfortWaypointStatus =
-  | 'PLANNED'
-  | 'CONFIRMED'
-  | 'COMPLETED'
-  | 'CANCELLED'
-  | 'SKIPPED';
+  'PLANNED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'SKIPPED';
 
 export type ComfortFacility = 'RESTROOM' | 'SHOWER' | 'FOOD' | 'SECURE_PARKING' | 'FUEL';
 
