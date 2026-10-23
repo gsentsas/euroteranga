@@ -175,11 +175,9 @@ export function CustomerCargo() {
         setError(result.error.message);
         return;
       }
-      setNotice(
-        `Devis ${result.data.reference} accepté. Aucun paiement n’a été déclenché.`,
-      );
       await open(detail.reference);
       await load();
+      setNotice(`Devis ${result.data.reference} accepté. Aucun paiement n’a été déclenché.`);
     } finally {
       setBusy(null);
     }
