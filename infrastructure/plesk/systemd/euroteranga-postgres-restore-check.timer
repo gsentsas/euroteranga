@@ -1,0 +1,12 @@
+[Unit]
+Description=Verify the latest EURO TERANGA PostgreSQL backup by restoring it
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+RandomizedDelaySec=20m
+Persistent=true
+AccuracySec=5m
+Unit=euroteranga-postgres-restore-check.service
+
+[Install]
+WantedBy=timers.target
