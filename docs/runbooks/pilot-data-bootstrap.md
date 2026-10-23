@@ -132,7 +132,7 @@ the record.
 ### From pilot-corridor/2: automatic, only for the bootstrap's own coaches
 
 A coach the bootstrap created under version 2 is renamed by the next run
-(`completed`, "renamed from "Teranga 01" for pilot-corridor/3"; `planned`
+(`completed`, "renamed from "Teranga 01" for pilot-corridor/4"; `planned`
 with the same text in a dry run) only if all of these hold:
 
 - it still has every other version 2 value (neutral make and model, no
