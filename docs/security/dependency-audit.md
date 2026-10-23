@@ -44,14 +44,15 @@ installing machine is downloaded.
 
 Declared in `pnpm-workspace.yaml` → `overrides`.
 
-| Package        | From   | To     | Advisories                                                 | Reached through                     |
-| -------------- | ------ | ------ | ---------------------------------------------------------- | ----------------------------------- |
-| `mysql2`       | 3.15.3 | 3.24.5 | GHSA-3f6p-5ww8-9rcr (high), GHSA-rgwj-5xj2-c3m3 (moderate) | Prisma CLI (dev only; MySQL unused) |
-| `deepmerge-ts` | 7.1.5  | 8.0.2  | GHSA-ggr8-5vv4-36mx (high)                                 | Prisma CLI → `@prisma/config`       |
+| Package        | From   | To     | Advisories                                                 | Reached through                                 |
+| -------------- | ------ | ------ | ---------------------------------------------------------- | ----------------------------------------------- |
+| `body-parser`  | 2.3.0  | 2.4.0  | GHSA-27r3-jxmh-p828 (high)                                 | NestJS platform-express → Express (runtime API) |
+| `mysql2`       | 3.15.3 | 3.24.5 | GHSA-3f6p-5ww8-9rcr (high), GHSA-rgwj-5xj2-c3m3 (moderate) | Prisma CLI (dev only; MySQL unused)             |
+| `deepmerge-ts` | 7.1.5  | 8.0.2  | GHSA-ggr8-5vv4-36mx (high)                                 | Prisma CLI → `@prisma/config`                   |
 
 Verified after override: `prisma generate`, `validate`, `migrate deploy`,
 `migrate status`, `db execute` and the API integration tests.
-Remove each override once Prisma ships the patched version itself.
+The `body-parser` override is runtime-facing and should be removed once Express/NestJS resolves to 2.4.0 or newer naturally. Remove each Prisma-tooling override once Prisma ships the patched version itself.
 
 ## Accepted exceptions (no fix available)
 
