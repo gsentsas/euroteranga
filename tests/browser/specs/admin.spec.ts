@@ -141,10 +141,12 @@ test('ops: SUPER_ADMIN signs in with MFA, invites, manages roles and status, rea
       page.getByRole('row').filter({ hasText: action }).filter({ hasText: admin.email }).first(),
     ).toBeVisible();
   }
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 400, height: 844 });
   const menuButton = page.getByRole('button', { name: 'Menu', exact: true });
   await expect(menuButton).toBeVisible();
   await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+  const menuButtonBox = await menuButton.boundingBox();
+  expect(menuButtonBox?.height).toBeGreaterThanOrEqual(44);
   await menuButton.click();
   await expect(menuButton).toHaveAttribute('aria-expanded', 'true');
   await expect(mainNav(page)).toBeVisible();
