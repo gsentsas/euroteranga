@@ -219,9 +219,7 @@ function assertExpectedDraft(draft: { updatedAt: Date } | null, expected: string
   }
 }
 
-async function publishedSiteSettings(
-  tx: DatabaseTransaction,
-): Promise<SiteSettings | null> {
+async function publishedSiteSettings(tx: DatabaseTransaction): Promise<SiteSettings | null> {
   const settingsEntry = await tx.contentEntry.findUnique({
     where: {
       kind_key: {
@@ -263,8 +261,9 @@ async function assertOwnerInfoReady(
   const kinds = [
     ...new Set(
       document.blocks
-        .filter((block): block is Extract<PageDocument['blocks'][number], { type: 'ownerInfo' }> =>
-          block.type === 'ownerInfo',
+        .filter(
+          (block): block is Extract<PageDocument['blocks'][number], { type: 'ownerInfo' }> =>
+            block.type === 'ownerInfo',
         )
         .map((block) => block.kind),
     ),
