@@ -58,3 +58,19 @@ export function pagesSeed() {
     unitAmountMinor: 24_900,
   };
 }
+
+/**
+ * WEB-CARGO-1: the real /fret template and three visibility controls used
+ * to prove that sitemap eligibility depends on publication, archive state
+ * and the indexable flag — never merely on the page path.
+ */
+export function cargoPageSeed() {
+  const raw = process.env.E2E_RUN_ID;
+  if (!raw) throw new Error('E2E_RUN_ID is set by global-setup.ts');
+  return {
+    path: '/fret',
+    draftPath: `/e2e-fret-brouillon-${raw}`,
+    archivedPath: `/e2e-fret-archive-${raw}`,
+    noIndexPath: `/e2e-fret-non-indexe-${raw}`,
+  };
+}

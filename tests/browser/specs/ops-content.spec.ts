@@ -271,6 +271,66 @@ test.describe('ops website content editor', () => {
     expect(errors).toEqual([]);
   });
 
+  test('the cargo template pre-fills /fret and stays an editable unpublished draft', async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(120_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    const run = process.env.E2E_RUN_ID ?? '';
+    const path = `/e2e-modele-fret-${run}`;
+
+    await signedIn(page.context(), 'contentEditor');
+    await page.goto(appUrl(ops, '/contenus'));
+    const create = page.getByRole('form', { name: 'Créer une page' });
+    await create.getByLabel('Modèle').selectOption({ label: 'Colis & fret' });
+    await expect(create.getByLabel('Chemin public')).toHaveValue('/fret');
+    await expect(create.getByLabel('Titre')).toHaveValue('Colis & fret Paris ↔ Dakar');
+    await expect(create.getByLabel('Description pour les moteurs de recherche')).toHaveValue(
+      'Envoyez vos colis et votre fret routier entre Paris et Dakar avec EURO TERANGA : prise en charge, suivi sécurisé et devis adapté à votre envoi.',
+    );
+
+    // /fret is already the published fixture: retain the template proof but
+    // create this editor-owned draft on a run-scoped path.
+    await create.getByLabel('Chemin public').fill(path);
+    await create.getByRole('button', { name: 'Créer la page' }).click();
+    await expect(page).toHaveURL(/\/contenus\/edition\?entree=/);
+
+    const editor = page.getByTestId('content-editor');
+    const form = page.getByRole('form', { name: `Modifier : ${path}` });
+    await expect(form.locator('.ops-content-block')).toHaveCount(8);
+    await expect(editor.getByText('Jamais publiée')).toBeVisible();
+
+    const preview = page.frameLocator('[data-testid="content-preview-frame"]');
+    await expect(preview.getByRole('heading', { level: 1 })).toContainText(
+      'Envoyez vos colis entre Paris et Dakar',
+    );
+    await expect(
+      preview.getByRole('heading', { name: 'Votre envoi, étape par étape.' }),
+    ).toBeVisible();
+    await expect(preview.getByRole('link', { name: 'Demander un devis' }).first()).toHaveAttribute(
+      'href',
+      '#questions',
+    );
+
+    // A normal generic block remains editable; saving never publishes it.
+    const hero = form.locator('.ops-content-block').first();
+    await hero.locator('summary').click();
+    await hero
+      .getByLabel('Introduction')
+      .fill('Présentation éditoriale de fret modifiée par le scénario navigateur.');
+    await form.getByRole('button', { name: 'Enregistrer le brouillon' }).click();
+    await expect(notice(page, 'Brouillon enregistré')).toBeVisible();
+    await expect(editor.getByText('Jamais publiée')).toBeVisible();
+
+    const live = await request.get(
+      `${BROWSER_API_URL}/v1/content/pages?path=${encodeURIComponent(path)}`,
+    );
+    expect(live.status()).toBe(404);
+    expect(errors).toEqual([]);
+  });
+
   test('a page whose template cannot be applied is still reachable', async ({ page }) => {
     const run = process.env.E2E_RUN_ID ?? '';
     const path = `/e2e-modele-echec-${run}`;

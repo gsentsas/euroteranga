@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { PAGE_TEMPLATES, pageDocumentSchema } from '@euroteranga/content';
 import { createDatabaseClient, type DatabaseTransaction } from '@euroteranga/database';
 import { hash } from '@node-rs/argon2';
-import { contentSeed, homeSeed, pagesSeed } from './content-seed.js';
+import { cargoPageSeed, contentSeed, homeSeed, pagesSeed } from './content-seed.js';
 import {
   bookingReaderRole,
   bookingSeed,
@@ -1212,6 +1213,39 @@ async function seedContentData(db: ReturnType<typeof createDatabaseClient>): Pro
     where: { id: homeRevision.id },
     data: { status: 'PUBLISHED' },
   });
+
+  // WEB-CARGO-1: publish the exact template on /fret. The neighbouring
+  // variants exercise all sitemap exclusions with the same Cargo content.
+  const cargo = cargoPageSeed();
+  const source = PAGE_TEMPLATES.find((template) => template.id === 'cargo-freight');
+  if (!source) throw new Error('cargo-freight page template is missing');
+  const cargoDocument = pageDocumentSchema.parse(source.document);
+  const createCargoRevision = async (
+    path: string,
+    document: typeof cargoDocument,
+    status: 'DRAFT' | 'PUBLISHED',
+  ) => {
+    const cargoEntry = await db.contentEntry.create({ data: { kind: 'PAGE', key: path } });
+    const cargoRevision = await db.contentRevision.create({
+      data: { entryId: cargoEntry.id, revision: 1, document },
+    });
+    if (status === 'PUBLISHED') {
+      await db.contentRevision.update({
+        where: { id: cargoRevision.id },
+        data: { status: 'PUBLISHED' },
+      });
+    }
+    return cargoEntry;
+  };
+  await createCargoRevision(cargo.path, cargoDocument, 'PUBLISHED');
+  await createCargoRevision(cargo.draftPath, cargoDocument, 'DRAFT');
+  const archived = await createCargoRevision(cargo.archivedPath, cargoDocument, 'PUBLISHED');
+  await db.contentEntry.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
+  await createCargoRevision(
+    cargo.noIndexPath,
+    { ...cargoDocument, seo: { ...cargoDocument.seo, indexable: false } },
+    'PUBLISHED',
+  );
 }
 
 /** Free synthetic country codes (iso3 `..Y`), never the network spec's own ones. */

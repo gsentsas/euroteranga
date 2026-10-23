@@ -366,3 +366,24 @@ describe('services page (UI-PUBLIC-2)', () => {
     expect(html).not.toMatch(/\d\s?€|24\s?\/\s?7/);
   });
 });
+
+describe('cargo and freight page (WEB-CARGO-1)', () => {
+  it('renders the editorial journey without fares, booking or public lookup fields', () => {
+    const page = template('cargo-freight');
+    const html = render(page, ctx());
+    const main = html.slice(html.indexOf('<main'), html.indexOf('</main>'));
+    expect(html.match(/<h1/g)).toHaveLength(1);
+    expect(html).toContain('Envoyez vos colis entre Paris et Dakar');
+    expect(html).toContain('id="services"');
+    expect(html).toContain('id="fonctionnement"');
+    expect(html).toContain('id="directions"');
+    expect(html).toContain('id="suivi"');
+    expect(html).toContain('id="questions"');
+    expect(html).toContain('Demander un devis');
+    expect(html).toContain('href="#questions"');
+    expect(html).toContain('href="#suivi"');
+    expect(main).not.toMatch(/\d\s?€|€\s?\d|\/\s*(?:kg|m(?:³|3))/i);
+    expect(main).not.toContain('https://booking.example/');
+    expect(main).not.toMatch(/<input|<form|AggregateOffer|"Offer"|priceCurrency/i);
+  });
+});

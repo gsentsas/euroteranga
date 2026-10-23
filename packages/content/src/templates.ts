@@ -275,4 +275,227 @@ export const PAGE_TEMPLATES: readonly PageTemplate[] = [
       ],
     },
   },
+  {
+    id: 'cargo-freight',
+    label: 'Colis & fret',
+    description:
+      'Une page éditoriale pour présenter les envois Paris ↔ Dakar, le devis et le suivi sécurisé.',
+    path: '/fret',
+    document: {
+      title: 'Colis & fret Paris ↔ Dakar',
+      seo: {
+        title: 'Colis & fret Paris ↔ Dakar — EURO TERANGA',
+        description:
+          'Envoyez vos colis et votre fret routier entre Paris et Dakar avec EURO TERANGA : prise en charge, suivi sécurisé et devis adapté à votre envoi.',
+        indexable: true,
+      },
+      blocks: [
+        {
+          type: 'hero',
+          variant: 'page',
+          eyebrow: 'Colis & fret routier',
+          title: 'Envoyez vos colis entre Paris et Dakar',
+          titleAccent: 'avec un suivi à chaque étape',
+          lead: 'EURO TERANGA accompagne les envois routiers dans les deux sens. Chaque prise en charge est confirmée après étude de la demande et établissement d’un devis.',
+          primaryCta: {
+            label: 'Demander un devis',
+            target: { kind: 'anchor', id: 'questions' },
+          },
+          secondaryCta: {
+            label: 'Comment fonctionne le suivi ?',
+            target: { kind: 'anchor', id: 'suivi' },
+          },
+          journeyCard: false,
+        },
+        {
+          type: 'sectionNav',
+          label: 'Sur cette page',
+          items: [
+            { label: 'Services', anchor: 'services' },
+            { label: 'Fonctionnement', anchor: 'fonctionnement' },
+            { label: 'Directions', anchor: 'directions' },
+            { label: 'Suivi', anchor: 'suivi' },
+            { label: 'Questions', anchor: 'questions' },
+          ],
+        },
+        {
+          type: 'cards',
+          variant: 'services',
+          anchor: 'services',
+          kicker: 'Services',
+          title: 'Une prise en charge adaptée à votre envoi.',
+          intro:
+            'Les caractéristiques et les options sont étudiées avant confirmation dans le devis.',
+          items: [
+            {
+              icon: 'luggage',
+              title: 'Poids et volume',
+              text: 'Décrivez le format de votre envoi pour permettre à l’équipe d’étudier sa prise en charge.',
+            },
+            {
+              icon: 'route',
+              title: 'Collecte et livraison',
+              text: 'Ces options peuvent être étudiées selon le lieu, l’organisation du trajet et la demande.',
+            },
+            {
+              icon: 'shield',
+              title: 'Fragile ou professionnel',
+              text: 'Signalez les précautions utiles ou le contexte professionnel avant toute confirmation.',
+            },
+            {
+              icon: 'pin',
+              title: 'Suivi sécurisé',
+              text: 'Un lien confidentiel peut être transmis lorsque le partage du suivi est activé.',
+            },
+          ],
+        },
+        {
+          type: 'cards',
+          variant: 'steps',
+          anchor: 'fonctionnement',
+          kicker: 'Fonctionnement',
+          title: 'Votre envoi, étape par étape.',
+          intro:
+            'La progression dépend de l’acceptation de l’envoi et de son affectation à un trajet.',
+          items: [
+            {
+              title: 'Demande',
+              text: 'Vous communiquez les caractéristiques utiles à l’étude de votre envoi.',
+            },
+            {
+              title: 'Réception',
+              text: 'L’équipe confirme les modalités pratiques de remise de l’envoi.',
+            },
+            {
+              title: 'Inspection',
+              text: 'La conformité de l’envoi et les précautions nécessaires sont vérifiées.',
+            },
+            {
+              title: 'Affectation',
+              text: 'L’envoi accepté est affecté à un trajet disponible.',
+            },
+            {
+              title: 'Chargement',
+              text: 'Le chargement est enregistré après les contrôles opérationnels.',
+            },
+            {
+              title: 'Transport',
+              text: 'L’envoi progresse avec le trajet auquel il a été affecté.',
+            },
+            {
+              title: 'Arrivée',
+              text: 'L’arrivée est enregistrée avant la préparation de la remise.',
+            },
+            {
+              title: 'Mise à disposition ou livraison',
+              text: 'La modalité convenue est confirmée par l’équipe en charge de l’envoi.',
+            },
+          ],
+        },
+        {
+          type: 'cards',
+          variant: 'trust',
+          anchor: 'directions',
+          kicker: 'Directions',
+          title: 'Entre Paris et Dakar, dans les deux sens.',
+          items: [
+            {
+              icon: 'route',
+              title: 'Paris → Dakar',
+              text: 'Une prise en charge routière étudiée selon la nature de l’envoi et le trajet disponible.',
+            },
+            {
+              icon: 'route',
+              title: 'Dakar → Paris',
+              text: 'Le même accompagnement, avec des modalités confirmées avant la remise de l’envoi.',
+            },
+          ],
+        },
+        {
+          type: 'textImage',
+          anchor: 'suivi',
+          kicker: 'Suivi sécurisé',
+          title: 'Un accès transmis uniquement lorsqu’il est activé.',
+          body: [
+            paragraph(
+              'Lorsque le partage est disponible pour votre envoi, EURO TERANGA peut vous transmettre un lien confidentiel pour consulter sa progression.',
+            ),
+            paragraph(
+              'Il n’existe pas de recherche publique par identité ou par référence. Conservez le lien reçu et ne le partagez qu’avec les personnes concernées.',
+            ),
+          ],
+          illustration: 'tracking',
+          imageSide: 'end',
+          tone: 'navy',
+        },
+        {
+          type: 'faq',
+          anchor: 'questions',
+          kicker: 'Questions fréquentes',
+          title: 'Préparer votre demande.',
+          items: [
+            {
+              question: 'Quels envois peuvent être étudiés ?',
+              answer: [
+                paragraph(
+                  'Colis, effets et fret professionnel peuvent être étudiés. L’acceptation dépend de leur nature, de leur conditionnement et des contraintes du trajet.',
+                ),
+              ],
+            },
+            {
+              question: 'Comment indiquer le poids et le volume ?',
+              answer: [
+                paragraph(
+                  'Communiquez des estimations aussi précises que possible ainsi que le nombre de pièces. L’équipe vous indiquera les vérifications nécessaires.',
+                ),
+              ],
+            },
+            {
+              question: 'Puis-je signaler un envoi fragile ou professionnel ?',
+              answer: [
+                paragraph(
+                  'Oui. Signalez-le dès la demande afin que les précautions et la possibilité de prise en charge soient étudiées.',
+                ),
+              ],
+            },
+            {
+              question: 'La collecte ou la livraison est-elle toujours incluse ?',
+              answer: [
+                paragraph(
+                  'Non. Ces options dépendent de la zone et de l’organisation disponible. Le devis précise uniquement les modalités confirmées.',
+                ),
+              ],
+            },
+            {
+              question: 'Comment demander un devis ?',
+              answer: [
+                paragraph(
+                  'Utilisez les coordonnées de contact publiées par EURO TERANGA en bas de page et décrivez les caractéristiques de l’envoi ainsi que la direction souhaitée.',
+                ),
+              ],
+            },
+            {
+              question: 'Comment suivre mon envoi ?',
+              answer: [
+                paragraph(
+                  'Si le partage du suivi est activé, un lien sécurisé vous est transmis. Aucun formulaire public ne permet de rechercher un envoi.',
+                ),
+              ],
+            },
+          ],
+        },
+        {
+          type: 'cta',
+          kicker: 'Paris ↔ Dakar',
+          title: 'Préparez votre demande de fret.',
+          text: 'Décrivez votre envoi à l’équipe : les modalités confirmées seront réunies dans un devis adapté.',
+          button: {
+            label: 'Demander un devis',
+            target: { kind: 'anchor', id: 'questions' },
+          },
+          tone: 'light',
+        },
+      ],
+    },
+  },
 ];
