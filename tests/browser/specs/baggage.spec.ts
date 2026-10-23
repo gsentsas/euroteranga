@@ -50,7 +50,7 @@ test.describe('PR-13 baggage', () => {
     await page.goto(appUrl(clientApp, '/compte'));
 
     const section = page.getByTestId('customer-baggage');
-    await expect(section).toContainText('Aucune franchise ni aucun supplément bagage');
+    await expect(section).toContainText('Aucun paiement n’est déclenché depuis cet espace');
     await section
       .getByLabel('Voyageur et réservation')
       .selectOption(`${seed.bookingReference}|${seed.passengerReference}`);
@@ -143,7 +143,7 @@ test.describe('PR-13 baggage', () => {
     await expect(detail).toContainText('Coumba Bagages');
     await expect(detail).toContainText(seed.bookingReference);
     await expect(detail).toContainText(seed.tripReference);
-    await expect(detail).toContainText('Aucune franchise ni aucun supplément');
+    await expect(detail).toContainText('Non configurée pour cette tarification historique');
 
     await detail.getByLabel('Poids mesuré (kg)').fill('12,345');
     await detail.getByRole('button', { name: 'Enregistrer le poids' }).click();
