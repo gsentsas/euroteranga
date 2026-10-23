@@ -1,6 +1,6 @@
 import { JourneyShell } from '@euroteranga/ui';
 import Link from 'next/link';
-import { publicEnv } from '../lib/env';
+import { journeyLinks, publicEnv } from '../lib/env';
 
 export default function HomePage() {
   return (
@@ -9,6 +9,7 @@ export default function HomePage() {
       title="Votre voyage, au même endroit."
       subtitle="Retrouvez vos réservations, voyageurs, documents et étapes de préparation avant le départ."
       environment={publicEnv.NEXT_PUBLIC_APP_ENV}
+      links={journeyLinks}
       current="client"
     >
       <div className="et-client-home">
