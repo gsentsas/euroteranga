@@ -255,13 +255,23 @@ jobs:
           fetch-depth: 0 # scan the full history, not only the last commit
       - name: Forbidden files and quality-gate bypass markers
         run: bash scripts/check-forbidden-files.sh
+      - name: Hygiene check also works in a release tree without .git
+        run: bash scripts/test-check-forbidden-files.sh
       - name: Validate Plesk deployment scripts and nginx fragments
         run: |
-          bash -n infrastructure/plesk/deploy-release.sh
-          bash -n infrastructure/plesk/pilot-env-guard.sh
-          bash -n infrastructure/plesk/backup-postgres.sh
-          bash -n infrastructure/plesk/restore-check-postgres.sh
-          bash -n infrastructure/plesk/check-backup-freshness.sh
+          for script in infrastructure/plesk/*.sh infrastructure/plesk/lib/*.sh; do
+            bash -n "$script"
+          done
+          bash infrastructure/plesk/test-readiness.sh
+          for app in web booking client tracking ops crew; do
+            unit="infrastructure/plesk/systemd/euroteranga-${app}.service"
+            if grep -Eq '^ExecStart=.*pnpm' "$unit"; then
+              echo "::error file=$unit::Long-running frontend unit must not start through pnpm"
+              exit 1
+            fi
+            grep -Eq "^WorkingDirectory=/var/www/vhosts/euroteranga.com/current/apps/${app}$" "$unit"
+            grep -Eq '^ExecStart=/opt/plesk/node/24/bin/node node_modules/next/dist/bin/next start ' "$unit"
+          done
           grep -Fq 'Persistent=true' infrastructure/plesk/systemd/euroteranga-postgres-backup.timer
           grep -Fq 'Persistent=true' infrastructure/plesk/systemd/euroteranga-postgres-restore-check.timer
           grep -Fq 'User=euroteranga.com_5p804yhows7' infrastructure/plesk/systemd/euroteranga-postgres-backup.service
