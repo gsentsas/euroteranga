@@ -88,11 +88,6 @@ function databaseError(error: unknown): never {
   }
   const message = String(error);
   if (message.includes('currency must match')) throw BaggagePolicyErrors.currencyMismatch();
-  if (message.includes('published before the fare version is booked')) {
-    throw BaggagePolicyErrors.notPublishable(
-      "La politique doit être publiée avant la première réservation utilisant cette version tarifaire.",
-    );
-  }
   if (message.includes('not publishable') || message.includes('requires at least one excess tier')) {
     throw BaggagePolicyErrors.notPublishable(
       'La politique doit être active, liée à une version tarifaire publiée et contenir au moins un palier.',
@@ -102,20 +97,25 @@ function databaseError(error: unknown): never {
 }
 
 async function lockPolicy(tx: DatabaseTransaction, id: string) {
-  const rows = await tx.$queryRawUnsafe<Array<{ id: string; active: boolean }>>(
-    'SELECT "id", "active" FROM "baggage_policy" WHERE "id" = $1::uuid FOR UPDATE',
-    id,
-  );
+  const rows = await tx.$queryRaw<Array<{ id: string; active: boolean }>>`
+    SELECT "id", "active" FROM "baggage_policy"
+    WHERE "id" = ${id}::uuid
+    FOR UPDATE
+  `;
   if (!rows[0]) throw BaggagePolicyErrors.notFound();
   return rows[0];
 }
 
 async function lockVersion(tx: DatabaseTransaction, policyId: string, versionId: string) {
-  const rows = await tx.$queryRawUnsafe<Array<{ id: string; status: string; version: number }>>(
-    'SELECT "id", "status", "version" FROM "baggage_policy_version" WHERE "id" = $1::uuid AND "baggage_policy_id" = $2::uuid FOR UPDATE',
-    versionId,
-    policyId,
-  );
+  const rows = await tx.$queryRaw<
+    Array<{ id: string; status: string; version: number; fare_table_version_id: string }>
+  >`
+    SELECT "id", "status", "version", "fare_table_version_id"
+    FROM "baggage_policy_version"
+    WHERE "id" = ${versionId}::uuid
+      AND "baggage_policy_id" = ${policyId}::uuid
+    FOR UPDATE
+  `;
   if (!rows[0]) throw BaggagePolicyErrors.versionNotFound();
   return rows[0];
 }
