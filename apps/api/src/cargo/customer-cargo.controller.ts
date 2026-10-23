@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Header, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiCreatedResponse,
   ApiForbiddenResponse,
@@ -56,7 +66,9 @@ export class CustomerCargoController {
 
   @Get(':reference/quotes')
   @Header('Cache-Control', 'no-store')
-  @ApiOkResponse({ description: 'Commercial quotes actually issued for an owned freight request.' })
+  @ApiOkResponse({
+    description: 'Commercial quotes actually issued for an owned freight request.',
+  })
   @ApiNotFoundResponse({ type: ErrorBody })
   quotes(
     @CurrentPrincipal() principal: AuthPrincipal,
@@ -69,7 +81,9 @@ export class CustomerCargoController {
   @HttpCode(200)
   @UseGuards(CsrfGuard)
   @Header('Cache-Control', 'no-store')
-  @ApiOkResponse({ description: 'Accepts an owned ISSUED freight quote without creating payment.' })
+  @ApiOkResponse({
+    description: 'Accepts an owned ISSUED freight quote without creating payment.',
+  })
   @ApiNotFoundResponse({ type: ErrorBody })
   acceptQuote(
     @CurrentPrincipal() principal: AuthPrincipal,
@@ -85,10 +99,7 @@ export class CustomerCargoController {
   @Header('Cache-Control', 'no-store')
   @ApiOkResponse({ description: 'One owned freight request with privacy-bounded tracking.' })
   @ApiNotFoundResponse({ type: ErrorBody })
-  detail(
-    @CurrentPrincipal() principal: AuthPrincipal,
-    @Param('reference') reference: string,
-  ) {
+  detail(@CurrentPrincipal() principal: AuthPrincipal, @Param('reference') reference: string) {
     return this.cargo.detail(principal, reference);
   }
 }
