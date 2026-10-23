@@ -13,10 +13,18 @@ import {
   type PilotBootstrapOptions,
   type PilotBootstrapReport,
 } from '../../../src/pilot/pilot-bootstrap.js';
-import { PILOT_VEHICLES, type PilotVehicle } from '../../../src/pilot/pilot-dataset.js';
+import {
+  PILOT_VEHICLES,
+  pilotTripSlots,
+  type PilotVehicle,
+} from '../../../src/pilot/pilot-dataset.js';
 import { PricingService } from '../../../src/pricing/pricing.service.js';
 import { SeatMapService } from '../../../src/seat-maps/seat-map.service.js';
 import { TrackingService } from '../../../src/tracking/tracking.service.js';
+import {
+  tripCreateSchema,
+  tripTimetableSchema,
+} from '../../../src/trips/trip.dto.js';
 import { TripService } from '../../../src/trips/trip.service.js';
 import {
   adminApi,
@@ -398,6 +406,44 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
     expect(await snapshot(h)).toEqual(before);
   });
 
+  it('dry run validates the reserved tracking operator without writing', async () => {
+    const isolated = await harness();
+    try {
+      const client = db(isolated.t.app);
+      await client.authIdentity.create({
+        data: {
+          realm: 'STAFF',
+          email: PILOT_OPERATOR_EMAIL,
+          normalizedEmail: PILOT_OPERATOR_EMAIL,
+          status: 'ACTIVE',
+          emailVerifiedAt: new Date(),
+        },
+      });
+      const before = await snapshot(isolated);
+
+      const report = await isolated.run({ dryRun: true });
+      expect(report.hasConflicts).toBe(true);
+      expect(report.lines).toContainEqual(
+        expect.objectContaining({
+          outcome: 'conflict',
+          entity: 'operator',
+          key: 'tracking',
+        }),
+      );
+      const tracking = report.lines.filter((line) => line.entity === 'tracking');
+      expect(tracking).toHaveLength(8);
+      expect(
+        tracking.every(
+          (line) =>
+            line.outcome === 'skipped' && line.detail === 'depends on operator:tracking',
+        ),
+      ).toBe(true);
+      expect(await snapshot(isolated)).toEqual(before);
+    } finally {
+      await isolated.drop();
+    }
+  });
+
   it('completes data left half-way and refuses to overwrite operator data', async () => {
     // Half-way state: the pilot coach with every pilot identity field, but
     // still PLANNED and without seat map (the steps the bootstrap performs).
@@ -465,9 +511,46 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
       {},
     );
     expect(published.status).toBe(200);
-    const operatorWaypoints = await db(h.t.app).routeWaypoint.count({
+    const client = db(h.t.app);
+    const routeWaypoints = await client.routeWaypoint.findMany({
       where: { routeVersionId: version.body.id },
+      orderBy: { sequence: 'asc' },
+      select: { id: true },
     });
+    const operatorWaypoints = routeWaypoints.length;
+
+    // Existing SCHEDULED trip using the operator-owned conflicting route.
+    // Its pilot-looking reference must not make it eligible for bootstrap Tracking.
+    const slot = pilotTripSlots(today(), 4).find((candidate) => candidate.routeCode === 'ET-DKR-PAR')!;
+    const departure = new Date(`${slot.departureDate}T08:00:00Z`);
+    const arrival = new Date(departure.getTime() + 48 * 60 * 60 * 1000);
+    const tripService = h.t.app.get(TripService);
+    const operatorTrip = await tripService.createTrip(
+      tripCreateSchema.parse({
+        reference: slot.reference,
+        routeVersionId: version.body.id,
+      }),
+      PILOT_ACTOR,
+    );
+    await tripService.replaceTimetable(
+      operatorTrip.id,
+      tripTimetableSchema.parse({
+        timings: [
+          {
+            routeWaypointId: routeWaypoints[0]!.id,
+            plannedArrivalAt: null,
+            plannedDepartureAt: departure.toISOString(),
+          },
+          {
+            routeWaypointId: routeWaypoints[1]!.id,
+            plannedArrivalAt: arrival.toISOString(),
+            plannedDepartureAt: null,
+          },
+        ],
+      }),
+      PILOT_ACTOR,
+    );
+    await tripService.schedule(operatorTrip.id, PILOT_ACTOR);
 
     const report = await h.run();
     const line = (entity: string, key: string) =>
@@ -487,18 +570,20 @@ describe('pilot data bootstrap: dry run, resume and conflicts (isolated database
       detail: 'depends on route:ET-DKR-PAR',
     });
 
-    const client = db(h.t.app);
     expect(
       await client.vehicle.findUniqueOrThrow({ where: { code: 'ET-COACH-001' } }),
     ).toMatchObject({ status: 'ACTIVE', name: 'Teranga Pilote 01' });
-    // The operator route is untouched and no Dakar -> Paris trip was created.
+    // The operator route and its existing trip are untouched; no Tracking is added beside them.
     expect(await client.routeVersion.count({ where: { routeId: route.body.id } })).toBe(1);
     expect(await client.routeWaypoint.count({ where: { routeVersionId: version.body.id } })).toBe(
       operatorWaypoints,
     );
     expect(
       await client.trip.count({ where: { reference: { startsWith: 'ET-PILOT-DKRPAR-' } } }),
-    ).toBe(0);
+    ).toBe(1);
+    expect(
+      await client.tripTrackingConfig.findUnique({ where: { tripId: operatorTrip.id } }),
+    ).toBeNull();
     expect(
       await client.trip.count({
         where: { reference: { startsWith: 'ET-PILOT-PARDKR-' }, status: 'SCHEDULED' },
