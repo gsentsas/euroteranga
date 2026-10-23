@@ -4,12 +4,7 @@ const clientEventId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{7,63}$/);
 
 export const comfortUuidSchema = z.uuid();
 
-export const comfortEventTypeSchema = z.enum([
-  'CONFIRMED',
-  'COMPLETED',
-  'CANCELLED',
-  'SKIPPED',
-]);
+export const comfortEventTypeSchema = z.enum(['CONFIRMED', 'COMPLETED', 'CANCELLED', 'SKIPPED']);
 
 export const comfortFacilitySchema = z.enum([
   'RESTROOM',
