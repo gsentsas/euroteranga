@@ -55,8 +55,10 @@ CREATE INDEX "baggage_policy_active_id_idx" ON "baggage_policy"("active", "id");
 
 CREATE UNIQUE INDEX "baggage_policy_version_baggage_policy_id_version_key"
   ON "baggage_policy_version"("baggage_policy_id", "version");
-CREATE UNIQUE INDEX "baggage_policy_version_fare_table_version_id_key"
+CREATE INDEX "baggage_policy_version_fare_table_version_id_idx"
   ON "baggage_policy_version"("fare_table_version_id");
+CREATE UNIQUE INDEX "baggage_policy_version_one_published_per_fare_version"
+  ON "baggage_policy_version"("fare_table_version_id") WHERE "status" = 'PUBLISHED';
 CREATE INDEX "baggage_policy_version_status_idx" ON "baggage_policy_version"("status");
 CREATE UNIQUE INDEX "baggage_policy_version_one_draft_per_policy"
   ON "baggage_policy_version"("baggage_policy_id") WHERE "status" = 'DRAFT';
@@ -191,7 +193,6 @@ DECLARE
   policy RECORD;
   fare RECORD;
   has_tier BOOLEAN;
-  booking_count BIGINT;
 BEGIN
   IF TG_OP = 'DELETE' THEN
     RAISE EXCEPTION 'baggage policy versions are historical and cannot be deleted'
@@ -252,14 +253,6 @@ BEGIN
     ) INTO has_tier;
     IF NOT has_tier THEN
       RAISE EXCEPTION 'baggage policy version requires at least one excess tier'
-        USING ERRCODE = 'object_not_in_prerequisite_state';
-    END IF;
-    SELECT count(*) INTO booking_count
-    FROM "booking" b
-    JOIN "fare_entry" fe ON fe."id" = b."fare_entry_id"
-    WHERE fe."fare_table_version_id" = OLD."fare_table_version_id";
-    IF booking_count > 0 THEN
-      RAISE EXCEPTION 'baggage policy must be published before the fare version is booked'
         USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
     RETURN NEW;
@@ -402,7 +395,10 @@ BEGIN
     SELECT pv."id" INTO expected_policy_id
     FROM "baggage_policy_version" pv
     WHERE pv."fare_table_version_id" = subject."fare_table_version_id"
-      AND pv."status" IN ('PUBLISHED', 'RETIRED');
+      AND pv."status" IN ('PUBLISHED', 'RETIRED')
+    ORDER BY CASE pv."status" WHEN 'PUBLISHED' THEN 0 ELSE 1 END,
+             pv."published_at" DESC
+    LIMIT 1;
 
     IF expected_policy_id IS NULL THEN
       IF NEW."baggage_policy_version_id" IS NOT NULL
