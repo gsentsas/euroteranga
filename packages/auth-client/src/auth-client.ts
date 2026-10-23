@@ -2018,6 +2018,88 @@ export interface PublicRoadFreightTracking {
   } | null;
 }
 
+export interface CustomerRoadFreightTimelineEvent {
+  sequence: number;
+  status: PublicRoadFreightTrackingStatus;
+  occurredAt: string;
+  location: {
+    sequence: number;
+    kind: 'STOP' | 'CHECKPOINT';
+    code: string;
+    name: string;
+  } | null;
+}
+
+export interface CustomerRoadFreightQuoteLine {
+  kind: RoadFreightQuoteLineKind;
+  label: string;
+  amountMinor: string;
+  position: number;
+}
+
+export interface CustomerRoadFreightQuote {
+  reference: string;
+  version: number;
+  status: Exclude<RoadFreightQuoteStatus, 'DRAFT'>;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  totalMinor: string;
+  snapshot: {
+    direction: RoadFreightDirection;
+    weightKg: string;
+    volumeLiters: number;
+    packageCount: number;
+    fragile: boolean;
+    professional: boolean;
+    pickupRequired: boolean;
+    deliveryRequired: boolean;
+    shipmentUpdatedAt: string;
+  };
+  lines: CustomerRoadFreightQuoteLine[];
+  issuedAt: string;
+  acceptedAt: string | null;
+  cancelledAt: string | null;
+  supersededAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerRoadFreightShipment {
+  reference: string;
+  direction: RoadFreightDirection;
+  status: PublicRoadFreightTrackingStatus;
+  sender: { name: string; contact: string };
+  recipient: { name: string; contact: string };
+  weightKg: string;
+  volumeLiters: number;
+  packageCount: number;
+  dimensionsCm: { length: number; width: number; height: number } | null;
+  declaredContents: string;
+  declaredValue: RoadFreightDeclaredValue | null;
+  fragile: boolean;
+  professional: boolean;
+  pickupRequired: boolean;
+  deliveryRequired: boolean;
+  booking: { reference: string } | null;
+  trip: {
+    reference: string;
+    status: TripStatus;
+    route: { code: string; name: string };
+    plannedDepartureAt: string | null;
+    plannedArrivalAt: string | null;
+  } | null;
+  latestQuote: CustomerRoadFreightQuote | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerRoadFreightShipmentDetail extends CustomerRoadFreightShipment {
+  lastUpdatedAt: string;
+  timeline: CustomerRoadFreightTimelineEvent[];
+}
+
+export type CustomerRoadFreightCreateInput = Omit<RoadFreightCreateInput, 'customerIdentityId'>;
+
 /** PR-14: the six server-derived check-in gates of one BookingPassenger. */
 export type CheckInGate = 'BOOKING' | 'PAYMENT' | 'DOCUMENTS' | 'COMPLIANCE' | 'SEAT' | 'BAGGAGE';
 export type CheckInGateStatus = 'PASS' | 'BLOCKED' | 'PENDING_REVIEW';
@@ -3786,6 +3868,32 @@ export function createAuthClient(baseUrl: string) {
           call<BaggageDetail>('GET', `/v1/booking/baggage/${encodeURIComponent(reference)}`),
         baggageQr: (reference: string) =>
           call<BaggageQr>('GET', `/v1/booking/baggage/${encodeURIComponent(reference)}/qr`),
+        /** CLIENT-CARGO-1: only freight owned by the authenticated CUSTOMER. */
+        cargo: {
+          list: (options: { cursor?: string; limit?: number } = {}) =>
+            call<Page<CustomerRoadFreightShipment>>(
+              'GET',
+              `/v1/booking/cargo?${query({ cursor: options.cursor, limit: options.limit })}`,
+            ),
+          detail: (reference: string) =>
+            call<CustomerRoadFreightShipmentDetail>(
+              'GET',
+              `/v1/booking/cargo/${encodeURIComponent(reference)}`,
+            ),
+          create: (input: CustomerRoadFreightCreateInput) =>
+            withCsrf<CustomerRoadFreightShipmentDetail>('customer', '/v1/booking/cargo', input),
+          quotes: (reference: string) =>
+            call<{ items: CustomerRoadFreightQuote[] }>(
+              'GET',
+              `/v1/booking/cargo/${encodeURIComponent(reference)}/quotes`,
+            ),
+          acceptQuote: (reference: string, quoteReference: string, expectedUpdatedAt?: string) =>
+            withCsrf<CustomerRoadFreightQuote>(
+              'customer',
+              `/v1/booking/cargo/${encodeURIComponent(reference)}/quotes/${encodeURIComponent(quoteReference)}/accept`,
+              expectedUpdatedAt ? { expectedUpdatedAt } : {},
+            ),
+        },
         /** PR-14: seats, six gates and check-ins of an owned booking (no side effect). */
         checkInOverview: (bookingReference: string) =>
           call<BookingCheckInOverview>(

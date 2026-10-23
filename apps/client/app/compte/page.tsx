@@ -4,6 +4,7 @@ import { AccountView } from '../../components/account-view';
 import { CustomerBaggage } from '../../components/customer-baggage';
 import { CustomerBookings } from '../../components/customer-bookings';
 import { CustomerCheckIn } from '../../components/customer-check-in';
+import { CustomerCargo } from '../../components/customer-cargo';
 import { CustomerCompliance } from '../../components/customer-compliance';
 import { CustomerPassengers } from '../../components/customer-passengers';
 import { publicEnv } from '../../lib/env';
@@ -25,6 +26,7 @@ export default function Page() {
         <CustomerPassengers />
         <CustomerCompliance />
         <CustomerBaggage />
+        <CustomerCargo />
         <CustomerCheckIn />
       </div>
     </JourneyShell>

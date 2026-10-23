@@ -103,6 +103,8 @@ export const cargoCreateSchema = z
   })
   .strict();
 
+export const customerCargoCreateSchema = cargoCreateSchema.omit({ customerIdentityId: true });
+
 export const cargoUpdateSchema = z
   .object({
     senderName: cargoEditable.senderName.optional(),
@@ -184,7 +186,16 @@ export const cargoListQuerySchema = z
     { path: ['createdTo'], message: 'createdTo must follow createdFrom' },
   );
 
+export const customerCargoListQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    cursor: z.uuid().optional(),
+  })
+  .strict();
+
 export type CargoCreateInput = z.infer<typeof cargoCreateSchema>;
+export type CustomerCargoCreateInput = z.infer<typeof customerCargoCreateSchema>;
+export type CustomerCargoListQuery = z.infer<typeof customerCargoListQuerySchema>;
 export type CargoUpdateInput = z.infer<typeof cargoUpdateSchema>;
 export type CargoEventInput = z.infer<typeof cargoEventSchema>;
 export type CargoScanInput = z.infer<typeof cargoScanSchema>;
