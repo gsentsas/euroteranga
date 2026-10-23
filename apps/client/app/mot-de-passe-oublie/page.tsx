@@ -1,7 +1,7 @@
 import { JourneyShell } from '@euroteranga/ui';
 import type { Metadata } from 'next';
 import { ForgotPasswordForm } from '../../components/forgot-password-form';
-import { publicEnv } from '../../lib/env';
+import { journeyLinks, publicEnv } from '../../lib/env';
 
 export const metadata: Metadata = { title: 'Mot de passe oublié — EURO TERANGA' };
 
@@ -12,6 +12,7 @@ export default function Page() {
       title="Retrouvez l’accès à votre compte."
       subtitle="Indiquez votre adresse e-mail pour recevoir un lien de réinitialisation."
       environment={publicEnv.NEXT_PUBLIC_APP_ENV}
+      links={journeyLinks}
       current="client"
     >
       <section className="et-auth-panel" aria-labelledby="forgot-password-panel">
