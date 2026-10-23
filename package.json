@@ -15,7 +15,7 @@
     "build:frontends": "pnpm --recursive --filter \"./apps/**\" --filter \"!@euroteranga/api\" run build",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --write apps/api/src/pilot/pilot-bootstrap.ts docs/audit/2026-10-full-product-audit.md docs/runbooks/pilot-data-bootstrap.md && git diff -- apps/api/src/pilot/pilot-bootstrap.ts docs/audit/2026-10-full-product-audit.md docs/runbooks/pilot-data-bootstrap.md && exit 1",
+    "format:check": "prettier --check .",
     "typecheck": "pnpm --recursive run typecheck",
     "test": "pnpm test:unit && pnpm test:integration",
     "test:unit": "pnpm --recursive --if-present run test:unit",
