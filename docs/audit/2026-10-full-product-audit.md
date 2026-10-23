@@ -225,30 +225,32 @@ The UI-1 to UI-4 phases redesigned:
   loading, empty and retry states, confirmation of sensitive actions);
 - the Crew PWA.
 
-`ui-final.spec.ts` covers a cross-app responsive acceptance. This audit did not
-redo a screen-by-screen review of every OPS view. The remaining UX findings
-are tracked in UX-1, which reviews every screen with screenshots at desktop
-and 400 px.
+`ui-final.spec.ts` covers a cross-app responsive acceptance. UX-1A
+extends that baseline at desktop and exactly 400 px on all six frontends and
+on the seeded public inner pages. A later UX-1B can still do a manual
+screen-by-screen visual review where screenshots add value.
 
 ## Mobile and accessibility
 
-The audit verified the following:
+Automated regression guards now verify:
 
 - **Navigation:** skip links (`.et-skip-link`) exist on the public site and
-  the journey shell, and `main` is focusable.
-- **Landmarks:** they are present.
+  the journey shell, and the first keyboard Tab reaches a real focus target.
+- **Landmarks:** each entry/public page has one `main` landmark and one H1.
+- **Images:** browser acceptance rejects any `img` without an `alt`
+  attribute, including the seeded public inner pages.
+- **Structure:** duplicate IDs and horizontal overflow are rejected on all six
+  entry surfaces and on the seeded public pages.
+- **Mobile:** the shared acceptance uses a 400 px viewport, matching the UX-1
+  review target.
+- **Reduced motion:** the public stylesheet disables smooth scrolling,
+  transitions and hover transforms under `prefers-reduced-motion: reduce`;
+  UX-1A verifies that behavior in Chromium.
 - **Language:** `lang="fr"` is set.
-- **Mobile:** UI-4G proved there is no horizontal overflow on Booking mobile.
 
-Gaps:
-
-- the public FAQ uses `<details>`, which is accessible, but its content is
-  not managed anywhere;
-- there are no images, so alt text has not been tested yet;
-- reduced motion is not checked for the public animations.
-
-An automated check (WCAG A/AA rules in Playwright) is planned with the new
-public pages (WEB-2).
+These checks are regression guards, not a claim of complete WCAG A/AA
+conformance. A full semantic, contrast and screen-reader audit remains a
+separate review task.
 
 ## Performance
 
