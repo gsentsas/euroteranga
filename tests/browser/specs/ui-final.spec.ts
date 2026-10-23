@@ -3,12 +3,12 @@ import { appUrl, frontendApps } from '../apps.js';
 
 const viewports = [
   { name: 'desktop', width: 1440, height: 900 },
-  { name: 'mobile', width: 390, height: 844 },
+  { name: 'mobile', width: 400, height: 844 },
 ] as const;
 
 for (const app of frontendApps) {
   for (const viewport of viewports) {
-    test(`UI-4G: ${app.name} ${viewport.name} keeps the entry surface structurally sound`, async ({
+    test(`UX-1A: ${app.name} ${viewport.name} keeps the entry surface structurally sound`, async ({
       page,
     }) => {
       const runtimeErrors: string[] = [];
@@ -21,6 +21,10 @@ for (const app of frontendApps) {
         if (app.name === 'ops' && text.includes('401 (Unauthorized)')) return;
         runtimeErrors.push(text);
       });
+
+      if (app.name === 'web') {
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+      }
 
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       const response = await page.goto(appUrl(app));
@@ -47,12 +51,16 @@ for (const app of frontendApps) {
         return {
           duplicateIds,
           missingImageAlt,
+          mainCount: document.querySelectorAll('main').length,
+          h1Count: document.querySelectorAll('h1').length,
           horizontalOverflow: Math.max(0, documentWidth - window.innerWidth),
         };
       });
 
       expect(structure.duplicateIds).toEqual([]);
       expect(structure.missingImageAlt).toEqual([]);
+      expect(structure.mainCount).toBe(1);
+      expect(structure.h1Count).toBe(1);
       expect(structure.horizontalOverflow).toBeLessThanOrEqual(1);
 
       await page.keyboard.press('Tab');
@@ -66,6 +74,22 @@ for (const app of frontendApps) {
           : null;
       });
       expect(focused).not.toBeNull();
+
+      if (app.name === 'web') {
+        const motion = await page.evaluate(() => {
+          const button = document.querySelector<HTMLElement>('.public-button');
+          return {
+            reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+            scrollBehavior: getComputedStyle(document.documentElement).scrollBehavior,
+            buttonTransitionDuration: button ? getComputedStyle(button).transitionDuration : null,
+          };
+        });
+        expect(motion).toEqual({
+          reducedMotion: true,
+          scrollBehavior: 'auto',
+          buttonTransitionDuration: '0s',
+        });
+      }
 
       expect(runtimeErrors).toEqual([]);
     });
