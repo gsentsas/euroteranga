@@ -233,5 +233,75 @@ describe('TERANGA-COMFORT-1 traveller comfort projection', () => {
     expect(serialized).not.toContain('recordedByIdentityId');
     expect(serialized).not.toContain(manager.email);
     expect(serialized).not.toContain(alice.email);
+
+    await db(t.app).$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SET LOCAL session_replication_role = 'replica'");
+      await tx.trip.update({
+        where: { id: fixture.tripId },
+        data: { status: 'IN_PROGRESS', actualDepartureAt: new Date() },
+      });
+    });
+
+    const completed = await adminApi(manager).post(
+      '/tracking/trips/' + fixture.tripId + '/comfort/events',
+      {
+        clientEventId: 'comfort-integration-complete-0001',
+        routeWaypointId: fixture.checkpointWaypointId!,
+        type: 'COMPLETED',
+        occurredAt: new Date().toISOString(),
+        actualFacilities: ['FOOD'],
+      },
+    );
+    expect(completed.status, completed.text).toBe(201);
+
+    const cancelled = await adminApi(manager).post(
+      '/tracking/trips/' + fixture.tripId + '/comfort/events',
+      {
+        clientEventId: 'comfort-integration-cancel-0001',
+        routeWaypointId: fixture.wp[3]!,
+        type: 'CANCELLED',
+        occurredAt: new Date().toISOString(),
+        actualFacilities: [],
+      },
+    );
+    expect(cancelled.status, cancelled.text).toBe(201);
+
+    const skipped = await adminApi(manager).post(
+      '/tracking/trips/' + fixture.tripId + '/comfort/events',
+      {
+        clientEventId: 'comfort-integration-skip-0001',
+        routeWaypointId: fixture.wp[4]!,
+        type: 'SKIPPED',
+        occurredAt: new Date().toISOString(),
+        actualFacilities: [],
+      },
+    );
+    expect(skipped.status, skipped.text).toBe(201);
+
+    const progressed = await client(t.app, 'staff').get(
+      '/v1/tracking/' + encodeURIComponent(token),
+    );
+    expect(progressed.status, progressed.text).toBe(200);
+    expect(progressed.body.comfort).toMatchObject({
+      currentStep: {
+        sequence: 3,
+        status: 'COMPLETED',
+        plannedFacilities: expect.arrayContaining(['FOOD', 'RESTROOM']),
+        actualFacilities: ['FOOD'],
+      },
+      nextStep: {
+        sequence: 6,
+        status: 'PLANNED',
+      },
+      nextPause: null,
+      steps: expect.arrayContaining([
+        expect.objectContaining({ sequence: 4, status: 'CANCELLED' }),
+        expect.objectContaining({ sequence: 5, status: 'SKIPPED' }),
+      ]),
+    });
+    expect(progressed.body.comfort.nextStep.sequence).not.toBe(
+      progressed.body.comfort.currentStep.sequence,
+    );
+    expect(progressed.body.position).toBeNull();
   }, 120_000);
 });
