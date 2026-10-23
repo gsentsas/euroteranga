@@ -1,6 +1,11 @@
 'use client';
 
-import type { PublicTrackingProjection, TrackingProviderStatus } from '@euroteranga/auth-client';
+import type {
+  ComfortFacility,
+  ComfortStep,
+  PublicTrackingProjection,
+  TrackingProviderStatus,
+} from '@euroteranga/auth-client';
 import { JourneyShell } from '@euroteranga/ui';
 import { useEffect, useState } from 'react';
 import { auth } from '../lib/auth';
@@ -13,6 +18,22 @@ const PROVIDER_LABELS: Record<TrackingProviderStatus, string> = {
   UNAVAILABLE: 'GPS indisponible',
 };
 
+const COMFORT_STATUS_LABELS: Record<ComfortStep['status'], string> = {
+  PLANNED: 'Prévu',
+  CONFIRMED: 'Confirmé',
+  COMPLETED: 'Effectué',
+  CANCELLED: 'Annulé',
+  SKIPPED: 'Non effectué',
+};
+
+const COMFORT_FACILITY_LABELS: Record<ComfortFacility, string> = {
+  RESTROOM: 'Toilettes',
+  SHOWER: 'Douches',
+  FOOD: 'Restauration',
+  SECURE_PARKING: 'Stationnement sécurisé',
+  FUEL: 'Ravitaillement',
+};
+
 const formatAt = (value: string | null) =>
   value
     ? new Intl.DateTimeFormat('fr-FR', {
@@ -20,6 +41,53 @@ const formatAt = (value: string | null) =>
         timeStyle: 'short',
       }).format(new Date(value))
     : '—';
+
+function ComfortStepCard({
+  title,
+  step,
+}: {
+  title: string;
+  step: ComfortStep | null;
+}) {
+  if (!step) {
+    return (
+      <div className="tracking-event">
+        <span className="tracking-kicker">{title}</span>
+        <span>Aucune étape annoncée.</span>
+      </div>
+    );
+  }
+
+  const facilities =
+    step.status === 'COMPLETED' && step.actualFacilities.length > 0
+      ? step.actualFacilities
+      : step.plannedFacilities;
+  const facilityPrefix =
+    step.status === 'COMPLETED' && step.actualFacilities.length > 0
+      ? 'Services constatés'
+      : 'Services prévus';
+
+  return (
+    <div className="tracking-event">
+      <span className="tracking-kicker">{title}</span>
+      <strong>
+        {step.name} — {step.locality}
+      </strong>
+      <span>
+        {COMFORT_STATUS_LABELS[step.status]} · arrivée indicative {formatAt(step.plannedArrivalAt)}
+      </span>
+      {step.suggestedDwellMinutes ? (
+        <span>Pause indicative : {step.suggestedDwellMinutes} min</span>
+      ) : null}
+      {facilities.length > 0 ? (
+        <span>
+          {facilityPrefix} :{' '}
+          {facilities.map((facility) => COMFORT_FACILITY_LABELS[facility]).join(', ')}
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 export function PublicTracking({ token }: { token: string }) {
   const [data, setData] = useState<PublicTrackingProjection | null>(null);
@@ -130,6 +198,29 @@ export function PublicTracking({ token }: { token: string }) {
                 Aucune position géographique n’est publiée pour ce niveau de suivi.
               </p>
             )}
+          </section>
+
+          <section
+            className="tracking-card"
+            aria-labelledby="tracking-comfort-title"
+            data-testid="public-comfort"
+          >
+            <div className="tracking-heading">
+              <div>
+                <span className="tracking-kicker">Confort du voyage</span>
+                <h2 id="tracking-comfort-title">Prochaine étape et prochaine pause</h2>
+              </div>
+              <span className="tracking-badge">Information voyageur</span>
+            </div>
+            <div className="tracking-comfort-grid">
+              <ComfortStepCard title="Dernière étape connue" step={data.comfort.currentStep} />
+              <ComfortStepCard title="Prochaine étape" step={data.comfort.nextStep} />
+              <ComfortStepCard title="Prochaine pause" step={data.comfort.nextPause} />
+            </div>
+            <p className="tracking-privacy">
+              Les horaires, pauses et services prévus restent indicatifs jusqu’à leur confirmation
+              opérationnelle.
+            </p>
           </section>
 
           <p className="tracking-privacy">
