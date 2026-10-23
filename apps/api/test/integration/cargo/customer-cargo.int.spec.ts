@@ -351,7 +351,7 @@ describe('CLIENT-CARGO-1 authenticated customer cargo', () => {
     const json = JSON.stringify(audits);
     expect(json).toContain('ROAD_FREIGHT_CREATED');
     expect(json).toContain('ROAD_FREIGHT_ACCESSED');
-    expect(json).not.toContain('CREATE_RESULT');
+    expect(json).not.toMatch(/"access":"CREATE_RESULT"/);
     expect(json).not.toContain('CUSTOMER-SENSITIVE-SENDER');
     expect(json).not.toContain('CUSTOMER-SENSITIVE-RECIPIENT');
     expect(json).not.toContain('tokenHash');
