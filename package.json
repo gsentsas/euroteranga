@@ -15,7 +15,7 @@
     "build:frontends": "pnpm --recursive --filter \"./apps/**\" --filter \"!@euroteranga/api\" run build",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --write docs/audit/2026-10-full-product-audit.md && git diff -- docs/audit/2026-10-full-product-audit.md && false",
+    "format:check": "prettier --check .",
     "typecheck": "pnpm --recursive run typecheck",
     "test": "pnpm test:unit && pnpm test:integration",
     "test:unit": "pnpm --recursive --if-present run test:unit",
