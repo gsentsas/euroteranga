@@ -352,6 +352,7 @@ describe('content model', () => {
       '/dakar-paris',
       '/nos-bus',
       '/services',
+      '/fret',
     ]);
     for (const template of PAGE_TEMPLATES) {
       const parsed = pageDocumentSchema.parse(template.document);

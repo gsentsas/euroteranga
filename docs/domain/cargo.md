@@ -33,6 +33,26 @@ Hors périmètre :
 - calcul de marge/rentabilité ;
 - création client autonome.
 
+## Page publique — WEB-CARGO-1
+
+Le CMS propose le modèle éditorial `cargo-freight` sur le chemin suggéré
+`/fret`. Il présente les services, le déroulement opérationnel, les deux sens
+Paris ↔ Dakar, le principe du suivi sécurisé et des réponses prudentes aux
+questions fréquentes. Il réutilise exclusivement les blocs CMS génériques :
+aucun bloc Cargo spécialisé n'est nécessaire.
+
+Cette page est une vitrine, pas un guichet Cargo. Elle ne crée aucun envoi,
+n'appelle aucune route STAFF et ne propose aucune recherche publique par
+référence, identité ou coordonnées. « Demander un devis » renvoie vers les
+informations de contact publiées par le propriétaire du site ; aucune donnée
+personnelle n'est collectée par la page.
+
+La page ne contient ni prix, ni barème, ni formule, ni promesse de capacité.
+Les options de collecte ou de livraison restent conditionnelles et seul un
+devis établi par l'équipe peut confirmer les modalités. Le suivi est présenté
+comme un lien confidentiel éventuellement transmis lorsque son partage est
+activé ; aucun token ou identifiant interne n'est affiché.
+
 L'état `QUOTE` reste un statut opérationnel du fret. Le prix n'est pas porté
 par `RoadFreightShipment` : CARGO-PRICE-1 le stocke dans des objets
 `RoadFreightQuote` séparés et historisés.

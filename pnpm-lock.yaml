@@ -787,6 +787,9 @@ importers:
 
   tests/browser:
     dependencies:
+      '@euroteranga/content':
+        specifier: workspace:*
+        version: link:../../packages/content
       '@euroteranga/database':
         specifier: workspace:*
         version: link:../../packages/database

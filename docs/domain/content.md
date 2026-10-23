@@ -99,6 +99,11 @@ show the "from" price of each direction. The website reads that price from
 the public search API (Pricing, PR-08) when it renders the page. Marketing
 can therefore never contradict Booking.
 
+The `cargo-freight` template deliberately uses `cards` for its two directions,
+not `routes`: `/fret` must never render passenger fares or a public cargo price.
+Its quote calls to action remain editorial anchors to the contact guidance;
+the template neither creates Cargo records nor exposes a public lookup form.
+
 ### Owner information
 
 Legal and contact fields are nullable. A `null` value means

@@ -6,6 +6,7 @@ import {
   documentSchemaOf,
   mediaReferencesOf,
   pageDocumentSchema,
+  siteSettingsSchema,
   type ContentKind,
   type PageDocument,
 } from '@euroteranga/content';
@@ -215,6 +216,35 @@ function assertExpectedDraft(draft: { updatedAt: Date } | null, expected: string
   }
 }
 
+async function assertFreightPublicContact(tx: DatabaseTransaction): Promise<void> {
+  const settingsEntry = await tx.contentEntry.findUnique({
+    where: {
+      kind_key: {
+        kind: 'SITE_SETTINGS',
+        key: SINGLETON_KEYS.SITE_SETTINGS,
+      },
+    },
+    select: { id: true },
+  });
+  if (!settingsEntry) throw ContentErrors.publicContactRequired();
+
+  await tx.$queryRaw`
+    SELECT "id"
+    FROM "content_entry"
+    WHERE "id" = ${settingsEntry.id}::uuid
+    FOR SHARE
+  `;
+
+  const published = await tx.contentRevision.findFirst({
+    where: { entryId: settingsEntry.id, status: 'PUBLISHED' },
+    select: { document: true },
+  });
+  const settings = published ? siteSettingsSchema.safeParse(published.document) : null;
+  if (!settings?.success || (!settings.data.contact.email && !settings.data.contact.phone)) {
+    throw ContentErrors.publicContactRequired();
+  }
+}
+
 /**
  * CMS-1 business authority for the public website content: pages, site
  * settings and navigation, with an editable draft, one published revision
@@ -407,6 +437,9 @@ export class ContentService {
         assertExpectedDraft(draft, input.expectedDraftUpdatedAt);
         // The model may have evolved since the draft was saved: check it again.
         await assertMediaUsable(tx, entry.kind, validate(entry.kind, draft.document));
+        if (entry.kind === 'PAGE' && entry.key === '/fret') {
+          await assertFreightPublicContact(tx);
+        }
         if (published) {
           await tx.contentRevision.update({
             where: { id: published.id },
