@@ -388,7 +388,7 @@ describe('BAGGAGE-PLUS-1 versioned allowance and excess pricing', () => {
         where: { id: tier.id },
         data: { chargeMinor: 4444n },
       }),
-    ).rejects.toThrow(/published baggage excess tiers are immutable/);
+    ).rejects.toThrow(/editable only on a DRAFT policy version/);
 
     await expect(
       db(t.app).baggagePolicyVersion.update({
