@@ -1586,5 +1586,4 @@ async function seedPublicPagesData(db: ReturnType<typeof createDatabaseClient>):
       seo: { ...document.seo, indexable: false },
     });
   }
-
 }
