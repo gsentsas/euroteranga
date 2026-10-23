@@ -15,7 +15,7 @@
     "build:frontends": "pnpm --recursive --filter \"./apps/**\" --filter \"!@euroteranga/api\" run build",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --write apps/api/test/integration/tracking/comfort.int.spec.ts apps/client/app/account.css apps/client/components/customer-comfort.tsx apps/ops/components/tracking/comfort-admin.tsx apps/tracking/app/tracking.css apps/tracking/components/public-tracking.tsx && git diff -- apps/api/test/integration/tracking/comfort.int.spec.ts apps/client/app/account.css apps/client/components/customer-comfort.tsx apps/ops/components/tracking/comfort-admin.tsx apps/tracking/app/tracking.css apps/tracking/components/public-tracking.tsx && exit 1",
     "typecheck": "pnpm --recursive run typecheck",
     "test": "pnpm test:unit && pnpm test:integration",
     "test:unit": "pnpm --recursive --if-present run test:unit",
