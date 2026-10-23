@@ -45,6 +45,16 @@ The purge deletes only expired/revoked temporary authentication artifacts. It
 does not delete identities, durable MFA credentials, security events or audit
 events.
 
+## PostgreSQL backups
+
+`install-systemd.sh` also installs and starts the OPS-4 PostgreSQL backup and
+restore-check timers. Daily custom-format dumps are kept separately from
+deployment pre-migration dumps, checksummed, rotated, and restored into an
+isolated temporary database as a control.
+
+See [postgres-backups.md](postgres-backups.md) for retention, freshness,
+manual execution, recovery evidence and the remaining off-site blocker.
+
 ## Observability
 
 - `systemctl status 'euroteranga-*.service'`
