@@ -12,7 +12,7 @@ an authorization mistake irreversible. PostgreSQL, object storage and a
 malware scanner cannot participate in one atomic transaction.
 
 The first implementation must work deterministically in local development and
-CI while leaving a safe path to private S3-compatible production storage. It
+CI while supporting a private local filesystem in production without exposing uploads through a web root. It
 must not pretend that a technically clean file is legally valid.
 
 **TECHNICALLY_ACCEPTED != REGULATORY_VALID.** `ACCEPTED` only records that a
@@ -39,28 +39,28 @@ rules); PR-11 has no approval state, permission, endpoint or button.
    Compensating deletion is best effort and idempotent. An uncertain outcome
    stays quarantined or rejected and therefore inaccessible. Operators use a
    documented reconciliation process for possible orphans.
-6. `LOCAL` storage and the deterministic `TEST` scanner exist only for
-   local/CI and are configuration errors in staging/production. `S3` and
-   `CLAMAV` require explicit settings. `DISABLED` is the default and safely
-   makes uploads unavailable.
-7. Production provisioning, bucket policy, credential rotation, encryption,
-   retention and ClamAV operations require a separate infrastructure decision
-   before enablement. PR-11 makes no production change: production has no
-   provisioned S3 bucket and no ClamAV service, and the default
-   `DISABLED`/`DISABLED` configuration keeps uploads unavailable there.
+6. `LOCAL` is the selected EURO TERANGA production storage adapter. In a
+   deployed environment it requires a persistent absolute private root outside
+   web/static/upload and temporary paths, and it must be paired with `CLAMAV`.
+   The deterministic `TEST` scanner remains refused in staging/production.
+   `S3` remains an optional adapter, not a production requirement.
+7. Production provisioning must create the local root outside the release and
+   web trees, owned by the application account with directories `0700` and
+   files `0600`, include it in the off-site backup/retention plan, and
+   provision ClamAV before uploads are enabled. `DISABLED`/`DISABLED`
+   remains the safe default until those checks are complete.
 8. Every read of document data is audited before it is returned:
    `PASSENGER_DOCUMENT_ACCESSED` with `LIST` (one event per STAFF page),
    `METADATA` or `CONTENT`.
 
 ## Required production properties
 
-Before enabling S3 in a deployed environment, an infrastructure review must
-prove: a private bucket with block-public-access/anonymous access disabled,
-least-privilege service credentials, HTTPS, encryption at rest, logging and
-alerting without object data, versioning/immutability policy as appropriate,
-backup/retention decisions, and tested deletion/reconciliation. ClamAV must be
-private, authenticated by network placement, monitored, signature-updated and
-capacity-tested. None is provisioned by this ADR.
+Before enabling LOCAL in a deployed environment, an infrastructure review must
+prove: a dedicated persistent directory outside every release/web/static/upload
+path, no symlink components, owner-only access, sufficient disk capacity,
+backup/retention coverage, tested restore and deletion/reconciliation, and no
+direct HTTP route to the directory. ClamAV must be loopback/private, monitored,
+signature-updated and capacity-tested. S3 is not required for EURO TERANGA.
 
 ## Consequences
 
@@ -79,7 +79,7 @@ Trade-offs:
 - cross-system failure can create an orphan object or a quarantined row that
   needs reconciliation;
 - API streaming consumes application bandwidth;
-- production readiness depends on external S3/ClamAV provisioning and an
+- production readiness depends on local private storage/ClamAV provisioning and an
   explicit retention policy.
 
 ## Alternatives considered
