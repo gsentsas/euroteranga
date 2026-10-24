@@ -11,41 +11,76 @@ interface PreviewCell {
   seatLabel: string | null;
 }
 
+const KIND_CLASS: Record<SeatMapCellKind, string> = {
+  SEAT: 'ops-seatmap-cell--seat',
+  AISLE: 'ops-seatmap-cell--aisle',
+  DRIVER: 'ops-seatmap-cell--driver',
+  DOOR: 'ops-seatmap-cell--door',
+  TOILET: 'ops-seatmap-cell--toilet',
+  STAIRS: 'ops-seatmap-cell--stairs',
+  OTHER: 'ops-seatmap-cell--other',
+};
+
 /**
- * Visual layout, one grid per deck. It is a reading aid only: every cell is
- * also listed in an accessible table next to it. Empty positions are blank.
+ * Visual reading aid for the physical layout. Commercial availability is
+ * deliberately not represented here; the accessible table remains the
+ * authoritative textual view of every cell.
  */
 export function SeatMapPreview({ cells, label }: { cells: readonly PreviewCell[]; label: string }) {
   const decks = [...new Set(cells.map((cell) => cell.deck))].sort((a, b) => a - b);
-  if (decks.length === 0) return <p>Aucune cellule.</p>;
+  if (decks.length === 0) return <p className="ops-seatmap-empty">Aucune cellule.</p>;
+
   return (
-    <div className="et-network-adders">
-      {decks.map((deck) => {
-        const deckCells = cells.filter((cell) => cell.deck === deck);
-        const columns = Math.max(...deckCells.map((cell) => cell.column));
-        return (
-          <div key={deck}>
-            <p className="et-hint">Pont {deck}</p>
-            <div
-              className="et-seatmap-deck"
-              role="group"
-              aria-label={`Aperçu ${label}, pont ${deck}`}
-              style={{ gridTemplateColumns: `repeat(${columns}, minmax(3.25rem, auto))` }}
-            >
-              {deckCells.map((cell) => (
+    <div className="ops-seatmap-preview">
+      <div className="ops-seatmap-preview__legend" aria-label="Légende du plan">
+        {(['SEAT', 'AISLE', 'DRIVER', 'DOOR', 'TOILET', 'STAIRS', 'OTHER'] as SeatMapCellKind[]).map(
+          (kind) => (
+            <span key={kind}>
+              <i className={`ops-seatmap-legend-swatch ${KIND_CLASS[kind]}`} aria-hidden="true" />
+              {KIND_LABELS[kind]}
+            </span>
+          ),
+        )}
+      </div>
+
+      <div className="ops-seatmap-preview__decks">
+        {decks.map((deck) => {
+          const deckCells = cells.filter((cell) => cell.deck === deck);
+          const columns = Math.max(...deckCells.map((cell) => cell.column));
+          const rows = Math.max(...deckCells.map((cell) => cell.row));
+
+          return (
+            <section key={deck} className="ops-seatmap-deck-card">
+              <div className="ops-seatmap-deck-card__heading">
+                <span>Pont {deck}</span>
+                <small>
+                  {rows} rang{rows > 1 ? 's' : ''} · {columns} colonne{columns > 1 ? 's' : ''}
+                </small>
+              </div>
+              <div className="ops-seatmap-bus-shell">
+                <div className="ops-seatmap-bus-shell__nose" aria-hidden="true" />
                 <div
-                  key={`${cell.row}-${cell.column}`}
-                  className={`et-seatmap-cell${cell.kind === 'SEAT' ? ' et-seatmap-cell--seat' : ''}${cell.kind === 'AISLE' ? ' et-seatmap-cell--aisle' : ''}`}
-                  style={{ gridRow: cell.row, gridColumn: cell.column }}
-                  title={`${KIND_LABELS[cell.kind]}${cell.seatLabel ? ` ${cell.seatLabel}` : ''} — rang ${cell.row}, colonne ${cell.column}`}
+                  className="et-seatmap-deck ops-seatmap-grid"
+                  role="group"
+                  aria-label={`Aperçu ${label}, pont ${deck}`}
+                  style={{ gridTemplateColumns: `repeat(${columns}, minmax(2.5rem, 1fr))` }}
                 >
-                  {cell.kind === 'SEAT' ? cell.seatLabel : KIND_LABELS[cell.kind]}
+                  {deckCells.map((cell) => (
+                    <div
+                      key={`${cell.row}-${cell.column}`}
+                      className={`et-seatmap-cell ops-seatmap-cell ${KIND_CLASS[cell.kind]}`}
+                      style={{ gridRow: cell.row, gridColumn: cell.column }}
+                      title={`${KIND_LABELS[cell.kind]}${cell.seatLabel ? ` ${cell.seatLabel}` : ''} — rang ${cell.row}, colonne ${cell.column}`}
+                    >
+                      {cell.kind === 'SEAT' ? cell.seatLabel : KIND_LABELS[cell.kind]}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
+              </div>
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }
