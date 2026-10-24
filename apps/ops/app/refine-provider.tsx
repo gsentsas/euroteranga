@@ -4,6 +4,7 @@ import { Refine } from '@refinedev/core';
 import routerProvider from '@refinedev/nextjs-router/app';
 import { Suspense, type ReactNode } from 'react';
 import { authProvider } from '../lib/auth-provider';
+import { OPS_RESOURCES } from '../components/ops-navigation';
 
 /**
  * Refine is used as a UI framework only (navigation, and later tables, forms
@@ -20,145 +21,15 @@ export function RefineProvider({ children }: { children: ReactNode }) {
       <Refine
         routerProvider={routerProvider}
         authProvider={authProvider}
-        resources={[
-          { name: 'foundation', list: '/', meta: { label: 'Vue d’ensemble' } },
-          {
-            name: 'network',
-            list: '/network',
-            meta: { label: 'Réseau', permission: 'network.read' },
+        resources={OPS_RESOURCES.map((resource) => ({
+          name: resource.name,
+          list: resource.list,
+          meta: {
+            label: resource.label,
+            group: resource.group,
+            ...(resource.permission ? { permission: resource.permission } : {}),
           },
-          {
-            name: 'fleet',
-            list: '/fleet',
-            meta: { label: 'Flotte', permission: 'fleet.read' },
-          },
-          {
-            name: 'trips',
-            list: '/trips',
-            meta: { label: 'Voyages', permission: 'trip.read' },
-          },
-          {
-            name: 'tracking',
-            list: '/tracking',
-            meta: { label: 'Tracking', permission: 'tracking.read' },
-          },
-          {
-            name: 'incidents',
-            list: '/incidents',
-            meta: { label: 'Incidents', permission: 'incident.read' },
-          },
-          {
-            name: 'seat-maps',
-            list: '/seat-maps',
-            meta: { label: 'Plans de sièges', permission: 'seatmap.read' },
-          },
-          {
-            name: 'pricing',
-            list: '/pricing',
-            meta: { label: 'Tarification', permission: 'pricing.read' },
-          },
-          {
-            name: 'bookings',
-            list: '/bookings',
-            meta: { label: 'Réservations', permission: 'booking.read' },
-          },
-          {
-            name: 'payments',
-            list: '/payments',
-            meta: { label: 'Paiements', permission: 'payment.read' },
-          },
-          {
-            name: 'finance',
-            list: '/finance',
-            meta: { label: 'Finance', permission: 'finance.read' },
-          },
-          {
-            name: 'reporting',
-            list: '/reporting',
-            meta: { label: 'Reporting', permission: 'reporting.view' },
-          },
-          {
-            name: 'baggage',
-            list: '/baggage',
-            meta: { label: 'Bagages', permission: 'baggage.read' },
-          },
-          {
-            name: 'cargo',
-            list: '/cargo',
-            meta: { label: 'Colis & fret', permission: 'cargo.read' },
-          },
-          {
-            name: 'check-in',
-            list: '/check-in',
-            meta: { label: 'Check-in / Embarquement', permission: 'checkin.read' },
-          },
-          {
-            name: 'manifests',
-            list: '/manifests',
-            meta: { label: 'Manifestes passagers', permission: 'manifest.read' },
-          },
-          {
-            name: 'regulatory-permits',
-            list: '/regulatory-permits',
-            meta: { label: 'Autorisations réglementaires', permission: 'permit.read' },
-          },
-          {
-            name: 'departure',
-            list: '/departure',
-            meta: { label: 'Départ / Dispatch', permission: 'departure.read' },
-          },
-          // Compliance group: PR-11 technical files and PR-12 rules/reviews.
-          // PR-16 permits and PR-17 dispatch remain separate operational domains.
-          {
-            name: 'passenger-documents',
-            list: '/passenger-documents',
-            meta: {
-              label: 'Documents passagers',
-              permission: 'passenger.document.read',
-              group: 'Conformité',
-            },
-          },
-          {
-            name: 'compliance-rules',
-            list: '/compliance/rules',
-            meta: {
-              label: 'Règles réglementaires',
-              permission: 'compliance.rule.read',
-              group: 'Conformité',
-            },
-          },
-          {
-            name: 'compliance-reviews',
-            list: '/compliance/reviews',
-            meta: { label: 'Revues passagers', permission: 'compliance.read', group: 'Conformité' },
-          },
-          {
-            name: 'content',
-            list: '/contenus',
-            meta: { label: 'Contenus du site', permission: 'content.read' },
-          },
-          {
-            name: 'media',
-            list: '/mediatheque',
-            meta: { label: 'Médiathèque', permission: 'media.read' },
-          },
-          // `permission` only filters the navigation; the API authorizes every call.
-          {
-            name: 'admin-identities',
-            list: '/admin/utilisateurs',
-            meta: { label: 'Utilisateurs', permission: 'identity.read' },
-          },
-          {
-            name: 'admin-roles',
-            list: '/admin/roles',
-            meta: { label: 'Rôles', permission: 'role.read' },
-          },
-          {
-            name: 'admin-audit',
-            list: '/admin/audit',
-            meta: { label: 'Journal d’audit', permission: 'audit.read' },
-          },
-        ]}
+        }))}
         options={{
           // Refine reports usage telemetry unless explicitly disabled.
           disableTelemetry: true,

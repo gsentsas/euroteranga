@@ -4,6 +4,8 @@ import { useGetIdentity, useLogout } from '@refinedev/core';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { auth } from '../lib/auth';
+import type { OpsIconName } from './ops-icons';
+import { OpsKpiCard } from './ops-ui';
 import { useAccess } from './staff-access';
 
 const shortcuts = [
@@ -41,6 +43,13 @@ type DashboardMetric = {
   href: string;
   permission: string;
   tone?: 'default' | 'warning' | 'danger';
+};
+
+const METRIC_ICONS: Record<string, OpsIconName> = {
+  trips: 'route',
+  incidents: 'alert',
+  payments: 'payment',
+  checkin: 'check',
 };
 
 function pageCount(items: readonly unknown[], nextCursor: string | null): string {
@@ -218,16 +227,15 @@ export function StaffHome() {
           </div>
           <div className="ops-dashboard__pulse">
             {visibleMetrics.map((metric) => (
-              <Link
-                href={metric.href}
+              <OpsKpiCard
                 key={metric.key}
-                className={`ops-metric-card ops-metric-card--${metric.tone ?? 'default'}`}
-              >
-                <span>{metric.label}</span>
-                <strong>{metric.value}</strong>
-                <small>{metric.detail}</small>
-                <b>Consulter →</b>
-              </Link>
+                href={metric.href}
+                label={metric.label}
+                value={metric.value}
+                helper={metric.detail}
+                icon={METRIC_ICONS[metric.key] ?? 'dashboard'}
+                tone={metric.tone && metric.tone !== 'default' ? metric.tone : 'info'}
+              />
             ))}
           </div>
         </section>
