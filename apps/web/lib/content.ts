@@ -55,7 +55,9 @@ type Read<T> = { status: 'ok'; data: T } | { status: 'missing' } | { status: 'un
 async function read<T>(path: string, revalidate: number): Promise<Read<T>> {
   try {
     const response = await fetch(`${apiBase()}${path}`, {
-      next: { revalidate },
+      ...(publicEnv.NEXT_PUBLIC_APP_ENV === 'ci'
+        ? { cache: 'no-store' as const }
+        : { next: { revalidate } }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: { Accept: 'application/json' },
     });

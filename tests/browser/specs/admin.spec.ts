@@ -67,10 +67,30 @@ test('ops: SUPER_ADMIN signs in with MFA, invites, manages roles and status, rea
   await expect(page).toHaveURL(appUrl(ops, '/'));
   await expect(page.getByTestId('session-roles')).toHaveText('SUPER_ADMIN');
 
+  // OPS-UI-1: every protected screen shares the same operational shell.
+  await expect(page.getByRole('banner').getByLabel('EURO TERANGA Ops — accueil')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Centre opérationnel' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Fil d’Ariane' })).toContainText(
+    'Centre de contrôle',
+  );
+  await expect(page.getByRole('button', { name: 'Ouvrir le menu du compte' })).toBeVisible();
+  for (const group of [
+    'Opérations',
+    'Commercial & finance',
+    'Exploitation',
+    'Conformité',
+    'Site public',
+    'Administration',
+  ]) {
+    await expect(mainNav(page).getByRole('heading', { name: group })).toBeVisible();
+  }
+
   // UI-4C: the global search reuses the same authenticated session and existing read permissions.
   const bookingSearchSeed = bookingSeed();
   const globalSearch = page.getByRole('searchbox', { name: 'Recherche globale' });
   await expect(globalSearch).toBeVisible();
+  await page.keyboard.press('Control+k');
+  await expect(globalSearch).toBeFocused();
   await globalSearch.fill(bookingSearchSeed.staffBookingReference);
   const globalResults = page.getByRole('region', { name: 'Résultats globaux' });
   await expect(globalResults).toBeVisible();
@@ -156,12 +176,34 @@ test('ops: SUPER_ADMIN signs in with MFA, invites, manages roles and status, rea
   expect(closeButtonBox?.width).toBeGreaterThanOrEqual(44);
   expect(closeButtonBox?.height).toBeGreaterThanOrEqual(44);
 
+  // Escape closes the off-canvas navigation and restores focus to its trigger.
+  await page.keyboard.press('Escape');
+  await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+  await expect(menuButton).toBeFocused();
+  await menuButton.click();
+
   const overviewLink = mainNav(page).getByRole('link', { name: 'Vue d’ensemble' });
   const overviewBox = await overviewLink.boundingBox();
   expect(overviewBox?.height).toBeGreaterThanOrEqual(44);
   await overviewLink.click();
   await expect(page).toHaveURL(appUrl(ops, '/'));
   await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+  const layout = await page.evaluate(() => ({
+    horizontalOverflow: document.documentElement.scrollWidth - window.innerWidth,
+    offenders: [...document.querySelectorAll<HTMLElement>('body *')]
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          element: `${element.tagName.toLocaleLowerCase()}${element.className ? `.${String(element.className).replaceAll(' ', '.')}` : ''}`,
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          width: Math.round(rect.width),
+        };
+      })
+      .filter((rect) => rect.right > window.innerWidth + 1)
+      .slice(0, 8),
+  }));
+  expect(layout.horizontalOverflow, JSON.stringify(layout.offenders)).toBeLessThanOrEqual(1);
 
   expect(errors).toEqual([]);
 });

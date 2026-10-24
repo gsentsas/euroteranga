@@ -91,7 +91,9 @@ test.describe('PR-25 pilot acceptance', () => {
 
     await page.goto(appUrl(ops, '/reporting'));
     await expect(page.getByTestId('reporting-workspace')).toBeVisible();
-    await expect(page.getByText('Reporting opérationnel', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Reporting opérationnel' }),
+    ).toBeVisible();
     expect(errors).toEqual([]);
   });
 

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json.schemastore.org/design-tokens.json",
+  "color": {
+    "navy1000": "#050d18",
+    "navy950": "#081525",
+    "navy900": "#0d1f34",
+    "navy850": "#132941",
+    "navy700": "#24425f",
+    "gold": "#f5bf28",
+    "goldStrong": "#dfa713",
+    "canvas": "#f1f4f8",
+    "surface": "#ffffff",
+    "surfaceMuted": "#f7f9fc",
+    "border": "#d8e0ea",
+    "text": "#111827",
+    "muted": "#5c6b80",
+    "success": "#12845b",
+    "successSurface": "#dcfce9",
+    "warning": "#a86109",
+    "warningSurface": "#fff4d6",
+    "danger": "#b72f43",
+    "dangerSurface": "#ffeaed",
+    "info": "#2563c9",
+    "infoSurface": "#e7f0ff",
+    "focus": "#f7c843"
+  },
+  "space": {
+    "1": "0.25rem",
+    "2": "0.5rem",
+    "3": "0.75rem",
+    "4": "1rem",
+    "5": "1.25rem",
+    "6": "1.5rem",
+    "8": "2rem",
+    "10": "2.5rem"
+  },
+  "radius": {
+    "control": "0.5rem",
+    "card": "0.75rem",
+    "panel": "1rem",
+    "pill": "999px"
+  },
+  "shadow": {
+    "card": "0 1px 2px rgba(8, 21, 37, 0.05), 0 8px 24px rgba(8, 21, 37, 0.04)",
+    "panel": "0 24px 64px rgba(5, 13, 24, 0.22)"
+  },
+  "breakpoint": {
+    "mobile": "38rem",
+    "tablet": "64rem",
+    "wide": "90rem"
+  }
+}

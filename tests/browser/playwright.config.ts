@@ -30,7 +30,10 @@ export default defineConfig({
     },
     ...frontendApps.map((app) => ({
       command: `pnpm --filter @euroteranga/${app.name} exec next start --port ${app.port}`,
-      url: appUrl(app, '/'),
+      // The public home page reads CMS data and caches it for 60 seconds.
+      // Probe its static icon so readiness cannot cache an empty database
+      // before globalSetup has installed the disposable browser fixtures.
+      url: appUrl(app, app.name === 'web' ? '/icon.svg' : '/'),
       reuseExistingServer: !isCI,
       timeout: 60_000,
     })),

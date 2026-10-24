@@ -2,44 +2,9 @@
 
 import { useMenu } from '@refinedev/core';
 import Link from 'next/link';
+import { OpsIcon } from './ops-icons';
+import { OPS_NAV_GROUPS, opsResource } from './ops-navigation';
 import { useAccess } from './staff-access';
-
-const GROUPS: ReadonlyArray<{ key: string; label: string; resources: readonly string[] }> = [
-  {
-    key: 'pilotage',
-    label: 'Pilotage',
-    resources: ['foundation', 'network', 'fleet', 'trips', 'tracking', 'incidents'],
-  },
-  {
-    key: 'commercial',
-    label: 'Commercial & finance',
-    resources: ['seat-maps', 'pricing', 'bookings', 'payments', 'finance', 'reporting'],
-  },
-  {
-    key: 'exploitation',
-    label: 'Exploitation',
-    resources: ['baggage', 'cargo', 'check-in', 'manifests', 'regulatory-permits', 'departure'],
-  },
-  {
-    key: 'compliance',
-    label: 'Conformité',
-    resources: ['passenger-documents', 'compliance-rules', 'compliance-reviews'],
-  },
-  {
-    key: 'site',
-    label: 'Site public',
-    resources: ['content', 'media'],
-  },
-  {
-    key: 'admin',
-    label: 'Administration',
-    resources: ['admin-identities', 'admin-roles', 'admin-audit'],
-  },
-];
-
-function resourceGroup(name: string): (typeof GROUPS)[number] {
-  return GROUPS.find((group) => group.resources.includes(name)) ?? GROUPS[0]!;
-}
 
 /**
  * Navigation built from the Refine resource registry and filtered with the
@@ -56,9 +21,9 @@ export function OpsNav({ onNavigate }: { onNavigate?: () => void } = {}) {
     return typeof permission !== 'string' || state.access.permissions.includes(permission);
   });
 
-  const grouped = GROUPS.map((group) => ({
+  const grouped = OPS_NAV_GROUPS.map((group) => ({
     ...group,
-    items: visible.filter((item) => resourceGroup(item.name).key === group.key),
+    items: visible.filter((item) => opsResource(item.name)?.group === group.key),
   })).filter((group) => group.items.length > 0);
 
   return (
@@ -73,6 +38,7 @@ export function OpsNav({ onNavigate }: { onNavigate?: () => void } = {}) {
           <ul aria-label={group.label}>
             {group.items.map((item) => {
               const active = item.key === selectedKey;
+              const resource = opsResource(item.name);
               return (
                 <li key={item.key}>
                   <Link
@@ -81,7 +47,9 @@ export function OpsNav({ onNavigate }: { onNavigate?: () => void } = {}) {
                     aria-current={active ? 'page' : undefined}
                     onClick={() => onNavigate?.()}
                   >
-                    <span className="ops-nav__bullet" aria-hidden="true" />
+                    <span className="ops-nav__icon" aria-hidden="true">
+                      <OpsIcon name={resource?.icon ?? 'dashboard'} />
+                    </span>
                     <span>{item.label ?? item.name}</span>
                   </Link>
                 </li>

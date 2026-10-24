@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { auth } from '../lib/auth';
+import { OpsIcon } from './ops-icons';
 import { useAccess } from './staff-access';
 
 type SearchResult = {
@@ -54,6 +55,7 @@ export function OpsGlobalSearch() {
   const state = useAccess();
   const inputId = useId();
   const resultsId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [searchState, setSearchState] = useState<SearchState>('idle');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -70,6 +72,18 @@ export function OpsGlobalSearch() {
     setOpen(false);
     setSearchState('idle');
   }, [pathname]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLocaleLowerCase('fr-FR') !== 'k' || (!event.metaKey && !event.ctrlKey)) {
+        return;
+      }
+      event.preventDefault();
+      inputRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -344,13 +358,14 @@ export function OpsGlobalSearch() {
       </label>
       <div className="ops-global-search__control">
         <span aria-hidden="true" className="ops-global-search__icon">
-          ⌕
+          <OpsIcon name="search" />
         </span>
         <input
+          ref={inputRef}
           id={inputId}
           type="search"
           autoComplete="off"
-          placeholder="Réservation, voyage, passager, véhicule…"
+          placeholder="Rechercher un voyage, une réservation, un client…"
           value={query}
           aria-controls={showPanel ? resultsId : undefined}
           aria-expanded={showPanel}
@@ -378,7 +393,11 @@ export function OpsGlobalSearch() {
           >
             ×
           </button>
-        ) : null}
+        ) : (
+          <kbd className="ops-global-search__shortcut" aria-hidden="true">
+            ⌘ K
+          </kbd>
+        )}
       </div>
 
       {showPanel ? (
