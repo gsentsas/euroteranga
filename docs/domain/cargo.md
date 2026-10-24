@@ -24,9 +24,14 @@ CARGO-PRICE-1 ajoute ensuite les devis commerciaux versionnés, sans formule de
 prix automatique : les lignes sont saisies explicitement par OPS et le total
 est dérivé côté serveur en unités monétaires mineures exactes.
 
+CARGO-PRICING-1 ajoute un domaine séparé de grilles automatiques versionnées et
+fail-closed, documenté dans [`cargo-pricing.md`](./cargo-pricing.md). Il ne
+convertit jamais une estimation publique en envoi ou en devis. Aucun tarif
+commercial n'est semé par le code.
+
 Hors périmètre :
 
-- paiement Cargo, FX, promotions et calculateur public ;
+- paiement Cargo, FX et promotions ;
 - QR/scans et tracking public (`CARGO-TRACK-1`) ;
 - documents douaniers privés ;
 - déclenchement automatique du véhicule support ;

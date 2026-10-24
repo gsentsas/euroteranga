@@ -1898,6 +1898,151 @@ export interface RoadFreightListOptions {
   createdTo?: string;
 }
 
+export type CargoPricingCategory =
+  | 'STANDARD_PARCEL'
+  | 'PERSONAL_ITEMS'
+  | 'CLOTHING'
+  | 'DOCUMENTS'
+  | 'ALLOWED_FOOD'
+  | 'EQUIPMENT'
+  | 'PROFESSIONAL_GOODS'
+  | 'UNACCOMPANIED_BAGGAGE'
+  | 'ACCOMPANIED_PARCEL'
+  | 'SPECIAL_HANDLING'
+  | 'OTHER';
+export type CargoPricingMethod =
+  'ACTUAL_WEIGHT' | 'VOLUMETRIC_WEIGHT' | 'VOLUME' | 'FLAT_RATE' | 'TIERED_WEIGHT' | 'CUSTOM_QUOTE';
+export type CargoPricingQuoteReason =
+  | 'NO_ACTIVE_RULE'
+  | 'AMBIGUOUS_RULE'
+  | 'CUSTOM_QUOTE'
+  | 'THRESHOLD_EXCEEDED'
+  | 'VOLUME_REQUIRED'
+  | 'NO_MATCHING_TIER'
+  | 'OPTION_NOT_CONFIGURED'
+  | 'OPTION_REQUIRES_QUOTE'
+  | 'INCOMPLETE_RULE';
+export type CargoPricingOptionKind =
+  'PICKUP' | 'DELIVERY' | 'FRAGILE_HANDLING' | 'PROFESSIONAL_HANDLING' | 'INSURANCE';
+
+export interface CargoEstimateInput {
+  from: 'PAR' | 'DKR';
+  to: 'PAR' | 'DKR';
+  /** Exact decimal string with at most three places. */
+  weightKg: string;
+  dimensions?: { lengthCm: number; widthCm: number; heightCm: number };
+  /** Exact decimal string, alternative to dimensions. */
+  volumeLiters?: string;
+  category: CargoPricingCategory;
+  pickup?: boolean;
+  delivery?: boolean;
+  fragile?: boolean;
+}
+
+export interface CargoEstimateResult {
+  direction: RoadFreightDirection;
+  from: 'PAR' | 'DKR';
+  to: 'PAR' | 'DKR';
+  category: CargoPricingCategory;
+  actualWeightKg: string;
+  volumeM3: string | null;
+  requiresQuote: boolean;
+  quoteReason: CargoPricingQuoteReason | null;
+  currencyCode: string | null;
+  currencyMinorUnit: number | null;
+  totalMinor: string | null;
+  /** Stable public code and version, e.g. RULE_CODE:v2. */
+  pricingVersion: string | null;
+  effectiveFrom: string | null;
+  calculation: {
+    method: CargoPricingMethod;
+    actualWeightKg: string;
+    volumetricWeightKg: string | null;
+    billableWeightKg: string | null;
+    volumeM3: string | null;
+    unitPriceMinor: string | null;
+    baseAmountMinor: string;
+    minimumApplied: boolean;
+    tierPosition: number | null;
+  } | null;
+  lines: Array<{
+    kind: 'BASE' | 'MINIMUM_ADJUSTMENT' | 'OPTION';
+    code: string;
+    amountMinor: string;
+  }>;
+  includedOptions: CargoPricingOptionKind[];
+}
+
+export interface CargoPricingTierInput {
+  position: number;
+  minWeightKg: string;
+  maxWeightKg: string | null;
+  method: 'UNIT_WEIGHT' | 'UNIT_VOLUME' | 'FLAT_RATE' | 'CUSTOM_QUOTE';
+  unitPriceMinor: string | null;
+  flatPriceMinor: string | null;
+  minimumChargeMinor: string | null;
+}
+
+export interface CargoPricingOptionInput {
+  kind: CargoPricingOptionKind;
+  mode: 'INCLUDED' | 'FLAT_RATE' | 'CUSTOM_QUOTE';
+  amountMinor: string | null;
+}
+
+export interface CargoPricingVersionInput {
+  method: CargoPricingMethod;
+  currencyCode: string;
+  currencyMinorUnit: number;
+  roundingMode: 'UP' | 'HALF_UP' | 'DOWN' | null;
+  unitPriceMinor: string | null;
+  flatPriceMinor: string | null;
+  minimumChargeMinor: string | null;
+  volumetricDivisorCm3PerKg: number | null;
+  quoteAboveWeightKg: string | null;
+  quoteAboveVolumeLiters: number | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  categories: CargoPricingCategory[];
+  tiers: CargoPricingTierInput[];
+  options: CargoPricingOptionInput[];
+}
+
+export interface CargoPricingVersion extends CargoPricingVersionInput {
+  id: string;
+  ruleId: string;
+  version: number;
+  status: 'DRAFT' | 'ACTIVE' | 'DISABLED';
+  activatedAt: string | null;
+  disabledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CargoPricingRule {
+  id: string;
+  code: string;
+  name: string;
+  direction: RoadFreightDirection;
+  audience: 'PUBLIC' | 'PRO' | 'NEGOTIATED';
+  createdAt: string;
+  updatedAt: string;
+  versions: CargoPricingVersion[];
+}
+
+export interface CargoPricingRuleListOptions {
+  cursor?: string;
+  limit?: number;
+  direction?: RoadFreightDirection;
+  audience?: 'PUBLIC' | 'PRO' | 'NEGOTIATED';
+}
+
+export interface CargoPricingRuleCreateInput {
+  code: string;
+  name: string;
+  direction: RoadFreightDirection;
+  audience: 'PUBLIC' | 'PRO' | 'NEGOTIATED';
+}
+
 export type RoadFreightQuoteStatus = 'DRAFT' | 'ISSUED' | 'ACCEPTED' | 'SUPERSEDED' | 'CANCELLED';
 export type RoadFreightQuoteLineKind = 'CHARGE' | 'DISCOUNT';
 
@@ -4043,6 +4188,10 @@ export function createAuthClient(baseUrl: string) {
       public: (token: string) =>
         call<PublicRoadFreightTracking>('GET', '/v1/cargo-tracking/' + encodeURIComponent(token)),
     },
+    cargoPricing: {
+      estimate: (input: CargoEstimateInput) =>
+        call<CargoEstimateResult>('POST', '/v1/cargo/estimate', { body: input }),
+    },
     content: {
       page: (path: string) =>
         call<PublicContentPage>('GET', `/v1/content/pages?${query({ path })}`),
@@ -4440,6 +4589,60 @@ export function createAuthClient(baseUrl: string) {
           withCsrf<AdminFareTable>(
             'staff',
             `/v1/admin/pricing/fare-tables/${encodeURIComponent(fareTableId)}/versions/${encodeURIComponent(versionId)}/publish`,
+          ),
+        cargoRules: (options: CargoPricingRuleListOptions = {}) =>
+          call<Page<CargoPricingRule>>(
+            'GET',
+            `/v1/admin/pricing/cargo-rules?${query({
+              cursor: options.cursor,
+              limit: options.limit,
+              direction: options.direction,
+              audience: options.audience,
+            })}`,
+          ),
+        cargoRule: (ruleId: string) =>
+          call<CargoPricingRule>(
+            'GET',
+            `/v1/admin/pricing/cargo-rules/${encodeURIComponent(ruleId)}`,
+          ),
+        createCargoRule: (input: CargoPricingRuleCreateInput) =>
+          withCsrf<CargoPricingRule>('staff', '/v1/admin/pricing/cargo-rules', input),
+        updateCargoRule: (ruleId: string, name: string) =>
+          withCsrf<CargoPricingRule>(
+            'staff',
+            `/v1/admin/pricing/cargo-rules/${encodeURIComponent(ruleId)}`,
+            { name },
+          ),
+        createCargoVersion: (
+          ruleId: string,
+          input: CargoPricingVersionInput | { sourceVersionId: string },
+        ) =>
+          withCsrf<CargoPricingRule>(
+            'staff',
+            `/v1/admin/pricing/cargo-rules/${encodeURIComponent(ruleId)}/versions`,
+            input,
+          ),
+        updateCargoVersion: (ruleId: string, versionId: string, input: CargoPricingVersionInput) =>
+          withCsrf<CargoPricingRule>(
+            'staff',
+            `/v1/admin/pricing/cargo-rules/${encodeURIComponent(ruleId)}/versions/${encodeURIComponent(versionId)}`,
+            input,
+          ),
+        activateCargoVersion: (ruleId: string, versionId: string) =>
+          withCsrf<CargoPricingRule>(
+            'staff',
+            `/v1/admin/pricing/cargo-rules/${encodeURIComponent(ruleId)}/versions/${encodeURIComponent(versionId)}/activate`,
+          ),
+        disableCargoVersion: (ruleId: string, versionId: string) =>
+          withCsrf<CargoPricingRule>(
+            'staff',
+            `/v1/admin/pricing/cargo-rules/${encodeURIComponent(ruleId)}/versions/${encodeURIComponent(versionId)}/disable`,
+          ),
+        previewCargoVersion: (ruleId: string, versionId: string, input: CargoEstimateInput) =>
+          call<CargoEstimateResult>(
+            'POST',
+            `/v1/admin/pricing/cargo-rules/${encodeURIComponent(ruleId)}/versions/${encodeURIComponent(versionId)}/preview`,
+            { body: input },
           ),
       },
       baggagePolicies: {

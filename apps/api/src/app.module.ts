@@ -4,6 +4,7 @@ import { Module, type DynamicModule, type Type } from '@nestjs/common';
 import { AuthorizationModule } from './authorization/authorization.module.js';
 import { BaggageModule } from './baggage/baggage.module.js';
 import { CargoModule } from './cargo/cargo.module.js';
+import { CargoPricingModule } from './cargo-pricing/cargo-pricing.module.js';
 import { BorderModule } from './borders/border.module.js';
 import { CheckInModule } from './check-in/check-in.module.js';
 import { BookingModule } from './bookings/booking.module.js';
@@ -82,6 +83,7 @@ export class AppModule {
         ComplianceModule,
         BaggageModule,
         CargoModule,
+        CargoPricingModule,
         BorderModule,
         IncidentModule,
         CheckInModule,

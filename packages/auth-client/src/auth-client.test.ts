@@ -55,6 +55,8 @@ import {
   type DepartureReadinessResponse,
   type DepartureReadinessSnapshot,
   type StaffPassengerCheckIn,
+  type CargoEstimateResult,
+  type CargoPricingRule,
 } from './index.js';
 
 type Call = { url: string; init: RequestInit };
@@ -1431,6 +1433,68 @@ describe('admin client', () => {
     // No STAFF method can make an attempt succeed.
     expectTypeOf(client.admin.payments).not.toHaveProperty('markPaid');
     expectTypeOf(client.admin.payments).toHaveProperty('cancelPayment');
+  });
+});
+
+describe('cargo pricing contract (CARGO-PRICING-1)', () => {
+  it('uses the public estimate contract and never sends a price or formula', async () => {
+    const calls = mockFetch([{ status: 200, body: { requiresQuote: true } }]);
+    const client = createAuthClient('http://api.test');
+    await client.cargoPricing.estimate({
+      from: 'PAR',
+      to: 'DKR',
+      weightKg: '25.000',
+      dimensions: { lengthCm: 60, widthCm: 40, heightCm: 40 },
+      category: 'STANDARD_PARCEL',
+      pickup: true,
+    });
+    expect(calls[0]?.url).toBe('http://api.test/v1/cargo/estimate');
+    expect(calls[0]?.init.method).toBe('POST');
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+      from: 'PAR',
+      to: 'DKR',
+      weightKg: '25.000',
+      dimensions: { lengthCm: 60, widthCm: 40, heightCm: 40 },
+      category: 'STANDARD_PARCEL',
+      pickup: true,
+    });
+    expectTypeOf(client.cargoPricing.estimate).returns.resolves.toEqualTypeOf<
+      ApiResult<CargoEstimateResult>
+    >();
+    expectTypeOf(client.cargoPricing.estimate).parameter(0).not.toHaveProperty('unitPriceMinor');
+    expectTypeOf(client.cargoPricing.estimate).parameter(0).not.toHaveProperty('formula');
+  });
+
+  it('protects tariff mutations with STAFF CSRF and leaves preview side-effect free', async () => {
+    const id = '01900000-0000-7000-8000-000000000001';
+    const versionId = '01900000-0000-7000-8000-000000000002';
+    const calls = mockFetch([
+      { status: 200, body: { csrfToken: 'cargo-pricing-csrf' } },
+      { status: 201, body: { id, versions: [] } },
+      { status: 200, body: { requiresQuote: true } },
+    ]);
+    const pricing = createAuthClient('http://api.test').admin.pricing;
+    await pricing.createCargoRule({
+      code: 'PUBLIC_PAR_DKR',
+      name: 'Paris Dakar',
+      direction: 'PAR_DKR',
+      audience: 'PUBLIC',
+    });
+    expect(calls[1]?.url).toBe('http://api.test/v1/admin/pricing/cargo-rules');
+    expect(calls[1]?.init.headers).toMatchObject({
+      'X-CSRF-Token': 'cargo-pricing-csrf',
+    });
+    await pricing.previewCargoVersion(id, versionId, {
+      from: 'PAR',
+      to: 'DKR',
+      weightKg: '1.000',
+      category: 'DOCUMENTS',
+    });
+    expect(calls[2]?.url).toBe(
+      `http://api.test/v1/admin/pricing/cargo-rules/${id}/versions/${versionId}/preview`,
+    );
+    expect(calls[2]?.init.headers).toEqual({ 'Content-Type': 'application/json' });
+    expectTypeOf(pricing.cargoRule).returns.resolves.toEqualTypeOf<ApiResult<CargoPricingRule>>();
   });
 });
 

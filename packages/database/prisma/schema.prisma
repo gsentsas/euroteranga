@@ -650,6 +650,85 @@ enum RoadFreightQuoteLineKind {
   @@map("road_freight_quote_line_kind")
 }
 
+/// CARGO-PRICING-1: stable commercial audience of a freight-pricing rule.
+enum CargoPricingAudience {
+  PUBLIC
+  PRO
+  NEGOTIATED
+
+  @@map("cargo_pricing_audience")
+}
+
+enum CargoPricingRuleVersionStatus {
+  DRAFT
+  ACTIVE
+  DISABLED
+
+  @@map("cargo_pricing_rule_version_status")
+}
+
+enum CargoPricingMethod {
+  ACTUAL_WEIGHT
+  VOLUMETRIC_WEIGHT
+  VOLUME
+  FLAT_RATE
+  TIERED_WEIGHT
+  CUSTOM_QUOTE
+
+  @@map("cargo_pricing_method")
+}
+
+enum CargoPricingRoundingMode {
+  UP
+  HALF_UP
+  DOWN
+
+  @@map("cargo_pricing_rounding_mode")
+}
+
+enum CargoPricingCategory {
+  STANDARD_PARCEL
+  PERSONAL_ITEMS
+  CLOTHING
+  DOCUMENTS
+  ALLOWED_FOOD
+  EQUIPMENT
+  PROFESSIONAL_GOODS
+  UNACCOMPANIED_BAGGAGE
+  ACCOMPANIED_PARCEL
+  SPECIAL_HANDLING
+  OTHER
+
+  @@map("cargo_pricing_category")
+}
+
+enum CargoPricingTierMethod {
+  UNIT_WEIGHT
+  UNIT_VOLUME
+  FLAT_RATE
+  CUSTOM_QUOTE
+
+  @@map("cargo_pricing_tier_method")
+}
+
+enum CargoPricingOptionKind {
+  PICKUP
+  DELIVERY
+  FRAGILE_HANDLING
+  PROFESSIONAL_HANDLING
+  INSURANCE
+
+  @@map("cargo_pricing_option_kind")
+}
+
+enum CargoPricingOptionMode {
+  INCLUDED
+  FLAT_RATE
+  CUSTOM_QUOTE
+
+  @@map("cargo_pricing_option_mode")
+}
+
 enum RegulatoryPermitStatus {
   DRAFT
   ACTIVE
@@ -1928,6 +2007,107 @@ model RoadFreightQuoteLine {
   @@unique([quoteId, position])
   @@index([quoteId, kind])
   @@map("road_freight_quote_line")
+}
+
+/// Stable identity of one freight-pricing rule. Direction and audience are
+/// immutable; all monetary configuration lives on historical versions.
+model CargoPricingRule {
+  id        String               @id @default(uuid(7)) @db.Uuid
+  code      String               @unique @db.VarChar(32)
+  name      String               @db.VarChar(160)
+  direction RoadFreightDirection
+  audience  CargoPricingAudience
+  createdAt DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  versions CargoPricingRuleVersion[]
+
+  @@index([direction, audience, id])
+  @@map("cargo_pricing_rule")
+}
+
+/// Immutable after activation. No production tariff is seeded by the
+/// migration: absence of an ACTIVE matching version means custom quote.
+model CargoPricingRuleVersion {
+  id                          String                        @id @default(uuid(7)) @db.Uuid
+  ruleId                      String                        @map("rule_id") @db.Uuid
+  version                     Int
+  status                      CargoPricingRuleVersionStatus @default(DRAFT)
+  method                      CargoPricingMethod
+  currencyCode                String                        @map("currency_code") @db.VarChar(3)
+  currencyMinorUnit           Int                           @map("currency_minor_unit")
+  roundingMode                CargoPricingRoundingMode?      @map("rounding_mode")
+  unitPriceMinor              BigInt?                       @map("unit_price_minor")
+  flatPriceMinor              BigInt?                       @map("flat_price_minor")
+  minimumChargeMinor          BigInt?                       @map("minimum_charge_minor")
+  volumetricDivisorCm3PerKg   Int?                          @map("volumetric_divisor_cm3_per_kg")
+  quoteAboveWeightKg          Decimal?                      @map("quote_above_weight_kg") @db.Decimal(8, 3)
+  quoteAboveVolumeLiters      Int?                          @map("quote_above_volume_liters")
+  effectiveFrom               DateTime                      @map("effective_from") @db.Timestamptz(3)
+  effectiveTo                 DateTime?                     @map("effective_to") @db.Timestamptz(3)
+  activatedAt                 DateTime?                     @map("activated_at") @db.Timestamptz(3)
+  disabledAt                  DateTime?                     @map("disabled_at") @db.Timestamptz(3)
+  createdAt                   DateTime                      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                   DateTime                      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  rule       CargoPricingRule           @relation(fields: [ruleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  categories CargoPricingRuleCategory[]
+  tiers      CargoPricingTier[]
+  options    CargoPricingOption[]
+
+  @@unique([ruleId, version])
+  @@index([status, effectiveFrom, effectiveTo])
+  @@map("cargo_pricing_rule_version")
+}
+
+model CargoPricingRuleCategory {
+  ruleVersionId String               @map("rule_version_id") @db.Uuid
+  category      CargoPricingCategory
+
+  ruleVersion CargoPricingRuleVersion @relation(fields: [ruleVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([ruleVersionId, category])
+  @@index([category, ruleVersionId])
+  @@map("cargo_pricing_rule_category")
+}
+
+/// Weight bounds are inclusive on the lower side and exclusive on the upper
+/// side. A null maximum is the open-ended final tier.
+model CargoPricingTier {
+  id                 String                 @id @default(uuid(7)) @db.Uuid
+  ruleVersionId      String                 @map("rule_version_id") @db.Uuid
+  position           Int
+  minWeightKg        Decimal                @map("min_weight_kg") @db.Decimal(8, 3)
+  maxWeightKg        Decimal?               @map("max_weight_kg") @db.Decimal(8, 3)
+  method             CargoPricingTierMethod
+  unitPriceMinor     BigInt?                @map("unit_price_minor")
+  flatPriceMinor     BigInt?                @map("flat_price_minor")
+  minimumChargeMinor BigInt?                @map("minimum_charge_minor")
+  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  ruleVersion CargoPricingRuleVersion @relation(fields: [ruleVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([ruleVersionId, position])
+  @@unique([ruleVersionId, minWeightKg])
+  @@index([ruleVersionId, minWeightKg, maxWeightKg])
+  @@map("cargo_pricing_tier")
+}
+
+model CargoPricingOption {
+  id            String                 @id @default(uuid(7)) @db.Uuid
+  ruleVersionId String                 @map("rule_version_id") @db.Uuid
+  kind          CargoPricingOptionKind
+  mode          CargoPricingOptionMode
+  amountMinor   BigInt?                @map("amount_minor")
+  createdAt     DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  ruleVersion CargoPricingRuleVersion @relation(fields: [ruleVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([ruleVersionId, kind])
+  @@index([ruleVersionId, kind])
+  @@map("cargo_pricing_option")
 }
 
 model RoadFreightShipmentEvent {
