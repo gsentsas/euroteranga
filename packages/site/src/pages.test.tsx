@@ -380,8 +380,14 @@ describe('cargo and freight page (WEB-CARGO-1)', () => {
     expect(html).toContain('id="suivi"');
     expect(html).toContain('id="questions"');
     expect(html).toContain('Demander un devis');
+    // Page-local anchors stay local, while global header/footer anchors return
+    // to the home page instead of targeting missing ids on /fret.
     expect(html).toContain('href="#questions"');
     expect(html).toContain('href="#suivi"');
+    expect(html).toContain('href="/#trajets"');
+    expect(html).toContain('href="/#aide"');
+    expect(html).not.toContain('href="#trajets"');
+    expect(html).not.toContain('href="#aide"');
     expect(main).not.toMatch(/\d\s?€|€\s?\d|\/\s*(?:kg|m(?:³|3))/i);
     expect(main).not.toContain('https://booking.example/');
     expect(main).not.toMatch(/<input|<form|AggregateOffer|"Offer"|priceCurrency/i);
