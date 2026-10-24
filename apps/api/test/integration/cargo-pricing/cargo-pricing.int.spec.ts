@@ -215,13 +215,18 @@ describe('CARGO-PRICING-1 versioned freight pricing', () => {
     });
   });
 
-  it('ignores future versions and fails closed when two active rules are ambiguous', async () => {
+  it('refuses future activation and fails closed when two effective rules are ambiguous', async () => {
     const future = await createRule('FUTURE_SYNTHETIC');
     const futureVersion = await createVersion(
       future.id,
       versionBody({ effectiveFrom: new Date(Date.now() + 86_400_000).toISOString() }),
     );
-    await activate(future.id, futureVersion.id);
+    const futureActivation = await adminApi(manager).post(
+      `/pricing/cargo-rules/${future.id}/versions/${futureVersion.id}/activate`,
+      {},
+    );
+    expect(futureActivation.status, futureActivation.text).toBe(422);
+    expect(futureActivation.body.code).toBe('CARGO_PRICING_VERSION_NOT_EFFECTIVE');
 
     const conflicting = await createRule('CONFLICT_SYNTHETIC');
     const conflictingVersion = await createVersion(conflicting.id);
@@ -234,10 +239,17 @@ describe('CARGO-PRICING-1 versioned freight pricing', () => {
       pricingVersion: null,
     });
 
-    await adminApi(manager).post(
+    const disabled = await adminApi(manager).post(
       `/pricing/cargo-rules/${conflicting.id}/versions/${conflictingVersion.id}/disable`,
       {},
     );
+    expect(disabled.status, disabled.text).toBe(200);
+
+    const afterDisable = await publicEstimate();
+    expect(afterDisable.body).toMatchObject({
+      requiresQuote: false,
+      pricingVersion: 'PAR_DKR_SYNTHETIC:v1',
+    });
   });
 
   it('refuses expired activation and returns an explicit custom quote without a zero price', async () => {
