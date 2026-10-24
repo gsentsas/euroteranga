@@ -157,7 +157,9 @@ test('ops seat maps: seatmap.read consults the catalogue without any mutation co
   expect(errors).toEqual([]);
 });
 
-test('ops seat maps: filters and keyboard drawer keep the catalogue accessible', async ({ page }) => {
+test('ops seat maps: filters and keyboard drawer keep the catalogue accessible', async ({
+  page,
+}) => {
   const errors = trackPageErrors(page);
   const seed = seatMapSeed();
 

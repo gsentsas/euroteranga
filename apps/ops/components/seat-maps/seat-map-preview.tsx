@@ -33,14 +33,14 @@ export function SeatMapPreview({ cells, label }: { cells: readonly PreviewCell[]
   return (
     <div className="ops-seatmap-preview">
       <div className="ops-seatmap-preview__legend" aria-label="Légende du plan">
-        {(['SEAT', 'AISLE', 'DRIVER', 'DOOR', 'TOILET', 'STAIRS', 'OTHER'] as SeatMapCellKind[]).map(
-          (kind) => (
-            <span key={kind}>
-              <i className={`ops-seatmap-legend-swatch ${KIND_CLASS[kind]}`} aria-hidden="true" />
-              {KIND_LABELS[kind]}
-            </span>
-          ),
-        )}
+        {(
+          ['SEAT', 'AISLE', 'DRIVER', 'DOOR', 'TOILET', 'STAIRS', 'OTHER'] as SeatMapCellKind[]
+        ).map((kind) => (
+          <span key={kind}>
+            <i className={`ops-seatmap-legend-swatch ${KIND_CLASS[kind]}`} aria-hidden="true" />
+            {KIND_LABELS[kind]}
+          </span>
+        ))}
       </div>
 
       <div className="ops-seatmap-preview__decks">

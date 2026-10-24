@@ -6,14 +6,7 @@ import type {
   AdminSeatMapVersion,
 } from '@euroteranga/auth-client';
 import { TextField } from '@euroteranga/ui';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ChangeEvent,
-  type FormEvent,
-} from 'react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
 import { OpsDrawer } from '../ops-drawer';
@@ -104,14 +97,21 @@ function CreateSeatMapForm({
   };
 
   return (
-    <form className="et-form ops-seatmap-create" aria-label="Créer un plan de sièges" onSubmit={submit}>
+    <form
+      className="et-form ops-seatmap-create"
+      aria-label="Créer un plan de sièges"
+      onSubmit={submit}
+    >
       <div className="ops-seatmap-create__intro">
         <span className="ops-seatmap-create__icon" aria-hidden="true">
           <OpsIcon name="seat" />
         </span>
         <div>
           <h3>Nouveau plan</h3>
-          <p>Créez l’identité stable du plan. La disposition physique sera ajoutée dans une version brouillon.</p>
+          <p>
+            Créez l’identité stable du plan. La disposition physique sera ajoutée dans une version
+            brouillon.
+          </p>
         </div>
       </div>
       <TextField
@@ -140,11 +140,7 @@ function CreateSeatMapForm({
 
 function VersionStatus({ version }: { version: AdminSeatMapVersion }) {
   const tone =
-    version.status === 'PUBLISHED'
-      ? 'success'
-      : version.status === 'DRAFT'
-        ? 'warning'
-        : 'neutral';
+    version.status === 'PUBLISHED' ? 'success' : version.status === 'DRAFT' ? 'warning' : 'neutral';
   return <OpsStatusBadge tone={tone}>{VERSION_STATUS_LABELS[version.status]}</OpsStatusBadge>;
 }
 
@@ -236,10 +232,7 @@ function SeatMapDetail({
   };
 
   return (
-    <section
-      aria-label={`Plan ${seatMap.code} — ${seatMap.name}`}
-      className="ops-seatmap-detail"
-    >
+    <section aria-label={`Plan ${seatMap.code} — ${seatMap.name}`} className="ops-seatmap-detail">
       <div className="ops-seatmap-detail__status">
         <OpsStatusBadge tone={seatMap.active ? 'success' : 'neutral'}>
           {seatMap.active ? 'Actif' : 'Désactivé'}
@@ -333,7 +326,8 @@ function SeatMapDetail({
             </div>
           </dl>
           <p className="ops-seatmap-domain-note">
-            La capacité n’est jamais saisie manuellement : elle correspond au nombre de cellules de type siège.
+            La capacité n’est jamais saisie manuellement : elle correspond au nombre de cellules de
+            type siège.
           </p>
         </div>
       ) : null}
@@ -359,7 +353,10 @@ function SeatMapDetail({
                 {version.status !== 'DRAFT' ? (
                   <details>
                     <summary>Consulter la disposition</summary>
-                    <SeatMapPreview cells={version.cells} label={`de la version ${version.version}`} />
+                    <SeatMapPreview
+                      cells={version.cells}
+                      label={`de la version ${version.version}`}
+                    />
                     <SeatMapCellsTable
                       cells={version.cells}
                       caption={`Cellules de la version ${version.version}`}
@@ -405,10 +402,17 @@ function SeatMapDetail({
             disabled={busy}
             onClick={() => void toggle()}
           >
-            {seatMap.active ? `Désactiver le plan ${seatMap.code}` : `Activer le plan ${seatMap.code}`}
+            {seatMap.active
+              ? `Désactiver le plan ${seatMap.code}`
+              : `Activer le plan ${seatMap.code}`}
           </button>
           {!draft ? (
-            <button type="button" className="et-button" disabled={busy} onClick={() => void createDraft()}>
+            <button
+              type="button"
+              className="et-button"
+              disabled={busy}
+              onClick={() => void createDraft()}
+            >
               Créer une version brouillon
             </button>
           ) : null}
@@ -492,7 +496,10 @@ export function SeatMapsAdmin() {
 
     return maps
       .filter((map) => {
-        if (normalized && !`${map.code} ${map.name}`.toLocaleLowerCase('fr-FR').includes(normalized)) {
+        if (
+          normalized &&
+          !`${map.code} ${map.name}`.toLocaleLowerCase('fr-FR').includes(normalized)
+        ) {
           return false;
         }
         if (stateFilter === 'active' && !map.active) return false;
@@ -583,7 +590,10 @@ export function SeatMapsAdmin() {
           />
           <label className="ops-seatmap-filter">
             <span>État</span>
-            <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value as FilterState)}>
+            <select
+              value={stateFilter}
+              onChange={(event) => setStateFilter(event.target.value as FilterState)}
+            >
               <option value="all">Tous les états</option>
               <option value="active">Actifs</option>
               <option value="inactive">Désactivés</option>
@@ -603,7 +613,10 @@ export function SeatMapsAdmin() {
           </label>
           <label className="ops-seatmap-filter">
             <span>Trier par</span>
-            <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}>
+            <select
+              value={sortMode}
+              onChange={(event) => setSortMode(event.target.value as SortMode)}
+            >
               <option value="updated">Dernière mise à jour</option>
               <option value="code">Code</option>
               <option value="capacity">Capacité</option>
@@ -641,7 +654,9 @@ export function SeatMapsAdmin() {
                       </div>
                     </th>
                     <td>{map.name}</td>
-                    <td>{published ? <OpsVersionBadge>v{published.version}</OpsVersionBadge> : '—'}</td>
+                    <td>
+                      {published ? <OpsVersionBadge>v{published.version}</OpsVersionBadge> : '—'}
+                    </td>
                     <td>{published ? seatsLabel(published.seatCount) : '—'}</td>
                     <td>
                       <OpsStatusBadge tone={map.active ? 'success' : 'neutral'}>
