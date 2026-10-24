@@ -637,6 +637,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@euroteranga/auth-client':
+        specifier: workspace:*
+        version: link:../../packages/auth-client
       '@euroteranga/config':
         specifier: workspace:*
         version: link:../../packages/config
