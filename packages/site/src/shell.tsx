@@ -154,12 +154,15 @@ export function SitePage({
   blocks,
   ctx,
   banner,
+  afterHero,
 }: {
   title: string;
   blocks: readonly ContentBlock[];
   ctx: SiteContext;
   /** Rendered above the header (e.g. the OPS preview notice). */
   banner?: ReactNode;
+  /** Optional application-owned content rendered immediately after the hero. */
+  afterHero?: ReactNode;
 }) {
   return (
     <div className="public-site">
@@ -169,7 +172,7 @@ export function SitePage({
       </a>
       <SiteHeader ctx={ctx} />
       <main id="main" tabIndex={-1}>
-        <Blocks title={title} blocks={blocks} ctx={ctx} />
+        <Blocks title={title} blocks={blocks} ctx={ctx} afterHero={afterHero} />
       </main>
       <SiteFooter ctx={ctx} />
     </div>
