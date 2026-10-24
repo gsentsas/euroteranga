@@ -90,6 +90,10 @@ export const FIXTURES = {
   get pricingAdmin(): Fixture {
     return { realm: 'STAFF', email: runScoped('pricing-admin'), roles: ['SUPER_ADMIN'] };
   },
+  /** Dedicated SUPER_ADMIN for the fully-parallel Cargo Pricing OPS scenario. */
+  get cargoPricingAdmin(): Fixture {
+    return { realm: 'STAFF', email: runScoped('cargo-pricing-admin'), roles: ['SUPER_ADMIN'] };
+  },
   /** pricing.read only (no pricing.manage, no trip or network permission). */
   get pricingReader(): Fixture {
     return { realm: 'STAFF', email: runScoped('pricing-reader'), roles: ['FINANCE'] };
