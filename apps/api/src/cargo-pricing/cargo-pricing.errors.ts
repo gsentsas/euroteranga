@@ -41,4 +41,10 @@ export const CargoPricingErrors = {
       'CARGO_PRICING_VERSION_EXPIRED',
       'Une version déjà expirée ne peut pas être activée.',
     ),
+  futureVersion: () =>
+    new PublicApiError(
+      422,
+      'CARGO_PRICING_VERSION_NOT_EFFECTIVE',
+      'Une version dont la date d’effet est future ne peut pas être activée.',
+    ),
 } as const;
