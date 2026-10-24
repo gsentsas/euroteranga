@@ -48,7 +48,6 @@ describe('content model', () => {
       'contact.email',
       'contact.phone',
       'contact.hours',
-      'social',
     ]);
     expect(missingOwnerInfoInputs(DEFAULT_SITE_SETTINGS, 'privacy')).toHaveLength(6);
   });

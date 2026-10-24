@@ -684,7 +684,7 @@ export function missingOwnerInputs(settings: SiteSettings): string[] {
 export type OwnerInfoKind = (typeof OWNER_INFO_KINDS)[number];
 
 const OWNER_INFO_REQUIRED_FIELDS: Record<OwnerInfoKind, readonly string[]> = {
-  contact: ['contact.email', 'contact.phone', 'contact.hours', 'social'],
+  contact: ['contact.email', 'contact.phone', 'contact.hours'],
   legal: [
     'legal.companyName',
     'legal.legalForm',
