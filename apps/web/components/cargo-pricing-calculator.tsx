@@ -6,7 +6,8 @@ import {
   type CargoEstimateResult,
   type CargoPricingCategory,
 } from '@euroteranga/auth-client';
-import { FormEvent, useMemo, useState } from 'react';
+import type { Dispatch, FormEvent, SetStateAction } from 'react';
+import { useMemo, useState } from 'react';
 import styles from './cargo-pricing-calculator.module.css';
 
 const categories: Array<{ value: CargoPricingCategory; label: string }> = [
@@ -257,7 +258,7 @@ export function CargoPricingCalculator({
                       step="1"
                       value={String(value)}
                       onChange={(event) =>
-                        (setter as React.Dispatch<React.SetStateAction<string>>)(event.target.value)
+                        (setter as Dispatch<SetStateAction<string>>)(event.target.value)
                       }
                     />
                   </label>
