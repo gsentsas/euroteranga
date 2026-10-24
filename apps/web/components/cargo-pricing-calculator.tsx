@@ -241,7 +241,9 @@ export function CargoPricingCalculator({
             </div>
 
             <div className={styles.dimensions}>
-              <span>Dimensions en cm <small>(facultatif)</small></span>
+              <span>
+                Dimensions en cm <small>(facultatif)</small>
+              </span>
               <div className={styles.dimensionGrid}>
                 {[
                   ['Longueur', lengthCm, setLengthCm, 'lengthCm'],
@@ -271,7 +273,11 @@ export function CargoPricingCalculator({
             <legend>3. Services</legend>
             <div className={styles.options}>
               <label>
-                <input type="checkbox" checked={pickup} onChange={(e) => setPickup(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={pickup}
+                  onChange={(e) => setPickup(e.target.checked)}
+                />
                 <span>Enlèvement souhaité</span>
               </label>
               <label>
@@ -312,9 +318,18 @@ export function CargoPricingCalculator({
                 <h3>Devis personnalisé nécessaire</h3>
                 <p>{quoteReasonLabel(result)}</p>
                 <dl className={styles.summary}>
-                  <div><dt>Direction</dt><dd>{directionLabel}</dd></div>
-                  <div><dt>Poids</dt><dd>{result.actualWeightKg} kg</dd></div>
-                  <div><dt>Catégorie</dt><dd>{categoryLabel(result.category)}</dd></div>
+                  <div>
+                    <dt>Direction</dt>
+                    <dd>{directionLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Poids</dt>
+                    <dd>{result.actualWeightKg} kg</dd>
+                  </div>
+                  <div>
+                    <dt>Catégorie</dt>
+                    <dd>{categoryLabel(result.category)}</dd>
+                  </div>
                 </dl>
                 <a className={styles.quoteButton} href={quoteHref(result)}>
                   Demander un devis
@@ -348,9 +363,7 @@ export function CargoPricingCalculator({
               </div>
             )
           ) : (
-            <p className={styles.placeholder}>
-              Le résultat apparaîtra ici après calcul.
-            </p>
+            <p className={styles.placeholder}>Le résultat apparaîtra ici après calcul.</p>
           )}
         </div>
       </div>
