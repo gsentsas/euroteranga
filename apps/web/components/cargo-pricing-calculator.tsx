@@ -171,8 +171,9 @@ export function CargoPricingCalculator({
           <p className={styles.kicker}>Colis & fret</p>
           <h2 id="cargo-pricing-title">Calculez le prix de votre envoi</h2>
           <p>
-            Indiquez les caractéristiques de votre colis. Si une grille tarifaire active correspond,
-            le prix est calculé par EURO TERANGA. Sinon, nous vous orientons vers un devis.
+            Indiquez les caractéristiques de votre colis. Si une grille tarifaire active
+            correspond, le prix est calculé par EURO TERANGA. Sinon, nous vous orientons vers un
+            devis.
           </p>
         </div>
 
@@ -343,7 +344,9 @@ export function CargoPricingCalculator({
                     ? money(result.totalMinor, result.currencyCode, result.currencyMinorUnit)
                     : 'Tarif indisponible'}
                 </h3>
-                <p>{directionLabel} · {result.actualWeightKg} kg</p>
+                <p>
+                  {directionLabel} · {result.actualWeightKg} kg
+                </p>
                 <dl className={styles.lines}>
                   {result.lines.map((line, index) => (
                     <div key={`${line.code}-${index}`}>
