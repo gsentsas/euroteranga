@@ -74,6 +74,12 @@ export const RATE_LIMITS = {
     limit: 300,
     windowMs: 15 * MINUTE,
   },
+  /** Anonymous freight estimates: cheap but bounded to protect Pricing and PostgreSQL. */
+  cargoPricingEstimateIp: {
+    action: 'cargo-pricing-estimate:ip',
+    limit: 120,
+    windowMs: 15 * MINUTE,
+  },
   /** Customer seat assignments and self check-ins per identity (PR-14). */
   checkInCustomerIdentity: {
     action: 'check-in-customer:identity',

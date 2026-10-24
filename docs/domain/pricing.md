@@ -19,6 +19,11 @@ child/student/senior fares, round trips, promotions, coupons and discounts,
 yield or dynamic pricing, detailed taxes, commissions, payments, refunds and
 tickets. A resolved fare alone is **not a quote or a booking**.
 
+Freight pricing is deliberately a separate catalogue: `CargoPricingRule` does
+not reuse passenger `FareTable` amounts. See
+[`cargo-pricing.md`](./cargo-pricing.md). Both domains reuse `pricing.read` and
+`pricing.manage`, but neither may infer prices from the other.
+
 ## Model
 
 | Object             | Role                                                                                                         |
