@@ -20,12 +20,12 @@ Included:
 - owner-only CUSTOMER reads and downloads;
 - read-only STAFF access under `passenger.document.read`;
 - sensitive-read and lifecycle audit events;
-- LOCAL development/CI storage and an S3-compatible adapter.
+- LOCAL private filesystem storage for development/CI and production, plus an optional S3-compatible adapter.
 
 Deferred to PR-12 or later: regulatory compliance, legal validity, country
 rules, approval/rejection by staff, OCR, MRZ, biometrics, retention/deletion,
-check-in, boarding, manifests and ticketing. Production S3 and ClamAV
-provisioning are also outside this change.
+check-in, boarding, manifests and ticketing. Production local-storage and ClamAV
+provisioning remain explicit infrastructure operations.
 
 ## Data model
 
@@ -100,16 +100,18 @@ harmless synthetic marker and is refused in staging/production.
 The domain depends only on `ObjectStorageProvider` (`put`, `get`, `head`,
 `delete`). See [ADR-005](../adr/ADR-005-private-object-storage-quarantine.md).
 
-- `LOCAL` is development/CI only. Its configured root must be absolute and
-  normalized (no `.`/`..`/`//`, never `/`), and cannot be a
+- `LOCAL` is the selected production adapter. Its configured root must be
+  absolute and normalized (no `.`/`..`/`//`, never `/`), cannot be a
   public/static/upload path (`public`, `public_html`, `htdocs`, `httpdocs`,
-  `static`, `uploads`); the adapter also refuses `/` itself. Roots and shards
-  cannot be symlinks; directories are owner-only `0700`, objects `0600`.
-- `S3` uses an explicitly configured endpoint/bucket/credentials, emits no
-  public ACL and no signed URL, and marks objects `private, no-store`.
+  `static`, `uploads`), and cannot use `/tmp` or `/var/tmp` when deployed.
+  Roots and shards cannot be symlinks; directories are owner-only `0700`,
+  objects `0600`. Production must keep the root outside release/web trees and
+  include it in backup/restore and retention procedures.
+- `S3` remains an optional adapter but is not required by the production
+  architecture.
 - `DISABLED` is the safe default. Enabling storage without a scanner is a
-  startup error. LOCAL and TEST are refused in staging/production, and a
-  deployed S3 endpoint must use HTTPS.
+  startup error. `TEST` is refused in staging/production; production LOCAL
+  must therefore use `CLAMAV`.
 
 Every read is `client → authenticated API → owner/RBAC check → audit → private
 stream`. Responses use the validated MIME, an attachment filename derived
