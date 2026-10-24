@@ -216,10 +216,20 @@ describe('CARGO-PRICING-1 versioned freight pricing', () => {
   });
 
   it('refuses future activation and fails closed when two effective rules are ambiguous', async () => {
+    const baseline = await createRule('AMBIGUITY_BASELINE_SYNTHETIC');
+    const baselineVersion = await createVersion(
+      baseline.id,
+      versionBody({ categories: ['DOCUMENTS'] }),
+    );
+    await activate(baseline.id, baselineVersion.id);
+
     const future = await createRule('FUTURE_SYNTHETIC');
     const futureVersion = await createVersion(
       future.id,
-      versionBody({ effectiveFrom: new Date(Date.now() + 86_400_000).toISOString() }),
+      versionBody({
+        categories: ['DOCUMENTS'],
+        effectiveFrom: new Date(Date.now() + 86_400_000).toISOString(),
+      }),
     );
     const futureActivation = await adminApi(manager).post(
       `/pricing/cargo-rules/${future.id}/versions/${futureVersion.id}/activate`,
@@ -229,9 +239,13 @@ describe('CARGO-PRICING-1 versioned freight pricing', () => {
     expect(futureActivation.body.code).toBe('CARGO_PRICING_VERSION_NOT_EFFECTIVE');
 
     const conflicting = await createRule('CONFLICT_SYNTHETIC');
-    const conflictingVersion = await createVersion(conflicting.id);
+    const conflictingVersion = await createVersion(
+      conflicting.id,
+      versionBody({ categories: ['DOCUMENTS'] }),
+    );
     await activate(conflicting.id, conflictingVersion.id);
-    const response = await publicEstimate();
+
+    const response = await publicEstimate(estimateBody({ category: 'DOCUMENTS' }));
     expect(response.body).toMatchObject({
       requiresQuote: true,
       quoteReason: 'AMBIGUOUS_RULE',
@@ -245,10 +259,10 @@ describe('CARGO-PRICING-1 versioned freight pricing', () => {
     );
     expect(disabled.status, disabled.text).toBe(200);
 
-    const afterDisable = await publicEstimate();
+    const afterDisable = await publicEstimate(estimateBody({ category: 'DOCUMENTS' }));
     expect(afterDisable.body).toMatchObject({
       requiresQuote: false,
-      pricingVersion: 'PAR_DKR_SYNTHETIC:v1',
+      pricingVersion: 'AMBIGUITY_BASELINE_SYNTHETIC:v1',
     });
   });
 
