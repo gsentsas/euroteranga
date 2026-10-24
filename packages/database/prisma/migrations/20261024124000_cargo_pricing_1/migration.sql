@@ -216,13 +216,13 @@ CREATE TABLE "cargo_pricing_option" (
 
 CREATE INDEX "cargo_pricing_rule_direction_audience_id_idx"
   ON "cargo_pricing_rule" ("direction", "audience", "id");
-CREATE INDEX "cargo_pricing_rule_version_status_effective_idx"
+CREATE INDEX "cargo_pricing_rule_version_status_effective_from_effective__idx"
   ON "cargo_pricing_rule_version" ("status", "effective_from", "effective_to");
-CREATE INDEX "cargo_pricing_rule_category_category_version_idx"
+CREATE INDEX "cargo_pricing_rule_category_category_rule_version_id_idx"
   ON "cargo_pricing_rule_category" ("category", "rule_version_id");
-CREATE INDEX "cargo_pricing_tier_version_weight_idx"
+CREATE INDEX "cargo_pricing_tier_rule_version_id_min_weight_kg_max_weight_idx"
   ON "cargo_pricing_tier" ("rule_version_id", "min_weight_kg", "max_weight_kg");
-CREATE INDEX "cargo_pricing_option_version_kind_idx"
+CREATE INDEX "cargo_pricing_option_rule_version_id_kind_idx"
   ON "cargo_pricing_option" ("rule_version_id", "kind");
 
 CREATE UNIQUE INDEX "cargo_pricing_rule_one_draft_version"
@@ -235,15 +235,15 @@ ALTER TABLE "cargo_pricing_rule_version"
   FOREIGN KEY ("rule_id") REFERENCES "cargo_pricing_rule"("id")
   ON DELETE RESTRICT ON UPDATE RESTRICT;
 ALTER TABLE "cargo_pricing_rule_category"
-  ADD CONSTRAINT "cargo_pricing_rule_category_version_id_fkey"
+  ADD CONSTRAINT "cargo_pricing_rule_category_rule_version_id_fkey"
   FOREIGN KEY ("rule_version_id") REFERENCES "cargo_pricing_rule_version"("id")
   ON DELETE RESTRICT ON UPDATE RESTRICT;
 ALTER TABLE "cargo_pricing_tier"
-  ADD CONSTRAINT "cargo_pricing_tier_version_id_fkey"
+  ADD CONSTRAINT "cargo_pricing_tier_rule_version_id_fkey"
   FOREIGN KEY ("rule_version_id") REFERENCES "cargo_pricing_rule_version"("id")
   ON DELETE RESTRICT ON UPDATE RESTRICT;
 ALTER TABLE "cargo_pricing_option"
-  ADD CONSTRAINT "cargo_pricing_option_version_id_fkey"
+  ADD CONSTRAINT "cargo_pricing_option_rule_version_id_fkey"
   FOREIGN KEY ("rule_version_id") REFERENCES "cargo_pricing_rule_version"("id")
   ON DELETE RESTRICT ON UPDATE RESTRICT;
 
