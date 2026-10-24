@@ -258,10 +258,7 @@ describe('exact cargo pricing engine (all figures are synthetic test data)', () 
 
   it('fails closed when an explicit rule does not match direction or category', () => {
     expect(
-      estimateCargoWithRule(
-        input({ from: 'DKR', to: 'PAR' }),
-        rule({ direction: 'PAR_DKR' }),
-      ),
+      estimateCargoWithRule(input({ from: 'DKR', to: 'PAR' }), rule({ direction: 'PAR_DKR' })),
     ).toMatchObject({
       requiresQuote: true,
       quoteReason: 'NO_ACTIVE_RULE',
