@@ -123,7 +123,7 @@ test('ops pricing: SUPER_ADMIN manages a fail-closed cargo pricing rule', async 
   const seed = pricingSeed();
   const code = `CPF_E2E_${seed.run}`;
 
-  await signInAndEnroll(page, FIXTURES.pricingAdmin.email);
+  await signInAndEnroll(page, FIXTURES.cargoPricingAdmin.email);
   await mainNav(page).getByRole('link', { name: 'Tarification' }).click();
   await expect(page.getByTestId('cargo-pricing-workspace')).toBeVisible();
 
