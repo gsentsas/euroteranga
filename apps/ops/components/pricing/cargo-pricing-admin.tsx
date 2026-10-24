@@ -354,7 +354,7 @@ function VersionEditor({
           {Object.entries(METHOD_LABELS).map(([method, label]) => <option key={method} value={method}>{label}</option>)}
         </select>
       </div>
-      <TextField label="Devise" name="cargoCurrency" value={value.currencyCode} onChange={(currencyCode) => patch({ currencyCode: currencyCode.toUpperCase() })} maxLength={3} />
+      <TextField label="Devise" name="cargoCurrency" value={value.currencyCode} onChange={(currencyCode) => patch({ currencyCode: currencyCode.toUpperCase() })} maxLength={3} autoComplete="off" />
       <div className="et-field">
         <label htmlFor={minorId}>Décimales devise</label>
         <select id={minorId} className="et-select" value={String(value.currencyMinorUnit)} onChange={(event) => patch({ currencyMinorUnit: Number(event.target.value) })}>
@@ -372,13 +372,13 @@ function VersionEditor({
         </div>
       ) : null}
       {['ACTUAL_WEIGHT', 'VOLUMETRIC_WEIGHT', 'VOLUME'].includes(value.method) ? (
-        <TextField label="Prix unitaire (unités mineures)" name="cargoUnitPrice" value={value.unitPriceMinor ?? ''} onChange={(unitPriceMinor) => patch({ unitPriceMinor: setOptionalString(unitPriceMinor) })} />
+        <TextField label="Prix unitaire (unités mineures)" name="cargoUnitPrice" value={value.unitPriceMinor ?? ''} onChange={(unitPriceMinor) => patch({ unitPriceMinor: setOptionalString(unitPriceMinor) })} autoComplete="off" />
       ) : null}
       {value.method === 'FLAT_RATE' ? (
-        <TextField label="Forfait (unités mineures)" name="cargoFlatPrice" value={value.flatPriceMinor ?? ''} onChange={(flatPriceMinor) => patch({ flatPriceMinor: setOptionalString(flatPriceMinor) })} />
+        <TextField label="Forfait (unités mineures)" name="cargoFlatPrice" value={value.flatPriceMinor ?? ''} onChange={(flatPriceMinor) => patch({ flatPriceMinor: setOptionalString(flatPriceMinor) })} autoComplete="off" />
       ) : null}
       {value.method !== 'CUSTOM_QUOTE' ? (
-        <TextField label="Minimum de facturation (unités mineures)" name="cargoMinimum" value={value.minimumChargeMinor ?? ''} onChange={(minimumChargeMinor) => patch({ minimumChargeMinor: setOptionalString(minimumChargeMinor) })} />
+        <TextField label="Minimum de facturation (unités mineures)" name="cargoMinimum" value={value.minimumChargeMinor ?? ''} onChange={(minimumChargeMinor) => patch({ minimumChargeMinor: setOptionalString(minimumChargeMinor) })} autoComplete="off" />
       ) : null}
       {value.method === 'VOLUMETRIC_WEIGHT' || value.method === 'TIERED_WEIGHT' ? (
         <div className="et-field">
@@ -386,13 +386,13 @@ function VersionEditor({
           <input className="et-input" type="number" min={1} value={value.volumetricDivisorCm3PerKg ?? ''} onChange={(event) => patch({ volumetricDivisorCm3PerKg: event.target.value ? Number(event.target.value) : null })} />
         </div>
       ) : null}
-      <TextField label="Devis au-delà du poids (kg)" name="cargoQuoteWeight" value={value.quoteAboveWeightKg ?? ''} onChange={(quoteAboveWeightKg) => patch({ quoteAboveWeightKg: setOptionalString(quoteAboveWeightKg) })} />
+      <TextField label="Devis au-delà du poids (kg)" name="cargoQuoteWeight" value={value.quoteAboveWeightKg ?? ''} onChange={(quoteAboveWeightKg) => patch({ quoteAboveWeightKg: setOptionalString(quoteAboveWeightKg) })} autoComplete="off" />
       <div className="et-field">
         <label>Devis au-delà du volume (litres)</label>
         <input className="et-input" type="number" min={1} value={value.quoteAboveVolumeLiters ?? ''} onChange={(event) => patch({ quoteAboveVolumeLiters: event.target.value ? Number(event.target.value) : null })} />
       </div>
-      <TextField label="Date d’effet (ISO)" name="cargoEffectiveFrom" value={value.effectiveFrom} onChange={(effectiveFrom) => patch({ effectiveFrom })} />
-      <TextField label="Date de fin (ISO, optionnelle)" name="cargoEffectiveTo" value={value.effectiveTo ?? ''} onChange={(effectiveTo) => patch({ effectiveTo: setOptionalString(effectiveTo) })} />
+      <TextField label="Date d’effet (ISO)" name="cargoEffectiveFrom" value={value.effectiveFrom} onChange={(effectiveFrom) => patch({ effectiveFrom })} autoComplete="off" />
+      <TextField label="Date de fin (ISO, optionnelle)" name="cargoEffectiveTo" value={value.effectiveTo ?? ''} onChange={(effectiveTo) => patch({ effectiveTo: setOptionalString(effectiveTo) })} autoComplete="off" />
 
       <fieldset>
         <legend>Catégories tarifées</legend>
@@ -471,7 +471,7 @@ function PreviewForm({
           {Object.entries(DIRECTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
       </div>
-      <TextField label="Poids test (kg)" name="cargoPreviewWeight" value={weight} onChange={setWeight} />
+      <TextField label="Poids test (kg)" name="cargoPreviewWeight" value={weight} onChange={setWeight} autoComplete="off" />
       <div className="et-field">
         <label htmlFor={categoryId}>Catégorie test</label>
         <select id={categoryId} className="et-select" value={category} onChange={(event) => setCategory(event.target.value as CargoPricingCategory)}>
@@ -557,7 +557,7 @@ function CargoRuleDetail({
 
       {canManage ? (
         <form className="et-form et-network-form" aria-label={`Renommer la règle ${rule.code}`} onSubmit={rename}>
-          <TextField label="Nom de la règle" name="cargoRuleRename" value={name} onChange={setName} maxLength={160} />
+          <TextField label="Nom de la règle" name="cargoRuleRename" value={name} onChange={setName} maxLength={160} autoComplete="off" />
           <button className="et-button et-button--secondary" type="submit" disabled={busy || !name.trim()}>Enregistrer le nom</button>
         </form>
       ) : null}
