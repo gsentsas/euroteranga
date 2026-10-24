@@ -170,6 +170,10 @@ export function estimateCargoWithRule(
   input: CargoEstimateInput,
   rule: CargoPricingEngineRule,
 ): CargoPricingEstimateResult {
+  if (directionOf(input) !== rule.direction || !rule.categories.includes(input.category)) {
+    return quoteResult(input, 'NO_ACTIVE_RULE', rule);
+  }
+
   const actualWeightGrams = decimalToThousandths(input.weightKg);
   const volumeCm3 = volumeCm3Of(input);
 
