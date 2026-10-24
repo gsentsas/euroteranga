@@ -82,8 +82,12 @@ test.describe('public cargo and freight page (WEB-CARGO-1)', () => {
     await page.getByLabel('Poids').fill('25');
     await page.getByLabel('Type d’envoi').selectOption('STANDARD_PARCEL');
     await page.getByRole('button', { name: 'Calculer mon tarif' }).click();
-    await expect(page.getByRole('heading', { name: 'Devis personnalisé nécessaire' })).toBeVisible();
-    await expect(page.getByText('Aucun tarif automatique ne peut être confirmé pour cet envoi.')).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Devis personnalisé nécessaire' }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Aucun tarif automatique ne peut être confirmé pour cet envoi.'),
+    ).toBeVisible();
     await expect(page.getByRole('link', { name: 'Demander un devis' }).last()).toHaveAttribute(
       'href',
       /^(mailto:|#questions)/,
