@@ -1636,10 +1636,12 @@ export function Blocks({
   title,
   blocks,
   ctx,
+  afterHero,
 }: {
   title: string;
   blocks: readonly ContentBlock[];
   ctx: SiteContext;
+  afterHero?: ReactNode;
 }) {
   const hasHero = blocks.some((block) => block.type === 'hero');
   return (
@@ -1652,7 +1654,10 @@ export function Blocks({
         </div>
       )}
       {blocks.map((block, index) => (
-        <Block key={index} block={block} index={index} ctx={ctx} pageTitle={title} />
+        <div key={index}>
+          <Block block={block} index={index} ctx={ctx} pageTitle={title} />
+          {block.type === 'hero' && afterHero ? afterHero : null}
+        </div>
       ))}
     </>
   );
