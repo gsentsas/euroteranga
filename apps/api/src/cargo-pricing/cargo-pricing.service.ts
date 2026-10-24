@@ -535,6 +535,9 @@ export class CargoPricingService {
         });
         validateConfig(configFromRow(target));
         const now = new Date();
+        if (target.effectiveFrom > now) {
+          throw CargoPricingErrors.futureVersion();
+        }
         if (target.effectiveTo && target.effectiveTo <= now) {
           throw CargoPricingErrors.expiredVersion();
         }
