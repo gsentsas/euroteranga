@@ -299,12 +299,13 @@ BEGIN
       "position",
       "min_weight_kg",
       "max_weight_kg",
+      row_number() OVER (ORDER BY "position") AS rn,
       lead("min_weight_kg") OVER (ORDER BY "position") AS next_min,
       lead("position") OVER (ORDER BY "position") AS next_position
     FROM "cargo_pricing_tier"
     WHERE "rule_version_id" = target_id
   ) tiers
-  WHERE ("position" = 0 AND "min_weight_kg" <> 0)
+  WHERE ("rn" = 1 AND "min_weight_kg" <> 0)
      OR ("next_position" IS NOT NULL AND "next_position" <> "position" + 1)
      OR ("next_min" IS NOT NULL AND "max_weight_kg" IS DISTINCT FROM "next_min")
      OR ("next_min" IS NULL AND "max_weight_kg" IS NOT NULL);
