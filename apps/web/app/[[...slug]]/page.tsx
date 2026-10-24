@@ -7,7 +7,9 @@ import {
 import { SitePage, type SiteMedia } from '@euroteranga/site';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { CargoPricingCalculator } from '../../components/cargo-pricing-calculator';
 import { loadMedia, loadPage, loadSiteContext } from '../../lib/content';
+import { publicEnv } from '../../lib/env';
 import {
   DEFAULT_TITLE,
   jsonLd,
@@ -202,7 +204,19 @@ export default async function ContentPage({ params }: Params) {
         <BreadcrumbData path={path} title={document.title} />
       ) : null}
       {faq ? <FaqData items={faq.items} /> : null}
-      <SitePage title={document.title} blocks={document.blocks} ctx={ctx} />
+      <SitePage
+        title={document.title}
+        blocks={document.blocks}
+        ctx={ctx}
+        afterHero={
+          path === '/fret' ? (
+            <CargoPricingCalculator
+              apiBaseUrl={publicEnv.NEXT_PUBLIC_API_BASE_URL}
+              quoteEmail={ctx.settings.contact.email}
+            />
+          ) : undefined
+        }
+      />
     </>
   );
 }
