@@ -117,6 +117,58 @@ test('ops pricing: SUPER_ADMIN publishes a fare table, prices a DRAFT trip and f
   expect(errors).toEqual([]);
 });
 
+test('ops pricing: SUPER_ADMIN manages a fail-closed cargo pricing rule', async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors = trackPageErrors(page);
+  const seed = pricingSeed();
+  const code = `CPF_E2E_${seed.run}`;
+
+  await signInAndEnroll(page, FIXTURES.pricingAdmin.email);
+  await mainNav(page).getByRole('link', { name: 'Tarification' }).click();
+  await expect(page.getByTestId('cargo-pricing-workspace')).toBeVisible();
+
+  const create = page.getByRole('form', { name: 'Créer une règle tarifaire fret' });
+  await create.getByLabel('Code de la règle', { exact: true }).fill(code.toLowerCase());
+  await create.getByLabel('Nom de la règle', { exact: true }).fill('Fret synthétique E2E');
+  await create.getByLabel('Direction', { exact: true }).selectOption('PAR_DKR');
+  await create.getByLabel('Audience', { exact: true }).selectOption('PUBLIC');
+  await create.getByRole('button', { name: 'Créer la règle fret' }).click();
+  await expect(notice(page, `Règle fret ${code} créée.`)).toBeVisible();
+
+  const detail = page.getByRole('region', {
+    name: `Règle fret ${code} — Fret synthétique E2E`,
+  });
+  await expect(detail.getByTestId('cargo-rule-detail')).toContainText('Paris → Dakar');
+  await expect(detail.getByTestId('cargo-rule-detail')).toContainText(
+    'Aucune — estimation publique en devis requis',
+  );
+
+  await detail.getByRole('button', { name: 'Créer un brouillon fail-closed' }).click();
+  await expect(notice(page, `Brouillon fret créé pour ${code}.`)).toBeVisible();
+
+  const editor = detail.getByRole('form', { name: `Configurer la version 1 de ${code}` });
+  await expect(editor.getByLabel('Méthode', { exact: true })).toHaveValue('CUSTOM_QUOTE');
+
+  const preview = detail.getByRole('form', { name: `Prévisualiser la version 1 de ${code}` });
+  await preview.getByRole('button', { name: 'Prévisualiser' }).click();
+  await expect(detail.getByTestId('cargo-pricing-preview')).toContainText('Devis requis');
+  await expect(detail.getByTestId('cargo-pricing-preview')).toContainText('CUSTOM_QUOTE');
+
+  await detail.getByRole('button', { name: 'Activer la version 1' }).click();
+  await detail.getByRole('button', { name: 'Confirmer l’activation' }).click();
+  await expect(notice(page, `Version 1 de ${code} activée.`)).toBeVisible();
+  await expect(detail.getByTestId('cargo-rule-detail')).toContainText('v1 — Devis personnalisé');
+
+  await detail.getByRole('button', { name: 'Désactiver la version 1' }).click();
+  await detail.getByRole('button', { name: 'Confirmer la désactivation' }).click();
+  await expect(notice(page, `Version 1 de ${code} désactivée.`)).toBeVisible();
+  await expect(detail.getByTestId('cargo-rule-detail')).toContainText(
+    'Aucune — estimation publique en devis requis',
+  );
+
+  expect(errors).toEqual([]);
+});
+
 test('ops pricing: pricing.read consults fares without any mutation control', async ({ page }) => {
   const errors = trackPageErrors(page);
   const seed = pricingSeed();
@@ -146,6 +198,8 @@ test('ops pricing: pricing.read consults fares without any mutation control', as
 
   const api = directAdminApi(page.request);
   expect((await api.get('/pricing/fare-tables?limit=10')).status()).toBe(200);
+  expect((await api.get('/pricing/cargo-rules?limit=10')).status()).toBe(200);
+  expect(page.getByRole('form', { name: 'Créer une règle tarifaire fret' })).toHaveCount(0);
   const forbidden = await api.post('/pricing/fare-tables', {
     code: `FT_DENIED_${seed.run}`,
     name: 'Interdit',
@@ -156,6 +210,15 @@ test('ops pricing: pricing.read consults fares without any mutation control', as
   });
   expect(forbidden.status()).toBe(403);
   expect(((await forbidden.json()) as { code: string }).code).toBe('FORBIDDEN');
+
+  const cargoForbidden = await api.post('/pricing/cargo-rules', {
+    code: `CPF_DENIED_${seed.run}`,
+    name: 'Interdit',
+    direction: 'PAR_DKR',
+    audience: 'PUBLIC',
+  });
+  expect(cargoForbidden.status()).toBe(403);
+  expect(((await cargoForbidden.json()) as { code: string }).code).toBe('FORBIDDEN');
   expect(errors).toEqual([]);
 });
 
