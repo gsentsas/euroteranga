@@ -256,6 +256,30 @@ describe('exact cargo pricing engine (all figures are synthetic test data)', () 
     });
   });
 
+  it('fails closed when an explicit rule does not match direction or category', () => {
+    expect(
+      estimateCargoWithRule(
+        input({ from: 'DKR', to: 'PAR' }),
+        rule({ direction: 'PAR_DKR' }),
+      ),
+    ).toMatchObject({
+      requiresQuote: true,
+      quoteReason: 'NO_ACTIVE_RULE',
+      totalMinor: null,
+    });
+
+    expect(
+      estimateCargoWithRule(
+        input({ category: 'DOCUMENTS' }),
+        rule({ categories: ['STANDARD_PARCEL'] }),
+      ),
+    ).toMatchObject({
+      requiresQuote: true,
+      quoteReason: 'NO_ACTIVE_RULE',
+      totalMinor: null,
+    });
+  });
+
   it('never emits a zero price from an incomplete or too-small configuration', () => {
     expect(
       estimateCargoWithRule(
