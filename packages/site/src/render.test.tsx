@@ -39,7 +39,8 @@ describe('public website rendering', () => {
     expect(html).toContain('href="https://booking.example/"');
     expect(html).toContain('href="https://client.example/"');
     expect(html).toContain('href="https://tracking.example/"');
-    expect(html).toContain('href="#trajets"');
+    expect(html).toContain('href="/#trajets"');
+    expect(html).toContain('href="/#aide"');
     expect(html).toContain('id="aide"');
     expect(html).toContain('<details>');
     expect(html).toContain('© 2030 EURO TERANGA');

@@ -2,7 +2,7 @@ import type { ContentBlock, ContentLink } from '@euroteranga/content';
 import type { ReactNode } from 'react';
 import { Blocks, type SiteContext } from './blocks.js';
 import { CoachMark, Icon } from './icons.js';
-import { resolveHref } from './links.js';
+import { resolveGlobalNavigationHref, resolveHref } from './links.js';
 
 function Brand({ name }: { name: string }) {
   const [first, ...rest] = name.split(' ');
@@ -28,7 +28,7 @@ function NavLink({
   className?: string;
 }) {
   return (
-    <a className={className} href={resolveHref(link.target, ctx.apps)}>
+    <a className={className} href={resolveGlobalNavigationHref(link.target, ctx.apps)}>
       {link.label}
     </a>
   );
