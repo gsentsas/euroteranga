@@ -79,6 +79,14 @@ export const FIXTURES = {
   get seatMapAdmin(): Fixture {
     return { realm: 'STAFF', email: runScoped('seat-map-admin'), roles: ['SUPER_ADMIN'] };
   },
+  /** Dedicated identity keeps the parallel seat-map accessibility scenario independent. */
+  get seatMapAccessibilityAdmin(): Fixture {
+    return {
+      realm: 'STAFF',
+      email: runScoped('seat-map-accessibility-admin'),
+      roles: ['SUPER_ADMIN'],
+    };
+  },
   /** seatmap.read only (no seatmap.manage). */
   get seatMapReader(): Fixture {
     return { realm: 'STAFF', email: runScoped('seat-map-reader'), roles: ['BOOKING_AGENT'] };
@@ -241,6 +249,7 @@ export function invitationToken(): string {
 
 export type PreauthenticatedFixture =
   | 'crew'
+  | 'seatMapAccessibilityAdmin'
   | 'paymentCustomer'
   | 'foreignCustomer'
   | 'passengerDocumentReader'
@@ -264,6 +273,7 @@ export type PreauthenticatedFixture =
 
 const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string> = {
   crew: 'E2E_CREW_SESSION',
+  seatMapAccessibilityAdmin: 'E2E_SEAT_MAP_ACCESSIBILITY_ADMIN_SESSION',
   paymentCustomer: 'E2E_PAYMENT_CUSTOMER_SESSION',
   foreignCustomer: 'E2E_FOREIGN_CUSTOMER_SESSION',
   passengerDocumentReader: 'E2E_PASSENGER_DOCUMENT_READER_SESSION',

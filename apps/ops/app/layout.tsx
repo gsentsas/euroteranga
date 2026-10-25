@@ -1,6 +1,7 @@
 import '@euroteranga/ui/tokens.css';
 import './network.css';
 import './ops.css';
+import './seat-maps/seat-maps.css';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { RefineProvider } from './refine-provider';

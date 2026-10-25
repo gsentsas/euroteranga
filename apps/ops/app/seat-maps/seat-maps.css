@@ -1,0 +1,657 @@
+/* OPS-UI-2 — Plans de sièges. */
+
+.ops-seatmaps {
+  display: grid;
+  gap: 1rem;
+}
+
+.ops-seatmaps__intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-card);
+  background: #fff;
+  box-shadow: var(--ops-shadow-card);
+}
+
+.ops-seatmaps__intro p {
+  max-width: 58rem;
+  margin: 0;
+  color: var(--ops-muted);
+}
+
+.ops-seatmaps__intro .et-button {
+  flex: none;
+}
+
+.ops-seatmaps__kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.ops-seatmaps__catalogue {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+}
+
+.ops-seatmaps__catalogue-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ops-seatmaps__catalogue-heading span {
+  color: var(--ops-info);
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ops-seatmaps__catalogue-heading h2,
+.ops-seatmap-create h3,
+.ops-seatmap-section-heading h3 {
+  margin: 0;
+  color: var(--ops-navy-950);
+}
+
+.ops-seatmaps__catalogue-heading h2 {
+  margin-top: 0.15rem;
+  font-size: 1.15rem;
+}
+
+.ops-seatmaps__catalogue-heading > p {
+  margin: 0;
+  color: var(--ops-muted);
+  font-size: 0.76rem;
+}
+
+.ops-seatmap-filter {
+  min-width: 9.5rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.ops-seatmap-filter > span {
+  color: var(--ops-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.ops-seatmap-filter select {
+  min-height: 2.75rem;
+  padding: 0.45rem 2rem 0.45rem 0.65rem;
+  background: #fff;
+}
+
+.ops-seatmap-plan-cell {
+  min-width: 13rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.ops-seatmap-plan-cell__icon {
+  width: 2.3rem;
+  height: 2.3rem;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 0.55rem;
+  background: var(--ops-info-surface);
+  color: var(--ops-info);
+}
+
+.ops-seatmap-plan-cell > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.08rem;
+}
+
+.ops-seatmap-plan-cell strong {
+  color: var(--ops-navy-950);
+  font-size: 0.8rem;
+}
+
+.ops-seatmap-plan-cell span {
+  color: var(--ops-muted);
+  font-size: 0.7rem;
+}
+
+.ops-seatmap-mobile-list {
+  display: none;
+}
+
+.ops-seatmap-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.9rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-card);
+  background: #fff;
+}
+
+.ops-seatmap-card__heading {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.ops-seatmap-card__heading > div {
+  min-width: 0;
+  display: grid;
+}
+
+.ops-seatmap-card__heading strong,
+.ops-seatmap-card__heading span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-seatmap-card__heading > div span {
+  color: var(--ops-muted);
+  font-size: 0.72rem;
+}
+
+.ops-seatmap-card dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.ops-seatmap-card dl div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.ops-seatmap-card dt {
+  color: var(--ops-muted);
+  font-size: 0.64rem;
+  font-weight: 750;
+}
+
+.ops-seatmap-card dd {
+  margin: 0;
+  color: var(--ops-navy-900);
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+.ops-seatmap-create {
+  display: grid;
+  gap: 0.9rem;
+  box-shadow: none;
+}
+
+.ops-seatmap-create__intro {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.ops-seatmap-create__intro p {
+  margin: 0.15rem 0 0;
+  color: var(--ops-muted);
+  font-size: 0.76rem;
+}
+
+.ops-seatmap-create__icon {
+  width: 2.6rem;
+  height: 2.6rem;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 0.65rem;
+  background: var(--ops-info-surface);
+  color: var(--ops-info);
+}
+
+.ops-seatmap-detail {
+  display: grid;
+  gap: 1rem;
+}
+
+.ops-seatmap-detail__status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ops-seatmap-tab-panel {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.ops-seatmap-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.ops-seatmap-section-heading span {
+  color: var(--ops-muted);
+  font-size: 0.68rem;
+}
+
+.ops-seatmap-section-heading h3 {
+  margin-top: 0.1rem;
+  font-size: 0.98rem;
+}
+
+.ops-seatmap-usage-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.ops-seatmap-usage-grid article {
+  display: grid;
+  gap: 0.08rem;
+  padding: 0.75rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-panel-muted);
+}
+
+.ops-seatmap-usage-grid span,
+.ops-seatmap-usage-grid small {
+  color: var(--ops-muted);
+  font-size: 0.66rem;
+}
+
+.ops-seatmap-usage-grid strong {
+  color: var(--ops-navy-950);
+  font-size: 1.2rem;
+}
+
+.ops-seatmap-properties {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-card);
+  overflow: hidden;
+}
+
+.ops-seatmap-properties > div {
+  padding: 0.8rem;
+  border-right: 1px solid var(--ops-line);
+  border-bottom: 1px solid var(--ops-line);
+}
+
+.ops-seatmap-properties > div:nth-child(2n) {
+  border-right: 0;
+}
+
+.ops-seatmap-properties dt {
+  color: var(--ops-muted);
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.ops-seatmap-properties dd {
+  margin: 0.16rem 0 0;
+  color: var(--ops-navy-950);
+  font-size: 0.78rem;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.ops-seatmap-domain-note {
+  margin: 0;
+  padding: 0.75rem;
+  border-left: 3px solid var(--ops-gold);
+  background: #fff9e8;
+  color: #64521e;
+  font-size: 0.74rem;
+}
+
+.ops-seatmap-version-list,
+.ops-seatmap-timeline {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ops-seatmap-version-list > li {
+  padding: 0.8rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: #fff;
+}
+
+.ops-seatmap-version-list__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.ops-seatmap-version-list__heading > div {
+  display: grid;
+}
+
+.ops-seatmap-version-list__heading span {
+  color: var(--ops-muted);
+  font-size: 0.66rem;
+}
+
+.ops-seatmap-version-list > li > p {
+  margin: 0.45rem 0 0;
+  color: var(--ops-muted);
+  font-size: 0.74rem;
+}
+
+.ops-seatmap-version-list details {
+  margin-top: 0.65rem;
+}
+
+.ops-seatmap-version-list summary {
+  color: var(--ops-info);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ops-seatmap-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--ops-line);
+}
+
+.ops-seatmap-timeline {
+  position: relative;
+}
+
+.ops-seatmap-timeline::before {
+  content: '';
+  position: absolute;
+  top: 0.4rem;
+  bottom: 0.4rem;
+  left: 0.33rem;
+  width: 1px;
+  background: var(--ops-line);
+}
+
+.ops-seatmap-timeline li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 0.7rem minmax(0, 1fr);
+  gap: 0.7rem;
+}
+
+.ops-seatmap-timeline__dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-top: 0.28rem;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--ops-gold-strong);
+  box-shadow: 0 0 0 1px var(--ops-gold-strong);
+  z-index: 1;
+}
+
+.ops-seatmap-timeline li > div {
+  display: grid;
+  gap: 0.1rem;
+  padding-bottom: 0.4rem;
+}
+
+.ops-seatmap-timeline strong {
+  color: var(--ops-navy-950);
+  font-size: 0.76rem;
+}
+
+.ops-seatmap-timeline span {
+  color: var(--ops-muted);
+  font-size: 0.64rem;
+}
+
+.ops-seatmap-timeline p {
+  margin: 0.15rem 0 0;
+  color: var(--ops-muted);
+  font-size: 0.7rem;
+}
+
+.ops-seatmap-empty {
+  display: grid;
+  place-items: center;
+  gap: 0.3rem;
+  min-height: 7rem;
+  padding: 1rem;
+  color: var(--ops-muted);
+  text-align: center;
+}
+
+.ops-seatmap-empty svg {
+  width: 1.8rem;
+  height: 1.8rem;
+}
+
+.ops-seatmap-empty strong {
+  color: var(--ops-navy-900);
+}
+
+.ops-seatmap-empty p {
+  margin: 0;
+  font-size: 0.74rem;
+}
+
+.ops-seatmap-preview {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ops-seatmap-preview__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  color: var(--ops-muted);
+  font-size: 0.64rem;
+}
+
+.ops-seatmap-preview__legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.ops-seatmap-legend-swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 0.2rem;
+}
+
+.ops-seatmap-preview__decks {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ops-seatmap-deck-card {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ops-seatmap-deck-card__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.ops-seatmap-deck-card__heading span {
+  color: var(--ops-navy-900);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.ops-seatmap-deck-card__heading small {
+  color: var(--ops-muted);
+  font-size: 0.62rem;
+}
+
+.ops-seatmap-bus-shell {
+  position: relative;
+  overflow-x: auto;
+  padding: 2.2rem 0.65rem 0.65rem;
+  border: 1px solid #c8d2de;
+  border-radius: 2.2rem 2.2rem 0.8rem 0.8rem;
+  background: #f7f9fc;
+}
+
+.ops-seatmap-bus-shell__nose {
+  position: absolute;
+  top: 0.65rem;
+  left: 50%;
+  width: 3.5rem;
+  height: 0.8rem;
+  transform: translateX(-50%);
+  border: 1px solid #b8c4d1;
+  border-radius: 999px;
+  background: #e8edf3;
+}
+
+.ops-seatmap-grid {
+  min-width: max-content;
+  gap: 0.28rem;
+}
+
+.ops-seatmap-cell {
+  min-width: 2.45rem;
+  min-height: 2.2rem;
+  display: grid;
+  place-items: center;
+  padding: 0.25rem;
+  border: 1px solid #b7c4d2;
+  border-radius: 0.45rem;
+  background: #fff;
+  color: var(--ops-navy-900);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-align: center;
+  line-height: 1.05;
+}
+
+.ops-seatmap-cell--seat,
+.ops-seatmap-legend-swatch.ops-seatmap-cell--seat {
+  border-color: #3f6fb4;
+  background: #e8f1ff;
+  color: #244f8d;
+}
+
+.ops-seatmap-cell--aisle,
+.ops-seatmap-legend-swatch.ops-seatmap-cell--aisle {
+  border-style: dashed;
+  background: #f2f4f7;
+  color: #7b8795;
+}
+
+.ops-seatmap-cell--driver,
+.ops-seatmap-legend-swatch.ops-seatmap-cell--driver {
+  border-color: #7b61b2;
+  background: #f1edfb;
+  color: #5a458c;
+}
+
+.ops-seatmap-cell--door,
+.ops-seatmap-legend-swatch.ops-seatmap-cell--door {
+  border-color: #b47a2b;
+  background: #fff4df;
+  color: #855613;
+}
+
+.ops-seatmap-cell--toilet,
+.ops-seatmap-legend-swatch.ops-seatmap-cell--toilet {
+  border-color: #498499;
+  background: #e8f7fb;
+  color: #2d6579;
+}
+
+.ops-seatmap-cell--stairs,
+.ops-seatmap-legend-swatch.ops-seatmap-cell--stairs {
+  border-color: #7e8792;
+  background: #eef0f2;
+  color: #59616b;
+}
+
+.ops-seatmap-cell--other,
+.ops-seatmap-legend-swatch.ops-seatmap-cell--other {
+  border-color: #9f7c67;
+  background: #f7efea;
+  color: #765848;
+}
+
+@media (max-width: 70rem) {
+  .ops-seatmaps__kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 46rem) {
+  .ops-seatmaps__intro,
+  .ops-seatmaps__catalogue-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ops-seatmaps__intro .et-button {
+    width: 100%;
+  }
+
+  .ops-seatmap-desktop-table {
+    display: none;
+  }
+
+  .ops-seatmap-mobile-list {
+    display: grid;
+    gap: 0.65rem;
+  }
+
+  .ops-seatmap-properties,
+  .ops-seatmap-usage-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-seatmap-properties > div {
+    border-right: 0;
+  }
+
+  .ops-seatmap-card dl {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .ops-seatmap-card dl div:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 34rem) {
+  .ops-seatmaps__kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-seatmap-card__heading {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .ops-seatmap-card__heading > .ops-status-badge {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
