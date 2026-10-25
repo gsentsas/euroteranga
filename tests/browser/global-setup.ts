@@ -29,6 +29,7 @@ const DAY_MS = 24 * 3_600_000;
 
 const PREAUTHENTICATED_SESSIONS = {
   crew: 'E2E_CREW_SESSION',
+  seatMapAccessibilityAdmin: 'E2E_SEAT_MAP_ACCESSIBILITY_ADMIN_SESSION',
   paymentCustomer: 'E2E_PAYMENT_CUSTOMER_SESSION',
   foreignCustomer: 'E2E_FOREIGN_CUSTOMER_SESSION',
   passengerDocumentReader: 'E2E_PASSENGER_DOCUMENT_READER_SESSION',
@@ -171,6 +172,9 @@ export default async function globalSetup(): Promise<void> {
 function preauthenticatedSessionEnvironment(fixture: Fixture): string | undefined {
   if (fixture.email === FIXTURES.crew.email) {
     return PREAUTHENTICATED_SESSIONS.crew;
+  }
+  if (fixture.email === FIXTURES.seatMapAccessibilityAdmin.email) {
+    return PREAUTHENTICATED_SESSIONS.seatMapAccessibilityAdmin;
   }
   if (fixture.email === FIXTURES.paymentCustomer.email) {
     return PREAUTHENTICATED_SESSIONS.paymentCustomer;

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { appByName, appUrl } from '../apps.js';
-import { FIXTURES, seatMapSeed } from '../fixtures.js';
-import { directAdminApi, signInAndEnroll } from '../staff.js';
+import { FIXTURES, preauthenticatedSession, seatMapSeed } from '../fixtures.js';
+import { BROWSER_API_URL, directAdminApi, signInAndEnroll } from '../staff.js';
 
 const ops = appByName('ops');
 
@@ -163,7 +163,16 @@ test('ops seat maps: filters and keyboard drawer keep the catalogue accessible',
   const errors = trackPageErrors(page);
   const seed = seatMapSeed();
 
-  await signInAndEnroll(page, FIXTURES.seatMapAccessibilityAdmin.email);
+  await page.context().addCookies([
+    {
+      name: 'et_staff_session',
+      value: preauthenticatedSession('seatMapAccessibilityAdmin'),
+      url: BROWSER_API_URL,
+      httpOnly: true,
+      secure: false,
+      sameSite: 'Strict',
+    },
+  ]);
   await page.goto(appUrl(ops, '/seat-maps'));
   await expect(page.getByTestId('seat-maps-workspace')).toBeVisible();
 

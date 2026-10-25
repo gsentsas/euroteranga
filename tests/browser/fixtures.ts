@@ -249,6 +249,7 @@ export function invitationToken(): string {
 
 export type PreauthenticatedFixture =
   | 'crew'
+  | 'seatMapAccessibilityAdmin'
   | 'paymentCustomer'
   | 'foreignCustomer'
   | 'passengerDocumentReader'
@@ -272,6 +273,7 @@ export type PreauthenticatedFixture =
 
 const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string> = {
   crew: 'E2E_CREW_SESSION',
+  seatMapAccessibilityAdmin: 'E2E_SEAT_MAP_ACCESSIBILITY_ADMIN_SESSION',
   paymentCustomer: 'E2E_PAYMENT_CUSTOMER_SESSION',
   foreignCustomer: 'E2E_FOREIGN_CUSTOMER_SESSION',
   passengerDocumentReader: 'E2E_PASSENGER_DOCUMENT_READER_SESSION',
