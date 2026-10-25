@@ -11,6 +11,7 @@ import { auth } from '../../lib/auth';
 import { OpsConfirmSubmit } from '../ops-confirm-submit';
 import { OpsEmptyState, OpsErrorState, OpsLoadingState } from '../ops-data-state';
 import { OpsDetailRegion } from '../ops-detail-region';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { PAYMENT_STATUS_LABELS } from '../payments/payment-format';
 import { useCan } from '../staff-access';
 
@@ -20,6 +21,21 @@ const STATUS_LABELS: Record<CustomerBookingStatus, string> = {
   EXPIRED: 'Expirée',
   CANCELLED: 'Annulée',
 };
+
+function bookingStatusTone(
+  status: CustomerBookingStatus,
+): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
+  switch (status) {
+    case 'HELD':
+      return 'warning';
+    case 'CONFIRMED':
+      return 'success';
+    case 'EXPIRED':
+      return 'neutral';
+    case 'CANCELLED':
+      return 'danger';
+  }
+}
 
 function formatAt(value: string | null, timeZone = 'UTC'): string {
   if (!value) return '—';
@@ -68,7 +84,9 @@ function BookingDetail({
     >
       <div className="et-actions">
         <h2 id={`admin-booking-${booking.id}`}>Réservation {booking.reference}</h2>
-        <span className="et-tag">{STATUS_LABELS[booking.status]}</span>
+        <OpsStatusBadge tone={bookingStatusTone(booking.status)}>
+          {STATUS_LABELS[booking.status]}
+        </OpsStatusBadge>
       </div>
       <dl className="et-booking-admin-summary">
         <dt>Voyage</dt>
@@ -247,21 +265,74 @@ export function BookingsAdmin() {
     }
   };
 
+  const visibleBookings = bookings ?? [];
+  const heldCount = visibleBookings.filter((booking) => booking.status === 'HELD').length;
+  const confirmedCount = visibleBookings.filter((booking) => booking.status === 'CONFIRMED').length;
+  const closedCount = visibleBookings.filter(
+    (booking) => booking.status === 'EXPIRED' || booking.status === 'CANCELLED',
+  ).length;
+
   return (
-    <div className="et-network" data-testid="bookings-workspace">
-      <p>
-        Consultez les réservations. L’annulation d’une retenue provisoire libère les sièges et exige
-        un motif ; une réservation confirmée (payée) ne peut pas être annulée tant que le
-        remboursement n’existe pas.
-      </p>
+    <div
+      className="et-network ops-operations-workspace ops-bookings-workspace"
+      data-testid="bookings-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Activité commerciale</p>
+          <h2>Réservations voyageurs</h2>
+          <p>
+            Consultez les réservations. L’annulation d’une retenue provisoire libère les sièges et
+            exige un motif ; une réservation confirmée (payée) ne peut pas être annulée tant que le
+            remboursement n’existe pas.
+          </p>
+        </div>
+      </div>
+
       <FormAlert message={error} />
       {notice ? (
         <FormStatus>
           <p>{notice}</p>
         </FormStatus>
       ) : null}
+
+      {bookings ? (
+        <section className="ops-operations-kpis" aria-label="Indicateurs des réservations">
+          <OpsKpiCard
+            label="Dossiers affichés"
+            value={visibleBookings.length}
+            helper={
+              nextCursor ? 'Liste partielle · autres réservations disponibles' : 'Liste chargée'
+            }
+            icon="booking"
+            tone="info"
+          />
+          <OpsKpiCard
+            label="Provisoires"
+            value={heldCount}
+            helper="Retenues en attente"
+            icon="audit"
+            tone={heldCount > 0 ? 'warning' : 'neutral'}
+          />
+          <OpsKpiCard
+            label="Confirmées"
+            value={confirmedCount}
+            helper="Réservations validées"
+            icon="check"
+            tone="success"
+          />
+          <OpsKpiCard
+            label="Clôturées"
+            value={closedCount}
+            helper="Expirées ou annulées"
+            icon="alert"
+            tone="neutral"
+          />
+        </section>
+      ) : null}
+
       <form
-        className="et-form et-network-form"
+        className="et-form et-network-form ops-bookings-filter"
         aria-label="Filtrer les réservations"
         onSubmit={(event) => {
           event.preventDefault();
@@ -300,8 +371,16 @@ export function BookingsAdmin() {
         </button>
       </form>
 
-      <section aria-labelledby="admin-bookings-title">
-        <h2 id="admin-bookings-title">Réservations</h2>
+      <section
+        className="ops-operations-section ops-operations-section--primary"
+        aria-labelledby="admin-bookings-title"
+      >
+        <div className="et-actions">
+          <div>
+            <p className="ops-operations-section-kicker">Registre commercial</p>
+            <h2 id="admin-bookings-title">Réservations</h2>
+          </div>
+        </div>
         {!bookings && !loadError ? <OpsLoadingState title="Chargement des réservations" /> : null}
         {!bookings && loadError ? (
           <OpsErrorState
@@ -348,7 +427,11 @@ export function BookingsAdmin() {
                       )}
                     </td>
                     <td>{formatAt(booking.holdExpiresAt, booking.origin.stop?.timezone)}</td>
-                    <td>{STATUS_LABELS[booking.status]}</td>
+                    <td>
+                      <OpsStatusBadge tone={bookingStatusTone(booking.status)}>
+                        {STATUS_LABELS[booking.status]}
+                      </OpsStatusBadge>
+                    </td>
                     <td>
                       <button
                         type="button"

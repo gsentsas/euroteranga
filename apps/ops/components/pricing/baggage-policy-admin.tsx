@@ -9,6 +9,7 @@ import { TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
+import { OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 
 interface TierDraft {
@@ -557,7 +558,7 @@ export function BaggagePolicyAdmin() {
 
   return (
     <section
-      className="et-network"
+      className="et-network ops-pricing-domain ops-baggage-pricing-workspace"
       aria-labelledby="baggage-policy-title"
       data-testid="baggage-policy-workspace"
     >
@@ -594,7 +595,10 @@ export function BaggagePolicyAdmin() {
               {policies.map((policy) => {
                 const published = policy.versions.find((version) => version.status === 'PUBLISHED');
                 return (
-                  <tr key={policy.id}>
+                  <tr
+                    key={policy.id}
+                    className={selectedId === policy.id ? 'ops-table-row--selected' : undefined}
+                  >
                     <th>
                       {policy.code} — {policy.name}
                     </th>
@@ -604,7 +608,11 @@ export function BaggagePolicyAdmin() {
                         ? `v${published.version} · ${published.includedPieces} × ${published.includedWeightKgPerPiece.replace('.', ',')} kg`
                         : '—'}
                     </td>
-                    <td>{policy.active ? 'Active' : 'Désactivée'}</td>
+                    <td>
+                      <OpsStatusBadge tone={policy.active ? 'success' : 'neutral'}>
+                        {policy.active ? 'Active' : 'Désactivée'}
+                      </OpsStatusBadge>
+                    </td>
                     <td>
                       <button
                         type="button"

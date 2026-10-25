@@ -2080,3 +2080,628 @@
     align-items: flex-start;
   }
 }
+
+/* OPS-UI-4 BOOKINGS */
+
+.ops-bookings-filter {
+  margin: 0;
+  padding: 0.95rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-card);
+  background: #fff;
+  box-shadow: var(--ops-shadow-card);
+}
+
+.ops-bookings-filter .et-network-adders {
+  gap: 0.8rem;
+}
+
+.ops-bookings-workspace .ops-operations-section > .et-actions {
+  align-items: center;
+}
+
+.ops-bookings-workspace .ops-operations-section > .et-actions h2 {
+  margin: 0;
+}
+
+.ops-bookings-workspace .ops-operations-section > .et-table-wrap {
+  margin: 0;
+}
+
+.ops-bookings-workspace .et-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+}
+
+.ops-bookings-workspace .et-table caption {
+  color: var(--ops-navy-900);
+  font-weight: 800;
+}
+
+.ops-bookings-workspace .et-table thead th {
+  background: var(--ops-panel-muted);
+  color: var(--ops-muted);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.ops-bookings-workspace .et-table tbody tr {
+  transition: background 120ms ease;
+}
+
+.ops-bookings-workspace .et-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.ops-bookings-workspace [data-testid='booking-detail'] {
+  min-width: 0;
+  border-top: 3px solid var(--ops-info);
+}
+
+.ops-bookings-workspace [data-testid='booking-detail'] > .et-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ops-bookings-workspace [data-testid='booking-detail'] > .et-actions h2 {
+  margin-right: auto;
+}
+
+.ops-bookings-workspace [data-testid='booking-payments'] {
+  margin-top: 1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-panel-muted);
+}
+
+@media (max-width: 48rem) {
+  .ops-bookings-filter {
+    padding: 0.8rem;
+  }
+
+  .ops-bookings-workspace .et-table-wrap {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .ops-bookings-workspace [data-testid='booking-detail'] > .et-actions {
+    align-items: flex-start;
+  }
+}
+
+/* OPS-UI-4 PRICING */
+
+.ops-pricing-create-panel {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-card);
+  background: #fff;
+  box-shadow: var(--ops-shadow-card);
+}
+
+.ops-pricing-create-panel > .et-network-form {
+  margin: 0;
+  padding: 0.95rem;
+  border-color: var(--ops-line);
+  background: var(--ops-panel-muted);
+  box-shadow: none;
+}
+
+.ops-pricing-workspace .et-table,
+.ops-pricing-domain .et-table {
+  width: 100%;
+  margin: 0;
+}
+
+.ops-pricing-workspace .et-table caption,
+.ops-pricing-domain .et-table caption {
+  color: var(--ops-navy-900);
+  font-weight: 800;
+}
+
+.ops-pricing-workspace .et-table thead th,
+.ops-pricing-domain .et-table thead th {
+  background: var(--ops-panel-muted);
+  color: var(--ops-muted);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.ops-pricing-workspace .et-table tbody tr,
+.ops-pricing-domain .et-table tbody tr {
+  transition: background 120ms ease;
+}
+
+.ops-pricing-workspace .et-table tbody tr:hover,
+.ops-pricing-domain .et-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.ops-pricing-domain {
+  min-width: 0;
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--ops-line);
+  border-top: 3px solid var(--ops-info);
+  border-radius: var(--ops-radius-card);
+  background: #fff;
+  box-shadow: var(--ops-shadow-card);
+}
+
+.ops-pricing-domain > h2 {
+  margin: 0;
+  color: var(--ops-navy-950);
+}
+
+.ops-pricing-domain > p {
+  margin: 0;
+  color: var(--ops-muted);
+  line-height: 1.55;
+}
+
+.ops-pricing-domain > .et-network-form {
+  margin: 0;
+  padding: 0.95rem;
+  border-color: var(--ops-line);
+  background: var(--ops-panel-muted);
+  box-shadow: none;
+}
+
+.ops-pricing-domain > .et-table-wrap,
+.ops-pricing-workspace .ops-operations-section > .et-table-wrap {
+  margin: 0;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: #fff;
+}
+
+.ops-pricing-filters {
+  min-width: 0;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-panel-muted);
+}
+
+.ops-pricing-filters label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--ops-muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+@media (max-width: 48rem) {
+  .ops-pricing-create-panel,
+  .ops-pricing-domain {
+    padding: 0.8rem;
+  }
+
+  .ops-pricing-workspace .et-table-wrap,
+  .ops-pricing-domain .et-table-wrap {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .ops-pricing-filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ops-pricing-filters label,
+  .ops-pricing-filters .et-select {
+    width: 100%;
+  }
+}
+
+/* OPS-UI-4 PAYMENTS */
+
+.ops-payments-filter {
+  margin: 0;
+  padding: 0.95rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-card);
+  background: #fff;
+  box-shadow: var(--ops-shadow-card);
+}
+
+.ops-payments-filter .et-network-adders {
+  gap: 0.8rem;
+}
+
+.ops-payments-workspace .ops-operations-section > .et-actions {
+  align-items: center;
+}
+
+.ops-payments-workspace .ops-operations-section > .et-actions h2 {
+  margin: 0;
+}
+
+.ops-payments-workspace .ops-operations-section > .et-table-wrap {
+  margin: 0;
+}
+
+.ops-payments-workspace .et-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+}
+
+.ops-payments-workspace .et-table caption {
+  color: var(--ops-navy-900);
+  font-weight: 800;
+}
+
+.ops-payments-workspace .et-table thead th {
+  background: var(--ops-panel-muted);
+  color: var(--ops-muted);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.ops-payments-workspace .et-table tbody tr {
+  transition: background 120ms ease;
+}
+
+.ops-payments-workspace .et-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.ops-payments-workspace [data-testid='payment-detail'] {
+  min-width: 0;
+  border-top: 3px solid var(--ops-info);
+}
+
+.ops-payments-workspace [data-testid='payment-detail'] > .et-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ops-payments-workspace [data-testid='payment-detail'] > .et-actions h2 {
+  margin-right: auto;
+}
+
+.ops-payments-workspace .et-payment-timeline {
+  margin: 0.8rem 0 1rem;
+  padding: 0.9rem 0.9rem 0.9rem 2rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-panel-muted);
+}
+
+.ops-payments-workspace .et-payment-timeline li + li {
+  margin-top: 0.45rem;
+}
+
+@media (max-width: 48rem) {
+  .ops-payments-filter {
+    padding: 0.8rem;
+  }
+
+  .ops-payments-workspace .et-table-wrap {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .ops-payments-workspace [data-testid='payment-detail'] > .et-actions {
+    align-items: flex-start;
+  }
+}
+
+/* OPS-UI-4 FINANCE */
+
+.ops-finance-search {
+  margin: 0;
+  padding: 0.95rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-card);
+  background: #fff;
+  box-shadow: var(--ops-shadow-card);
+}
+
+.ops-finance-search .et-field {
+  min-width: min(100%, 22rem);
+}
+
+.ops-finance-workspace > .et-network-panel,
+.ops-finance-panel {
+  min-width: 0;
+  margin: 0;
+  border-color: var(--ops-line);
+  border-radius: var(--ops-radius-card);
+  background: #fff;
+  box-shadow: var(--ops-shadow-card);
+}
+
+.ops-finance-workspace #finance-summary-title,
+.ops-finance-panel > h2 {
+  color: var(--ops-navy-950);
+}
+
+.ops-finance-workspace .et-table {
+  width: 100%;
+  margin: 0;
+}
+
+.ops-finance-workspace .et-table caption {
+  color: var(--ops-navy-900);
+  font-weight: 800;
+}
+
+.ops-finance-workspace .et-table thead th {
+  background: var(--ops-panel-muted);
+  color: var(--ops-muted);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.ops-finance-workspace .et-table tbody tr {
+  transition: background 120ms ease;
+}
+
+.ops-finance-workspace .et-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.ops-finance-export-actions {
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.7rem 0;
+}
+
+.ops-finance-entry-grid {
+  align-items: start;
+  gap: 0.9rem;
+}
+
+.ops-finance-entry-grid > .et-form {
+  height: 100%;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-card);
+  background: #fff;
+  box-shadow: var(--ops-shadow-card);
+}
+
+.ops-finance-panel {
+  border-top: 3px solid var(--ops-info);
+}
+
+.ops-finance-panel > h2 {
+  margin-top: 0;
+}
+
+.ops-finance-panel > .et-table-wrap {
+  margin: 0;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: #fff;
+}
+
+.ops-finance-panel form.et-form {
+  margin-top: 0.7rem;
+  padding: 0.75rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-panel-muted);
+}
+
+.ops-finance-expense {
+  margin-top: 0.75rem;
+  padding: 0.95rem;
+  border: 1px solid var(--ops-line);
+  box-shadow: none;
+}
+
+.ops-finance-expense > .et-actions {
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ops-finance-expense > .et-actions h3 {
+  margin: 0;
+  color: var(--ops-navy-900);
+}
+
+.ops-finance-expense-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.ops-finance-expense .et-form {
+  margin-top: 0.75rem;
+  padding: 0.8rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-panel-muted);
+}
+
+.ops-finance-workspace [data-testid^='refund-not-sent-'] {
+  margin: 0 0 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border-left: 3px solid var(--ops-warning);
+  border-radius: 0 var(--ops-radius-control) var(--ops-radius-control) 0;
+  background: var(--ops-warning-surface);
+}
+
+@media (max-width: 48rem) {
+  .ops-finance-search,
+  .ops-finance-entry-grid > .et-form,
+  .ops-finance-panel,
+  .ops-finance-expense {
+    padding: 0.8rem;
+  }
+
+  .ops-finance-workspace .et-table-wrap {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .ops-finance-export-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ops-finance-export-actions .et-button {
+    width: 100%;
+  }
+
+  .ops-finance-expense > .et-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* OPS-UI-4 REPORTING */
+
+.ops-reporting-filter {
+  margin: 0;
+  padding: 0.95rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-card);
+  background: #fff;
+  box-shadow: var(--ops-shadow-card);
+}
+
+.ops-reporting-filter > .et-actions {
+  margin-top: 0.75rem;
+  gap: 0.55rem;
+}
+
+.ops-reporting-privacy {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-success-surface);
+  color: var(--ops-navy-900);
+}
+
+.ops-reporting-section {
+  min-width: 0;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.ops-reporting-section > .et-actions {
+  align-items: center;
+}
+
+.ops-reporting-section > .et-actions h2 {
+  margin: 0;
+}
+
+.ops-reporting-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.ops-reporting-panel {
+  min-width: 0;
+  margin: 0;
+  border-color: var(--ops-line);
+  border-top: 3px solid var(--ops-info);
+  border-radius: var(--ops-radius-card);
+  background: #fff;
+  box-shadow: var(--ops-shadow-card);
+}
+
+.ops-reporting-panel > h2 {
+  margin-top: 0;
+  color: var(--ops-navy-950);
+}
+
+.ops-reporting-panel > p {
+  color: var(--ops-muted);
+}
+
+.ops-reporting-panel > .et-table-wrap {
+  margin: 0;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: #fff;
+}
+
+.ops-reporting-workspace .et-table {
+  width: 100%;
+  margin: 0;
+}
+
+.ops-reporting-workspace .et-table caption {
+  color: var(--ops-navy-900);
+  font-weight: 800;
+}
+
+.ops-reporting-workspace .et-table thead th {
+  background: var(--ops-panel-muted);
+  color: var(--ops-muted);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.ops-reporting-workspace .et-table tbody tr {
+  transition: background 120ms ease;
+}
+
+.ops-reporting-workspace .et-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+@media (max-width: 64rem) {
+  .ops-reporting-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 48rem) {
+  .ops-reporting-filter,
+  .ops-reporting-panel {
+    padding: 0.8rem;
+  }
+
+  .ops-reporting-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-reporting-filter > .et-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ops-reporting-filter > .et-actions .et-button {
+    width: 100%;
+  }
+
+  .ops-reporting-workspace .et-table-wrap {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .ops-reporting-privacy {
+    align-items: flex-start;
+  }
+}

@@ -9,6 +9,7 @@ import type {
 import { FormAlert, FormStatus } from '@euroteranga/ui';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 
 function isoDate(date: Date): string {
@@ -78,10 +79,13 @@ function saveDownload(download: PrivateDownload): void {
 
 function Kpi({ label, value }: { label: string; value: string | number }) {
   return (
-    <article className="et-network-panel">
-      <strong>{label}</strong>
-      <div>{value}</div>
-    </article>
+    <OpsKpiCard
+      label={label}
+      value={value}
+      helper="Période sélectionnée"
+      icon="chart"
+      tone="info"
+    />
   );
 }
 
@@ -189,8 +193,27 @@ export function ReportingDashboard() {
   };
 
   return (
-    <div className="et-network" data-testid="reporting-workspace">
-      <form className="et-network-form" aria-label="Filtres reporting" onSubmit={submit}>
+    <div
+      className="et-network ops-operations-workspace ops-reporting-workspace"
+      data-testid="reporting-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Pilotage & analyse</p>
+          <h2>Reporting opérationnel</h2>
+          <p>
+            Analysez l’activité commerciale, financière et opérationnelle sur une période donnée.
+            Les montants restent toujours séparés par devise et aucune conversion de change
+            implicite n’est appliquée.
+          </p>
+        </div>
+      </div>
+
+      <form
+        className="et-network-form ops-reporting-filter"
+        aria-label="Filtres reporting"
+        onSubmit={submit}
+      >
         <div className="et-network-adders">
           <div className="et-field">
             <label htmlFor="reporting-from">Du (UTC)</label>
@@ -246,9 +269,21 @@ export function ReportingDashboard() {
 
       {data ? (
         <>
-          <section aria-labelledby="reporting-overview-title">
-            <h2 id="reporting-overview-title">Synthèse</h2>
-            <div className="et-network-adders">
+          {data.privacy.containsPassengerPii === false ? (
+            <div className="ops-reporting-privacy" role="status">
+              <OpsStatusBadge tone="success">Sans PII passager</OpsStatusBadge>
+              <span>Cette vue agrégée ne contient aucune donnée personnelle voyageur.</span>
+            </div>
+          ) : null}
+
+          <section className="ops-reporting-section" aria-labelledby="reporting-overview-title">
+            <div className="et-actions">
+              <div>
+                <p className="ops-operations-section-kicker">Vue d’ensemble</p>
+                <h2 id="reporting-overview-title">Synthèse</h2>
+              </div>
+            </div>
+            <div className="et-network-adders ops-reporting-kpis">
               <Kpi label="Voyages" value={data.activity.tripCount} />
               <Kpi label="Passagers" value={data.commercial.passengerCount} />
               <Kpi label="Sièges vendus" value={data.commercial.soldSeatCount} />
@@ -258,15 +293,23 @@ export function ReportingDashboard() {
             </div>
           </section>
 
-          <section className="et-network-panel" aria-labelledby="reporting-finance-title">
+          <section
+            className="et-network-panel ops-reporting-panel"
+            aria-labelledby="reporting-finance-title"
+          >
             <h2 id="reporting-finance-title">Finance</h2>
             <p>Les montants restent séparés par devise. Aucun taux de change n’est appliqué.</p>
             <FinanceTable currencies={data.finance.currencies} />
           </section>
 
-          <section aria-labelledby="reporting-operations-title">
-            <h2 id="reporting-operations-title">Exploitation</h2>
-            <div className="et-network-adders">
+          <section className="ops-reporting-section" aria-labelledby="reporting-operations-title">
+            <div className="et-actions">
+              <div>
+                <p className="ops-operations-section-kicker">Qualité d’exploitation</p>
+                <h2 id="reporting-operations-title">Exploitation</h2>
+              </div>
+            </div>
+            <div className="et-network-adders ops-reporting-kpis">
               <Kpi label="Départs à l’heure" value={data.operations.onTimeDepartureCount} />
               <Kpi label="Départs en retard" value={data.operations.delayedDepartureCount} />
               <Kpi
@@ -279,7 +322,10 @@ export function ReportingDashboard() {
             </div>
           </section>
 
-          <section className="et-network-panel" aria-labelledby="reporting-routes-title">
+          <section
+            className="et-network-panel ops-reporting-panel"
+            aria-labelledby="reporting-routes-title"
+          >
             <h2 id="reporting-routes-title">Performance par trajet</h2>
             <div className="et-table-wrap">
               <table className="et-table">
@@ -324,7 +370,10 @@ export function ReportingDashboard() {
             </div>
           </section>
 
-          <section className="et-network-panel" aria-labelledby="reporting-trips-title">
+          <section
+            className="et-network-panel ops-reporting-panel"
+            aria-labelledby="reporting-trips-title"
+          >
             <h2 id="reporting-trips-title">Voyages récents de la période</h2>
             <div className="et-table-wrap">
               <table className="et-table">
@@ -351,7 +400,9 @@ export function ReportingDashboard() {
                         <td>
                           {trip.route.code} · v{trip.route.version}
                         </td>
-                        <td>{trip.status}</td>
+                        <td>
+                          <OpsStatusBadge tone="neutral">{trip.status}</OpsStatusBadge>
+                        </td>
                         <td>{trip.passengerCount}</td>
                         <td>{percent(trip.loadFactor)}</td>
                         <td>{trip.incidentCount}</td>
