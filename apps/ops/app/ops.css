@@ -2044,7 +2044,7 @@
 
 .ops-incidents-workspace [data-testid='incident-detail'] {
   min-width: 0;
-  border-top: 3px solid var(--ops-blue);
+  border-top: 3px solid var(--ops-info);
 }
 
 .ops-incidents-workspace [data-testid='incident-detail'] > .et-actions {
