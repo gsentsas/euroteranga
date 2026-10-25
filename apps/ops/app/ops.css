@@ -2705,3 +2705,481 @@
     align-items: flex-start;
   }
 }
+
+/* OPS-UI-5 GROUND OPERATIONS */
+
+/* Status badges may keep the legacy .et-tag hook: semantic colours must still win. */
+.ops-app .ops-status-badge.et-tag {
+  display: inline-flex;
+  padding: 0.18rem 0.58rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.ops-app .ops-status-badge--success.et-tag {
+  background: var(--ops-success-surface);
+  color: #087044;
+}
+
+.ops-app .ops-status-badge--warning.et-tag {
+  background: var(--ops-warning-surface);
+  color: var(--ops-warning);
+}
+
+.ops-app .ops-status-badge--danger.et-tag {
+  background: var(--ops-danger-surface);
+  color: var(--ops-danger);
+}
+
+.ops-app .ops-status-badge--info.et-tag {
+  background: var(--ops-info-surface);
+  color: var(--ops-info);
+}
+
+.ops-app .ops-status-badge--neutral.et-tag {
+  background: #edf1f5;
+  color: #5a6778;
+}
+
+.ops-ground-tools {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(15rem, 1fr) minmax(0, 2.6fr);
+  align-items: start;
+  gap: 0.9rem;
+}
+
+.ops-ground-tools > :only-child {
+  grid-column: 1 / -1;
+}
+
+.ops-app .ops-ground-panel {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0.95rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-card);
+  background: #fff;
+  box-shadow: var(--ops-shadow-card);
+}
+
+.ops-ground-panel > h2,
+.ops-ground-panel > h3 {
+  margin: 0;
+  color: var(--ops-navy-950);
+  font-size: 1rem;
+}
+
+.ops-ground-panel .et-network-adders {
+  gap: 0.8rem;
+}
+
+.ops-app .ops-ground-panel.ops-ground-scan {
+  border-top: 3px solid var(--ops-gold);
+}
+
+.ops-ground-partial {
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #f1d58a;
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-warning-surface);
+  color: #6b4306;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.ops-ground-guardrail {
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--ops-line);
+  border-left: 4px solid var(--ops-navy-700);
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-panel-muted);
+  color: var(--ops-navy-850);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.ops-ground-guardrail--strong {
+  border-color: #f1d58a;
+  border-left-color: var(--ops-warning);
+  background: var(--ops-warning-surface);
+  color: #5d3a05;
+}
+
+.ops-ground-workspace .ops-operations-section > .et-actions {
+  align-items: center;
+}
+
+.ops-ground-workspace .ops-operations-section > .et-actions h2 {
+  margin: 0;
+}
+
+.ops-ground-workspace .et-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+}
+
+.ops-ground-workspace .et-table caption {
+  color: var(--ops-navy-900);
+  font-weight: 800;
+  text-align: left;
+}
+
+.ops-ground-workspace .et-table thead th {
+  background: var(--ops-panel-muted);
+  color: var(--ops-muted);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.ops-ground-workspace .et-table tbody th {
+  background: transparent;
+  color: var(--ops-navy-900);
+  font-size: 0.8rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ops-ground-workspace .et-table tbody tr {
+  transition: background 120ms ease;
+}
+
+/* Operational references stay on one line: the table wrapper scrolls instead. */
+.ops-ground-workspace .et-table .et-code {
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.ops-ground-workspace .ops-ground-facts .et-code,
+.ops-ground-workspace .ops-operations-section-kicker .et-code {
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+}
+
+.ops-ground-workspace .et-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.ops-ground-detail {
+  min-width: 0;
+  display: grid;
+  gap: 0.9rem;
+  border-top: 3px solid var(--ops-info);
+}
+
+.ops-ground-detail > .et-alert,
+.ops-ground-detail > .et-status-box {
+  margin: 0;
+}
+
+.ops-ground-detail__header {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ops-ground-detail h2 {
+  margin: 0;
+  color: var(--ops-navy-950);
+  font-size: 1.05rem;
+}
+
+.ops-ground-detail__header > :first-child {
+  margin-right: auto;
+}
+
+.ops-ground-detail h3 {
+  margin: 0;
+  color: var(--ops-navy-950);
+  font-size: 0.95rem;
+}
+
+/* Nested sub-panels (tracking, quotes, boarding) read as sections of the same record. */
+.ops-ground-detail .et-network-panel .et-form {
+  max-width: none;
+}
+
+.ops-ground-workspace .et-table-wrap > table:not(.et-table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+.ops-ground-workspace .et-table-wrap > table:not(.et-table) caption {
+  padding: 0.7rem 0.75rem;
+  color: var(--ops-navy-900);
+  font-weight: 800;
+  text-align: left;
+}
+
+.ops-ground-workspace .et-table-wrap > table:not(.et-table) th,
+.ops-ground-workspace .et-table-wrap > table:not(.et-table) td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--ops-line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ops-ground-workspace .et-table-wrap > table:not(.et-table) thead th {
+  background: var(--ops-panel-muted);
+  color: var(--ops-muted);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.ops-ground-workspace .et-table-wrap > table:not(.et-table) .et-code {
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.ops-app .ops-ground-detail .et-network-panel {
+  margin: 0;
+  padding: 0.9rem;
+  border-color: var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-panel-muted);
+  box-shadow: none;
+}
+
+.ops-ground-detail .et-network-panel > .et-actions h3 {
+  margin: 0;
+}
+
+.ops-ground-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ops-ground-facts {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.ops-ground-facts > div {
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-panel-muted);
+}
+
+.ops-ground-facts > .ops-ground-facts__wide {
+  grid-column: 1 / -1;
+}
+
+.ops-ground-facts dt {
+  margin-bottom: 0.2rem;
+  color: var(--ops-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ops-ground-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ops-text);
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.ops-ground-qr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+
+.ops-ground-qr figure {
+  margin: 0;
+}
+
+.ops-ground-forms {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.8rem;
+}
+
+.ops-ground-form {
+  min-width: 0;
+  max-width: none;
+  align-content: start;
+  padding: 0.85rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-panel-muted);
+}
+
+.ops-ground-form .ops-operations-section-kicker {
+  margin: 0;
+}
+
+.ops-ground-form--wide {
+  grid-column: 1 / -1;
+}
+
+.ops-ground-flags {
+  flex-wrap: wrap;
+  gap: 0.5rem 1.1rem;
+  color: var(--ops-navy-850);
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.ops-ground-form__hint {
+  margin: 0;
+  color: var(--ops-muted);
+  font-size: 0.78rem;
+}
+
+.ops-ground-detail > .et-table-wrap,
+.ops-ground-detail .et-table-wrap {
+  margin: 0;
+}
+
+/* Ordered operational sequence: informative only, every step stays a server decision. */
+.ops-ground-sequence {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: ops-ground-step;
+}
+
+.ops-ground-sequence > li {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.6rem 0.7rem 0.6rem 2.4rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: #fff;
+  counter-increment: ops-ground-step;
+}
+
+.ops-ground-sequence > li::before {
+  position: absolute;
+  top: 0.62rem;
+  left: 0.65rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #edf1f5;
+  color: #5a6778;
+  content: counter(ops-ground-step);
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.ops-ground-sequence > li > span {
+  color: var(--ops-navy-950);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.ops-ground-sequence > li > small {
+  overflow-wrap: anywhere;
+  color: var(--ops-muted);
+  font-size: 0.75rem;
+}
+
+.ops-ground-sequence > .ops-ground-sequence__step--done {
+  border-color: #a7e3c4;
+  background: #f3fcf7;
+}
+
+.ops-ground-sequence > .ops-ground-sequence__step--done::before {
+  background: var(--ops-success-surface);
+  color: #087044;
+}
+
+.ops-ground-sequence > .ops-ground-sequence__step--blocked {
+  border-color: #efa9b3;
+  background: #fff8f9;
+}
+
+.ops-ground-sequence > .ops-ground-sequence__step--blocked::before {
+  background: var(--ops-danger-surface);
+  color: var(--ops-danger);
+}
+
+.ops-ground-history {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.85rem 0.85rem 0.85rem 2rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-panel-muted);
+  font-size: 0.82rem;
+}
+
+.ops-ground-history .et-code {
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  word-break: normal;
+}
+
+.ops-ground-blockers {
+  color: var(--ops-danger);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.ops-ground-resolution {
+  display: grid;
+  gap: 0.7rem;
+}
+
+@media (max-width: 64rem) {
+  .ops-ground-tools {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 48rem) {
+  .ops-app .ops-ground-panel {
+    padding: 0.8rem;
+  }
+
+  .ops-ground-workspace .et-table-wrap {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .ops-ground-detail__header {
+    align-items: flex-start;
+  }
+
+  .ops-ground-facts {
+    grid-template-columns: 1fr;
+  }
+}

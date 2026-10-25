@@ -69,11 +69,19 @@ type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 export function OpsStatusBadge({
   children,
   tone = 'neutral',
+  className,
 }: {
   children: ReactNode;
   tone?: StatusTone;
+  className?: string;
 }) {
-  return <span className={`ops-status-badge ops-status-badge--${tone}`}>{children}</span>;
+  return (
+    <span
+      className={`ops-status-badge ops-status-badge--${tone}${className ? ` ${className}` : ''}`}
+    >
+      {children}
+    </span>
+  );
 }
 
 export function OpsVersionBadge({ children }: { children: ReactNode }) {

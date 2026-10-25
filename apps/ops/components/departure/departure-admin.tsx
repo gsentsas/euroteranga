@@ -10,6 +10,8 @@ import type {
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsEmptyState } from '../ops-data-state';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 
 const GATE_LABELS: Record<DepartureGate, string> = {
@@ -69,42 +71,128 @@ function statusLabel(status: DepartureReadinessResponse['trip']['status']) {
   }
 }
 
-function ReadinessPanel({ data }: { data: DepartureReadinessResponse }) {
+/**
+ * Read-only view of the four dispatch steps. Each step is decided by the Core API;
+ * this list only reflects the facts it returned.
+ */
+function DispatchSequence({ data }: { data: DepartureReadinessResponse | null }) {
+  const steps = [
+    {
+      label: 'Readiness',
+      done: data?.readiness.status === 'READY',
+      blocked: data ? data.readiness.status !== 'READY' && data.trip.status === 'SCHEDULED' : false,
+      detail: data
+        ? data.readiness.status === 'READY'
+          ? 'Gates satisfaites'
+          : `${data.readiness.blockers.length} blocage(s) à lever`
+        : 'Recalculée par le serveur',
+    },
+    {
+      label: 'Autorisation explicite',
+      done: Boolean(data?.latestAuthorization?.current),
+      blocked: false,
+      detail: data?.latestAuthorization
+        ? `v${data.latestAuthorization.version}${data.latestAuthorization.current ? '' : ' · périmée'}`
+        : 'Décision humaine tracée',
+    },
+    {
+      label: 'Départ réel',
+      done: Boolean(data?.trip.actualDepartureAt),
+      blocked: false,
+      detail: data?.trip.actualDepartureAt
+        ? formatAt(data.trip.actualDepartureAt)
+        : 'Horodaté à l’enregistrement',
+    },
+    {
+      label: 'Clôture du voyage',
+      done: data?.trip.status === 'COMPLETED',
+      blocked: false,
+      detail: data?.trip.actualArrivalAt
+        ? formatAt(data.trip.actualArrivalAt)
+        : 'À l’arrivée réelle',
+    },
+  ];
   return (
-    <section className="et-network-panel" aria-labelledby="departure-readiness-title">
-      <div className="et-actions">
-        <h2 id="departure-readiness-title">Readiness du départ</h2>
-        <span className="et-tag">{data.readiness.status === 'READY' ? 'PRÊT' : 'BLOQUÉ'}</span>
-        <span className="et-code">{data.readiness.engineVersion}</span>
+    <ol className="ops-ground-sequence" aria-label="Séquence de dispatch">
+      {steps.map((step) => (
+        <li
+          key={step.label}
+          className={
+            step.done
+              ? 'ops-ground-sequence__step--done'
+              : step.blocked
+                ? 'ops-ground-sequence__step--blocked'
+                : undefined
+          }
+        >
+          <span>{step.label}</span>
+          <small>{step.detail}</small>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function ReadinessPanel({ data }: { data: DepartureReadinessResponse }) {
+  const ready = data.readiness.status === 'READY';
+  return (
+    <section
+      className="ops-operations-section ops-operations-section--primary ops-ground-detail"
+      aria-labelledby="departure-readiness-title"
+    >
+      <div className="et-actions ops-ground-detail__header">
+        <div>
+          <p className="ops-operations-section-kicker">
+            Moteur <span className="et-code">{data.readiness.engineVersion}</span>
+          </p>
+          <h2 id="departure-readiness-title">Readiness du départ</h2>
+        </div>
+        <OpsStatusBadge tone={ready ? 'success' : 'danger'}>
+          {ready ? 'PRÊT' : 'BLOQUÉ'}
+        </OpsStatusBadge>
       </div>
-      <dl className="et-booking-admin-summary">
-        <dt>Voyage</dt>
-        <dd className="et-code">{data.trip.reference}</dd>
-        <dt>État opérationnel</dt>
-        <dd>{statusLabel(data.trip.status)}</dd>
-        <dt>Départ réel</dt>
-        <dd>{formatAt(data.trip.actualDepartureAt)}</dd>
-        <dt>Arrivée réelle</dt>
-        <dd>{formatAt(data.trip.actualArrivalAt)}</dd>
-        <dt>Empreinte readiness</dt>
-        <dd className="et-code">{data.fingerprint}</dd>
+      <dl className="ops-ground-facts">
+        <div>
+          <dt>Voyage</dt>
+          <dd className="et-code">{data.trip.reference}</dd>
+        </div>
+        <div>
+          <dt>État opérationnel</dt>
+          <dd>{statusLabel(data.trip.status)}</dd>
+        </div>
+        <div>
+          <dt>Départ réel</dt>
+          <dd>{formatAt(data.trip.actualDepartureAt)}</dd>
+        </div>
+        <div>
+          <dt>Arrivée réelle</dt>
+          <dd>{formatAt(data.trip.actualArrivalAt)}</dd>
+        </div>
+        <div className="ops-ground-facts__wide">
+          <dt>Empreinte readiness</dt>
+          <dd className="et-code">{data.fingerprint}</dd>
+        </div>
       </dl>
 
       <div className="et-table-wrap">
-        <table data-testid="departure-gates">
+        <table className="et-table" data-testid="departure-gates">
           <caption>Gates calculées exclusivement par le serveur</caption>
           <thead>
             <tr>
-              <th>Gate</th>
-              <th>État</th>
-              <th>Blocages</th>
+              <th scope="col">Gate</th>
+              <th scope="col">État</th>
+              <th scope="col">Blocages</th>
             </tr>
           </thead>
           <tbody>
             {data.readiness.gates.map((gate) => (
               <tr key={gate.gate}>
-                <td>{GATE_LABELS[gate.gate]}</td>
-                <td>{gate.status === 'PASS' ? 'OK' : 'Bloqué'}</td>
+                <th scope="row">{GATE_LABELS[gate.gate]}</th>
+                <td>
+                  <OpsStatusBadge tone={gate.status === 'PASS' ? 'success' : 'danger'}>
+                    {gate.status === 'PASS' ? 'OK' : 'Bloqué'}
+                  </OpsStatusBadge>
+                </td>
                 <td>{gate.blockers.map((code) => BLOCKER_LABELS[code]).join(' · ') || '—'}</td>
               </tr>
             ))}
@@ -129,39 +217,52 @@ function ReadinessPanel({ data }: { data: DepartureReadinessResponse }) {
         </div>
       ) : null}
 
-      <dl className="et-booking-admin-summary">
-        <dt>Passagers confirmés</dt>
-        <dd>{data.readiness.passengers.total}</dd>
-        <dt>Check-in</dt>
-        <dd>{data.readiness.passengers.checkedIn}</dd>
-        <dt>Embarqués</dt>
-        <dd>{data.readiness.passengers.boarded}</dd>
-        <dt>Toujours conformes PR-14</dt>
-        <dd>{data.readiness.passengers.currentReady}</dd>
-        <dt>Manifeste courant</dt>
-        <dd>
-          {data.readiness.manifest
-            ? `${data.readiness.manifest.reference} · v${data.readiness.manifest.version}`
-            : 'Absent'}
-        </dd>
-        <dt>Politique permis</dt>
-        <dd>
-          {data.readiness.permitPolicy
-            ? `v${data.readiness.permitPolicy.version} · ${data.readiness.permitPolicy.requirementCount} exigence(s)`
-            : 'Non publiée'}
-        </dd>
+      <dl className="ops-ground-facts">
+        <div>
+          <dt>Passagers confirmés</dt>
+          <dd>{data.readiness.passengers.total}</dd>
+        </div>
+        <div>
+          <dt>Check-in</dt>
+          <dd>{data.readiness.passengers.checkedIn}</dd>
+        </div>
+        <div>
+          <dt>Embarqués</dt>
+          <dd>{data.readiness.passengers.boarded}</dd>
+        </div>
+        <div>
+          <dt>Toujours conformes PR-14</dt>
+          <dd>{data.readiness.passengers.currentReady}</dd>
+        </div>
+        <div>
+          <dt>Manifeste courant</dt>
+          <dd>
+            {data.readiness.manifest
+              ? `${data.readiness.manifest.reference} · v${data.readiness.manifest.version}`
+              : 'Absent'}
+          </dd>
+        </div>
+        <div>
+          <dt>Politique permis</dt>
+          <dd>
+            {data.readiness.permitPolicy
+              ? `v${data.readiness.permitPolicy.version} · ${data.readiness.permitPolicy.requirementCount} exigence(s)`
+              : 'Non publiée'}
+          </dd>
+        </div>
       </dl>
 
       {data.readiness.permitPolicy?.requirements.length ? (
         <div className="et-table-wrap">
-          <table data-testid="departure-permit-requirements">
+          <table className="et-table" data-testid="departure-permit-requirements">
+            <caption>Exigences explicites de la politique publiée</caption>
             <thead>
               <tr>
-                <th>#</th>
-                <th>Type</th>
-                <th>Périmètre</th>
-                <th>Résultat</th>
-                <th>Permis utilisé</th>
+                <th scope="col">#</th>
+                <th scope="col">Type</th>
+                <th scope="col">Périmètre</th>
+                <th scope="col">Résultat</th>
+                <th scope="col">Permis utilisé</th>
               </tr>
             </thead>
             <tbody>
@@ -173,7 +274,11 @@ function ReadinessPanel({ data }: { data: DepartureReadinessResponse }) {
                     {SCOPE_LABELS[requirement.scopeType]}
                     {requirement.countryIso2 ? ` ${requirement.countryIso2}` : ''}
                   </td>
-                  <td>{requirement.satisfied ? 'Satisfaite' : 'Manquante'}</td>
+                  <td>
+                    <OpsStatusBadge tone={requirement.satisfied ? 'success' : 'danger'}>
+                      {requirement.satisfied ? 'Satisfaite' : 'Manquante'}
+                    </OpsStatusBadge>
+                  </td>
                   <td className="et-code">{requirement.permitReference ?? '—'}</td>
                 </tr>
               ))}
@@ -184,20 +289,28 @@ function ReadinessPanel({ data }: { data: DepartureReadinessResponse }) {
 
       <h3>Autorisation de départ</h3>
       {data.latestAuthorization ? (
-        <dl className="et-booking-admin-summary">
-          <dt>Référence</dt>
-          <dd className="et-code">{data.latestAuthorization.reference}</dd>
-          <dt>Version</dt>
-          <dd>{data.latestAuthorization.version}</dd>
-          <dt>Créée le</dt>
-          <dd>{formatAt(data.latestAuthorization.authorizedAt)}</dd>
-          <dt>Correspond aux faits actuels</dt>
-          <dd>
-            {data.latestAuthorization.current ? 'Oui' : 'Non — nouvelle autorisation requise'}
-          </dd>
+        <dl className="ops-ground-facts">
+          <div>
+            <dt>Référence</dt>
+            <dd className="et-code">{data.latestAuthorization.reference}</dd>
+          </div>
+          <div>
+            <dt>Version</dt>
+            <dd>{data.latestAuthorization.version}</dd>
+          </div>
+          <div>
+            <dt>Créée le</dt>
+            <dd>{formatAt(data.latestAuthorization.authorizedAt)}</dd>
+          </div>
+          <div>
+            <dt>Correspond aux faits actuels</dt>
+            <dd>
+              {data.latestAuthorization.current ? 'Oui' : 'Non — nouvelle autorisation requise'}
+            </dd>
+          </div>
         </dl>
       ) : (
-        <p>Aucune autorisation de départ n’a encore été créée.</p>
+        <p className="ops-ground-form__hint">Aucune autorisation de départ n’a encore été créée.</p>
       )}
     </section>
   );
@@ -220,15 +333,28 @@ function PolicyEditor({
   const add = () =>
     setRequirements((current) => [...current, { permitType: '', scopeType: 'TRIP' }]);
   return (
-    <section className="et-network-panel" aria-labelledby="departure-policy-title">
-      <h2 id="departure-policy-title">Politique explicite de permis</h2>
-      <p>
-        L’absence de politique bloque le départ. Publier cette liste vide signifie explicitement «
-        aucun permis opérationnel requis » pour ce voyage. Aucune règle juridique n’est déduite par
+    <section
+      className="ops-operations-section ops-ground-detail"
+      aria-labelledby="departure-policy-title"
+    >
+      <div>
+        <p className="ops-operations-section-kicker">Gate permis opérationnels</p>
+        <h2 id="departure-policy-title">Politique explicite de permis</h2>
+      </div>
+      <p className="ops-ground-guardrail">
+        L’absence de politique bloque le départ. Publier une liste vide signifie explicitement :
+        aucun permis opérationnel requis pour ce voyage. Aucune règle juridique n’est déduite par
         l’application.
       </p>
+      {requirements.length === 0 ? (
+        <p className="ops-ground-form__hint">
+          Aucune exigence saisie : la publication déclarera qu’aucun permis opérationnel n’est
+          requis.
+        </p>
+      ) : null}
       {requirements.map((requirement, index) => (
-        <div className="et-form et-network-form" key={index}>
+        <div className="et-form ops-ground-form ops-ground-requirement" key={index}>
+          <p className="ops-operations-section-kicker">Exigence {index + 1}</p>
           <label className="et-field">
             Type de permis
             <input
@@ -397,13 +523,29 @@ export function DepartureAdmin() {
     }
   };
 
+  const passedGates = data?.readiness.gates.filter((gate) => gate.status === 'PASS').length ?? 0;
+  const hasDispatchAction = data
+    ? ((canAuthorize || canManage) && data.trip.status === 'SCHEDULED') ||
+      (canManage && data.trip.status === 'IN_PROGRESS')
+    : false;
+
   return (
-    <div className="et-network" data-testid="departure-workspace">
-      <p>
-        La readiness est recalculée par le Core API à partir des faits actuels. L’interface ne peut
-        ni forcer un gate, ni ignorer un blocker, ni transformer un permis intrinsèquement valide en
-        autorisation de départ.
-      </p>
+    <div
+      className="et-network ops-operations-workspace ops-ground-workspace ops-departure-workspace"
+      data-testid="departure-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Départ / Dispatch</p>
+          <h2>Readiness et dispatch du voyage</h2>
+          <p>
+            La readiness est recalculée par le Core API à partir des faits actuels. L’interface ne
+            peut ni forcer un gate, ni ignorer un blocker, ni transformer un permis intrinsèquement
+            valide en autorisation de départ.
+          </p>
+        </div>
+      </div>
+      <DispatchSequence data={data} />
       <FormAlert message={error} />
       {notice ? (
         <FormStatus>
@@ -411,10 +553,11 @@ export function DepartureAdmin() {
         </FormStatus>
       ) : null}
       <form
-        className="et-form et-network-form"
+        className="et-form et-network-form ops-ground-panel ops-ground-scan"
         aria-label="Ouvrir le dispatch d’un voyage"
         onSubmit={search}
       >
+        <p className="ops-operations-section-kicker">Voyage</p>
         <TextField
           label="Référence du voyage"
           name="departureTripReference"
@@ -440,6 +583,55 @@ export function DepartureAdmin() {
         </div>
       </form>
 
+      {data ? (
+        <section
+          className="ops-operations-kpis"
+          aria-label={`Indicateurs de dispatch ${data.trip.reference}`}
+        >
+          <OpsKpiCard
+            label="Gates OK"
+            value={`${passedGates} / ${data.readiness.gates.length}`}
+            helper="Calculées par le serveur"
+            icon="check"
+            tone={passedGates === data.readiness.gates.length ? 'success' : 'danger'}
+          />
+          <OpsKpiCard
+            label="Passagers embarqués"
+            value={`${data.readiness.passengers.boarded} / ${data.readiness.passengers.total}`}
+            helper="Parmi les passagers confirmés"
+            icon="users"
+            tone={
+              data.readiness.passengers.boarded === data.readiness.passengers.total
+                ? 'info'
+                : 'warning'
+            }
+          />
+          <OpsKpiCard
+            label="Manifeste"
+            value={data.readiness.manifest ? `v${data.readiness.manifest.version}` : '—'}
+            helper={data.readiness.manifest ? 'Dernière version générée' : 'Aucun manifeste généré'}
+            icon="manifest"
+            tone={data.readiness.manifest ? 'info' : 'warning'}
+          />
+          <OpsKpiCard
+            label="Politique de permis"
+            value={data.readiness.permitPolicy ? `v${data.readiness.permitPolicy.version}` : '—'}
+            helper={
+              data.readiness.permitPolicy
+                ? `${data.readiness.permitPolicy.requirementCount} exigence(s) explicite(s)`
+                : 'Non publiée : le départ reste bloqué'
+            }
+            icon="permit"
+            tone={data.readiness.permitPolicy ? 'info' : 'warning'}
+          />
+        </section>
+      ) : (
+        <OpsEmptyState
+          title="Aucun voyage ouvert"
+          description="Saisissez la référence d’un voyage pour recalculer sa readiness de départ."
+        />
+      )}
+
       {data ? <ReadinessPanel data={data} /> : null}
 
       {data && canManage && data.trip.status === 'SCHEDULED' ? (
@@ -447,8 +639,19 @@ export function DepartureAdmin() {
       ) : null}
 
       {data ? (
-        <section className="et-network-panel" aria-labelledby="departure-actions-title">
-          <h2 id="departure-actions-title">Actions de dispatch</h2>
+        <section
+          className="ops-operations-section ops-ground-detail"
+          aria-labelledby="departure-actions-title"
+        >
+          <div>
+            <p className="ops-operations-section-kicker">Décisions tracées</p>
+            <h2 id="departure-actions-title">Actions de dispatch</h2>
+          </div>
+          <p className="ops-ground-guardrail">
+            Chaque action est revalidée par le serveur au moment de l’appel ; aucune ne contourne un
+            blocage. L’autorisation exige une readiness complète, le départ réel exige une
+            autorisation toujours valable pour les faits actuels.
+          </p>
           <div className="et-actions">
             {canAuthorize && data.trip.status === 'SCHEDULED' ? (
               <button
@@ -498,6 +701,12 @@ export function DepartureAdmin() {
               </button>
             ) : null}
           </div>
+          {hasDispatchAction ? null : (
+            <p className="ops-ground-form__hint">
+              Aucune action de dispatch n’est disponible pour l’état actuel du voyage ou pour vos
+              permissions.
+            </p>
+          )}
         </section>
       ) : null}
     </div>
