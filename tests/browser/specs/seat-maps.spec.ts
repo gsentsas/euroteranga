@@ -163,7 +163,7 @@ test('ops seat maps: filters and keyboard drawer keep the catalogue accessible',
   const errors = trackPageErrors(page);
   const seed = seatMapSeed();
 
-  await signInAndEnroll(page, FIXTURES.seatMapAdmin.email);
+  await signInAndEnroll(page, FIXTURES.seatMapAccessibilityAdmin.email);
   await page.goto(appUrl(ops, '/seat-maps'));
   await expect(page.getByTestId('seat-maps-workspace')).toBeVisible();
 

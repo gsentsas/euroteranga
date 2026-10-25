@@ -79,6 +79,14 @@ export const FIXTURES = {
   get seatMapAdmin(): Fixture {
     return { realm: 'STAFF', email: runScoped('seat-map-admin'), roles: ['SUPER_ADMIN'] };
   },
+  /** Dedicated identity keeps the parallel seat-map accessibility scenario independent. */
+  get seatMapAccessibilityAdmin(): Fixture {
+    return {
+      realm: 'STAFF',
+      email: runScoped('seat-map-accessibility-admin'),
+      roles: ['SUPER_ADMIN'],
+    };
+  },
   /** seatmap.read only (no seatmap.manage). */
   get seatMapReader(): Fixture {
     return { realm: 'STAFF', email: runScoped('seat-map-reader'), roles: ['BOOKING_AGENT'] };

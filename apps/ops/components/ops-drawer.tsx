@@ -24,6 +24,11 @@ export function OpsDrawer({
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -38,7 +43,7 @@ export function OpsDrawer({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab' || !panelRef.current) return;
@@ -62,7 +67,7 @@ export function OpsDrawer({
       document.body.style.overflow = previousOverflow;
       window.requestAnimationFrame(() => returnFocusRef.current?.focus());
     };
-  }, [onClose, open]);
+  }, [open]);
 
   if (!open) return null;
 
