@@ -12,6 +12,7 @@ import type {
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 
 const TYPE_LABELS: Record<IncidentType, string> = {
@@ -53,6 +54,40 @@ const ACTION_LABELS: Record<IncidentActionType, string> = {
   PASSENGERS_INFORMED: 'Passagers informés',
   POSTMORTEM: 'Retour d’expérience',
 };
+
+function severityTone(
+  severity: IncidentSeverity,
+): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
+  switch (severity) {
+    case 'LOW':
+      return 'neutral';
+    case 'MEDIUM':
+      return 'info';
+    case 'HIGH':
+      return 'warning';
+    case 'CRITICAL':
+      return 'danger';
+  }
+}
+
+function incidentStatusTone(
+  status: IncidentStatus,
+): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
+  switch (status) {
+    case 'OPEN':
+      return 'info';
+    case 'ASSESSING':
+      return 'warning';
+    case 'ACTION_REQUIRED':
+      return 'danger';
+    case 'MITIGATING':
+      return 'warning';
+    case 'RESOLVED':
+      return 'success';
+    case 'CLOSED':
+      return 'neutral';
+  }
+}
 
 const TYPES = Object.keys(TYPE_LABELS) as IncidentType[];
 const SEVERITIES = Object.keys(SEVERITY_LABELS) as IncidentSeverity[];
@@ -235,8 +270,12 @@ function IncidentDetailPanel({
       <div className="et-actions">
         <h2 id={'incident-' + detail.reference}>Incident {detail.reference}</h2>
         <span className="et-tag">{TYPE_LABELS[detail.type]}</span>
-        <span className="et-tag">{SEVERITY_LABELS[detail.severity]}</span>
-        <span className="et-tag">{STATUS_LABELS[detail.status]}</span>
+        <OpsStatusBadge tone={severityTone(detail.severity)}>
+          {SEVERITY_LABELS[detail.severity]}
+        </OpsStatusBadge>
+        <OpsStatusBadge tone={incidentStatusTone(detail.status)}>
+          {STATUS_LABELS[detail.status]}
+        </OpsStatusBadge>
       </div>
 
       <FormAlert message={error} />
@@ -586,84 +625,141 @@ export function IncidentAdmin() {
     }
   };
 
+  const visibleItems = items ?? [];
+  const openCount = visibleItems.filter(
+    (item) => item.status !== 'RESOLVED' && item.status !== 'CLOSED',
+  ).length;
+  const criticalCount = visibleItems.filter((item) => item.severity === 'CRITICAL').length;
+  const actionRequiredCount = visibleItems.filter(
+    (item) => item.status === 'ACTION_REQUIRED',
+  ).length;
+
   return (
-    <div className="et-network" data-testid="incident-workspace">
-      <p>
-        Suivi factuel des incidents opérationnels du trajet. Les catégories frontière, douane ou
-        police ne constituent jamais une décision juridique, douanière ou d’immigration.
-      </p>
+    <div
+      className="et-network ops-operations-workspace ops-incidents-workspace"
+      data-testid="incident-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Gestion opérationnelle</p>
+          <h2>Incidents de trajet</h2>
+          <p>
+            Suivi factuel des incidents opérationnels du trajet. Les catégories frontière, douane ou
+            police ne constituent jamais une décision juridique, douanière ou d’immigration.
+          </p>
+        </div>
+      </div>
+
       <FormAlert message={error} />
       {notice ? <FormStatus>{notice}</FormStatus> : null}
 
-      <form
-        className="et-form et-network-form"
-        aria-label="Filtrer les incidents"
-        onSubmit={filter}
-      >
-        <div className="et-field">
-          <label htmlFor={statusId}>Statut</label>
-          <select
-            id={statusId}
-            className="et-select"
-            value={status}
-            onChange={(event) => setStatus(event.target.value as IncidentStatus | '')}
-          >
-            <option value="">Tous</option>
-            {STATUSES.map((value) => (
-              <option key={value} value={value}>
-                {STATUS_LABELS[value]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="et-field">
-          <label htmlFor={severityId}>Sévérité</label>
-          <select
-            id={severityId}
-            className="et-select"
-            value={severity}
-            onChange={(event) => setSeverity(event.target.value as IncidentSeverity | '')}
-          >
-            <option value="">Toutes</option>
-            {SEVERITIES.map((value) => (
-              <option key={value} value={value}>
-                {SEVERITY_LABELS[value]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="et-field">
-          <label htmlFor={typeId}>Type</label>
-          <select
-            id={typeId}
-            className="et-select"
-            value={type}
-            onChange={(event) => setType(event.target.value as IncidentType | '')}
-          >
-            <option value="">Tous</option>
-            {TYPES.map((value) => (
-              <option key={value} value={value}>
-                {TYPE_LABELS[value]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <TextField
-          label="Voyage"
-          name="tripFilter"
-          value={tripFilter}
-          onChange={setTripFilter}
-          autoComplete="off"
-          hint="Référence du voyage, par exemple ET-..."
-          maxLength={32}
-        />
-        <button className="et-button et-button--secondary" type="submit">
-          Appliquer
-        </button>
-      </form>
+      {items ? (
+        <section className="ops-operations-kpis" aria-label="Indicateurs des incidents">
+          <OpsKpiCard
+            label="Incidents affichés"
+            value={visibleItems.length}
+            helper={nextCursor ? 'Liste partielle · autres incidents disponibles' : 'Liste chargée'}
+            icon="alert"
+            tone="info"
+          />
+          <OpsKpiCard
+            label="En traitement"
+            value={openCount}
+            helper="Non résolus et non clôturés"
+            icon="review"
+            tone={openCount > 0 ? 'warning' : 'neutral'}
+          />
+          <OpsKpiCard
+            label="Action requise"
+            value={actionRequiredCount}
+            helper="Intervention opérationnelle attendue"
+            icon="dispatch"
+            tone={actionRequiredCount > 0 ? 'danger' : 'neutral'}
+          />
+          <OpsKpiCard
+            label="Critiques"
+            value={criticalCount}
+            helper="Sévérité critique"
+            icon="shield"
+            tone={criticalCount > 0 ? 'danger' : 'neutral'}
+          />
+        </section>
+      ) : null}
+
+      <div className="ops-incidents-filter-panel">
+        <form
+          className="et-form et-network-form"
+          aria-label="Filtrer les incidents"
+          onSubmit={filter}
+        >
+          <div className="et-field">
+            <label htmlFor={statusId}>Statut</label>
+            <select
+              id={statusId}
+              className="et-select"
+              value={status}
+              onChange={(event) => setStatus(event.target.value as IncidentStatus | '')}
+            >
+              <option value="">Tous</option>
+              {STATUSES.map((value) => (
+                <option key={value} value={value}>
+                  {STATUS_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="et-field">
+            <label htmlFor={severityId}>Sévérité</label>
+            <select
+              id={severityId}
+              className="et-select"
+              value={severity}
+              onChange={(event) => setSeverity(event.target.value as IncidentSeverity | '')}
+            >
+              <option value="">Toutes</option>
+              {SEVERITIES.map((value) => (
+                <option key={value} value={value}>
+                  {SEVERITY_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="et-field">
+            <label htmlFor={typeId}>Type</label>
+            <select
+              id={typeId}
+              className="et-select"
+              value={type}
+              onChange={(event) => setType(event.target.value as IncidentType | '')}
+            >
+              <option value="">Tous</option>
+              {TYPES.map((value) => (
+                <option key={value} value={value}>
+                  {TYPE_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <TextField
+            label="Voyage"
+            name="tripFilter"
+            value={tripFilter}
+            onChange={setTripFilter}
+            autoComplete="off"
+            hint="Référence du voyage, par exemple ET-..."
+            maxLength={32}
+          />
+          <button className="et-button et-button--secondary" type="submit">
+            Appliquer
+          </button>
+        </form>
+      </div>
 
       {canManage ? (
-        <section className="et-network-panel" aria-labelledby="incident-open-title">
+        <section
+          className="et-network-panel ops-incidents-open-panel"
+          aria-labelledby="incident-open-title"
+        >
           <h2 id="incident-open-title">Ouvrir un incident</h2>
           <form className="et-form et-network-form" onSubmit={open}>
             <TextField
@@ -742,65 +838,86 @@ export function IncidentAdmin() {
         </section>
       ) : null}
 
-      <div className="et-table-wrap">
-        <table data-testid="incident-list">
-          <caption>Incidents opérationnels</caption>
-          <thead>
-            <tr>
-              <th>Référence</th>
-              <th>Voyage</th>
-              <th>Type</th>
-              <th>Sévérité</th>
-              <th>Statut</th>
-              <th>Responsable</th>
-              <th>Ouvert le</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items === null ? (
+      <section
+        className="ops-operations-section ops-operations-section--primary"
+        aria-labelledby="incident-list-title"
+      >
+        <div className="et-actions">
+          <div>
+            <p className="ops-operations-section-kicker">Registre opérationnel</p>
+            <h2 id="incident-list-title">Incidents</h2>
+          </div>
+        </div>
+        <div className="et-table-wrap">
+          <table data-testid="incident-list">
+            <caption>Incidents opérationnels</caption>
+            <thead>
               <tr>
-                <td colSpan={8}>Chargement…</td>
+                <th>Référence</th>
+                <th>Voyage</th>
+                <th>Type</th>
+                <th>Sévérité</th>
+                <th>Statut</th>
+                <th>Responsable</th>
+                <th>Ouvert le</th>
+                <th>Action</th>
               </tr>
-            ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={8}>Aucun incident.</td>
-              </tr>
-            ) : (
-              items.map((item) => (
-                <tr key={item.id}>
-                  <td className="et-code">{item.reference}</td>
-                  <td className="et-code">{item.trip.reference}</td>
-                  <td>{TYPE_LABELS[item.type]}</td>
-                  <td>{SEVERITY_LABELS[item.severity]}</td>
-                  <td>{STATUS_LABELS[item.status]}</td>
-                  <td>{owners.find((owner) => owner.id === item.ownerIdentityId)?.email ?? '—'}</td>
-                  <td>{formatAt(item.openedAt)}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="et-button et-button--secondary"
-                      onClick={() => void select(item.reference)}
-                    >
-                      Ouvrir
-                    </button>
-                  </td>
+            </thead>
+            <tbody>
+              {items === null ? (
+                <tr>
+                  <td colSpan={8}>Chargement…</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={8}>Aucun incident.</td>
+                </tr>
+              ) : (
+                items.map((item) => (
+                  <tr key={item.id}>
+                    <td className="et-code">{item.reference}</td>
+                    <td className="et-code">{item.trip.reference}</td>
+                    <td>{TYPE_LABELS[item.type]}</td>
+                    <td>
+                      <OpsStatusBadge tone={severityTone(item.severity)}>
+                        {SEVERITY_LABELS[item.severity]}
+                      </OpsStatusBadge>
+                    </td>
+                    <td>
+                      <OpsStatusBadge tone={incidentStatusTone(item.status)}>
+                        {STATUS_LABELS[item.status]}
+                      </OpsStatusBadge>
+                    </td>
+                    <td>
+                      {owners.find((owner) => owner.id === item.ownerIdentityId)?.email ?? '—'}
+                    </td>
+                    <td>{formatAt(item.openedAt)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="et-button et-button--secondary"
+                        onClick={() => void select(item.reference)}
+                      >
+                        Ouvrir
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
-      {nextCursor ? (
-        <button
-          type="button"
-          className="et-button et-button--secondary"
-          onClick={() => void load(nextCursor)}
-        >
-          Charger la suite
-        </button>
-      ) : null}
+        {nextCursor ? (
+          <button
+            type="button"
+            className="et-button et-button--secondary"
+            onClick={() => void load(nextCursor)}
+          >
+            Charger la suite
+          </button>
+        ) : null}
+      </section>
 
       {detail ? (
         <IncidentDetailPanel
