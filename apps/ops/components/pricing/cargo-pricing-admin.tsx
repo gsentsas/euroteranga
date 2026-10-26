@@ -18,6 +18,7 @@ import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
 import { OpsConfirmSubmit } from '../ops-confirm-submit';
+import { OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 
 type Run = ReturnType<typeof useAdminFeedback>['run'];
@@ -989,7 +990,7 @@ export function CargoPricingAdmin() {
 
   return (
     <section
-      className="et-network"
+      className="et-network ops-pricing-domain ops-cargo-pricing-workspace"
       data-testid="cargo-pricing-workspace"
       aria-labelledby="cargo-pricing-title"
     >
@@ -1011,7 +1012,7 @@ export function CargoPricingAdmin() {
         />
       ) : null}
 
-      <div className="et-actions" aria-label="Filtres des règles fret">
+      <div className="et-actions ops-pricing-filters" aria-label="Filtres des règles fret">
         <label>
           Direction{' '}
           <select
@@ -1066,13 +1067,20 @@ export function CargoPricingAdmin() {
             {items.map((rule) => {
               const active = rule.versions.find((version) => version.status === 'ACTIVE');
               return (
-                <tr key={rule.id}>
+                <tr
+                  key={rule.id}
+                  className={selectedId === rule.id ? 'ops-table-row--selected' : undefined}
+                >
                   <th scope="row">
                     <span className="et-tag">{rule.code}</span> {rule.name}
                   </th>
                   <td>{DIRECTION_LABELS[rule.direction]}</td>
                   <td>{AUDIENCE_LABELS[rule.audience]}</td>
-                  <td>{active ? `v${active.version}` : 'Aucune'}</td>
+                  <td>
+                    <OpsStatusBadge tone={active ? 'success' : 'neutral'}>
+                      {active ? `v${active.version}` : 'Aucune'}
+                    </OpsStatusBadge>
+                  </td>
                   <td>
                     <button
                       type="button"

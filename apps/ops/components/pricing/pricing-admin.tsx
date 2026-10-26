@@ -5,6 +5,7 @@ import { TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 import { FareDraftEditor, FareEntriesTable } from './fare-editor';
 import { FARE_VERSION_STATUS_LABELS, faresLabel } from './pricing-format';
@@ -347,25 +348,80 @@ export function PricingAdmin() {
 
   if (!tables) return <p role="status">Chargement des grilles tarifaires…</p>;
 
+  const activeTableCount = tables.filter((table) => table.active).length;
+  const publishedTableCount = tables.filter((table) =>
+    table.versions.some((version) => version.status === 'PUBLISHED'),
+  ).length;
+  const currencyCount = new Set(
+    tables.map((table) => `${table.currencyCode}:${table.currencyMinorUnit}`),
+  ).size;
+
   return (
-    <div className="et-network" data-testid="pricing-workspace">
-      <p>
-        Une grille tarifaire fixe le tarif de base d’un trajet entre deux arrêts d’une version de
-        route, en unités mineures exactes d’une devise. Ses versions publiées sont historiques et
-        immuables. Aucune réservation, réduction ni paiement n’est géré ici.
-      </p>
+    <div
+      className="et-network ops-operations-workspace ops-pricing-workspace"
+      data-testid="pricing-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Politique commerciale</p>
+          <h2>Tarification voyageurs</h2>
+          <p>
+            Une grille tarifaire fixe le tarif de base d’un trajet entre deux arrêts d’une version
+            de route, en unités mineures exactes d’une devise. Ses versions publiées sont
+            historiques et immuables. Aucune réservation, réduction ni paiement n’est géré ici.
+          </p>
+        </div>
+      </div>
+
       {feedback}
-      {canManage ? (
-        <CreateFareTableForm
-          routes={routes}
-          run={run}
-          busy={busy}
-          onCreated={(id) => {
-            void load().then(() => setSelectedId(id));
-          }}
+
+      <section className="ops-operations-kpis" aria-label="Indicateurs de tarification">
+        <OpsKpiCard
+          label="Grilles affichées"
+          value={tables.length}
+          helper={nextCursor ? 'Liste partielle · autres grilles disponibles' : 'Liste chargée'}
+          icon="pricing"
+          tone="info"
         />
+        <OpsKpiCard
+          label="Actives"
+          value={activeTableCount}
+          helper="Grilles actuellement activées"
+          icon="check"
+          tone="success"
+        />
+        <OpsKpiCard
+          label="Publiées"
+          value={publishedTableCount}
+          helper="Avec une version publiée"
+          icon="audit"
+          tone="info"
+        />
+        <OpsKpiCard
+          label="Devises"
+          value={currencyCount}
+          helper="Toujours traitées séparément"
+          icon="finance"
+          tone="neutral"
+        />
+      </section>
+      {canManage ? (
+        <div className="ops-pricing-create-panel">
+          <CreateFareTableForm
+            routes={routes}
+            run={run}
+            busy={busy}
+            onCreated={(id) => {
+              void load().then(() => setSelectedId(id));
+            }}
+          />
+        </div>
       ) : null}
-      <section aria-labelledby="fare-tables-title">
+
+      <section
+        className="ops-operations-section ops-operations-section--primary"
+        aria-labelledby="fare-tables-title"
+      >
         <h2 id="fare-tables-title">Grilles</h2>
         <div className="et-table-wrap">
           <table className="et-table">
@@ -384,7 +440,10 @@ export function PricingAdmin() {
               {tables.map((table) => {
                 const published = table.versions.find((version) => version.status === 'PUBLISHED');
                 return (
-                  <tr key={table.id}>
+                  <tr
+                    key={table.id}
+                    className={selectedId === table.id ? 'ops-table-row--selected' : undefined}
+                  >
                     <th scope="row">
                       <span className="et-tag">{table.code}</span> {table.name}
                     </th>
@@ -395,7 +454,11 @@ export function PricingAdmin() {
                         ? `v${published.version} — ${faresLabel(published.entryCount)}`
                         : '—'}
                     </td>
-                    <td>{table.active ? 'Active' : 'Désactivée'}</td>
+                    <td>
+                      <OpsStatusBadge tone={table.active ? 'success' : 'neutral'}>
+                        {table.active ? 'Active' : 'Désactivée'}
+                      </OpsStatusBadge>
+                    </td>
                     <td>
                       <button
                         type="button"

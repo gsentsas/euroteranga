@@ -12,6 +12,7 @@ import { auth } from '../../lib/auth';
 import { OpsConfirmSubmit } from '../ops-confirm-submit';
 import { OpsEmptyState, OpsErrorState, OpsLoadingState } from '../ops-data-state';
 import { OpsDetailRegion } from '../ops-detail-region';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 import { BOOKING_STATUS_LABELS, formatInstant, PAYMENT_STATUS_LABELS } from './payment-format';
 
@@ -19,6 +20,21 @@ const EVENT_LABELS: Record<AdminPaymentDetail['events'][number]['type'], string>
   PAYMENT_SUCCEEDED: 'Succès signalé par le prestataire',
   PAYMENT_FAILED: 'Échec signalé par le prestataire',
 };
+
+function paymentStatusTone(
+  status: PaymentStatus,
+): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
+  switch (status) {
+    case 'PENDING':
+      return 'warning';
+    case 'SUCCEEDED':
+      return 'success';
+    case 'FAILED':
+      return 'danger';
+    case 'CANCELLED':
+      return 'neutral';
+  }
+}
 
 function PaymentDetail({
   payment,
@@ -45,7 +61,9 @@ function PaymentDetail({
     >
       <div className="et-actions">
         <h2 id={`admin-payment-${payment.id}`}>Paiement {payment.reference}</h2>
-        <span className="et-tag">{PAYMENT_STATUS_LABELS[payment.status]}</span>
+        <OpsStatusBadge tone={paymentStatusTone(payment.status)}>
+          {PAYMENT_STATUS_LABELS[payment.status]}
+        </OpsStatusBadge>
       </div>
       <dl className="et-booking-admin-summary">
         <dt>Réservation</dt>
@@ -201,21 +219,72 @@ export function PaymentsAdmin() {
     }
   };
 
+  const visiblePayments = payments ?? [];
+  const pendingCount = visiblePayments.filter((payment) => payment.status === 'PENDING').length;
+  const succeededCount = visiblePayments.filter((payment) => payment.status === 'SUCCEEDED').length;
+  const failedOrCancelledCount = visiblePayments.filter(
+    (payment) => payment.status === 'FAILED' || payment.status === 'CANCELLED',
+  ).length;
+
   return (
-    <div className="et-network" data-testid="payments-workspace">
-      <p>
-        Consultez les tentatives de paiement des réservations. Le succès d’un paiement vient
-        uniquement du prestataire de paiement (environnement de test SANDBOX dans cette version) :
-        aucune action ne permet de marquer un paiement comme réussi.
-      </p>
+    <div
+      className="et-network ops-operations-workspace ops-payments-workspace"
+      data-testid="payments-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Encaissement & prestataires</p>
+          <h2>Suivi des paiements</h2>
+          <p>
+            Consultez les tentatives de paiement des réservations. Le succès d’un paiement vient
+            uniquement du prestataire de paiement (environnement de test SANDBOX dans cette version)
+            : aucune action ne permet de marquer un paiement comme réussi.
+          </p>
+        </div>
+      </div>
+
       <FormAlert message={error} />
       {notice ? (
         <FormStatus>
           <p>{notice}</p>
         </FormStatus>
       ) : null}
+
+      {payments ? (
+        <section className="ops-operations-kpis" aria-label="Indicateurs des paiements">
+          <OpsKpiCard
+            label="Tentatives affichées"
+            value={visiblePayments.length}
+            helper={nextCursor ? 'Liste partielle · autres paiements disponibles' : 'Liste chargée'}
+            icon="payment"
+            tone="info"
+          />
+          <OpsKpiCard
+            label="En attente"
+            value={pendingCount}
+            helper="Confirmation provider attendue"
+            icon="audit"
+            tone={pendingCount > 0 ? 'warning' : 'neutral'}
+          />
+          <OpsKpiCard
+            label="Réussies"
+            value={succeededCount}
+            helper="Succès reçus du prestataire"
+            icon="check"
+            tone="success"
+          />
+          <OpsKpiCard
+            label="Échecs / annulées"
+            value={failedOrCancelledCount}
+            helper="Tentatives non abouties"
+            icon="alert"
+            tone={failedOrCancelledCount > 0 ? 'danger' : 'neutral'}
+          />
+        </section>
+      ) : null}
+
       <form
-        className="et-form et-network-form"
+        className="et-form et-network-form ops-payments-filter"
         aria-label="Filtrer les paiements"
         onSubmit={(event) => {
           event.preventDefault();
@@ -266,8 +335,16 @@ export function PaymentsAdmin() {
         </button>
       </form>
 
-      <section aria-labelledby="admin-payments-title">
-        <h2 id="admin-payments-title">Paiements</h2>
+      <section
+        className="ops-operations-section ops-operations-section--primary"
+        aria-labelledby="admin-payments-title"
+      >
+        <div className="et-actions">
+          <div>
+            <p className="ops-operations-section-kicker">Journal des tentatives</p>
+            <h2 id="admin-payments-title">Paiements</h2>
+          </div>
+        </div>
         {!payments && !loadError ? <OpsLoadingState title="Chargement des paiements" /> : null}
         {!payments && loadError ? (
           <OpsErrorState
@@ -302,7 +379,11 @@ export function PaymentsAdmin() {
                       {payment.reference}
                     </th>
                     <td className="et-code">{payment.booking.reference}</td>
-                    <td>{PAYMENT_STATUS_LABELS[payment.status]}</td>
+                    <td>
+                      <OpsStatusBadge tone={paymentStatusTone(payment.status)}>
+                        {PAYMENT_STATUS_LABELS[payment.status]}
+                      </OpsStatusBadge>
+                    </td>
                     <td>
                       {formatMoney(
                         payment.amountMinor,

@@ -10,6 +10,7 @@ import type {
 import { FormAlert, FormStatus } from '@euroteranga/ui';
 import { useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 import { ProfitabilityPanel } from './profitability-panel';
 
@@ -167,7 +168,7 @@ function Summary({ summary }: { summary: FinanceTripSummary }) {
     <section className="et-network-panel" aria-labelledby="finance-summary-title">
       <div className="et-actions">
         <h2 id="finance-summary-title">Contribution du voyage {summary.trip.reference}</h2>
-        <span className="et-tag">{summary.trip.status}</span>
+        <OpsStatusBadge tone="info">{summary.trip.status}</OpsStatusBadge>
       </div>
       <p>
         Les devises restent séparées. Aucune conversion de change n’est appliquée par EURO TERANGA.
@@ -775,11 +776,22 @@ export function FinanceAdmin() {
   };
 
   return (
-    <div className="et-network" data-testid="finance-workspace">
-      <p>
-        Finance opérationnelle par voyage. Les paiements réussis restent la source des revenus
-        billets. Les règlements de dépenses ne sont jamais comptés une seconde fois dans la marge.
-      </p>
+    <div
+      className="et-network ops-operations-workspace ops-finance-workspace"
+      data-testid="finance-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Pilotage financier</p>
+          <h2>Finance opérationnelle</h2>
+          <p>
+            Finance opérationnelle par voyage. Les paiements réussis restent la source des revenus
+            billets. Les règlements de dépenses ne sont jamais comptés une seconde fois dans la
+            marge.
+          </p>
+        </div>
+      </div>
+
       <FormAlert message={error} />
       {notice ? (
         <FormStatus>
@@ -788,7 +800,7 @@ export function FinanceAdmin() {
       ) : null}
 
       <form
-        className="et-form et-network-form"
+        className="et-form et-network-form ops-finance-search"
         aria-label="Charger la finance d’un voyage"
         onSubmit={search}
       >
@@ -810,13 +822,44 @@ export function FinanceAdmin() {
 
       {summary ? (
         <>
+          <section className="ops-operations-kpis" aria-label="Indicateurs finance">
+            <OpsKpiCard
+              label="Devises"
+              value={summary.currencies.length}
+              helper="Jamais agrégées entre elles"
+              icon="finance"
+              tone="info"
+            />
+            <OpsKpiCard
+              label="Paiements réussis"
+              value={summary.payments.length}
+              helper="Source des revenus billets"
+              icon="payment"
+              tone="success"
+            />
+            <OpsKpiCard
+              label="Recettes additionnelles"
+              value={summary.revenues.length}
+              helper="Écritures du voyage"
+              icon="chart"
+              tone="info"
+            />
+            <OpsKpiCard
+              label="Dépenses"
+              value={summary.expenses.length}
+              helper="Écritures et règlements suivis"
+              icon="audit"
+              tone="neutral"
+            />
+          </section>
+
           <Summary summary={summary} />
           <ProfitabilityPanel
             key={activeReference}
             tripReference={activeReference}
             refreshKey={summary}
           />
-          <div className="et-actions">
+          <div className="et-actions ops-finance-export-actions">
             <button
               type="button"
               className="et-button et-button--secondary"
@@ -834,13 +877,16 @@ export function FinanceAdmin() {
           </div>
 
           {canManage ? (
-            <div className="et-network-grid">
+            <div className="et-network-grid ops-finance-entry-grid">
               <RevenueForm tripReference={activeReference} onSaved={() => load()} />
               <ExpenseForm tripReference={activeReference} onSaved={() => load()} />
             </div>
           ) : null}
 
-          <section className="et-network-panel" aria-labelledby="finance-payments-title">
+          <section
+            className="et-network-panel ops-finance-panel"
+            aria-labelledby="finance-payments-title"
+          >
             <h2 id="finance-payments-title">Billets et remboursements</h2>
             <div className="et-table-wrap">
               <table className="et-table">
@@ -906,7 +952,10 @@ export function FinanceAdmin() {
             </div>
           </section>
 
-          <section className="et-network-panel" aria-labelledby="finance-revenues-title">
+          <section
+            className="et-network-panel ops-finance-panel"
+            aria-labelledby="finance-revenues-title"
+          >
             <h2 id="finance-revenues-title">Recettes additionnelles</h2>
             <div className="et-table-wrap">
               <table className="et-table">
@@ -933,7 +982,11 @@ export function FinanceAdmin() {
                         )}
                       </td>
                       <td>{revenue.description}</td>
-                      <td>{revenue.status === 'ACTIVE' ? 'Active' : 'Annulée'}</td>
+                      <td>
+                        <OpsStatusBadge tone={revenue.status === 'ACTIVE' ? 'success' : 'neutral'}>
+                          {revenue.status === 'ACTIVE' ? 'Active' : 'Annulée'}
+                        </OpsStatusBadge>
+                      </td>
                       {canManage ? (
                         <td>
                           {revenue.status === 'ACTIVE' ? (
@@ -954,10 +1007,13 @@ export function FinanceAdmin() {
             </div>
           </section>
 
-          <section className="et-network-panel" aria-labelledby="finance-expenses-title">
+          <section
+            className="et-network-panel ops-finance-panel"
+            aria-labelledby="finance-expenses-title"
+          >
             <h2 id="finance-expenses-title">Dépenses et règlements</h2>
             {summary.expenses.map((expense) => (
-              <article key={expense.id} className="et-network-panel">
+              <article key={expense.id} className="et-network-panel ops-finance-expense">
                 <div className="et-actions">
                   <h3>
                     {EXPENSE_LABELS[expense.type]} ·{' '}
@@ -973,15 +1029,20 @@ export function FinanceAdmin() {
                   {' · '}
                   {instant(expense.occurredAt)}
                 </p>
-                <p>
-                  État : {expense.status === 'ACTIVE' ? 'active' : 'annulée'} · règlements :{' '}
-                  {money(
-                    expense.payouts
-                      .reduce((total, payout) => total + BigInt(payout.amountMinor), 0n)
-                      .toString(),
-                    expense.currencyCode,
-                    expense.currencyMinorUnit,
-                  )}
+                <p className="ops-finance-expense-status">
+                  <OpsStatusBadge tone={expense.status === 'ACTIVE' ? 'success' : 'neutral'}>
+                    {expense.status === 'ACTIVE' ? 'Active' : 'Annulée'}
+                  </OpsStatusBadge>
+                  <span>
+                    Règlements :{' '}
+                    {money(
+                      expense.payouts
+                        .reduce((total, payout) => total + BigInt(payout.amountMinor), 0n)
+                        .toString(),
+                      expense.currencyCode,
+                      expense.currencyMinorUnit,
+                    )}
+                  </span>
                 </p>
                 {canManage && expense.status === 'ACTIVE' ? (
                   <>
