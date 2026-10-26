@@ -680,9 +680,10 @@ export function TripDetail({
   const costsLocked = data.costs.state === 'ready' && data.costs.data.status === 'LOCKED';
   const canCancel = canManage && trip.status !== 'CANCELLED';
 
-  // A different trip starts read-only.
+  // A different trip starts read-only and must not inherit one-shot editor requests.
   useEffect(() => {
     setEditing(null);
+    setEditTokens({ pricing: 0, costs: 0 });
     setCancelOpen(false);
   }, [trip.id]);
 
@@ -773,6 +774,15 @@ export function TripDetail({
     }
   });
   const selectedTab = visibleTabs.some((candidate) => candidate.id === tab) ? tab : 'apercu';
+
+  // Edit tokens are one-shot requests. Leaving their panel consumes them so remounting
+  // the tab never reopens an editor without a new explicit user action.
+  useEffect(() => {
+    setEditTokens((current) => ({
+      pricing: selectedTab === 'tarification' ? current.pricing : 0,
+      costs: selectedTab === 'couts' ? current.costs : 0,
+    }));
+  }, [selectedTab]);
 
   const editMenu: CockpitMenuItem[] = (Object.keys(EDIT_TARGET_LABELS) as TripEditTarget[])
     .filter(canEdit)
