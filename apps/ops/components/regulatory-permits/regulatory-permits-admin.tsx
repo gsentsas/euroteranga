@@ -11,6 +11,9 @@ import type {
 import { FormAlert, FormStatus } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsEmptyState, OpsLoadingState } from '../ops-data-state';
+import { OpsDetailRegion } from '../ops-detail-region';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 
 const STATUS_LABELS: Record<RegulatoryPermitLifecycleStatus, string> = {
@@ -26,6 +29,23 @@ const VALIDITY_LABELS = {
   EXPIRED: 'Expirée',
   REVOKED: 'Révoquée',
 } as const;
+
+type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+
+/** Never 'success': an active, intrinsically valid permit is not a departure decision. */
+const STATUS_TONES: Record<RegulatoryPermitLifecycleStatus, Tone> = {
+  DRAFT: 'neutral',
+  ACTIVE: 'info',
+  REVOKED: 'danger',
+};
+
+const VALIDITY_TONES: Record<keyof typeof VALIDITY_LABELS, Tone> = {
+  DRAFT: 'neutral',
+  NOT_YET_VALID: 'warning',
+  VALID: 'info',
+  EXPIRED: 'danger',
+  REVOKED: 'danger',
+};
 
 const dateTime = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -239,7 +259,7 @@ function PermitFields({
   const set = (field: keyof PermitFormValues, value: string) =>
     setValues({ ...values, [field]: value });
   return (
-    <>
+    <div className="et-network-adders">
       <label className="et-field">
         Type de permis
         <input
@@ -339,7 +359,7 @@ function PermitFields({
           onChange={(event) => set('notes', event.target.value)}
         />
       </label>
-    </>
+    </div>
   );
 }
 
@@ -373,11 +393,14 @@ function CreatePermit({
   };
   return (
     <form
-      className="et-form et-network-form"
+      className="et-form et-network-form ops-ground-panel"
       aria-label="Créer une autorisation réglementaire"
       onSubmit={submit}
     >
-      <h2>Créer une autorisation</h2>
+      <div>
+        <p className="ops-operations-section-kicker">Saisie en brouillon</p>
+        <h2>Créer une autorisation</h2>
+      </div>
       <PermitFields values={values} setValues={setValues} />
       <button type="submit" className="et-button" disabled={busy || pending}>
         Créer le brouillon
@@ -501,63 +524,102 @@ function Detail({
   };
 
   return (
-    <section className="et-network-panel" aria-labelledby="permit-detail-title">
-      <div className="et-actions">
-        <h2 id="permit-detail-title">Autorisation {permit.reference}</h2>
-        <span className="et-tag">{STATUS_LABELS[permit.status]}</span>
-        <span className="et-tag" data-testid="permit-validity">
-          {VALIDITY_LABELS[permit.validityState]}
-        </span>
+    <section className="et-network-panel ops-ground-detail" aria-labelledby="permit-detail-title">
+      <div className="et-actions ops-ground-detail__header">
+        <div>
+          <p className="ops-operations-section-kicker">
+            Fiche autorisation · révision {permit.revision}
+          </p>
+          <h2 id="permit-detail-title">Autorisation {permit.reference}</h2>
+        </div>
+        <div className="ops-ground-badges">
+          <OpsStatusBadge tone={STATUS_TONES[permit.status]}>
+            {STATUS_LABELS[permit.status]}
+          </OpsStatusBadge>
+          <span data-testid="permit-validity">
+            <OpsStatusBadge tone={VALIDITY_TONES[permit.validityState]}>
+              {VALIDITY_LABELS[permit.validityState]}
+            </OpsStatusBadge>
+          </span>
+        </div>
       </div>
-      <dl data-testid="permit-detail">
-        <dt>Type et intitulé</dt>
-        <dd>
-          {permit.permitType} — {permit.title}
-        </dd>
-        <dt>Autorité</dt>
-        <dd>{permit.issuingAuthority}</dd>
-        <dt>Référence de l’autorité</dt>
-        <dd>{permit.authorityReference ?? '—'}</dd>
-        <dt>Juridiction</dt>
-        <dd>
-          {permit.jurisdictionCountry
-            ? `${permit.jurisdictionCountry.iso2} — ${permit.jurisdictionCountry.name}`
-            : '—'}
-        </dd>
-        <dt>Périmètre</dt>
-        <dd>{scopeLabel(permit.scope)}</dd>
-        <dt>Période inclusive</dt>
-        <dd>
-          {permit.validFrom} → {permit.validUntil}
-        </dd>
-        <dt>État évalué par le serveur le</dt>
-        <dd>{permit.evaluatedOn}</dd>
-        <dt>Révision</dt>
-        <dd>{permit.revision}</dd>
-        <dt>Source</dt>
-        <dd>{permit.sourceUrl ?? '—'}</dd>
-        <dt>Notes</dt>
-        <dd>{permit.notes ?? '—'}</dd>
+      <p className="ops-ground-guardrail ops-ground-guardrail--strong">
+        Validité intrinsèque seulement : elle ne rend aucun voyage prêt et ne vaut pas autorisation
+        de départ.
+      </p>
+      <dl className="ops-ground-facts" data-testid="permit-detail">
+        <div>
+          <dt>Type et intitulé</dt>
+          <dd>
+            {permit.permitType} — {permit.title}
+          </dd>
+        </div>
+        <div>
+          <dt>Autorité</dt>
+          <dd>{permit.issuingAuthority}</dd>
+        </div>
+        <div>
+          <dt>Référence de l’autorité</dt>
+          <dd>{permit.authorityReference ?? '—'}</dd>
+        </div>
+        <div>
+          <dt>Juridiction</dt>
+          <dd>
+            {permit.jurisdictionCountry
+              ? `${permit.jurisdictionCountry.iso2} — ${permit.jurisdictionCountry.name}`
+              : '—'}
+          </dd>
+        </div>
+        <div>
+          <dt>Périmètre</dt>
+          <dd>{scopeLabel(permit.scope)}</dd>
+        </div>
+        <div>
+          <dt>Période inclusive</dt>
+          <dd>
+            {permit.validFrom} → {permit.validUntil}
+          </dd>
+        </div>
+        <div>
+          <dt>État évalué par le serveur le</dt>
+          <dd>{permit.evaluatedOn}</dd>
+        </div>
+        <div>
+          <dt>Révision</dt>
+          <dd>{permit.revision}</dd>
+        </div>
+        <div className="ops-ground-facts__wide">
+          <dt>Source</dt>
+          <dd>{permit.sourceUrl ?? '—'}</dd>
+        </div>
+        <div className="ops-ground-facts__wide">
+          <dt>Notes</dt>
+          <dd>{permit.notes ?? '—'}</dd>
+        </div>
         {permit.revocationReason ? (
-          <>
+          <div className="ops-ground-facts__wide">
             <dt>Motif de révocation</dt>
             <dd>{permit.revocationReason}</dd>
-          </>
+          </div>
         ) : null}
       </dl>
       <h3>Historique</h3>
-      <ol aria-label={`Historique de l’autorisation ${permit.reference}`}>
+      <ol
+        className="ops-ground-history"
+        aria-label={`Historique de l’autorisation ${permit.reference}`}
+      >
         {permit.history.map((entry) => (
           <li key={`${entry.occurredAt}-${entry.revision ?? ''}`}>
-            {dateTime.format(new Date(entry.occurredAt))} — {entry.action}
+            {dateTime.format(new Date(entry.occurredAt))} —{' '}
+            <span className="et-code">{entry.action}</span>
             {entry.reason ? ` — ${entry.reason}` : ''}
           </li>
         ))}
       </ol>
       {canManage && permit.status === 'DRAFT' ? (
-        <>
+        <div className="ops-ground-forms">
           <form
-            className="et-form et-network-form"
+            className="et-form ops-ground-form ops-ground-form--wide"
             aria-label={`Modifier l’autorisation ${permit.reference}`}
             onSubmit={update}
           >
@@ -567,19 +629,26 @@ function Detail({
               Enregistrer les modifications
             </button>
           </form>
-          <button
-            type="button"
-            className="et-button"
-            disabled={busy || pending}
-            onClick={() => void activate()}
-          >
-            Activer l’autorisation
-          </button>
-        </>
+          <div className="ops-ground-form ops-ground-form--wide">
+            <p className="ops-operations-section-kicker">Activation</p>
+            <p className="ops-ground-form__hint">
+              L’activation fige le brouillon ; la validité reste évaluée par le serveur sur la
+              période inclusive.
+            </p>
+            <button
+              type="button"
+              className="et-button"
+              disabled={busy || pending}
+              onClick={() => void activate()}
+            >
+              Activer l’autorisation
+            </button>
+          </div>
+        </div>
       ) : null}
       {canManage && permit.status === 'ACTIVE' ? (
         <div
-          className="et-form et-network-form"
+          className="et-form ops-ground-form"
           role="group"
           aria-label={`Révoquer l’autorisation ${permit.reference}`}
         >
@@ -661,14 +730,33 @@ export function RegulatoryPermitsAdmin() {
     await select(permit.reference);
   };
 
+  const visible = items ?? [];
+  const draftCount = visible.filter((permit) => permit.status === 'DRAFT').length;
+  const validCount = visible.filter((permit) => permit.validityState === 'VALID').length;
+  const closedCount = visible.filter(
+    (permit) => permit.validityState === 'EXPIRED' || permit.validityState === 'REVOKED',
+  ).length;
+
   return (
-    <div className="et-network" data-testid="regulatory-permit-workspace">
-      <p>
+    <div
+      className="et-network ops-operations-workspace ops-ground-workspace ops-permits-workspace"
+      data-testid="regulatory-permit-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Conformité réglementaire</p>
+          <h2>Registre des autorisations réglementaires</h2>
+          <p>
+            Autorisations saisies, activées puis révoquées avec un historique complet. La décision
+            de readiness et de dispatch appartient à PR-17.
+          </p>
+        </div>
+      </div>
+      <p className="ops-ground-guardrail ops-ground-guardrail--strong">
         <strong>
           La validité intrinsèque d’une autorisation ne signifie pas qu’un voyage est prêt ni
           autorisé à partir.
-        </strong>{' '}
-        La décision de readiness et de dispatch appartient à PR-17.
+        </strong>
       </p>
       <FormAlert message={error} />
       {notice ? (
@@ -676,6 +764,53 @@ export function RegulatoryPermitsAdmin() {
           <p>{notice}</p>
         </FormStatus>
       ) : null}
+
+      {items ? (
+        <section
+          className="ops-operations-kpis"
+          aria-label="Indicateurs des autorisations affichées"
+        >
+          <OpsKpiCard
+            label="Autorisations affichées"
+            value={visible.length}
+            helper={
+              nextCursor
+                ? 'Éléments chargés · liste partielle'
+                : 'Toutes les autorisations filtrées sont chargées'
+            }
+            icon="permit"
+            tone="info"
+          />
+          <OpsKpiCard
+            label="Brouillons"
+            value={draftCount}
+            helper="Non actifs, modifiables"
+            icon="document"
+            tone="neutral"
+          />
+          <OpsKpiCard
+            label="Valides intrinsèquement"
+            value={validCount}
+            helper="Ne vaut pas autorisation de départ"
+            icon="shield"
+            tone="info"
+          />
+          <OpsKpiCard
+            label="Expirées ou révoquées"
+            value={closedCount}
+            helper="Plus utilisables par la readiness"
+            icon="alert"
+            tone={closedCount > 0 ? 'warning' : 'neutral'}
+          />
+        </section>
+      ) : null}
+      {items && nextCursor ? (
+        <p className="ops-ground-partial" role="note">
+          Données partielles — d’autres éléments sont disponibles. Les indicateurs ne portent que
+          sur les {items.length} autorisations chargées.
+        </p>
+      ) : null}
+
       {canManage ? (
         <CreatePermit
           busy={busy}
@@ -684,7 +819,7 @@ export function RegulatoryPermitsAdmin() {
         />
       ) : null}
       <form
-        className="et-form et-network-form"
+        className="et-form et-network-form ops-ground-panel"
         aria-label="Filtrer les autorisations"
         onSubmit={(event) => {
           event.preventDefault();
@@ -693,56 +828,74 @@ export function RegulatoryPermitsAdmin() {
           setAppliedStatus(status);
         }}
       >
-        <label className="et-field" htmlFor={`${formId}-reference`}>
-          Référence
-          <input
-            id={`${formId}-reference`}
-            className="et-input"
-            value={reference}
-            onChange={(event) => setReference(event.target.value)}
-          />
-        </label>
-        <label className="et-field" htmlFor={`${formId}-status`}>
-          Lifecycle
-          <select
-            id={`${formId}-status`}
-            className="et-select"
-            value={status}
-            onChange={(event) => setStatus(event.target.value)}
-          >
-            <option value="">Tous</option>
-            <option value="DRAFT">Brouillon</option>
-            <option value="ACTIVE">Active</option>
-            <option value="REVOKED">Révoquée</option>
-          </select>
-        </label>
+        <p className="ops-operations-section-kicker">Filtres</p>
+        <div className="et-network-adders">
+          <label className="et-field" htmlFor={`${formId}-reference`}>
+            Référence
+            <input
+              id={`${formId}-reference`}
+              className="et-input"
+              value={reference}
+              onChange={(event) => setReference(event.target.value)}
+            />
+          </label>
+          <label className="et-field" htmlFor={`${formId}-status`}>
+            Lifecycle
+            <select
+              id={`${formId}-status`}
+              className="et-select"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+            >
+              <option value="">Tous</option>
+              <option value="DRAFT">Brouillon</option>
+              <option value="ACTIVE">Active</option>
+              <option value="REVOKED">Révoquée</option>
+            </select>
+          </label>
+        </div>
         <button type="submit" className="et-button">
           Appliquer les filtres
         </button>
       </form>
-      {!items ? (
-        <p role="status">Chargement des autorisations…</p>
-      ) : (
-        <section aria-labelledby="permit-list-title" className="et-network-panel">
-          <h2 id="permit-list-title">Autorisations</h2>
+      <section
+        aria-labelledby="permit-list-title"
+        className="ops-operations-section ops-operations-section--primary"
+      >
+        <div className="et-actions">
+          <div>
+            <p className="ops-operations-section-kicker">Registre</p>
+            <h2 id="permit-list-title">Autorisations</h2>
+          </div>
+        </div>
+        {!items && !error ? <OpsLoadingState title="Chargement des autorisations…" /> : null}
+        {items && items.length > 0 ? (
           <div className="et-table-wrap">
             <table className="et-table">
+              <caption>Autorisations et validité intrinsèque évaluée par le serveur</caption>
               <thead>
                 <tr>
-                  <th>Référence</th>
-                  <th>Type / intitulé</th>
-                  <th>Autorité</th>
-                  <th>Périmètre</th>
-                  <th>Période</th>
-                  <th>Lifecycle</th>
-                  <th>Validité intrinsèque</th>
-                  <th>Action</th>
+                  <th scope="col">Référence</th>
+                  <th scope="col">Type / intitulé</th>
+                  <th scope="col">Autorité</th>
+                  <th scope="col">Périmètre</th>
+                  <th scope="col">Période</th>
+                  <th scope="col">Lifecycle</th>
+                  <th scope="col">Validité intrinsèque</th>
+                  <th scope="col">Fiche</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((permit) => (
-                  <tr key={permit.reference}>
-                    <td className="et-code">{permit.reference}</td>
+                  <tr
+                    key={permit.reference}
+                    className={
+                      detail?.reference === permit.reference ? 'ops-table-row--selected' : undefined
+                    }
+                  >
+                    <th scope="row" className="et-code">
+                      {permit.reference}
+                    </th>
                     <td>
                       {permit.permitType}
                       <br />
@@ -753,12 +906,23 @@ export function RegulatoryPermitsAdmin() {
                     <td>
                       {permit.validFrom} → {permit.validUntil}
                     </td>
-                    <td>{STATUS_LABELS[permit.status]}</td>
-                    <td>{VALIDITY_LABELS[permit.validityState]}</td>
+                    <td>
+                      <OpsStatusBadge tone={STATUS_TONES[permit.status]}>
+                        {STATUS_LABELS[permit.status]}
+                      </OpsStatusBadge>
+                    </td>
+                    <td>
+                      <OpsStatusBadge tone={VALIDITY_TONES[permit.validityState]}>
+                        {VALIDITY_LABELS[permit.validityState]}
+                      </OpsStatusBadge>
+                    </td>
                     <td>
                       <button
                         type="button"
                         className="et-button et-button--secondary"
+                        aria-label={`Consulter l’autorisation ${permit.reference}`}
+                        aria-controls="permit-detail-panel"
+                        aria-expanded={detail?.reference === permit.reference}
                         onClick={() => void select(permit.reference)}
                       >
                         Consulter
@@ -766,33 +930,40 @@ export function RegulatoryPermitsAdmin() {
                     </td>
                   </tr>
                 ))}
-                {items.length === 0 ? (
-                  <tr>
-                    <td colSpan={8}>Aucune autorisation.</td>
-                  </tr>
-                ) : null}
               </tbody>
             </table>
           </div>
-          {nextCursor ? (
-            <button
-              type="button"
-              className="et-button et-button--secondary"
-              onClick={() => void load(nextCursor)}
-            >
-              Charger la suite
-            </button>
-          ) : null}
-        </section>
-      )}
+        ) : null}
+        {items?.length === 0 ? (
+          <OpsEmptyState
+            title="Aucune autorisation."
+            description="Aucune autorisation ne correspond aux filtres actuellement appliqués."
+          />
+        ) : null}
+        {nextCursor ? (
+          <button
+            type="button"
+            className="et-button et-button--secondary"
+            onClick={() => void load(nextCursor)}
+          >
+            Charger la suite
+          </button>
+        ) : null}
+      </section>
       {detail ? (
-        <Detail
-          permit={detail}
-          canManage={canManage}
-          busy={busy}
-          onChanged={changed}
-          setError={setError}
-        />
+        <OpsDetailRegion
+          id="permit-detail-panel"
+          focusKey={detail.reference}
+          onClose={() => setDetail(null)}
+        >
+          <Detail
+            permit={detail}
+            canManage={canManage}
+            busy={busy}
+            onChanged={changed}
+            setError={setError}
+          />
+        </OpsDetailRegion>
       ) : null}
     </div>
   );

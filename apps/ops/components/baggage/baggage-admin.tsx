@@ -12,6 +12,9 @@ import type {
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsEmptyState, OpsLoadingState } from '../ops-data-state';
+import { OpsDetailRegion } from '../ops-detail-region';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 
 const TYPE_LABELS: Record<BaggageType, string> = {
@@ -56,6 +59,27 @@ const OPERATIONAL_EVENTS: BaggageOperationalEventType[] = [
   'EXCEPTION_RESOLVED',
   'REMOVED',
 ];
+
+type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+
+/** Display tone only: the lifecycle itself is projected by the API from the event history. */
+const LIFECYCLE_TONES: Record<BaggageLifecycleStatus, Tone> = {
+  REGISTERED: 'neutral',
+  CHECKED_IN: 'info',
+  LOADED: 'info',
+  IN_TRANSIT: 'info',
+  ARRIVED: 'success',
+  DELIVERED: 'success',
+  REMOVED: 'neutral',
+};
+
+const EXCEPTION_TONES: Record<BaggageExceptionStatus, Tone> = {
+  MISSING: 'danger',
+  DAMAGED: 'danger',
+  HELD_BY_CUSTOMS: 'warning',
+};
+
+const IN_HANDLING: readonly BaggageLifecycleStatus[] = ['CHECKED_IN', 'LOADED', 'IN_TRANSIT'];
 
 const formatAt = (value: string) =>
   new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }).format(
@@ -159,79 +183,111 @@ function Detail({
 
   return (
     <section
-      className="et-network-panel"
+      className="et-network-panel ops-ground-detail"
       aria-labelledby={`baggage-${baggage.reference}`}
       data-testid="baggage-detail"
     >
-      <div className="et-actions">
-        <h2 id={`baggage-${baggage.reference}`}>Bagage {baggage.reference}</h2>
-        <span className="et-tag">{LIFECYCLE_LABELS[baggage.lifecycleStatus]}</span>
-        {baggage.exceptionStatus ? (
-          <span className="et-tag">{EXCEPTION_LABELS[baggage.exceptionStatus]}</span>
-        ) : null}
+      <div className="et-actions ops-ground-detail__header">
+        <div>
+          <p className="ops-operations-section-kicker">Fiche bagage</p>
+          <h2 id={`baggage-${baggage.reference}`}>Bagage {baggage.reference}</h2>
+        </div>
+        <div className="ops-ground-badges">
+          <OpsStatusBadge tone={LIFECYCLE_TONES[baggage.lifecycleStatus]} className="et-tag">
+            {LIFECYCLE_LABELS[baggage.lifecycleStatus]}
+          </OpsStatusBadge>
+          {baggage.exceptionStatus ? (
+            <OpsStatusBadge tone={EXCEPTION_TONES[baggage.exceptionStatus]} className="et-tag">
+              {EXCEPTION_LABELS[baggage.exceptionStatus]}
+            </OpsStatusBadge>
+          ) : null}
+        </div>
       </div>
-      <dl className="et-booking-admin-summary">
-        <dt>Voyageur</dt>
-        <dd>
-          {baggage.passenger.givenName} {baggage.passenger.familyName} ·{' '}
-          <span className="et-code">{baggage.passenger.reference}</span>
-        </dd>
-        <dt>Réservation</dt>
-        <dd className="et-code">{baggage.booking.reference}</dd>
-        <dt>Voyage</dt>
-        <dd>
-          <span className="et-code">{baggage.booking.trip.reference}</span> ·{' '}
-          {baggage.booking.trip.route.name}
-          {baggage.booking.trip.plannedDepartureAt
-            ? ` · départ ${formatAt(baggage.booking.trip.plannedDepartureAt)}`
-            : ''}
-        </dd>
-        <dt>Type</dt>
-        <dd>{TYPE_LABELS[baggage.type]}</dd>
-        <dt>Poids mesuré</dt>
-        <dd data-testid="baggage-weight">{formatWeight(baggage.measuredWeightKg)}</dd>
-        <dt>Franchise</dt>
-        <dd data-testid="baggage-allowance">
-          {baggage.allowance.policy ? (
-            <>
-              {baggage.allowance.policy.name} · version {baggage.allowance.policy.version} ·{' '}
-              {baggage.allowance.policy.includedPieces} pièce(s) de{' '}
-              {formatWeight(baggage.allowance.policy.includedWeightKgPerPiece)}
-              {' · '}rang du bagage {baggage.allowance.pieceOrdinal ?? '—'}
-            </>
-          ) : (
-            'Non configurée pour cette tarification historique'
-          )}
-        </dd>
-        <dt>Résultat commercial</dt>
-        <dd>{allowanceLabel(baggage)}</dd>
-        <dt>Code QR</dt>
-        <dd className="et-code">{baggage.qrPayload}</dd>
+      <dl className="ops-ground-facts">
+        <div>
+          <dt>Voyageur</dt>
+          <dd>
+            {baggage.passenger.givenName} {baggage.passenger.familyName} ·{' '}
+            <span className="et-code">{baggage.passenger.reference}</span>
+          </dd>
+        </div>
+        <div>
+          <dt>Réservation</dt>
+          <dd className="et-code">{baggage.booking.reference}</dd>
+        </div>
+        <div>
+          <dt>Voyage</dt>
+          <dd>
+            <span className="et-code">{baggage.booking.trip.reference}</span> ·{' '}
+            {baggage.booking.trip.route.name}
+            {baggage.booking.trip.plannedDepartureAt
+              ? ` · départ ${formatAt(baggage.booking.trip.plannedDepartureAt)}`
+              : ''}
+          </dd>
+        </div>
+        <div>
+          <dt>Type</dt>
+          <dd>{TYPE_LABELS[baggage.type]}</dd>
+        </div>
+        <div>
+          <dt>Poids mesuré</dt>
+          <dd data-testid="baggage-weight">{formatWeight(baggage.measuredWeightKg)}</dd>
+        </div>
+        <div>
+          <dt>Franchise</dt>
+          <dd data-testid="baggage-allowance">
+            {baggage.allowance.policy ? (
+              <>
+                {baggage.allowance.policy.name} · version {baggage.allowance.policy.version} ·{' '}
+                {baggage.allowance.policy.includedPieces} pièce(s) de{' '}
+                {formatWeight(baggage.allowance.policy.includedWeightKgPerPiece)}
+                {' · '}rang du bagage {baggage.allowance.pieceOrdinal ?? '—'}
+              </>
+            ) : (
+              'Non configurée pour cette tarification historique'
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Résultat commercial</dt>
+          <dd>{allowanceLabel(baggage)}</dd>
+        </div>
+        <div>
+          <dt>Code QR</dt>
+          <dd className="et-code">{baggage.qrPayload}</dd>
+        </div>
       </dl>
-      <p>
+      <p className="ops-ground-guardrail">
         Le code QR identifie seulement le bagage : chaque action exige une session STAFF et la
         permission correspondante. La franchise est historique et le supplément éventuel est
         recalculé uniquement lorsqu’un poids officiel est enregistré. Aucun paiement n’est créé.
       </p>
       <FormAlert message={error} />
-      <button
-        type="button"
-        className="et-button et-button--secondary"
-        onClick={() => void showQr()}
-      >
-        Afficher l’étiquette QR
-      </button>
-      {qr ? (
-        <figure className="et-baggage-qr">
-          {/* eslint-disable-next-line @next/next/no-img-element -- local data URI */}
-          <img src={qr} alt={`QR code du bagage ${baggage.reference}`} width={180} height={180} />
-          <figcaption className="et-code">{baggage.reference}</figcaption>
-        </figure>
-      ) : null}
+      <div className="ops-ground-qr">
+        <button
+          type="button"
+          className="et-button et-button--secondary"
+          onClick={() => void showQr()}
+        >
+          Afficher l’étiquette QR
+        </button>
+        {qr ? (
+          <figure className="et-baggage-qr">
+            {/* eslint-disable-next-line @next/next/no-img-element -- local data URI */}
+            <img src={qr} alt={`QR code du bagage ${baggage.reference}`} width={180} height={180} />
+            <figcaption className="et-code">{baggage.reference}</figcaption>
+          </figure>
+        ) : null}
+      </div>
 
       {canManage && baggage.lifecycleStatus !== 'REMOVED' ? (
-        <div className="et-network-adders">
-          <form className="et-form" aria-label="Enregistrer le poids" onSubmit={submitWeight}>
+        <div className="ops-ground-forms">
+          <form
+            className="et-form ops-ground-form"
+            aria-label="Enregistrer le poids"
+            onSubmit={submitWeight}
+          >
+            <p className="ops-operations-section-kicker">Pesée officielle</p>
             <TextField
               label="Poids mesuré (kg)"
               name="measuredWeightKg"
@@ -245,7 +301,12 @@ function Detail({
               Enregistrer le poids
             </button>
           </form>
-          <form className="et-form" aria-label="Enregistrer un événement" onSubmit={submitEvent}>
+          <form
+            className="et-form ops-ground-form"
+            aria-label="Enregistrer un événement"
+            onSubmit={submitEvent}
+          >
+            <p className="ops-operations-section-kicker">Événement opérationnel</p>
             <div className="et-field">
               <label htmlFor={eventId}>Événement</label>
               <select
@@ -263,6 +324,9 @@ function Detail({
                 ))}
               </select>
             </div>
+            <p className="ops-ground-form__hint">
+              Le serveur refuse toute transition non autorisée par le cycle de vie.
+            </p>
             <button type="submit" className="et-button" disabled={busy}>
               Enregistrer l’événement
             </button>
@@ -271,17 +335,17 @@ function Detail({
       ) : null}
 
       <div className="et-table-wrap">
-        <table data-testid="baggage-timeline">
+        <table className="et-table" data-testid="baggage-timeline">
           <caption>Historique immuable</caption>
           <thead>
             <tr>
-              <th>N°</th>
-              <th>Événement</th>
-              <th>Statut</th>
-              <th>Incident</th>
-              <th>Poids</th>
-              <th>Survenu le</th>
-              <th>Lieu</th>
+              <th scope="col">N°</th>
+              <th scope="col">Événement</th>
+              <th scope="col">Statut</th>
+              <th scope="col">Incident</th>
+              <th scope="col">Poids</th>
+              <th scope="col">Survenu le</th>
+              <th scope="col">Lieu</th>
             </tr>
           </thead>
           <tbody>
@@ -389,144 +453,228 @@ export function BaggageAdmin() {
     } else setError(result.error.message);
   };
 
+  const visible = items ?? [];
+  const unweighedCount = visible.filter((item) => item.measuredWeightKg === null).length;
+  const handlingCount = visible.filter((item) => IN_HANDLING.includes(item.lifecycleStatus)).length;
+  const exceptionCount = visible.filter((item) => item.exceptionStatus !== null).length;
+
   return (
-    <div className="et-network" data-testid="baggage-workspace">
-      <p>
-        Bagages enregistrés sur des voyageurs de réservations confirmées. Le statut est une
-        projection de l’historique : il ne se modifie qu’en enregistrant un événement.
-      </p>
+    <div
+      className="et-network ops-operations-workspace ops-ground-workspace ops-baggage-workspace"
+      data-testid="baggage-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Exploitation bagages</p>
+          <h2>Suivi opérationnel des bagages voyageurs</h2>
+          <p>
+            Bagages enregistrés sur des voyageurs de réservations confirmées. Le statut est une
+            projection de l’historique : il ne se modifie qu’en enregistrant un événement.
+          </p>
+        </div>
+      </div>
       <FormAlert message={error} />
       {notice ? (
         <FormStatus>
           <p>{notice}</p>
         </FormStatus>
       ) : null}
-      <form className="et-form et-network-form" aria-label="Résoudre un code QR" onSubmit={resolve}>
-        <TextField
-          label="Code QR scanné"
-          name="qrPayload"
-          value={qrPayload}
-          onChange={setQrPayload}
-          autoComplete="off"
-          maxLength={64}
-        />
-        <button type="submit" className="et-button et-button--secondary">
-          Rechercher le bagage
-        </button>
-      </form>
-      <form className="et-form et-network-form" aria-label="Filtrer les bagages" onSubmit={filter}>
-        <div className="et-network-adders">
-          <TextField
-            label="Référence bagage"
-            name="reference"
-            value={reference}
-            onChange={setReference}
-            autoComplete="off"
-            required={false}
-            maxLength={16}
+
+      {items ? (
+        <section className="ops-operations-kpis" aria-label="Indicateurs des bagages affichés">
+          <OpsKpiCard
+            label="Bagages affichés"
+            value={visible.length}
+            helper={
+              nextCursor
+                ? 'Éléments chargés · liste partielle'
+                : 'Tous les bagages filtrés sont chargés'
+            }
+            icon="baggage"
+            tone="info"
           />
-          <TextField
-            label="Référence réservation"
-            name="bookingReference"
-            value={bookingReference}
-            onChange={setBookingReference}
-            autoComplete="off"
-            required={false}
-            maxLength={16}
+          <OpsKpiCard
+            label="Non pesés"
+            value={unweighedCount}
+            helper="Parmi les bagages affichés"
+            icon="audit"
+            tone={unweighedCount > 0 ? 'warning' : 'neutral'}
           />
-          <TextField
-            label="Référence voyage"
-            name="tripReference"
-            value={tripReference}
-            onChange={setTripReference}
-            autoComplete="off"
-            required={false}
-            maxLength={32}
+          <OpsKpiCard
+            label="Pris en charge ou en transit"
+            value={handlingCount}
+            helper="Pris en charge, chargés ou en transit"
+            icon="bus"
+            tone="info"
           />
-          <div className="et-field">
-            <label htmlFor={typeId}>Type</label>
-            <select
-              id={typeId}
-              className="et-select"
-              value={type}
-              onChange={(event) => setType(event.target.value as BaggageType | '')}
-            >
-              <option value="">Tous</option>
-              {(Object.keys(TYPE_LABELS) as BaggageType[]).map((value) => (
-                <option key={value} value={value}>
-                  {TYPE_LABELS[value]}
-                </option>
-              ))}
-            </select>
+          <OpsKpiCard
+            label="Avec incident"
+            value={exceptionCount}
+            helper="Introuvable, endommagé ou retenu"
+            icon="alert"
+            tone={exceptionCount > 0 ? 'danger' : 'neutral'}
+          />
+        </section>
+      ) : null}
+      {items && nextCursor ? (
+        <p className="ops-ground-partial" role="note">
+          Données partielles — d’autres éléments sont disponibles. Les indicateurs ne portent que
+          sur les {items.length} bagages chargés.
+        </p>
+      ) : null}
+
+      <div className="ops-ground-tools">
+        <form
+          className="et-form et-network-form ops-ground-panel ops-ground-scan"
+          aria-label="Résoudre un code QR"
+          onSubmit={resolve}
+        >
+          <p className="ops-operations-section-kicker">Lecture d’étiquette</p>
+          <TextField
+            label="Code QR scanné"
+            name="qrPayload"
+            value={qrPayload}
+            onChange={setQrPayload}
+            autoComplete="off"
+            maxLength={64}
+          />
+          <button type="submit" className="et-button et-button--secondary">
+            Rechercher le bagage
+          </button>
+        </form>
+        <form
+          className="et-form et-network-form ops-ground-panel"
+          aria-label="Filtrer les bagages"
+          onSubmit={filter}
+        >
+          <p className="ops-operations-section-kicker">Filtres</p>
+          <div className="et-network-adders">
+            <TextField
+              label="Référence bagage"
+              name="reference"
+              value={reference}
+              onChange={setReference}
+              autoComplete="off"
+              required={false}
+              maxLength={16}
+            />
+            <TextField
+              label="Référence réservation"
+              name="bookingReference"
+              value={bookingReference}
+              onChange={setBookingReference}
+              autoComplete="off"
+              required={false}
+              maxLength={16}
+            />
+            <TextField
+              label="Référence voyage"
+              name="tripReference"
+              value={tripReference}
+              onChange={setTripReference}
+              autoComplete="off"
+              required={false}
+              maxLength={32}
+            />
+            <div className="et-field">
+              <label htmlFor={typeId}>Type</label>
+              <select
+                id={typeId}
+                className="et-select"
+                value={type}
+                onChange={(event) => setType(event.target.value as BaggageType | '')}
+              >
+                <option value="">Tous</option>
+                {(Object.keys(TYPE_LABELS) as BaggageType[]).map((value) => (
+                  <option key={value} value={value}>
+                    {TYPE_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="et-field">
+              <label htmlFor={statusId}>Statut</label>
+              <select
+                id={statusId}
+                className="et-select"
+                value={lifecycleStatus}
+                onChange={(event) =>
+                  setLifecycleStatus(event.target.value as BaggageLifecycleStatus | '')
+                }
+              >
+                <option value="">Tous</option>
+                {(Object.keys(LIFECYCLE_LABELS) as BaggageLifecycleStatus[]).map((value) => (
+                  <option key={value} value={value}>
+                    {LIFECYCLE_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="et-field">
+              <label htmlFor={exceptionId}>Incident</label>
+              <select
+                id={exceptionId}
+                className="et-select"
+                value={exceptionStatus}
+                onChange={(event) =>
+                  setExceptionStatus(event.target.value as BaggageExceptionStatus | '')
+                }
+              >
+                <option value="">Tous</option>
+                {(Object.keys(EXCEPTION_LABELS) as BaggageExceptionStatus[]).map((value) => (
+                  <option key={value} value={value}>
+                    {EXCEPTION_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="et-field">
-            <label htmlFor={statusId}>Statut</label>
-            <select
-              id={statusId}
-              className="et-select"
-              value={lifecycleStatus}
-              onChange={(event) =>
-                setLifecycleStatus(event.target.value as BaggageLifecycleStatus | '')
-              }
-            >
-              <option value="">Tous</option>
-              {(Object.keys(LIFECYCLE_LABELS) as BaggageLifecycleStatus[]).map((value) => (
-                <option key={value} value={value}>
-                  {LIFECYCLE_LABELS[value]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="et-field">
-            <label htmlFor={exceptionId}>Incident</label>
-            <select
-              id={exceptionId}
-              className="et-select"
-              value={exceptionStatus}
-              onChange={(event) =>
-                setExceptionStatus(event.target.value as BaggageExceptionStatus | '')
-              }
-            >
-              <option value="">Tous</option>
-              {(Object.keys(EXCEPTION_LABELS) as BaggageExceptionStatus[]).map((value) => (
-                <option key={value} value={value}>
-                  {EXCEPTION_LABELS[value]}
-                </option>
-              ))}
-            </select>
+          <button type="submit" className="et-button">
+            Filtrer
+          </button>
+        </form>
+      </div>
+
+      <section
+        className="ops-operations-section ops-operations-section--primary"
+        aria-labelledby="baggage-list-title"
+      >
+        <div className="et-actions">
+          <div>
+            <p className="ops-operations-section-kicker">Registre des bagages</p>
+            <h2 id="baggage-list-title">Bagages</h2>
           </div>
         </div>
-        <button type="submit" className="et-button">
-          Filtrer
-        </button>
-      </form>
-
-      {detail ? <Detail baggage={detail} canManage={canManage} onChanged={changed} /> : null}
-      <section aria-labelledby="baggage-list-title">
-        <h2 id="baggage-list-title">Bagages</h2>
-        {!items ? <p role="status">Chargement des bagages…</p> : null}
-        {items ? (
+        {!items && !error ? <OpsLoadingState title="Chargement des bagages…" /> : null}
+        {items && items.length > 0 ? (
           <div className="et-table-wrap">
-            <table>
+            <table className="et-table">
               <caption>Bagages et statut courant</caption>
               <thead>
                 <tr>
-                  <th>Bagage</th>
-                  <th>Voyageur</th>
-                  <th>Réservation · voyage</th>
-                  <th>Type</th>
-                  <th>Statut</th>
-                  <th>Incident</th>
-                  <th>Poids</th>
-                  <th>Franchise · excédent</th>
-                  <th>Créé le</th>
-                  <th>Action</th>
+                  <th scope="col">Bagage</th>
+                  <th scope="col">Voyageur</th>
+                  <th scope="col">Réservation · voyage</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col">Incident</th>
+                  <th scope="col">Poids</th>
+                  <th scope="col">Franchise · excédent</th>
+                  <th scope="col">Créé le</th>
+                  <th scope="col">Fiche</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <tr key={item.reference}>
-                    <td className="et-code">{item.reference}</td>
+                  <tr
+                    key={item.reference}
+                    className={
+                      detail?.reference === item.reference ? 'ops-table-row--selected' : undefined
+                    }
+                  >
+                    <th scope="row" className="et-code">
+                      {item.reference}
+                    </th>
                     <td>
                       {item.passenger.givenName} {item.passenger.familyName}
                       <br />
@@ -538,8 +686,20 @@ export function BaggageAdmin() {
                       <span className="et-code">{item.booking.trip.reference}</span>
                     </td>
                     <td>{TYPE_LABELS[item.type]}</td>
-                    <td>{LIFECYCLE_LABELS[item.lifecycleStatus]}</td>
-                    <td>{item.exceptionStatus ? EXCEPTION_LABELS[item.exceptionStatus] : '—'}</td>
+                    <td>
+                      <OpsStatusBadge tone={LIFECYCLE_TONES[item.lifecycleStatus]}>
+                        {LIFECYCLE_LABELS[item.lifecycleStatus]}
+                      </OpsStatusBadge>
+                    </td>
+                    <td>
+                      {item.exceptionStatus ? (
+                        <OpsStatusBadge tone={EXCEPTION_TONES[item.exceptionStatus]}>
+                          {EXCEPTION_LABELS[item.exceptionStatus]}
+                        </OpsStatusBadge>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td>{formatWeight(item.measuredWeightKg)}</td>
                     <td>{allowanceLabel(item)}</td>
                     <td>{formatAt(item.createdAt)}</td>
@@ -547,6 +707,9 @@ export function BaggageAdmin() {
                       <button
                         type="button"
                         className="et-button et-button--secondary"
+                        aria-label={`Consulter le bagage ${item.reference}`}
+                        aria-controls="baggage-detail-panel"
+                        aria-expanded={detail?.reference === item.reference}
                         onClick={() => void select(item.reference)}
                       >
                         Consulter
@@ -558,7 +721,12 @@ export function BaggageAdmin() {
             </table>
           </div>
         ) : null}
-        {items?.length === 0 ? <p>Aucun bagage.</p> : null}
+        {items?.length === 0 ? (
+          <OpsEmptyState
+            title="Aucun bagage"
+            description="Aucun bagage ne correspond aux filtres actuellement appliqués."
+          />
+        ) : null}
         {nextCursor ? (
           <button
             type="button"
@@ -569,6 +737,16 @@ export function BaggageAdmin() {
           </button>
         ) : null}
       </section>
+
+      {detail ? (
+        <OpsDetailRegion
+          id="baggage-detail-panel"
+          focusKey={detail.reference}
+          onClose={() => setDetail(null)}
+        >
+          <Detail baggage={detail} canManage={canManage} onChanged={changed} />
+        </OpsDetailRegion>
+      ) : null}
     </div>
   );
 }

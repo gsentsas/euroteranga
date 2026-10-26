@@ -11,6 +11,9 @@ import type {
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsEmptyState, OpsLoadingState } from '../ops-data-state';
+import { OpsDetailRegion } from '../ops-detail-region';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 import { CargoQuotePanel } from './cargo-quote-panel';
 import { CargoTrackingPanel } from './cargo-tracking-panel';
@@ -59,6 +62,41 @@ const EVENT_LABELS: Record<RoadFreightOperationalEventType, string> = {
   DAMAGED: 'Signaler endommagé',
   EXCEPTION_RESOLVED: 'Résoudre l’incident',
 };
+
+type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+
+/** Display tone only: the lifecycle is projected by the API from the operational events. */
+const STATUS_TONES: Record<RoadFreightLifecycleStatus, Tone> = {
+  QUOTE: 'neutral',
+  BOOKED: 'info',
+  RECEIVED: 'info',
+  INSPECTED: 'info',
+  ASSIGNED: 'info',
+  LOADED: 'info',
+  DEPARTED: 'info',
+  IN_TRANSIT: 'info',
+  ARRIVED: 'success',
+  AVAILABLE: 'success',
+  DELIVERED: 'success',
+  REFUSED: 'danger',
+  CANCELLED: 'neutral',
+};
+
+const EXCEPTION_TONES: Record<RoadFreightExceptionStatus, Tone> = {
+  HELD: 'danger',
+  CUSTOMS_HOLD: 'warning',
+  DAMAGED: 'danger',
+};
+
+const AWAITING_RECEPTION: readonly RoadFreightLifecycleStatus[] = ['QUOTE', 'BOOKED'];
+const IN_HANDLING: readonly RoadFreightLifecycleStatus[] = [
+  'RECEIVED',
+  'INSPECTED',
+  'ASSIGNED',
+  'LOADED',
+  'DEPARTED',
+  'IN_TRANSIT',
+];
 
 const OPERATIONAL_EVENTS = Object.keys(EVENT_LABELS) as RoadFreightOperationalEventType[];
 
@@ -222,53 +260,86 @@ function CargoDetail({
 
   return (
     <section
-      className="et-network-panel"
+      className="et-network-panel ops-ground-detail"
       aria-labelledby={`cargo-${shipment.reference}`}
       data-testid="cargo-detail"
     >
-      <div className="et-actions">
-        <h2 id={`cargo-${shipment.reference}`}>Colis & fret {shipment.reference}</h2>
-        <span className="et-tag">{STATUS_LABELS[shipment.lifecycleStatus]}</span>
-        {shipment.exceptionStatus ? (
-          <span className="et-tag">{EXCEPTION_LABELS[shipment.exceptionStatus]}</span>
-        ) : null}
+      <div className="et-actions ops-ground-detail__header">
+        <div>
+          <p className="ops-operations-section-kicker">
+            Fiche envoi · {DIRECTION_LABELS[shipment.direction]}
+          </p>
+          <h2 id={`cargo-${shipment.reference}`}>Colis & fret {shipment.reference}</h2>
+        </div>
+        <div className="ops-ground-badges">
+          <OpsStatusBadge tone={STATUS_TONES[shipment.lifecycleStatus]} className="et-tag">
+            {STATUS_LABELS[shipment.lifecycleStatus]}
+          </OpsStatusBadge>
+          {shipment.exceptionStatus ? (
+            <OpsStatusBadge tone={EXCEPTION_TONES[shipment.exceptionStatus]} className="et-tag">
+              {EXCEPTION_LABELS[shipment.exceptionStatus]}
+            </OpsStatusBadge>
+          ) : null}
+        </div>
       </div>
 
-      <dl className="et-booking-admin-summary">
-        <dt>Sens</dt>
-        <dd>{DIRECTION_LABELS[shipment.direction]}</dd>
-        <dt>Expéditeur</dt>
-        <dd>
-          {shipment.senderName} · {shipment.senderContact}
-        </dd>
-        <dt>Destinataire</dt>
-        <dd>
-          {shipment.recipientName} · {shipment.recipientContact}
-        </dd>
-        <dt>Poids</dt>
-        <dd data-testid="cargo-weight">{formatWeight(shipment.weightKg)}</dd>
-        <dt>Volume</dt>
-        <dd>{formatVolume(shipment.volumeLiters)}</dd>
-        <dt>Pièces</dt>
-        <dd>{shipment.packageCount}</dd>
-        <dt>Contenu déclaré</dt>
-        <dd>{shipment.declaredContents}</dd>
-        <dt>Réservation</dt>
-        <dd className="et-code">{shipment.booking?.reference ?? '—'}</dd>
-        <dt>Client</dt>
-        <dd>
-          {shipment.customer ? (
-            <>
-              {shipment.customer.email} · <span className="et-code">{shipment.customer.id}</span>
-            </>
-          ) : (
-            '—'
-          )}
-        </dd>
-        <dt>Voyage</dt>
-        <dd className="et-code">{shipment.trip?.reference ?? 'Non affecté'}</dd>
-        <dt>Véhicule</dt>
-        <dd className="et-code">{shipment.vehicle?.code ?? 'Non affecté'}</dd>
+      <dl className="ops-ground-facts">
+        <div>
+          <dt>Sens</dt>
+          <dd>{DIRECTION_LABELS[shipment.direction]}</dd>
+        </div>
+        <div>
+          <dt>Expéditeur</dt>
+          <dd>
+            {shipment.senderName} · {shipment.senderContact}
+          </dd>
+        </div>
+        <div>
+          <dt>Destinataire</dt>
+          <dd>
+            {shipment.recipientName} · {shipment.recipientContact}
+          </dd>
+        </div>
+        <div>
+          <dt>Poids</dt>
+          <dd data-testid="cargo-weight">{formatWeight(shipment.weightKg)}</dd>
+        </div>
+        <div>
+          <dt>Volume</dt>
+          <dd>{formatVolume(shipment.volumeLiters)}</dd>
+        </div>
+        <div>
+          <dt>Pièces</dt>
+          <dd>{shipment.packageCount}</dd>
+        </div>
+        <div>
+          <dt>Contenu déclaré</dt>
+          <dd>{shipment.declaredContents}</dd>
+        </div>
+        <div>
+          <dt>Réservation</dt>
+          <dd className="et-code">{shipment.booking?.reference ?? '—'}</dd>
+        </div>
+        <div>
+          <dt>Client</dt>
+          <dd>
+            {shipment.customer ? (
+              <>
+                {shipment.customer.email} · <span className="et-code">{shipment.customer.id}</span>
+              </>
+            ) : (
+              '—'
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Voyage</dt>
+          <dd className="et-code">{shipment.trip?.reference ?? 'Non affecté'}</dd>
+        </div>
+        <div>
+          <dt>Véhicule</dt>
+          <dd className="et-code">{shipment.vehicle?.code ?? 'Non affecté'}</dd>
+        </div>
       </dl>
 
       <FormAlert message={error} />
@@ -286,133 +357,151 @@ function CargoDetail({
         canManage={canManage && canManagePricing}
       />
 
-      {canManage && editable ? (
-        <form
-          className="et-form"
-          aria-label="Modifier les caractéristiques du fret"
-          onSubmit={submitFacts}
-        >
-          <div className="et-network-adders">
-            <TextField
-              label="Poids (kg)"
-              name="cargoWeightKg"
-              value={weightKg}
-              onChange={setWeightKg}
-              autoComplete="off"
-              maxLength={9}
-            />
-            <TextField
-              label="Volume (litres)"
-              name="cargoVolumeLiters"
-              value={volumeLiters}
-              onChange={setVolumeLiters}
-              autoComplete="off"
-            />
-            <TextField
-              label="Nombre de pièces"
-              name="cargoPackageCount"
-              value={packageCount}
-              onChange={setPackageCount}
-              autoComplete="off"
-            />
-            <TextField
-              label="Contact expéditeur"
-              name="cargoSenderContact"
-              value={senderContact}
-              onChange={setSenderContact}
-              autoComplete="off"
-            />
-            <TextField
-              label="Contact destinataire"
-              name="cargoRecipientContact"
-              value={recipientContact}
-              onChange={setRecipientContact}
-              autoComplete="off"
-            />
-            <TextField
-              label="Contenu déclaré"
-              name="cargoDeclaredContents"
-              value={declaredContents}
-              onChange={setDeclaredContents}
-              autoComplete="off"
-              maxLength={500}
-            />
-          </div>
-          <button type="submit" className="et-button" disabled={busy}>
-            Enregistrer les caractéristiques
-          </button>
-        </form>
-      ) : null}
-
-      {canManage && assignable ? (
-        <form className="et-form" aria-label="Affecter le fret" onSubmit={submitAssignment}>
-          <div className="et-network-adders">
-            <TextField
-              label="Référence voyage"
-              name="cargoTripReference"
-              value={tripReference}
-              onChange={setTripReference}
-              autoComplete="off"
-              maxLength={32}
-            />
-            <TextField
-              label="Code véhicule"
-              name="cargoVehicleCode"
-              value={vehicleCode}
-              onChange={setVehicleCode}
-              autoComplete="off"
-              maxLength={32}
-            />
-          </div>
-          <button type="submit" className="et-button" disabled={busy}>
-            {shipment.lifecycleStatus === 'ASSIGNED' ? 'Réaffecter' : 'Affecter'}
-          </button>
-        </form>
-      ) : null}
-
-      {canManage && !['DELIVERED', 'REFUSED', 'CANCELLED'].includes(shipment.lifecycleStatus) ? (
-        <form className="et-form" aria-label="Enregistrer un événement fret" onSubmit={submitEvent}>
-          <div className="et-field">
-            <label htmlFor={eventId}>Événement</label>
-            <select
-              id={eventId}
-              className="et-select"
-              value={eventType}
-              onChange={(event) =>
-                setEventType(event.target.value as RoadFreightOperationalEventType)
-              }
+      {canManage ? (
+        <div className="ops-ground-forms">
+          {editable ? (
+            <form
+              className="et-form ops-ground-form ops-ground-form--wide"
+              aria-label="Modifier les caractéristiques du fret"
+              onSubmit={submitFacts}
             >
-              {OPERATIONAL_EVENTS.map((value) => (
-                <option key={value} value={value}>
-                  {EVENT_LABELS[value]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button type="submit" className="et-button" disabled={busy}>
-            Enregistrer l’événement
-          </button>
-        </form>
+              <p className="ops-operations-section-kicker">Caractéristiques déclarées</p>
+              <div className="et-network-adders">
+                <TextField
+                  label="Poids (kg)"
+                  name="cargoWeightKg"
+                  value={weightKg}
+                  onChange={setWeightKg}
+                  autoComplete="off"
+                  maxLength={9}
+                />
+                <TextField
+                  label="Volume (litres)"
+                  name="cargoVolumeLiters"
+                  value={volumeLiters}
+                  onChange={setVolumeLiters}
+                  autoComplete="off"
+                />
+                <TextField
+                  label="Nombre de pièces"
+                  name="cargoPackageCount"
+                  value={packageCount}
+                  onChange={setPackageCount}
+                  autoComplete="off"
+                />
+                <TextField
+                  label="Contact expéditeur"
+                  name="cargoSenderContact"
+                  value={senderContact}
+                  onChange={setSenderContact}
+                  autoComplete="off"
+                />
+                <TextField
+                  label="Contact destinataire"
+                  name="cargoRecipientContact"
+                  value={recipientContact}
+                  onChange={setRecipientContact}
+                  autoComplete="off"
+                />
+                <TextField
+                  label="Contenu déclaré"
+                  name="cargoDeclaredContents"
+                  value={declaredContents}
+                  onChange={setDeclaredContents}
+                  autoComplete="off"
+                  maxLength={500}
+                />
+              </div>
+              <button type="submit" className="et-button" disabled={busy}>
+                Enregistrer les caractéristiques
+              </button>
+            </form>
+          ) : null}
+
+          {assignable ? (
+            <form
+              className="et-form ops-ground-form"
+              aria-label="Affecter le fret"
+              onSubmit={submitAssignment}
+            >
+              <p className="ops-operations-section-kicker">Affectation voyage / véhicule</p>
+              <div className="et-network-adders">
+                <TextField
+                  label="Référence voyage"
+                  name="cargoTripReference"
+                  value={tripReference}
+                  onChange={setTripReference}
+                  autoComplete="off"
+                  maxLength={32}
+                />
+                <TextField
+                  label="Code véhicule"
+                  name="cargoVehicleCode"
+                  value={vehicleCode}
+                  onChange={setVehicleCode}
+                  autoComplete="off"
+                  maxLength={32}
+                />
+              </div>
+              <button type="submit" className="et-button" disabled={busy}>
+                {shipment.lifecycleStatus === 'ASSIGNED' ? 'Réaffecter' : 'Affecter'}
+              </button>
+            </form>
+          ) : null}
+
+          {!['DELIVERED', 'REFUSED', 'CANCELLED'].includes(shipment.lifecycleStatus) ? (
+            <form
+              className="et-form ops-ground-form"
+              aria-label="Enregistrer un événement fret"
+              onSubmit={submitEvent}
+            >
+              <p className="ops-operations-section-kicker">Événement opérationnel</p>
+              <div className="et-field">
+                <label htmlFor={eventId}>Événement</label>
+                <select
+                  id={eventId}
+                  className="et-select"
+                  value={eventType}
+                  onChange={(event) =>
+                    setEventType(event.target.value as RoadFreightOperationalEventType)
+                  }
+                >
+                  {OPERATIONAL_EVENTS.map((value) => (
+                    <option key={value} value={value}>
+                      {EVENT_LABELS[value]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="ops-ground-form__hint">
+                Le serveur refuse toute transition non autorisée par le cycle de vie.
+              </p>
+              <button type="submit" className="et-button" disabled={busy}>
+                Enregistrer l’événement
+              </button>
+            </form>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="et-table-wrap">
-        <table data-testid="cargo-timeline">
+        <table className="et-table" data-testid="cargo-timeline">
           <caption>Historique opérationnel immuable</caption>
           <thead>
             <tr>
-              <th>N°</th>
-              <th>Événement</th>
-              <th>Statut</th>
-              <th>Incident</th>
-              <th>Survenu le</th>
-              <th>Lieu</th>
+              <th scope="col">N°</th>
+              <th scope="col">Événement</th>
+              <th scope="col">Statut</th>
+              <th scope="col">Incident</th>
+              <th scope="col">Survenu le</th>
+              <th scope="col">Lieu</th>
             </tr>
           </thead>
           <tbody>
             {shipment.events.map((event) => (
               <tr key={event.sequence}>
                 <td>{event.sequence}</td>
-                <td>{event.type}</td>
+                <td className="et-code">{event.type}</td>
                 <td>{STATUS_LABELS[event.lifecycleStatus]}</td>
                 <td>{event.exceptionStatus ? EXCEPTION_LABELS[event.exceptionStatus] : '—'}</td>
                 <td>{formatAt(event.occurredAt)}</td>
@@ -554,12 +643,28 @@ export function CargoAdmin() {
     setNotice(`Fret ${result.data.reference} identifié par QR.`);
   };
 
+  const visible = items ?? [];
+  const awaitingCount = visible.filter((item) =>
+    AWAITING_RECEPTION.includes(item.lifecycleStatus),
+  ).length;
+  const handlingCount = visible.filter((item) => IN_HANDLING.includes(item.lifecycleStatus)).length;
+  const exceptionCount = visible.filter((item) => item.exceptionStatus !== null).length;
+
   return (
-    <div className="et-network" data-testid="cargo-workspace">
-      <p>
-        Colis et fret routier distincts des bagages voyageurs. CARGO-PRICE-1 ajoute des devis
-        commerciaux versionnés ; les paiements et la comptabilisation Finance restent séparés.
-      </p>
+    <div
+      className="et-network ops-operations-workspace ops-ground-workspace ops-cargo-workspace"
+      data-testid="cargo-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Fret routier Paris ↔ Dakar</p>
+          <h2>Exploitation colis & fret</h2>
+          <p>
+            Colis et fret routier distincts des bagages voyageurs. CARGO-PRICE-1 ajoute des devis
+            commerciaux versionnés ; les paiements et la comptabilisation Finance restent séparés.
+          </p>
+        </div>
+      </div>
       <FormAlert message={error} />
       {notice ? (
         <FormStatus>
@@ -567,31 +672,153 @@ export function CargoAdmin() {
         </FormStatus>
       ) : null}
 
-      <form
-        className="et-form et-network-form"
-        aria-label="Résoudre un QR fret"
-        onSubmit={resolveQr}
-      >
-        <TextField
-          label="Code QR fret"
-          name="cargoQrPayload"
-          value={qrPayload}
-          onChange={setQrPayload}
-          autoComplete="off"
-          maxLength={64}
-        />
-        <button type="submit" className="et-button et-button--secondary">
-          Rechercher le fret
-        </button>
-      </form>
+      {items ? (
+        <section className="ops-operations-kpis" aria-label="Indicateurs des envois affichés">
+          <OpsKpiCard
+            label="Envois affichés"
+            value={visible.length}
+            helper={
+              nextCursor
+                ? 'Éléments chargés · liste partielle'
+                : 'Tous les envois filtrés sont chargés'
+            }
+            icon="cargo"
+            tone="info"
+          />
+          <OpsKpiCard
+            label="À réceptionner"
+            value={awaitingCount}
+            helper="Demandes, devis ou réservés"
+            icon="booking"
+            tone={awaitingCount > 0 ? 'warning' : 'neutral'}
+          />
+          <OpsKpiCard
+            label="En traitement ou en route"
+            value={handlingCount}
+            helper="Reçus, contrôlés, affectés, chargés ou partis"
+            icon="bus"
+            tone="info"
+          />
+          <OpsKpiCard
+            label="Avec incident"
+            value={exceptionCount}
+            helper="Bloqué, retenu en douane ou endommagé"
+            icon="alert"
+            tone={exceptionCount > 0 ? 'danger' : 'neutral'}
+          />
+        </section>
+      ) : null}
+      {items && nextCursor ? (
+        <p className="ops-ground-partial" role="note">
+          Données partielles — d’autres éléments sont disponibles. Les indicateurs ne portent que
+          sur les {items.length} envois chargés.
+        </p>
+      ) : null}
+
+      <div className="ops-ground-tools">
+        <form
+          className="et-form et-network-form ops-ground-panel ops-ground-scan"
+          aria-label="Résoudre un QR fret"
+          onSubmit={resolveQr}
+        >
+          <p className="ops-operations-section-kicker">Lecture d’étiquette</p>
+          <TextField
+            label="Code QR fret"
+            name="cargoQrPayload"
+            value={qrPayload}
+            onChange={setQrPayload}
+            autoComplete="off"
+            maxLength={64}
+          />
+          <button type="submit" className="et-button et-button--secondary">
+            Rechercher le fret
+          </button>
+        </form>
+        <form
+          className="et-form et-network-form ops-ground-panel"
+          aria-label="Filtrer les colis et fret"
+          onSubmit={filter}
+        >
+          <p className="ops-operations-section-kicker">Filtres</p>
+          <div className="et-network-adders">
+            <TextField
+              label="Référence fret"
+              name="cargoReference"
+              value={reference}
+              onChange={setReference}
+              required={false}
+              autoComplete="off"
+              maxLength={16}
+            />
+            <TextField
+              label="Référence voyage"
+              name="cargoFilterTrip"
+              value={tripReference}
+              onChange={setTripReference}
+              required={false}
+              autoComplete="off"
+              maxLength={32}
+            />
+            <TextField
+              label="Code véhicule"
+              name="cargoFilterVehicle"
+              value={vehicleCode}
+              onChange={setVehicleCode}
+              required={false}
+              autoComplete="off"
+              maxLength={32}
+            />
+            <div className="et-field">
+              <label htmlFor={directionFilterId}>Sens</label>
+              <select
+                id={directionFilterId}
+                className="et-select"
+                value={direction}
+                onChange={(event) => setDirection(event.target.value as RoadFreightDirection | '')}
+              >
+                <option value="">Tous</option>
+                {(Object.keys(DIRECTION_LABELS) as RoadFreightDirection[]).map((value) => (
+                  <option key={value} value={value}>
+                    {DIRECTION_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="et-field">
+              <label htmlFor={statusFilterId}>Statut</label>
+              <select
+                id={statusFilterId}
+                className="et-select"
+                value={lifecycleStatus}
+                onChange={(event) =>
+                  setLifecycleStatus(event.target.value as RoadFreightLifecycleStatus | '')
+                }
+              >
+                <option value="">Tous</option>
+                {(Object.keys(STATUS_LABELS) as RoadFreightLifecycleStatus[]).map((value) => (
+                  <option key={value} value={value}>
+                    {STATUS_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <button type="submit" className="et-button">
+            Filtrer
+          </button>
+        </form>
+      </div>
 
       {canManage ? (
         <form
-          className="et-form et-network-form"
+          className="et-form et-network-form ops-ground-panel"
           aria-label="Créer un colis ou fret"
           onSubmit={submitCreate}
         >
-          <h2>Nouveau colis / fret</h2>
+          <div>
+            <p className="ops-operations-section-kicker">Prise en charge</p>
+            <h2>Nouveau colis / fret</h2>
+          </div>
           <div className="et-network-adders">
             <div className="et-field">
               <label htmlFor={eventDirectionId}>Sens</label>
@@ -694,7 +921,7 @@ export function CargoAdmin() {
               maxLength={500}
             />
           </div>
-          <div className="et-actions">
+          <div className="et-actions ops-ground-flags">
             {CREATE_FLAG_OPTIONS.map(([key, label]) => (
               <label key={key}>
                 <input
@@ -714,119 +941,65 @@ export function CargoAdmin() {
         </form>
       ) : null}
 
-      <form
-        className="et-form et-network-form"
-        aria-label="Filtrer les colis et fret"
-        onSubmit={filter}
+      <section
+        className="ops-operations-section ops-operations-section--primary"
+        aria-labelledby="cargo-list-title"
       >
-        <div className="et-network-adders">
-          <TextField
-            label="Référence fret"
-            name="cargoReference"
-            value={reference}
-            onChange={setReference}
-            required={false}
-            autoComplete="off"
-            maxLength={16}
-          />
-          <TextField
-            label="Référence voyage"
-            name="cargoFilterTrip"
-            value={tripReference}
-            onChange={setTripReference}
-            required={false}
-            autoComplete="off"
-            maxLength={32}
-          />
-          <TextField
-            label="Code véhicule"
-            name="cargoFilterVehicle"
-            value={vehicleCode}
-            onChange={setVehicleCode}
-            required={false}
-            autoComplete="off"
-            maxLength={32}
-          />
-          <div className="et-field">
-            <label htmlFor={directionFilterId}>Sens</label>
-            <select
-              id={directionFilterId}
-              className="et-select"
-              value={direction}
-              onChange={(event) => setDirection(event.target.value as RoadFreightDirection | '')}
-            >
-              <option value="">Tous</option>
-              {(Object.keys(DIRECTION_LABELS) as RoadFreightDirection[]).map((value) => (
-                <option key={value} value={value}>
-                  {DIRECTION_LABELS[value]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="et-field">
-            <label htmlFor={statusFilterId}>Statut</label>
-            <select
-              id={statusFilterId}
-              className="et-select"
-              value={lifecycleStatus}
-              onChange={(event) =>
-                setLifecycleStatus(event.target.value as RoadFreightLifecycleStatus | '')
-              }
-            >
-              <option value="">Tous</option>
-              {(Object.keys(STATUS_LABELS) as RoadFreightLifecycleStatus[]).map((value) => (
-                <option key={value} value={value}>
-                  {STATUS_LABELS[value]}
-                </option>
-              ))}
-            </select>
+        <div className="et-actions">
+          <div>
+            <p className="ops-operations-section-kicker">Registre des envois</p>
+            <h2 id="cargo-list-title">Colis & fret</h2>
           </div>
         </div>
-        <button type="submit" className="et-button">
-          Filtrer
-        </button>
-      </form>
-
-      {detail ? (
-        <CargoDetail
-          shipment={detail}
-          canManage={canManage}
-          canReadPricing={canReadPricing}
-          canManagePricing={canManagePricing}
-          onChanged={changed}
-        />
-      ) : null}
-
-      <section aria-labelledby="cargo-list-title">
-        <h2 id="cargo-list-title">Colis & fret</h2>
-        {!items ? <p role="status">Chargement…</p> : null}
-        {items ? (
+        {!items && !error ? <OpsLoadingState title="Chargement des envois…" /> : null}
+        {items && items.length > 0 ? (
           <div className="et-table-wrap">
-            <table>
+            <table className="et-table">
               <caption>Fret routier et statut courant</caption>
               <thead>
                 <tr>
-                  <th>Référence</th>
-                  <th>Sens</th>
-                  <th>Expéditeur → destinataire</th>
-                  <th>Poids</th>
-                  <th>Volume</th>
-                  <th>Statut</th>
-                  <th>Voyage / véhicule</th>
-                  <th>Action</th>
+                  <th scope="col">Référence</th>
+                  <th scope="col">Sens</th>
+                  <th scope="col">Expéditeur → destinataire</th>
+                  <th scope="col">Poids</th>
+                  <th scope="col">Volume</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col">Incident</th>
+                  <th scope="col">Voyage / véhicule</th>
+                  <th scope="col">Fiche</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <tr key={item.reference}>
-                    <td className="et-code">{item.reference}</td>
+                  <tr
+                    key={item.reference}
+                    className={
+                      detail?.reference === item.reference ? 'ops-table-row--selected' : undefined
+                    }
+                  >
+                    <th scope="row" className="et-code">
+                      {item.reference}
+                    </th>
                     <td>{DIRECTION_LABELS[item.direction]}</td>
                     <td>
                       {item.senderName} → {item.recipientName}
                     </td>
                     <td>{formatWeight(item.weightKg)}</td>
                     <td>{formatVolume(item.volumeLiters)}</td>
-                    <td>{STATUS_LABELS[item.lifecycleStatus]}</td>
+                    <td>
+                      <OpsStatusBadge tone={STATUS_TONES[item.lifecycleStatus]}>
+                        {STATUS_LABELS[item.lifecycleStatus]}
+                      </OpsStatusBadge>
+                    </td>
+                    <td>
+                      {item.exceptionStatus ? (
+                        <OpsStatusBadge tone={EXCEPTION_TONES[item.exceptionStatus]}>
+                          {EXCEPTION_LABELS[item.exceptionStatus]}
+                        </OpsStatusBadge>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td>
                       <span className="et-code">{item.trip?.reference ?? '—'}</span>
                       <br />
@@ -836,6 +1009,9 @@ export function CargoAdmin() {
                       <button
                         type="button"
                         className="et-button et-button--secondary"
+                        aria-label={`Consulter l’envoi ${item.reference}`}
+                        aria-controls="cargo-detail-panel"
+                        aria-expanded={detail?.reference === item.reference}
                         onClick={() => void select(item.reference)}
                       >
                         Consulter
@@ -847,7 +1023,12 @@ export function CargoAdmin() {
             </table>
           </div>
         ) : null}
-        {items?.length === 0 ? <p>Aucun colis ou fret.</p> : null}
+        {items?.length === 0 ? (
+          <OpsEmptyState
+            title="Aucun colis ou fret"
+            description="Aucun envoi ne correspond aux filtres actuellement appliqués."
+          />
+        ) : null}
         {nextCursor ? (
           <button
             type="button"
@@ -858,6 +1039,22 @@ export function CargoAdmin() {
           </button>
         ) : null}
       </section>
+
+      {detail ? (
+        <OpsDetailRegion
+          id="cargo-detail-panel"
+          focusKey={detail.reference}
+          onClose={() => setDetail(null)}
+        >
+          <CargoDetail
+            shipment={detail}
+            canManage={canManage}
+            canReadPricing={canReadPricing}
+            canManagePricing={canManagePricing}
+            onChanged={changed}
+          />
+        </OpsDetailRegion>
+      ) : null}
     </div>
   );
 }

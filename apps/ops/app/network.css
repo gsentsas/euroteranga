@@ -727,7 +727,9 @@
 
 .ops-detail-region {
   scroll-margin-top: 5.75rem;
-  overflow: hidden;
+  /* clip, not hidden: hidden makes the region a scroll container, which pins the
+     sticky toolbar 4.75rem down over the record header instead of the viewport. */
+  overflow: clip;
   border: 1px solid #b9cdc4;
   border-radius: 0.9rem;
   background: #fff;
