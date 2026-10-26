@@ -10,6 +10,9 @@ import type {
 import { FormAlert, FormStatus } from '@euroteranga/ui';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsEmptyState, OpsLoadingState } from '../ops-data-state';
+import { OpsDetailRegion } from '../ops-detail-region';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 
 const STATUS_LABELS: Record<ComplianceRuleVersionStatus, string> = {
@@ -17,6 +20,27 @@ const STATUS_LABELS: Record<ComplianceRuleVersionStatus, string> = {
   PUBLISHED: 'Publiée',
   RETIRED: 'Retirée',
 };
+
+/** Version lifecycle, kept visually separate from source verification. */
+const STATUS_TONES: Record<ComplianceRuleVersionStatus, 'neutral' | 'info' | 'danger'> = {
+  DRAFT: 'neutral',
+  PUBLISHED: 'info',
+  RETIRED: 'danger',
+};
+
+/** Outlined badge: a verified source is not a compliance conclusion. */
+function SourceBadge({ verified }: { verified: boolean }) {
+  return (
+    <OpsStatusBadge tone={verified ? 'info' : 'warning'} className="ops-status-badge--outline">
+      {verified ? 'Source vérifiée' : 'Source non vérifiée'}
+    </OpsStatusBadge>
+  );
+}
+
+const formatAt = (value: string) =>
+  new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }).format(
+    new Date(value),
+  );
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -97,23 +121,63 @@ function ContentFields({
       onChange({ ...content, [key]: event.target.value }),
   });
   return (
-    <div className="et-form et-network-form">
-      <label htmlFor={`${idPrefix}-definition`}>Définition (langage de règle v1, JSON)</label>
-      <textarea {...field('definition')} rows={8} spellCheck={false} required />
-      <label htmlFor={`${idPrefix}-customerGuidance`}>Consigne affichée au client</label>
-      <input {...field('customerGuidance')} maxLength={500} required />
-      <label htmlFor={`${idPrefix}-effectiveFrom`}>En vigueur à partir du (date de voyage)</label>
-      <input {...field('effectiveFrom')} type="date" required />
-      <label htmlFor={`${idPrefix}-effectiveTo`}>En vigueur jusqu’au (inclus, facultatif)</label>
-      <input {...field('effectiveTo')} type="date" />
-      <label htmlFor={`${idPrefix}-authority`}>Autorité source</label>
-      <input {...field('authority')} maxLength={200} />
-      <label htmlFor={`${idPrefix}-title`}>Titre du texte source</label>
-      <input {...field('title')} maxLength={300} />
-      <label htmlFor={`${idPrefix}-url`}>URL officielle (https)</label>
-      <input {...field('url')} type="url" maxLength={2048} />
-      <label htmlFor={`${idPrefix}-reference`}>Référence officielle</label>
-      <input {...field('reference')} maxLength={200} />
+    <div className="ops-compliance-fields">
+      <fieldset className="ops-compliance-fieldset">
+        <legend>Contenu de la règle</legend>
+        <div className="et-field">
+          <label htmlFor={`${idPrefix}-definition`}>Définition (langage de règle v1, JSON)</label>
+          <textarea
+            {...field('definition')}
+            className="et-input ops-compliance-json-input"
+            rows={8}
+            spellCheck={false}
+            required
+          />
+          <p className="ops-ground-form__hint">
+            Le contrôle JSON local n’est qu’un premier filtre : le serveur revalide le langage de
+            règle, et aucun de ces contrôles n’est une validation réglementaire.
+          </p>
+        </div>
+        <div className="et-network-adders">
+          <div className="et-field">
+            <label htmlFor={`${idPrefix}-customerGuidance`}>Consigne affichée au client</label>
+            <input {...field('customerGuidance')} className="et-input" maxLength={500} required />
+          </div>
+          <div className="et-field">
+            <label htmlFor={`${idPrefix}-effectiveFrom`}>
+              En vigueur à partir du (date de voyage)
+            </label>
+            <input {...field('effectiveFrom')} className="et-input" type="date" required />
+          </div>
+          <div className="et-field">
+            <label htmlFor={`${idPrefix}-effectiveTo`}>
+              En vigueur jusqu’au (inclus, facultatif)
+            </label>
+            <input {...field('effectiveTo')} className="et-input" type="date" />
+          </div>
+        </div>
+      </fieldset>
+      <fieldset className="ops-compliance-fieldset">
+        <legend>Source officielle</legend>
+        <div className="et-network-adders">
+          <div className="et-field">
+            <label htmlFor={`${idPrefix}-authority`}>Autorité source</label>
+            <input {...field('authority')} className="et-input" maxLength={200} />
+          </div>
+          <div className="et-field">
+            <label htmlFor={`${idPrefix}-title`}>Titre du texte source</label>
+            <input {...field('title')} className="et-input" maxLength={300} />
+          </div>
+          <div className="et-field">
+            <label htmlFor={`${idPrefix}-url`}>URL officielle (https)</label>
+            <input {...field('url')} className="et-input" type="url" maxLength={2048} />
+          </div>
+          <div className="et-field">
+            <label htmlFor={`${idPrefix}-reference`}>Référence officielle</label>
+            <input {...field('reference')} className="et-input" maxLength={200} />
+          </div>
+        </div>
+      </fieldset>
     </div>
   );
 }
@@ -160,76 +224,103 @@ function VersionCard({
 
   return (
     <article
-      className="et-network-panel"
+      className="et-network-panel ops-compliance-version"
       data-testid={`compliance-rule-version-${version.version}`}
     >
-      <div className="et-actions">
+      <div className="et-actions ops-ground-detail__header">
         <h3>Version {version.version}</h3>
-        <span className="et-tag">{STATUS_LABELS[version.status]}</span>
-        <span className="et-tag">
-          {version.verification.status === 'VERIFIED' ? 'Source vérifiée' : 'Source non vérifiée'}
-        </span>
+        <div className="ops-ground-badges">
+          <OpsStatusBadge tone={STATUS_TONES[version.status]}>
+            {STATUS_LABELS[version.status]}
+          </OpsStatusBadge>
+          <SourceBadge verified={version.verification.status === 'VERIFIED'} />
+        </div>
       </div>
-      <dl className="et-booking-admin-summary">
-        <dt>En vigueur</dt>
-        <dd>
-          du {version.effectiveFrom}{' '}
-          {version.effectiveTo ? `au ${version.effectiveTo} inclus` : 'sans date de fin'}
-        </dd>
-        <dt>Source</dt>
-        <dd>
-          {version.source.authority ?? '—'} · {version.source.title ?? '—'}
-          {version.source.url?.startsWith('https://') ? (
-            <>
-              {' '}
-              ·{' '}
-              <a href={version.source.url} target="_blank" rel="noopener noreferrer nofollow">
-                lien officiel
-              </a>
-            </>
-          ) : null}
-          {version.source.reference ? ` · ${version.source.reference}` : ''}
-        </dd>
-        <dt>Vérification</dt>
-        <dd>
-          {version.verification.status === 'VERIFIED'
-            ? `par ${version.verification.verifiedBy ?? '—'}, source consultée le ${version.source.checkedOn ?? '—'}`
-            : 'non vérifiée'}
-        </dd>
-        <dt>Consigne client</dt>
-        <dd>{version.customerGuidance}</dd>
-        <dt>Empreinte</dt>
-        <dd className="et-code">{version.definitionSha256}</dd>
+      <dl className="ops-ground-facts">
+        <div>
+          <dt>En vigueur</dt>
+          <dd>
+            du {version.effectiveFrom}{' '}
+            {version.effectiveTo ? `au ${version.effectiveTo} inclus` : 'sans date de fin'}
+          </dd>
+        </div>
+        <div>
+          <dt>Vérification</dt>
+          <dd>
+            {version.verification.status === 'VERIFIED'
+              ? `par ${version.verification.verifiedBy ?? '—'}, source consultée le ${version.source.checkedOn ?? '—'}`
+              : 'non vérifiée'}
+          </dd>
+        </div>
         {version.publishedAt ? (
-          <>
+          <div>
             <dt>Publication</dt>
-            <dd>par {version.publishedBy ?? '—'}</dd>
-          </>
+            <dd>
+              par {version.publishedBy ?? '—'} · {formatAt(version.publishedAt)}
+            </dd>
+          </div>
         ) : null}
+        <div className="ops-ground-facts__wide">
+          <dt>Source</dt>
+          <dd>
+            {version.source.authority ?? '—'} · {version.source.title ?? '—'}
+            {version.source.url?.startsWith('https://') ? (
+              <>
+                {' '}
+                ·{' '}
+                <a href={version.source.url} target="_blank" rel="noopener noreferrer nofollow">
+                  lien officiel
+                </a>
+              </>
+            ) : null}
+            {version.source.reference ? ` · ${version.source.reference}` : ''}
+          </dd>
+        </div>
+        <div className="ops-ground-facts__wide">
+          <dt>Consigne client</dt>
+          <dd>{version.customerGuidance}</dd>
+        </div>
+        <div className="ops-ground-facts__wide">
+          <dt>Empreinte SHA-256 de la définition</dt>
+          <dd className="et-code">{version.definitionSha256}</dd>
+        </div>
         {version.retiredAt ? (
-          <>
+          <div className="ops-ground-facts__wide">
             <dt>Retrait</dt>
             <dd>
-              par {version.retiredBy ?? '—'} : {version.retirementReason}
+              par {version.retiredBy ?? '—'} · {formatAt(version.retiredAt)} :{' '}
+              {version.retirementReason}
             </dd>
-          </>
+          </div>
         ) : null}
       </dl>
-      <pre className="et-json et-code" aria-label={`Définition de la version ${version.version}`}>
-        {JSON.stringify(version.definition, null, 2)}
-      </pre>
+      <details className="ops-compliance-json">
+        <summary>Définition technique (JSON, langage v{version.languageVersion})</summary>
+        <pre className="et-json et-code" aria-label={`Définition de la version ${version.version}`}>
+          {JSON.stringify(version.definition, null, 2)}
+        </pre>
+      </details>
       <FormAlert message={localError} />
 
       {version.status === 'DRAFT' && canManage ? (
-        <>
-          <form onSubmit={save} aria-label={`Modifier le brouillon v${version.version}`}>
+        <div className="ops-ground-forms">
+          <form
+            className="et-form ops-ground-form ops-ground-form--wide"
+            onSubmit={save}
+            aria-label={`Modifier le brouillon v${version.version}`}
+          >
             <h4>Brouillon : modification</h4>
+            <p className="ops-ground-form__hint">
+              Toute modification annule la vérification précédente : la source devra être vérifiée à
+              nouveau.
+            </p>
             <ContentFields content={content} onChange={setContent} idPrefix={`${prefix}-edit`} />
             <button type="submit" className="et-button et-button--secondary" disabled={busy}>
               Enregistrer le brouillon
             </button>
           </form>
           <form
+            className="et-form ops-ground-form"
             aria-label={`Vérifier la source v${version.version}`}
             onSubmit={(event) => {
               event.preventDefault();
@@ -245,29 +336,37 @@ function VersionCard({
             }}
           >
             <h4>Vérification de la source officielle</h4>
-            <label htmlFor={`${prefix}-checked`}>Source consultée le</label>
-            <input
-              id={`${prefix}-checked`}
-              type="date"
-              max={today()}
-              value={checkedOn}
-              onChange={(event) => setCheckedOn(event.target.value)}
-              required
-            />
-            <label htmlFor={`${prefix}-note`}>Note de vérification (facultative)</label>
-            <input
-              id={`${prefix}-note`}
-              value={note}
-              maxLength={1000}
-              onChange={(event) => setNote(event.target.value)}
-            />
+            <div className="et-field">
+              <label htmlFor={`${prefix}-checked`}>Source consultée le</label>
+              <input
+                id={`${prefix}-checked`}
+                className="et-input"
+                type="date"
+                max={today()}
+                value={checkedOn}
+                onChange={(event) => setCheckedOn(event.target.value)}
+                required
+              />
+            </div>
+            <div className="et-field">
+              <label htmlFor={`${prefix}-note`}>Note de vérification (facultative)</label>
+              <input
+                id={`${prefix}-note`}
+                className="et-input"
+                value={note}
+                maxLength={1000}
+                onChange={(event) => setNote(event.target.value)}
+              />
+            </div>
             <button type="submit" className="et-button et-button--secondary" disabled={busy}>
               Marquer la source comme vérifiée
             </button>
           </form>
-          <div>
+          <div className="ops-ground-form">
             <h4>Publication</h4>
-            <p>Seul un brouillon vérifié et inchangé depuis sa vérification peut être publié.</p>
+            <p className="ops-ground-form__hint">
+              Seul un brouillon vérifié et inchangé depuis sa vérification peut être publié.
+            </p>
             <button
               type="button"
               className="et-button"
@@ -287,14 +386,17 @@ function VersionCard({
               Publier la version {version.version}
             </button>
           </div>
-        </>
+        </div>
       ) : null}
 
       {version.status === 'PUBLISHED' ? (
         <>
-          <p>Version publiée : lecture seule. Toute correction passe par une nouvelle version.</p>
+          <p className="ops-ground-guardrail">
+            Version publiée : lecture seule. Toute correction passe par une nouvelle version.
+          </p>
           {canManage ? (
             <form
+              className="et-form ops-ground-form"
               aria-label={`Retirer la version ${version.version}`}
               onSubmit={(event) => {
                 event.preventDefault();
@@ -310,15 +412,21 @@ function VersionCard({
               }}
             >
               <h4>Retrait</h4>
-              <label htmlFor={`${prefix}-reason`}>Motif du retrait</label>
-              <input
-                id={`${prefix}-reason`}
-                value={reason}
-                minLength={10}
-                maxLength={500}
-                required
-                onChange={(event) => setReason(event.target.value)}
-              />
+              <p className="ops-ground-form__hint">
+                Le retrait est motivé et conserve l’historique de la version.
+              </p>
+              <div className="et-field">
+                <label htmlFor={`${prefix}-reason`}>Motif du retrait</label>
+                <input
+                  id={`${prefix}-reason`}
+                  className="et-input"
+                  value={reason}
+                  minLength={10}
+                  maxLength={500}
+                  required
+                  onChange={(event) => setReason(event.target.value)}
+                />
+              </div>
               <button type="submit" className="et-button et-button--secondary" disabled={busy}>
                 Retirer la version {version.version}
               </button>
@@ -339,6 +447,7 @@ function VersionCard({
 export function ComplianceRulesAdmin() {
   const canManage = useCan('compliance.rule.manage');
   const [rules, setRules] = useState<ComplianceRuleSummary[] | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<ComplianceRule | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState(emptyContent);
@@ -349,8 +458,10 @@ export function ComplianceRulesAdmin() {
 
   const load = useCallback(async () => {
     const result = await auth.admin.compliance.rules({ limit: 100 });
-    if (result.ok) setRules(result.data.items);
-    else setError(result.error.message);
+    if (result.ok) {
+      setRules(result.data.items);
+      setNextCursor(result.data.nextCursor);
+    } else setError(result.error.message);
   }, []);
 
   useEffect(() => {
@@ -407,13 +518,40 @@ export function ComplianceRulesAdmin() {
 
   const hasDraft = selected?.versions.some((version) => version.status === 'DRAFT') ?? false;
 
+  const versions = rules?.flatMap((rule) => rule.versions) ?? [];
+  const draftCount = versions.filter((version) => version.status === 'DRAFT').length;
+  const publishedCount = versions.filter((version) => version.status === 'PUBLISHED').length;
+  const verifiedCount = versions.filter(
+    (version) => version.verificationStatus === 'VERIFIED',
+  ).length;
+
   return (
-    <div className="et-network" data-testid="compliance-rules-workspace">
-      <p>
-        Le code n’est pas une autorité juridique : chaque règle provient d’une source officielle,
-        est vérifiée puis publiée par une personne habilitée. Sans règle publiée et vérifiée, un
-        dossier reste « à vérifier ». Aucune règle réelle n’est fournie par le logiciel.
-      </p>
+    <div
+      className="et-network ops-operations-workspace ops-ground-workspace ops-compliance-workspace"
+      data-testid="compliance-rules-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Référentiel réglementaire</p>
+          <h2>Sources vérifiées, versions et publication</h2>
+          <p>
+            Chaque version suit le même cycle : brouillon, vérification de la source officielle,
+            publication, puis retrait motivé si nécessaire. Une version publiée n’est jamais
+            modifiée.
+          </p>
+        </div>
+      </div>
+      <div className="ops-ground-guardrail ops-ground-guardrail--strong">
+        <p>
+          <strong>Le code n’est pas une autorité juridique.</strong> Chaque règle provient d’une
+          source officielle, est vérifiée puis publiée par une personne habilitée. Aucune règle
+          réelle n’est fournie par le logiciel.
+        </p>
+        <p>
+          Sans règle publiée et vérifiée, un dossier reste « à vérifier » : l’absence de règle
+          applicable ne vaut jamais conformité.
+        </p>
+      </div>
       <FormAlert message={error} />
       {notice ? (
         <FormStatus>
@@ -421,36 +559,109 @@ export function ComplianceRulesAdmin() {
         </FormStatus>
       ) : null}
 
-      <section aria-labelledby="compliance-rules-list-title">
-        <h2 id="compliance-rules-list-title">Règles</h2>
-        {!rules ? <p role="status">Chargement des règles…</p> : null}
-        {rules?.length === 0 ? <p>Aucune règle enregistrée.</p> : null}
+      {rules ? (
+        <section className="ops-operations-kpis" aria-label="Indicateurs des règles chargées">
+          <OpsKpiCard
+            label="Règles chargées"
+            value={rules.length}
+            helper={
+              nextCursor ? 'Éléments chargés · liste partielle' : 'Toutes les règles sont chargées'
+            }
+            icon="permit"
+            tone="info"
+          />
+          <OpsKpiCard
+            label="Versions brouillon"
+            value={draftCount}
+            helper="Modifiables, non exploitées"
+            icon="document"
+            tone="neutral"
+          />
+          <OpsKpiCard
+            label="Versions publiées"
+            value={publishedCount}
+            helper="Lecture seule"
+            icon="check"
+            tone="info"
+          />
+          <OpsKpiCard
+            label="Sources vérifiées"
+            value={verifiedCount}
+            helper="Versions dont la source a été vérifiée"
+            icon="shield"
+            tone="info"
+          />
+        </section>
+      ) : null}
+      {rules && nextCursor ? (
+        <p className="ops-ground-partial" role="note">
+          Données partielles — d’autres éléments sont disponibles. Les indicateurs ne portent que
+          sur les {rules.length} règles chargées.
+        </p>
+      ) : null}
+
+      <section
+        className="ops-operations-section ops-operations-section--primary"
+        aria-labelledby="compliance-rules-list-title"
+      >
+        <div className="et-actions">
+          <div>
+            <p className="ops-operations-section-kicker">Catalogue</p>
+            <h2 id="compliance-rules-list-title">Règles</h2>
+          </div>
+        </div>
+        {!rules && !error ? <OpsLoadingState title="Chargement des règles…" /> : null}
+        {rules?.length === 0 ? (
+          <OpsEmptyState
+            title="Aucune règle enregistrée."
+            description="Le logiciel ne fournit aucune règle : chacune est saisie à partir d’une source officielle."
+          />
+        ) : null}
         {rules && rules.length > 0 ? (
           <div className="et-table-wrap">
-            <table>
+            <table className="et-table">
               <caption>Règles réglementaires et versions</caption>
               <thead>
                 <tr>
-                  <th>Référence</th>
-                  <th>Titre</th>
-                  <th>Versions</th>
-                  <th>Action</th>
+                  <th scope="col">Référence</th>
+                  <th scope="col">Titre</th>
+                  <th scope="col">Versions</th>
+                  <th scope="col">Statuts</th>
+                  <th scope="col">Fiche</th>
                 </tr>
               </thead>
               <tbody>
                 {rules.map((rule) => (
-                  <tr key={rule.reference}>
-                    <td className="et-code">{rule.reference}</td>
+                  <tr
+                    key={rule.reference}
+                    className={
+                      selected?.reference === rule.reference ? 'ops-table-row--selected' : undefined
+                    }
+                  >
+                    <th scope="row" className="et-code">
+                      {rule.reference}
+                    </th>
                     <td>{rule.title}</td>
+                    <td>{rule.versions.length}</td>
                     <td>
-                      {rule.versions
-                        .map((version) => `v${version.version} ${STATUS_LABELS[version.status]}`)
-                        .join(', ')}
+                      <ul className="ops-compliance-version-list">
+                        {rule.versions.map((version) => (
+                          <li key={version.version}>
+                            <span className="ops-compliance-version-label">v{version.version}</span>
+                            <OpsStatusBadge tone={STATUS_TONES[version.status]}>
+                              {STATUS_LABELS[version.status]}
+                            </OpsStatusBadge>
+                            <SourceBadge verified={version.verificationStatus === 'VERIFIED'} />
+                          </li>
+                        ))}
+                      </ul>
                     </td>
                     <td>
                       <button
                         type="button"
                         className="et-button et-button--secondary"
+                        aria-controls="compliance-rule-detail-panel"
+                        aria-expanded={selected?.reference === rule.reference}
                         onClick={() => void open(rule.reference)}
                       >
                         Ouvrir {rule.reference}
@@ -465,55 +676,77 @@ export function ComplianceRulesAdmin() {
       </section>
 
       {selected ? (
-        <section
-          aria-labelledby="compliance-rule-detail-title"
-          data-testid="compliance-rule-detail"
+        <OpsDetailRegion
+          id="compliance-rule-detail-panel"
+          focusKey={selected.reference}
+          onClose={() => setSelected(null)}
         >
-          <div className="et-actions">
-            <h2 id="compliance-rule-detail-title">
-              {selected.title} · <span className="et-code">{selected.reference}</span>
-            </h2>
-            {canManage && !hasDraft ? (
-              <button
-                type="button"
-                className="et-button et-button--secondary"
-                disabled={busy}
-                onClick={() =>
-                  void run(
-                    () => auth.admin.compliance.createVersion(selected.reference),
-                    'Nouvelle version créée en brouillon (copie de la dernière).',
-                  )
-                }
-              >
-                Créer une nouvelle version
-              </button>
-            ) : null}
-          </div>
-          {selected.versions.map((version) => (
-            <VersionCard
-              key={`${selected.reference}-${version.version}-${version.updatedAt}`}
-              rule={selected}
-              version={version}
-              canManage={canManage}
-              busy={busy}
-              run={run}
-            />
-          ))}
-        </section>
+          <section
+            className="et-network-panel ops-ground-detail"
+            aria-labelledby="compliance-rule-detail-title"
+            data-testid="compliance-rule-detail"
+          >
+            <div className="et-actions ops-ground-detail__header">
+              <div>
+                <p className="ops-operations-section-kicker">
+                  Règle réglementaire · {selected.versions.length} version(s)
+                </p>
+                <h2 id="compliance-rule-detail-title">
+                  {selected.title} · <span className="et-code">{selected.reference}</span>
+                </h2>
+              </div>
+              {canManage && !hasDraft ? (
+                <button
+                  type="button"
+                  className="et-button et-button--secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(
+                      () => auth.admin.compliance.createVersion(selected.reference),
+                      'Nouvelle version créée en brouillon (copie de la dernière).',
+                    )
+                  }
+                >
+                  Créer une nouvelle version
+                </button>
+              ) : null}
+            </div>
+            {selected.versions.map((version) => (
+              <VersionCard
+                key={`${selected.reference}-${version.version}-${version.updatedAt}`}
+                rule={selected}
+                version={version}
+                canManage={canManage}
+                busy={busy}
+                run={run}
+              />
+            ))}
+          </section>
+        </OpsDetailRegion>
       ) : null}
 
       {canManage ? (
-        <form onSubmit={create} aria-label="Créer une règle">
-          <h2>Nouvelle règle (brouillon)</h2>
-          <label htmlFor={titleId}>Titre interne de la règle</label>
-          <input
-            id={titleId}
-            value={title}
-            minLength={3}
-            maxLength={160}
-            required
-            onChange={(event) => setTitle(event.target.value)}
-          />
+        <form
+          className="et-form et-network-form ops-ground-panel"
+          onSubmit={create}
+          aria-label="Créer une règle"
+        >
+          <div>
+            <p className="ops-operations-section-kicker">Saisie depuis une source officielle</p>
+            <h2>Nouvelle règle (brouillon)</h2>
+          </div>
+          <div className="et-field">
+            <label htmlFor={titleId}>Titre interne de la règle</label>
+            <input
+              id={titleId}
+              className="et-input"
+              value={title}
+              minLength={3}
+              maxLength={160}
+              required
+              onChange={(event) => setTitle(event.target.value)}
+            />
+          </div>
           <ContentFields content={content} onChange={setContent} idPrefix="new-rule" />
           <button type="submit" className="et-button" disabled={busy}>
             Créer le brouillon
