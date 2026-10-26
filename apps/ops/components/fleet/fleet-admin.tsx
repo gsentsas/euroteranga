@@ -12,6 +12,7 @@ import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
 import { OpsConfirmSubmit } from '../ops-confirm-submit';
 import { OpsDetailRegion } from '../ops-detail-region';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { assignedLabel } from '../seat-maps/seat-map-format';
 import { SeatMapAssignmentForm } from '../seat-maps/seat-map-assignment-form';
 import {
@@ -48,6 +49,21 @@ const NEXT_STATUSES: Record<VehicleStatus, Array<VehicleStatusTransitionInput['s
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
 const volumeFormat = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3 });
+
+function vehicleStatusTone(
+  status: VehicleStatus,
+): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
+  switch (status) {
+    case 'ACTIVE':
+      return 'success';
+    case 'OUT_OF_SERVICE':
+      return 'warning';
+    case 'RETIRED':
+      return 'danger';
+    case 'PLANNED':
+      return 'info';
+  }
+}
 
 function volumeM3(litres: number | null): string {
   return litres === null ? '—' : `${volumeFormat.format(litres / 1000)} m³`;
@@ -297,7 +313,11 @@ function VehicleDetail({
         <dt>Nom opérationnel</dt>
         <dd data-testid="vehicle-name">{vehicle.name ?? '—'}</dd>
         <dt>Statut</dt>
-        <dd data-testid="vehicle-status">{STATUS_LABELS[vehicle.status]}</dd>
+        <dd data-testid="vehicle-status">
+          <OpsStatusBadge tone={vehicleStatusTone(vehicle.status)}>
+            {STATUS_LABELS[vehicle.status]}
+          </OpsStatusBadge>
+        </dd>
         <dt>Constructeur et modèle</dt>
         <dd>
           {vehicle.manufacturer} {vehicle.model}
@@ -458,25 +478,78 @@ export function FleetAdmin() {
 
   if (!vehicles) return <p role="status">Chargement de la flotte…</p>;
 
+  const plannedCount = vehicles.filter((vehicle) => vehicle.status === 'PLANNED').length;
+  const activeCount = vehicles.filter((vehicle) => vehicle.status === 'ACTIVE').length;
+  const unavailableCount = vehicles.filter(
+    (vehicle) => vehicle.status === 'OUT_OF_SERVICE' || vehicle.status === 'RETIRED',
+  ).length;
+
   return (
-    <div className="et-network" data-testid="fleet-workspace">
-      <p>
-        Registre des véhicules exploités. Un véhicule est enregistré comme planifié ; son statut
-        change uniquement par une transition motivée, et le retrait est définitif.
-      </p>
+    <div
+      className="et-network ops-operations-workspace ops-fleet-workspace"
+      data-testid="fleet-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Exploitation du parc</p>
+          <h2>Flotte opérationnelle</h2>
+          <p>
+            Registre des véhicules exploités. Un véhicule est enregistré comme planifié ; son statut
+            change uniquement par une transition motivée, et le retrait est définitif.
+          </p>
+        </div>
+      </div>
+
       {feedback}
-      {canManage ? (
-        <CreateVehicleForm
-          countries={countries}
-          run={run}
-          busy={busy}
-          onCreated={(vehicleId) => {
-            void load().then(() => setSelectedId(vehicleId));
-          }}
+
+      <section className="ops-operations-kpis" aria-label="Indicateurs de la flotte">
+        <OpsKpiCard
+          label="Véhicules affichés"
+          value={vehicles.length}
+          helper={nextCursor ? 'Liste partielle · autres véhicules disponibles' : 'Liste chargée'}
+          icon="bus"
+          tone="info"
         />
+        <OpsKpiCard
+          label="Planifiés"
+          value={plannedCount}
+          helper="Préparation ou mise en service"
+          icon="dispatch"
+          tone="info"
+        />
+        <OpsKpiCard
+          label="En service"
+          value={activeCount}
+          helper="Disponibles pour l’exploitation"
+          icon="check"
+          tone="success"
+        />
+        <OpsKpiCard
+          label="Indisponibles"
+          value={unavailableCount}
+          helper="Hors service ou retirés"
+          icon="alert"
+          tone={unavailableCount > 0 ? 'warning' : 'neutral'}
+        />
+      </section>
+
+      {canManage ? (
+        <div className="ops-fleet-create-panel">
+          <CreateVehicleForm
+            countries={countries}
+            run={run}
+            busy={busy}
+            onCreated={(vehicleId) => {
+              void load().then(() => setSelectedId(vehicleId));
+            }}
+          />
+        </div>
       ) : null}
 
-      <section aria-labelledby="vehicles-title">
+      <section
+        className="ops-operations-section ops-operations-section--primary"
+        aria-labelledby="vehicles-title"
+      >
         <h2 id="vehicles-title">Véhicules</h2>
         <div className="et-table-wrap">
           <table className="et-table">
@@ -504,7 +577,11 @@ export function FleetAdmin() {
                     {vehicle.manufacturer} {vehicle.model}
                   </td>
                   <td>{registrationOf(vehicle)}</td>
-                  <td>{STATUS_LABELS[vehicle.status]}</td>
+                  <td>
+                    <OpsStatusBadge tone={vehicleStatusTone(vehicle.status)}>
+                      {STATUS_LABELS[vehicle.status]}
+                    </OpsStatusBadge>
+                  </td>
                   <td>
                     <button
                       type="button"

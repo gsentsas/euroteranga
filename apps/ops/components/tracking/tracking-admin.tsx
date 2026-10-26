@@ -13,6 +13,7 @@ import type {
 import { FormAlert, FormStatus } from '@euroteranga/ui';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 import { ComfortAdmin } from './comfort-admin';
 
@@ -29,6 +30,36 @@ const PROVIDER_LABELS: Record<TrackingProviderStatus, string> = {
   STALE: 'Données anciennes',
   UNAVAILABLE: 'Indisponible',
 };
+
+function providerTone(
+  status: TrackingProviderStatus,
+): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
+  switch (status) {
+    case 'UP':
+      return 'success';
+    case 'DEGRADED':
+      return 'warning';
+    case 'STALE':
+      return 'warning';
+    case 'UNAVAILABLE':
+      return 'danger';
+  }
+}
+
+function visibilityTone(
+  visibility: TrackingVisibility,
+): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
+  switch (visibility) {
+    case 'PRECISE':
+      return 'success';
+    case 'APPROXIMATE':
+      return 'info';
+    case 'CHECKPOINT_ONLY':
+      return 'warning';
+    case 'HIDDEN':
+      return 'neutral';
+  }
+}
 
 const formatAt = (value: string | null | undefined) =>
   value
@@ -503,7 +534,11 @@ function TrackingDetail({
         <dt>Visibilité</dt>
         <dd>{VISIBILITY_LABELS[detail.config?.visibility ?? 'HIDDEN']}</dd>
         <dt>Provider</dt>
-        <dd data-testid="tracking-provider-status">{PROVIDER_LABELS[detail.providerStatus]}</dd>
+        <dd data-testid="tracking-provider-status">
+          <OpsStatusBadge tone={providerTone(detail.providerStatus)}>
+            {PROVIDER_LABELS[detail.providerStatus]}
+          </OpsStatusBadge>
+        </dd>
       </dl>
 
       <ConfigPanel detail={detail} devices={devices} disabled={busy} onChanged={reload} />
@@ -605,12 +640,73 @@ export function TrackingAdmin() {
 
   if (!trips) return <p role="status">Chargement du Tracking…</p>;
 
+  const enabledCount = trips.filter((trip) => trip.config?.enabled).length;
+  const healthyCount = trips.filter((trip) => trip.providerStatus === 'UP').length;
+  const attentionCount = trips.filter(
+    (trip) =>
+      trip.providerStatus === 'DEGRADED' ||
+      trip.providerStatus === 'STALE' ||
+      trip.providerStatus === 'UNAVAILABLE',
+  ).length;
+
   return (
-    <div className="et-network" data-testid="tracking-workspace">
+    <div
+      className="et-network ops-operations-workspace ops-tracking-workspace"
+      data-testid="tracking-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Supervision terrain</p>
+          <h2>Tracking des voyages</h2>
+          <p>
+            Suivi opérationnel des positions, devices et capacités publiques. La réception d’une
+            donnée GPS ne modifie jamais automatiquement sa visibilité publique.
+          </p>
+        </div>
+      </div>
+
       <FormAlert message={error} />
-      <section className="et-network-panel" aria-labelledby="tracking-trips-title">
+
+      <section className="ops-operations-kpis" aria-label="Indicateurs du Tracking">
+        <OpsKpiCard
+          label="Voyages suivis"
+          value={trips.length}
+          helper="Planifiés ou en cours"
+          icon="location"
+          tone="info"
+        />
+        <OpsKpiCard
+          label="Suivi actif"
+          value={enabledCount}
+          helper="Tracking explicitement activé"
+          icon="route"
+          tone="success"
+        />
+        <OpsKpiCard
+          label="Providers actifs"
+          value={healthyCount}
+          helper="Source de données disponible"
+          icon="check"
+          tone="success"
+        />
+        <OpsKpiCard
+          label="À surveiller"
+          value={attentionCount}
+          helper="Dégradé, ancien ou indisponible"
+          icon="alert"
+          tone={attentionCount > 0 ? 'warning' : 'neutral'}
+        />
+      </section>
+
+      <section
+        className="et-network-panel ops-operations-section ops-operations-section--primary"
+        aria-labelledby="tracking-trips-title"
+      >
         <div className="et-actions">
-          <h2 id="tracking-trips-title">Voyages actifs</h2>
+          <div>
+            <p className="ops-operations-section-kicker">Exploitation temps réel</p>
+            <h2 id="tracking-trips-title">Voyages actifs</h2>
+          </div>
           <button
             className="et-button et-button--secondary"
             type="button"
@@ -640,8 +736,16 @@ export function TrackingAdmin() {
                   <th scope="row">{trip.reference}</th>
                   <td>{trip.route.code}</td>
                   <td>{trip.vehicle?.code ?? '—'}</td>
-                  <td>{VISIBILITY_LABELS[trip.config?.visibility ?? 'HIDDEN']}</td>
-                  <td>{PROVIDER_LABELS[trip.providerStatus]}</td>
+                  <td>
+                    <OpsStatusBadge tone={visibilityTone(trip.config?.visibility ?? 'HIDDEN')}>
+                      {VISIBILITY_LABELS[trip.config?.visibility ?? 'HIDDEN']}
+                    </OpsStatusBadge>
+                  </td>
+                  <td>
+                    <OpsStatusBadge tone={providerTone(trip.providerStatus)}>
+                      {PROVIDER_LABELS[trip.providerStatus]}
+                    </OpsStatusBadge>
+                  </td>
                   <td>{formatAt(trip.lastObservation?.observedAt)}</td>
                   <td>
                     <button

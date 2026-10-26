@@ -15,6 +15,7 @@ import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
 import { OpsDetailRegion } from '../ops-detail-region';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 import { RouteEditor } from './route-editor';
 
@@ -568,7 +569,11 @@ function RouteForm({
 }
 
 function ActiveState({ active }: { active: boolean }) {
-  return <span className="et-tag">{active ? 'Actif' : 'Inactif'}</span>;
+  return (
+    <OpsStatusBadge tone={active ? 'success' : 'neutral'}>
+      {active ? 'Actif' : 'Inactif'}
+    </OpsStatusBadge>
+  );
 }
 
 export function NetworkAdmin() {
@@ -640,14 +645,55 @@ export function NetworkAdmin() {
   if (!data) return <p role="status">Chargement du réseau…</p>;
 
   return (
-    <div className="et-network" data-testid="network-workspace">
-      <p>
-        Les routes sont des données versionnées. Une version publiée reste consultable et ne peut
-        plus être modifiée.
-      </p>
+    <div
+      className="et-network ops-operations-workspace ops-network-workspace"
+      data-testid="network-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Infrastructure commerciale</p>
+          <h2>Réseau Europe ↔ Afrique</h2>
+          <p>
+            Les routes sont des données versionnées. Une version publiée reste consultable et ne
+            peut plus être modifiée.
+          </p>
+        </div>
+      </div>
+
       {feedback}
 
-      <section aria-labelledby="countries-title">
+      <section className="ops-operations-kpis" aria-label="Indicateurs du réseau">
+        <OpsKpiCard
+          label="Pays"
+          value={data.countries.length}
+          helper={`${data.countries.filter((country) => country.active).length} actifs`}
+          icon="network"
+          tone="info"
+        />
+        <OpsKpiCard
+          label="Arrêts"
+          value={data.stops.length}
+          helper={`${data.stops.filter((stop) => stop.active).length} actifs`}
+          icon="location"
+          tone="success"
+        />
+        <OpsKpiCard
+          label="Checkpoints"
+          value={data.checkpoints.length}
+          helper={`${data.checkpoints.filter((checkpoint) => checkpoint.travellerVisible).length} visibles voyageurs`}
+          icon="check"
+          tone="warning"
+        />
+        <OpsKpiCard
+          label="Routes"
+          value={data.routes.length}
+          helper={`${data.routes.filter((route) => route.active).length} actives`}
+          icon="route"
+          tone="info"
+        />
+      </section>
+
+      <section className="ops-operations-section" aria-labelledby="countries-title">
         <h2 id="countries-title">Pays</h2>
         {canManage ? <CountryForm run={run} busy={busy} onDone={reload} /> : null}
         <div className="et-table-wrap">
@@ -698,7 +744,7 @@ export function NetworkAdmin() {
         </div>
       </section>
 
-      <section aria-labelledby="stops-title">
+      <section className="ops-operations-section" aria-labelledby="stops-title">
         <h2 id="stops-title">Arrêts</h2>
         {canManage ? (
           <StopForm countries={data.countries} run={run} busy={busy} onDone={reload} />
@@ -748,7 +794,7 @@ export function NetworkAdmin() {
         </div>
       </section>
 
-      <section aria-labelledby="checkpoints-title">
+      <section className="ops-operations-section" aria-labelledby="checkpoints-title">
         <h2 id="checkpoints-title">Checkpoints</h2>
         {canManage ? (
           <CheckpointForm countries={data.countries} run={run} busy={busy} onDone={reload} />
@@ -820,7 +866,10 @@ export function NetworkAdmin() {
         </div>
       </section>
 
-      <section aria-labelledby="routes-title">
+      <section
+        className="ops-operations-section ops-operations-section--primary"
+        aria-labelledby="routes-title"
+      >
         <h2 id="routes-title">Routes</h2>
         {canManage ? (
           <RouteForm

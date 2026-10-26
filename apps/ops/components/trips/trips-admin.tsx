@@ -13,6 +13,7 @@ import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
 import { OpsEmptyState, OpsErrorState, OpsLoadingState } from '../ops-data-state';
 import { OpsDetailRegion } from '../ops-detail-region';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { usePublishedSeatMapVersions } from '../seat-maps/use-published-versions';
 import { useCan } from '../staff-access';
 import { TripDetail } from './trip-detail';
@@ -23,6 +24,21 @@ type Run = ReturnType<typeof useAdminFeedback>['run'];
 interface VersionOption {
   id: string;
   label: string;
+}
+
+function tripStatusTone(status: TripStatus): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
+  switch (status) {
+    case 'DRAFT':
+      return 'neutral';
+    case 'SCHEDULED':
+      return 'info';
+    case 'IN_PROGRESS':
+      return 'warning';
+    case 'COMPLETED':
+      return 'success';
+    case 'CANCELLED':
+      return 'danger';
+  }
 }
 
 /** Trips can only be created on a currently PUBLISHED route version. */
@@ -223,42 +239,98 @@ export function TripsAdmin() {
       vehicle.cargoVolumeLiters !== null,
   );
 
+  const visibleTrips = trips ?? [];
+  const scheduledCount = visibleTrips.filter((trip) => trip.status === 'SCHEDULED').length;
+  const inProgressCount = visibleTrips.filter((trip) => trip.status === 'IN_PROGRESS').length;
+  const completedCount = visibleTrips.filter((trip) => trip.status === 'COMPLETED').length;
+
   return (
-    <div className="et-network" data-testid="trips-workspace">
-      <p>
-        Un voyage est une occurrence planifiée d’une version de route publiée. Son horaire, saisi en
-        UTC, est figé dès la planification ; le véhicule est facultatif.
-      </p>
+    <div
+      className="et-network ops-operations-workspace ops-trips-workspace"
+      data-testid="trips-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Planification opérationnelle</p>
+          <h2>Voyages et rotations</h2>
+          <p>
+            Un voyage est une occurrence planifiée d’une version de route publiée. Son horaire,
+            saisi en UTC, est figé dès la planification ; le véhicule est facultatif.
+          </p>
+        </div>
+      </div>
+
       {feedback}
-      {canManage ? (
-        <CreateTripForm
-          versions={versions}
-          vehicles={primaryVehicles}
-          run={run}
-          busy={busy}
-          onCreated={(tripId) => {
-            void load().then(() => setSelectedId(tripId));
-          }}
-        />
+
+      {trips ? (
+        <section className="ops-operations-kpis" aria-label="Indicateurs des voyages">
+          <OpsKpiCard
+            label="Voyages affichés"
+            value={visibleTrips.length}
+            helper={nextCursor ? 'Liste partielle · autres voyages disponibles' : 'Liste chargée'}
+            icon="route"
+            tone="info"
+          />
+          <OpsKpiCard
+            label="Planifiés"
+            value={scheduledCount}
+            helper="Départs préparés"
+            icon="dispatch"
+            tone="info"
+          />
+          <OpsKpiCard
+            label="En cours"
+            value={inProgressCount}
+            helper="Rotations actuellement engagées"
+            icon="bus"
+            tone={inProgressCount > 0 ? 'warning' : 'neutral'}
+          />
+          <OpsKpiCard
+            label="Terminés"
+            value={completedCount}
+            helper="Voyages clôturés"
+            icon="check"
+            tone="success"
+          />
+        </section>
       ) : null}
 
-      <section aria-labelledby="trips-title">
+      {canManage ? (
+        <div className="ops-trips-create-panel">
+          <CreateTripForm
+            versions={versions}
+            vehicles={primaryVehicles}
+            run={run}
+            busy={busy}
+            onCreated={(tripId) => {
+              void load().then(() => setSelectedId(tripId));
+            }}
+          />
+        </div>
+      ) : null}
+
+      <section
+        className="ops-operations-section ops-operations-section--primary"
+        aria-labelledby="trips-title"
+      >
         <h2 id="trips-title">Voyages</h2>
-        <div className="et-field">
-          <label htmlFor={filterId}>Filtrer par statut</label>
-          <select
-            id={filterId}
-            className="et-select"
-            value={status}
-            onChange={(event) => setStatus(event.target.value as TripStatus | '')}
-          >
-            <option value="">Tous</option>
-            {(Object.keys(TRIP_STATUS_LABELS) as TripStatus[]).map((value) => (
-              <option key={value} value={value}>
-                {TRIP_STATUS_LABELS[value]}
-              </option>
-            ))}
-          </select>
+        <div className="ops-trips-filter">
+          <div className="et-field">
+            <label htmlFor={filterId}>Filtrer par statut</label>
+            <select
+              id={filterId}
+              className="et-select"
+              value={status}
+              onChange={(event) => setStatus(event.target.value as TripStatus | '')}
+            >
+              <option value="">Tous</option>
+              {(Object.keys(TRIP_STATUS_LABELS) as TripStatus[]).map((value) => (
+                <option key={value} value={value}>
+                  {TRIP_STATUS_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         {!trips && !listError ? <OpsLoadingState title="Chargement des voyages" /> : null}
         {!trips && listError ? (
@@ -296,7 +368,11 @@ export function TripsAdmin() {
                     </td>
                     <td>{formatUtc(trip.plannedDepartureAt)}</td>
                     <td>{trip.vehicle?.code ?? '—'}</td>
-                    <td>{TRIP_STATUS_LABELS[trip.status]}</td>
+                    <td>
+                      <OpsStatusBadge tone={tripStatusTone(trip.status)}>
+                        {TRIP_STATUS_LABELS[trip.status]}
+                      </OpsStatusBadge>
+                    </td>
                     <td>
                       <button
                         type="button"
