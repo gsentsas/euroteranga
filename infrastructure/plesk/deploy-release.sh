@@ -112,7 +112,7 @@ restart_all
 if ! wait_until_ready "release ${SHA:0:12}"; then
   echo "New release failed its readiness checks" >&2
   if [ -n "$PREVIOUS" ] && [ -d "$PREVIOUS" ]; then
-    ROLLBACK_LINK="$APP_ROOT/.current.rollback.$"
+    ROLLBACK_LINK="$APP_ROOT/.current.rollback.$$"
     ln -s "$PREVIOUS" "$ROLLBACK_LINK"
     mv -Tf "$ROLLBACK_LINK" "$CURRENT"
     restart_all

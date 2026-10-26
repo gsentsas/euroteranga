@@ -263,6 +263,7 @@ jobs:
             bash -n "$script"
           done
           bash infrastructure/plesk/test-readiness.sh
+          grep -Fq 'ROLLBACK_LINK="$APP_ROOT/.current.rollback.$$"' infrastructure/plesk/deploy-release.sh
           for app in web booking client tracking ops crew; do
             unit="infrastructure/plesk/systemd/euroteranga-${app}.service"
             if grep -Eq '^ExecStart=.*pnpm' "$unit"; then
