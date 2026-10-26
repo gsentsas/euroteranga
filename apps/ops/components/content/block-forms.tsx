@@ -40,6 +40,8 @@ const ICON_LABELS: Record<(typeof CONTENT_ICONS)[number], string> = {
   seat: 'Siège',
   phone: 'Téléphone',
   mail: 'Courriel',
+  parcel: 'Colis',
+  freight: 'Fret (palette)',
 };
 
 const ILLUSTRATION_LABELS: Record<(typeof CONTENT_ILLUSTRATIONS)[number], string> = {
@@ -47,6 +49,9 @@ const ILLUSTRATION_LABELS: Record<(typeof CONTENT_ILLUSTRATIONS)[number], string
   route: 'Itinéraire Paris ↔ Dakar',
   tracking: 'Suivi du trajet',
   coach: 'Autocar',
+  parcel: 'Colis',
+  freight: 'Fret (palette)',
+  services: 'Voyageurs, colis et fret',
 };
 
 const DIRECTION_LABELS: Record<(typeof ROUTE_DIRECTIONS)[number], string> = {
@@ -276,6 +281,15 @@ function BlockFields({ block, path }: { block: ContentBlock; path: DocumentPath 
           />
           <TextField path={[...path, 'lead']} label="Introduction" max={400} multiline />
           <MediaField path={[...path, 'mediaId']} label="Photo de fond" />
+          <SelectField
+            path={[...path, 'illustration']}
+            label="Illustration sans photo"
+            options={[
+              ['', 'Autocar (par défaut)'],
+              ...entries(ILLUSTRATION_LABELS).filter(([value]) => value !== 'coach'),
+            ]}
+            hint="Dessin du fond bleu nuit lorsqu’aucune photo n’est choisie (autocar par défaut)."
+          />
           <HeroSearchFields path={[...path, 'search']} />
           <LinkFields path={[...path, 'primaryCta']} legend="Bouton principal" optional />
           <LinkFields path={[...path, 'secondaryCta']} legend="Bouton secondaire" optional />
@@ -378,6 +392,8 @@ function BlockFields({ block, path }: { block: ContentBlock; path: DocumentPath 
               ['steps', 'Étapes numérotées'],
               ['trust', 'Garanties'],
               ['highlights', 'Rangée d’atouts (sous le bandeau d’accueil)'],
+              ['offers', 'Offres de services (cartes illustrées avec bouton)'],
+              ['journeys', 'Parcours par service (une étape par ligne du texte)'],
             ]}
           />
           <ListField

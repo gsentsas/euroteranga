@@ -15,6 +15,8 @@ import {
   siteSettingsSchema,
 } from './schemas.js';
 
+const linkOf = () => ({ label: 'Ouvrir', target: { kind: 'app', app: 'client' } });
+
 const page = (blocks: unknown[]) => ({
   title: 'Page',
   seo: { description: 'Description de la page.' },
@@ -34,6 +36,61 @@ describe('content model', () => {
     expect(siteSettingsSchema.parse(DEFAULT_SITE_SETTINGS)).toEqual(DEFAULT_SITE_SETTINGS);
     expect(navigationSchema.parse(DEFAULT_NAVIGATION)).toEqual(DEFAULT_NAVIGATION);
     expect(documentSchemaOf('PAGE')).toBe(pageDocumentSchema);
+  });
+
+  it('links the default home and navigation only to existing anchors and apps (PUBLIC-HOME-1)', () => {
+    const home = pageDocumentSchema.parse(DEFAULT_HOME_PAGE);
+    const anchors = new Set(home.blocks.flatMap((block) => (block.anchor ? [block.anchor] : [])));
+    const LINK_KINDS = ['anchor', 'page', 'app', 'url'];
+    const targets: Array<{ kind: string; id?: string }> = [];
+    const collect = (value: unknown): void => {
+      if (Array.isArray(value)) return value.forEach(collect);
+      if (!value || typeof value !== 'object') return;
+      const kind = (value as { kind?: unknown }).kind;
+      if (typeof kind === 'string' && LINK_KINDS.includes(kind)) {
+        targets.push(value as { kind: string; id?: string });
+      }
+      Object.values(value).forEach(collect);
+    };
+    collect([home.blocks, DEFAULT_NAVIGATION]);
+    expect(targets.length).toBeGreaterThan(10);
+    for (const target of targets) {
+      // A page link could be missing from a new environment: none by default.
+      expect(['anchor', 'app'], JSON.stringify(target)).toContain(target.kind);
+      if (target.kind === 'anchor') expect([...anchors], target.id).toContain(target.id);
+    }
+    // The three services are introduced right after the hero.
+    const services = home.blocks[1];
+    expect(services).toMatchObject({ type: 'cards', variant: 'offers', anchor: 'services' });
+    expect(services?.type === 'cards' ? services.items.map((item) => item.icon) : []).toEqual([
+      'bus',
+      'parcel',
+      'freight',
+    ]);
+  });
+
+  it('accepts the parcel and freight vocabulary and keeps earlier documents valid', () => {
+    const parsed = pageDocumentSchema.parse(
+      page([
+        { type: 'hero', title: 'Accueil', illustration: 'services' },
+        {
+          type: 'cards',
+          variant: 'journeys',
+          title: 'Parcours',
+          items: [{ icon: 'freight', title: 'Fret', text: 'Étape 1\nÉtape 2' }],
+        },
+        { type: 'cta', title: 'Colis', button: linkOf(), illustration: 'parcel' },
+      ]),
+    );
+    expect(parsed.blocks[0]).toMatchObject({ type: 'hero', illustration: 'services' });
+    // An earlier hero, without illustration, keeps the coach drawing (unset).
+    const earlier = pageDocumentSchema.parse(page([{ type: 'hero', title: 'Accueil' }]));
+    expect(earlier.blocks[0]).not.toHaveProperty('illustration');
+    expect(
+      pageDocumentSchema.safeParse(
+        page([{ type: 'cards', variant: 'unknown', title: 'X', items: [] }]),
+      ).success,
+    ).toBe(false);
   });
 
   it('never invents owner information: missing values are listed', () => {

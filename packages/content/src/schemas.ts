@@ -126,10 +126,22 @@ export const CONTENT_ICONS = [
   'seat',
   'phone',
   'mail',
+  /** PUBLIC-HOME-1: parcels and freight, the two shipping services. */
+  'parcel',
+  'freight',
 ] as const;
 
 /** Built-in decorative illustrations (original SVG, no external asset). */
-export const CONTENT_ILLUSTRATIONS = ['none', 'route', 'tracking', 'coach'] as const;
+export const CONTENT_ILLUSTRATIONS = [
+  'none',
+  'route',
+  'tracking',
+  'coach',
+  /** PUBLIC-HOME-1: parcels, freight pallets, and the three services together. */
+  'parcel',
+  'freight',
+  'services',
+] as const;
 
 const sectionHead = {
   anchor: anchorSchema.optional(),
@@ -180,6 +192,11 @@ export const heroBlockSchema = z
     note: optionalText(240),
     /** Background photograph (media library); a navy backdrop without it. */
     mediaId: uuid.optional(),
+    /**
+     * Decorative drawing of the navy backdrop when there is no photograph
+     * (PUBLIC-HOME-1). Unset keeps the coach drawing of earlier pages.
+     */
+    illustration: z.enum(CONTENT_ILLUSTRATIONS).optional(),
     /** Show the Paris ↔ Dakar journey card next to the title. */
     journeyCard: z.boolean().default(true),
     /**
@@ -251,7 +268,20 @@ const cardSchema = z
   })
   .strict();
 
-export const CARD_VARIANTS = ['features', 'services', 'steps', 'trust', 'highlights'] as const;
+/**
+ * `offers` (PUBLIC-HOME-1): one illustrated card per service with its call to
+ * action. `journeys`: one card per service whose text lists its steps, one
+ * step per line.
+ */
+export const CARD_VARIANTS = [
+  'features',
+  'services',
+  'steps',
+  'trust',
+  'highlights',
+  'offers',
+  'journeys',
+] as const;
 
 export const cardsBlockSchema = z
   .object({

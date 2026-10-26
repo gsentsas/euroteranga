@@ -1,3 +1,4 @@
+import { DEFAULT_NAVIGATION } from '@euroteranga/content';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AuditService } from '../../../src/authorization/audit.service.js';
@@ -585,13 +586,11 @@ describe('realistic seed: cleanup retires seed data only (isolated database)', (
     expect(fleet.find((item) => item.code === 'ET-COACH-001')!.amenities).toEqual([]);
     expect(fleet.find((item) => item.code === 'OPS_COACH_01')).toBeUndefined(); // PLANNED
     expect((await publicGet(h, '/content/pages?path=/paris-dakar')).status).toBe(404);
+    // The cleanup restores the default navigation, whatever its current labels.
     const site = await publicGet(h, '/content/site');
-    expect(site.body.navigation.header.map((link: { label: string }) => link.label)).toEqual([
-      'Trajets',
-      'Services',
-      'Suivi',
-      'Aide',
-    ]);
+    expect(site.body.navigation.header.map((link: { label: string }) => link.label)).toEqual(
+      DEFAULT_NAVIGATION.header.map((link) => link.label),
+    );
 
     // A second cleanup finds nothing more to retire.
     const again = await h.cleanup({ dryRun: false });

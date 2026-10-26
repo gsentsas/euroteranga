@@ -99,6 +99,23 @@ const PATHS: Record<IconName, ReactElement> = {
       <path d="m5 8 7 5 7-5" {...stroke} strokeLinejoin="round" />
     </>
   ),
+  /** PUBLIC-HOME-1: a taped cardboard box. */
+  parcel: (
+    <>
+      <path d="m12 3 8 4v10l-8 4-8-4V7l8-4Z" {...stroke} strokeLinejoin="round" />
+      <path d="m4 7 8 4 8-4M12 11v10" {...stroke} strokeLinejoin="round" />
+      <path d="m8 5 8 4" {...stroke} strokeLinecap="round" />
+    </>
+  ),
+  /** PUBLIC-HOME-1: stacked boxes on a pallet. */
+  freight: (
+    <>
+      <rect x="4" y="9" width="7" height="7" rx="1" {...stroke} />
+      <rect x="13" y="9" width="7" height="7" rx="1" {...stroke} />
+      <rect x="8.5" y="3" width="7" height="6" rx="1" {...stroke} />
+      <path d="M3 19h18M6 16v3M12 16v3M18 16v3" {...stroke} strokeLinecap="round" />
+    </>
+  ),
   snowflake: (
     <path
       d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"

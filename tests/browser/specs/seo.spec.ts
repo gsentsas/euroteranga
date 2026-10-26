@@ -21,7 +21,7 @@ test.describe('SEO of the public website (CI: never indexable)', () => {
 
   test('the homepage carries canonical, social and noindex metadata', async ({ page }) => {
     await page.goto(appUrl(web));
-    await expect(page).toHaveTitle('EURO TERANGA — Autocar Paris ↔ Dakar');
+    await expect(page).toHaveTitle('EURO TERANGA — Voyages, colis et fret Paris ↔ Dakar');
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
       'content',
       /noindex, nofollow/,

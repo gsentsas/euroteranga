@@ -37,7 +37,14 @@ import {
   type ItineraryLookup,
   type SitePlace,
 } from './itinerary.js';
-import { CoachIllustration, RouteIllustration, TrackingIllustration } from './illustrations.js';
+import {
+  CoachIllustration,
+  FreightIllustration,
+  ParcelIllustration,
+  RouteIllustration,
+  ServicesIllustration,
+  TrackingIllustration,
+} from './illustrations.js';
 import { resolveHref, type AppLinks } from './links.js';
 import { formatPrice, type FromPrice } from './money.js';
 
@@ -175,8 +182,20 @@ function Illustration({ name }: { name: string }) {
   if (name === 'route') return <RouteIllustration />;
   if (name === 'tracking') return <TrackingIllustration />;
   if (name === 'coach') return <CoachIllustration />;
+  if (name === 'parcel') return <ParcelIllustration />;
+  if (name === 'freight') return <FreightIllustration />;
+  if (name === 'services') return <ServicesIllustration />;
   return null;
 }
+
+/** Drawing of an offer card without photograph, chosen from its service icon. */
+const OFFER_ILLUSTRATIONS: Partial<Record<string, string>> = {
+  bus: 'coach',
+  parcel: 'parcel',
+  freight: 'freight',
+  route: 'route',
+  pin: 'tracking',
+};
 
 /** Rendered widths of an image, for the browser to pick a rendition. */
 const SIZES = {
@@ -314,6 +333,10 @@ function HeroSearch({
       {keep.map(([name, value], index) => (
         <input key={`${name}-${index}`} type="hidden" name={name} value={value} />
       ))}
+      {/* PUBLIC-HOME-1: next to the parcel and freight actions, name the passenger one. */}
+      <p className="public-search__caption">
+        <Icon name="bus" /> Voyageurs · Réserver un trajet
+      </p>
       <div className="public-search__field">
         <label htmlFor="public-search-from">
           <Icon name="bus" /> Départ
@@ -466,9 +489,12 @@ function Hero({
           fetchPriority="high"
           {...(focal ? { style: focal } : {})}
         />
-      ) : (
-        <div className="public-hero__art" aria-hidden="true">
-          <CoachIllustration />
+      ) : block.illustration === 'none' ? null : (
+        <div
+          className={`public-hero__art${block.illustration ? ` public-hero__art--${block.illustration}` : ''}`}
+          aria-hidden="true"
+        >
+          {block.illustration ? <Illustration name={block.illustration} /> : <CoachIllustration />}
         </div>
       )}
       <div className="public-container public-hero__inner">
@@ -507,8 +533,9 @@ function Hero({
           {block.primaryCta || block.secondaryCta ? (
             <div className="public-hero__actions">
               {block.primaryCta ? (
+                // With the trip search, its gold button stays the only primary action.
                 <a
-                  className="public-button public-button--gold"
+                  className={`public-button ${block.search ? 'public-button--light' : 'public-button--gold'}`}
                   href={resolveHref(block.primaryCta.target, ctx.apps)}
                 >
                   {block.primaryCta.label} <Icon name="arrow" />
@@ -1255,6 +1282,8 @@ const CARD_GRID: Record<string, string> = {
   services: 'public-services',
   features: 'public-trust-grid',
   highlights: 'public-trust-grid',
+  offers: 'public-offers',
+  journeys: 'public-journeys',
 };
 const CARD_CLASS: Record<string, string> = {
   trust: 'public-trust-card',
@@ -1262,7 +1291,89 @@ const CARD_CLASS: Record<string, string> = {
   services: 'public-service-card',
   features: 'public-trust-card',
   highlights: 'public-trust-card',
+  offers: 'public-offer-card',
+  journeys: 'public-journey-card',
 };
+
+type CardsBlock = Extract<ContentBlock, { type: 'cards' }>;
+
+/**
+ * PUBLIC-HOME-1: one card per service, as visible as the others: a photo or
+ * the drawing of its service, then its call to action. Two cards (parcels and
+ * freight) form a wide duo instead of a row of three.
+ */
+function Offers({ block, ctx }: { block: CardsBlock; ctx: SiteContext }) {
+  const duo = block.items.length === 2;
+  return (
+    <div className={`public-offers${duo ? ' public-offers--duo' : ''}`}>
+      {block.items.map((item, at) => {
+        const art = item.icon ? OFFER_ILLUSTRATIONS[item.icon] : undefined;
+        return (
+          <article key={at} className="public-offer-card">
+            {item.mediaId ? (
+              <Figure mediaId={item.mediaId} ctx={ctx} sizes="gallery" />
+            ) : art && !duo ? (
+              <div className="public-offer-card__art">
+                <Illustration name={art} />
+              </div>
+            ) : null}
+            <div className="public-offer-card__body">
+              {item.icon ? (
+                <span className="public-card-icon">
+                  <Icon name={item.icon} />
+                </span>
+              ) : null}
+              <h3>{item.title}</h3>
+              <p>{item.text}</p>
+              {item.link ? (
+                <a
+                  className={`public-button ${duo ? 'public-button--gold' : 'public-button--secondary'} public-offer-card__cta`}
+                  href={resolveHref(item.link.target, ctx.apps)}
+                >
+                  {item.link.label} <Icon name="arrow" />
+                </a>
+              ) : null}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+/** PUBLIC-HOME-1: one card per service; its text lists the steps, one per line. */
+function Journeys({ block, ctx }: { block: CardsBlock; ctx: SiteContext }) {
+  return (
+    <div className="public-journeys">
+      {block.items.map((item, at) => {
+        const steps = item.text
+          .split('\n')
+          .map((step) => step.trim())
+          .filter(Boolean);
+        return (
+          <article key={at} className="public-journey-card">
+            <div className="public-journey-card__head">
+              {item.icon ? (
+                <span className="public-card-icon">
+                  <Icon name={item.icon} />
+                </span>
+              ) : null}
+              <h3>{item.title}</h3>
+            </div>
+            <ol className="public-journey-card__steps">
+              {steps.map((step, index) => (
+                <li key={index}>{step}</li>
+              ))}
+            </ol>
+            {item.link ? (
+              <ContentAnchor className="public-journey-card__link" link={item.link} ctx={ctx} />
+            ) : null}
+          </article>
+        );
+      })}
+    </div>
+  );
+}
 
 function Section({
   block,
@@ -1402,6 +1513,28 @@ export function Block({
     case 'cards':
       if (block.variant === 'highlights') {
         return <Highlights block={block} ctx={ctx} titleId={titleId} />;
+      }
+      if (block.variant === 'offers' || block.variant === 'journeys') {
+        return (
+          <Section
+            block={block}
+            index={index}
+            ctx={ctx}
+            extraClass={`public-section--${block.variant}${block.variant === 'offers' && block.items.length === 2 ? ' public-section--duo' : ''}`}
+          >
+            <SectionHead
+              id={titleId}
+              kicker={block.kicker}
+              title={block.title}
+              intro={block.intro}
+            />
+            {block.variant === 'offers' ? (
+              <Offers block={block} ctx={ctx} />
+            ) : (
+              <Journeys block={block} ctx={ctx} />
+            )}
+          </Section>
+        );
       }
       return (
         <Section block={block} index={index} ctx={ctx}>

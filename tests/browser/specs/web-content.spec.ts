@@ -43,12 +43,13 @@ test.describe('public website content (CMS)', () => {
   }) => {
     await page.goto(appUrl(web));
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-      'Voyagez entre l’Europe et l’Afrique en toute confiance',
+      'Voyagez et expédiez entre l’Europe et l’Afrique',
     );
-    await expect(page.getByRole('navigation', { name: 'Navigation principale' })).toContainText(
-      'Trajets',
-    );
+    const nav = page.getByRole('navigation', { name: 'Navigation principale' });
+    await expect(nav).toContainText('Voyager');
+    await expect(nav).toContainText('Colis & fret');
     await expect(page.locator('#trajets')).toBeVisible();
+    await expect(page.locator('#expeditions')).toBeVisible();
     await expect(page.locator('#aide details').first()).toBeVisible();
     await expect(page.getByRole('contentinfo')).toContainText('EURO TERANGA');
   });

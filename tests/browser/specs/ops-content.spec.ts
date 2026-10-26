@@ -389,3 +389,47 @@ test.describe('ops website content editor', () => {
     ).toBe(403);
   });
 });
+
+/**
+ * PUBLIC-HOME-1: the home page model (Voyageurs · Colis · Fret) is loaded as a
+ * draft of `/` and never published from here. The public website only serves
+ * published revisions, so the shared home page of the other scenarios keeps
+ * its default content. A CONTENT_EDITOR has no seo.manage: the SEO is kept.
+ */
+test.describe('ops home page model', () => {
+  test('loads the Voyageurs · Colis · Fret sections as an unpublished draft of the home page', async ({
+    page,
+  }) => {
+    await signedIn(page.context(), 'contentEditor');
+    await page.goto(appUrl(ops, '/contenus'));
+    await expect(page.getByTestId('content-workspace')).toBeVisible();
+    const createHome = page.getByRole('button', {
+      name: 'Créer la page d’accueil à partir du contenu actuel',
+    });
+    if (await createHome.count()) await createHome.click();
+    else await page.getByRole('link', { name: /la page \/$/ }).click();
+    await expect(page).toHaveURL(/\/contenus\/edition\?entree=/);
+
+    const editor = page.getByTestId('content-editor');
+    await expect(editor.getByRole('heading', { level: 2, name: '/' })).toBeVisible();
+    const model = page.getByRole('form', { name: 'Charger le modèle de page d’accueil' });
+    await expect(editor).toContainText('Le référencement actuel est conservé');
+    await model.getByRole('button', { name: 'Charger le modèle Voyageurs · Colis · Fret' }).click();
+    await model.getByRole('button', { name: 'Charger dans le brouillon' }).click();
+    await expect(
+      notice(page, 'Modèle Voyageurs · Colis · Fret chargé dans le brouillon'),
+    ).toBeVisible();
+
+    // A draft only: nothing is published, the SEO field stays an seo.manage decision.
+    await expect(editor.getByText('Jamais publiée')).toBeVisible();
+    await expect(editor.locator('.ops-content-badge--live')).toHaveCount(0);
+    await expect(editor.getByLabel('Description dans les résultats de recherche')).toBeDisabled();
+    const preview = page.frameLocator('[data-testid="content-preview-frame"]');
+    await expect(preview.getByRole('heading', { level: 1 })).toHaveText(
+      'Voyagez et expédiez entre l’Europe et l’Afrique',
+    );
+    await expect(
+      preview.getByRole('heading', { name: 'Voyageurs, colis ou fret : choisissez votre service' }),
+    ).toBeVisible();
+  });
+});
