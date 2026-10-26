@@ -15,14 +15,14 @@ import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { PAYMENT_STATUS_LABELS } from '../payments/payment-format';
 import { useCan } from '../staff-access';
 
-const STATUS_LABELS: Record<CustomerBookingStatus, string> = {
+export const STATUS_LABELS: Record<CustomerBookingStatus, string> = {
   HELD: 'Provisoire',
   CONFIRMED: 'Confirmée',
   EXPIRED: 'Expirée',
   CANCELLED: 'Annulée',
 };
 
-function bookingStatusTone(
+export function bookingStatusTone(
   status: CustomerBookingStatus,
 ): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
   switch (status) {

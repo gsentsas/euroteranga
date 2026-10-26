@@ -180,19 +180,31 @@ export function OpsTabs({
   selected,
   onSelect,
   label,
+  idPrefix,
+  className,
 }: {
   tabs: readonly OpsTab[];
   selected: string;
   onSelect: (id: string) => void;
   label: string;
+  /** Links each tab to its panel: `${idPrefix}-tab-${id}` controls `${idPrefix}-panel-${id}`. */
+  idPrefix?: string;
+  className?: string;
 }) {
   return (
-    <div className="ops-tabs" role="tablist" aria-label={label}>
+    <div
+      className={`ops-tabs${className ? ` ${className}` : ''}`}
+      role="tablist"
+      aria-label={label}
+    >
       {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"
           role="tab"
+          {...(idPrefix
+            ? { id: `${idPrefix}-tab-${tab.id}`, 'aria-controls': `${idPrefix}-panel-${tab.id}` }
+            : {})}
           aria-selected={selected === tab.id}
           tabIndex={selected === tab.id ? 0 : -1}
           onClick={() => onSelect(tab.id)}

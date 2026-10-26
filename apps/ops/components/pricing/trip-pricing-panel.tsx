@@ -5,7 +5,7 @@ import {
   type AdminTrip,
   type ResolvedTripFare,
 } from '@euroteranga/auth-client';
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import type { useAdminFeedback } from '../admin/admin-feedback';
 import { placeOf } from '../trips/trip-format';
@@ -159,8 +159,8 @@ function FarePreview({ trip }: { trip: AdminTrip }) {
 /**
  * Historical pricing of a trip (pricing.read to see it). A DRAFT trip may be
  * priced with a compatible PUBLISHED version by trip.manage + pricing.read
- * holders; the current value is sent as the expected state. Frozen once
- * SCHEDULED or CANCELLED.
+ * holders, after an explicit "Modifier la tarification"; the current value is
+ * sent as the expected state. Frozen once SCHEDULED or CANCELLED.
  */
 export function TripPricingPanel({
   trip,
@@ -168,6 +168,7 @@ export function TripPricingPanel({
   run,
   busy,
   onReload,
+  editToken = 0,
 }: {
   trip: AdminTrip;
   /** trip.manage + pricing.read. */
@@ -175,15 +176,32 @@ export function TripPricingPanel({
   run: Run;
   busy: boolean;
   onReload: () => Promise<void>;
+  /** A new value opens the editor (cockpit "Modifier" menu). */
+  editToken?: number;
 }) {
   const selectId = useId();
   const editable = canAssign && trip.status === 'DRAFT';
   const options = useCompatibleFareVersions(trip, editable);
   const current = trip.fareTableVersion;
   const [value, setValue] = useState('');
+  const [editing, setEditing] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const showEditor = editable && editing;
   useEffect(() => {
     setValue(trip.fareTableVersionId ?? '');
   }, [trip.fareTableVersionId]);
+  useEffect(() => {
+    if (editToken > 0) setEditing(true);
+  }, [editToken]);
+  useEffect(() => {
+    if (showEditor) formRef.current?.focus();
+  }, [showEditor]);
+  const closeEditor = () => {
+    setValue(trip.fareTableVersionId ?? '');
+    setEditing(false);
+    requestAnimationFrame(() => editButtonRef.current?.focus());
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -200,12 +218,27 @@ export function TripPricingPanel({
         }),
       `Tarification du voyage ${trip.reference} : ${label}.`,
     );
-    if (ok) await onReload();
+    if (ok) {
+      setEditing(false);
+      await onReload();
+    }
   };
 
   return (
     <section aria-labelledby="trip-pricing-title">
-      <h3 id="trip-pricing-title">Tarification</h3>
+      <div className="ops-trip-section-head">
+        <h3 id="trip-pricing-title">Tarification</h3>
+        {editable && !editing ? (
+          <button
+            ref={editButtonRef}
+            type="button"
+            className="et-button et-button--secondary"
+            onClick={() => setEditing(true)}
+          >
+            Modifier la tarification
+          </button>
+        ) : null}
+      </div>
       <p>
         Grille du voyage :{' '}
         <strong data-testid="trip-fare-table">{assignedFareLabel(current)}</strong>
@@ -220,9 +253,11 @@ export function TripPricingPanel({
           La tarification est figée : elle fait partie de l’historique du voyage.
         </p>
       ) : null}
-      {editable ? (
+      {showEditor ? (
         <form
-          className="et-form et-network-form"
+          ref={formRef}
+          tabIndex={-1}
+          className="et-form et-network-form ops-trip-editor"
           aria-label={`Tarification du voyage ${trip.reference}`}
           onSubmit={submit}
         >
@@ -249,9 +284,14 @@ export function TripPricingPanel({
               proposées. La tarification reste facultative pour planifier.
             </p>
           </div>
-          <button className="et-button" type="submit" disabled={busy}>
-            Enregistrer la tarification
-          </button>
+          <div className="et-actions">
+            <button className="et-button" type="submit" disabled={busy}>
+              Enregistrer la tarification
+            </button>
+            <button type="button" className="et-button et-button--secondary" onClick={closeEditor}>
+              Fermer l’édition
+            </button>
+          </div>
         </form>
       ) : null}
       {current ? <FarePreview trip={trip} /> : null}
