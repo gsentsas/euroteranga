@@ -277,6 +277,7 @@ jobs:
           grep -Fq 'Persistent=true' infrastructure/plesk/systemd/euroteranga-postgres-restore-check.timer
           grep -Fq 'User=euroteranga.com_5p804yhows7' infrastructure/plesk/systemd/euroteranga-postgres-backup.service
           grep -Fq 'User=root' infrastructure/plesk/systemd/euroteranga-postgres-restore-check.service
+          grep -Fq 'Environment=PATH=/opt/plesk/node/24/bin:/usr/local/bin:/usr/sbin:/usr/bin:/bin' infrastructure/plesk/systemd/euroteranga-postgres-restore-check.service
           grep -Fq 'ReadWritePaths=/var/www/vhosts/euroteranga.com/backups' infrastructure/plesk/systemd/euroteranga-postgres-backup.service
           grep -Fq 'ReadWritePaths=/var/www/vhosts/euroteranga.com/backups' infrastructure/plesk/systemd/euroteranga-postgres-restore-check.service
           if grep -RFn '\\n' infrastructure/plesk/nginx --include='*.conf'; then
