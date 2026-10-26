@@ -252,8 +252,8 @@ catalogs:
       specifier: 16.4.2
       version: 16.4.2
     nodemailer:
-      specifier: 10.1.2
-      version: 10.1.2
+      specifier: 10.1.7
+      version: 10.1.7
     otpauth:
       specifier: 9.5.2
       version: 9.5.2
@@ -305,8 +305,8 @@ catalogs:
 
 overrides:
   body-parser: 2.4.0
-  deepmerge-ts: 8.0.2
   multer: 2.5.0
+  deepmerge-ts: 8.0.2
   mysql2: 3.24.5
 
 importers:
@@ -378,7 +378,7 @@ importers:
         version: 8.3.0
       nodemailer:
         specifier: 'catalog:'
-        version: 10.1.2
+        version: 10.1.7
       otpauth:
         specifier: 'catalog:'
         version: 9.5.2
@@ -2994,8 +2994,8 @@ packages:
       sass:
         optional: true
 
-  nodemailer@10.1.2:
-    resolution: {integrity: sha512-rnQn9Rzh8RAwcp42MVsIvxbsv6YZ2a2/av+uyJ/LPU1+2QSlrRgFsWWZTKenyRUqkIl8urOI0c4+CEcmFdsvQw==}
+  nodemailer@10.1.7:
+    resolution: {integrity: sha512-OQa6FDln5fLttmqSbjDiRYvFDOFNrBqfiOwHPlEbURil3b+vPB1v8xpi+Sp46drzNDlsTnNsS502vthmz56r4w==}
     engines: {node: '>=20.0.0'}
 
   object-assign@4.1.1:
@@ -5845,7 +5845,7 @@ snapshots:
       - '@types/node'
       - babel-plugin-macros
 
-  nodemailer@10.1.2: {}
+  nodemailer@10.1.7: {}
 
   object-assign@4.1.1: {}
 
