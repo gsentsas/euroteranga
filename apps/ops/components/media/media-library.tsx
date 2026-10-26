@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { OpsConfirmSubmit } from '../ops-confirm-submit';
+import { OpsEmptyState, OpsLoadingState } from '../ops-data-state';
+import { OpsKpiCard } from '../ops-ui';
 import { useCan } from '../staff-access';
 import {
   ALT_TEXT_MAX,
@@ -446,7 +448,7 @@ function MediaDetail({
     return (
       <section className="ops-content-section" aria-label="Image">
         <FormAlert message={error} />
-        {error ? null : <p role="status">Chargement de l’image…</p>}
+        {error ? null : <OpsLoadingState title="Chargement de l’image…" />}
       </section>
     );
   }
@@ -512,7 +514,7 @@ function MediaDetail({
         </h2>
         <div className="ops-content-badges">
           <span
-            className={`ops-content-badge ${active ? 'ops-content-badge--live' : 'ops-content-badge--draft'}`}
+            className={`ops-content-badge ${active ? 'ops-content-badge--online' : 'ops-content-badge--error'}`}
           >
             {active ? 'Active' : 'Archivée'}
           </span>
@@ -572,13 +574,13 @@ function MediaDetail({
         ) : null}
       </form>
 
-      <section aria-labelledby={`${idPrefix}-usages`}>
+      <section className="ops-media-usages" aria-labelledby={`${idPrefix}-usages`}>
         <h3 id={`${idPrefix}-usages`}>Utilisation</h3>
         {usages.length === 0 ? (
           <p className="et-hint">Aucun contenu ni véhicule n’utilise cette image.</p>
         ) : (
           <>
-            <ul>
+            <ul className="ops-media-usages__list">
               {usages.map((usage) => (
                 <li key={`${usage.kind}-${usage.key}-${usage.status}`}>{usageLabel(usage)}</li>
               ))}
@@ -742,13 +744,25 @@ export function MediaLibrary() {
         .filter((item) => item.status === status),
     );
 
+  const captioned = items?.filter((item) => item.caption).length ?? 0;
+  const credited = items?.filter((item) => item.credit).length ?? 0;
+
   return (
-    <div className="et-network ops-media" data-testid="media-library">
-      <p>
-        Les images du site public. Chaque image est réencodée en WebP sans métadonnées et ne change
-        plus : pour la remplacer, importez-en une nouvelle. Une image affichée par une page ne peut
-        pas être archivée, et l’archivage est définitif.
-      </p>
+    <div
+      className="et-network ops-operations-workspace ops-ground-workspace ops-media"
+      data-testid="media-library"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Site public</p>
+          <h2>Images et usages du site public</h2>
+          <p>
+            Les images du site public. Chaque image est réencodée en WebP sans métadonnées et ne
+            change plus : pour la remplacer, importez-en une nouvelle. Une image affichée par une
+            page ne peut pas être archivée, et l’archivage est définitif.
+          </p>
+        </div>
+      </div>
       <FormAlert message={error} />
       {notice ? (
         <FormStatus>
@@ -762,7 +776,46 @@ export function MediaLibrary() {
         </p>
       ) : null}
 
-      <div className="ops-media-toolbar">
+      {items ? (
+        <section
+          className="ops-operations-kpis ops-operations-kpis--three"
+          aria-label="Indicateurs des images chargées"
+        >
+          <OpsKpiCard
+            label={status === 'ACTIVE' ? 'Images actives chargées' : 'Images archivées chargées'}
+            value={items.length}
+            helper={
+              nextCursor
+                ? 'Éléments chargés · liste partielle'
+                : 'Toutes les images de ce filtre sont chargées'
+            }
+            icon="media"
+            tone="info"
+          />
+          <OpsKpiCard
+            label="Avec légende"
+            value={captioned}
+            helper="Parmi les images chargées"
+            icon="content"
+            tone="neutral"
+          />
+          <OpsKpiCard
+            label="Avec crédit photo"
+            value={credited}
+            helper="Auteur ou détenteur des droits renseigné"
+            icon="users"
+            tone={credited < items.length ? 'warning' : 'neutral'}
+          />
+        </section>
+      ) : null}
+      {items && nextCursor ? (
+        <p className="ops-ground-partial" role="note">
+          Données partielles — d’autres images sont disponibles. Les indicateurs ne portent que sur
+          les {items.length} images chargées.
+        </p>
+      ) : null}
+
+      <div className="ops-media-toolbar ops-ground-panel">
         <div role="group" aria-label="Statut des images" className="ops-content-preview__sizes">
           {(
             [
@@ -815,15 +868,17 @@ export function MediaLibrary() {
             {status === 'ACTIVE' ? 'Images actives' : 'Images archivées'}
           </h2>
           {!shown ? (
-            <p role="status">Chargement des images…</p>
+            <OpsLoadingState title="Chargement des images…" />
           ) : shown.length === 0 ? (
-            <p className="et-hint">
-              {search.trim()
-                ? 'Aucune image chargée ne correspond à cette recherche.'
-                : status === 'ACTIVE'
-                  ? 'Aucune image pour l’instant.'
-                  : 'Aucune image archivée.'}
-            </p>
+            <OpsEmptyState
+              title={
+                search.trim()
+                  ? 'Aucune image chargée ne correspond à cette recherche.'
+                  : status === 'ACTIVE'
+                    ? 'Aucune image pour l’instant.'
+                    : 'Aucune image archivée.'
+              }
+            />
           ) : (
             <ul className="ops-media-grid" aria-label="Images">
               {shown.map((item) => (

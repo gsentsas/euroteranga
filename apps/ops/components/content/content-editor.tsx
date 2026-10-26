@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { OpsConfirmSubmit } from '../ops-confirm-submit';
+import { OpsLoadingState } from '../ops-data-state';
 import { useCan } from '../staff-access';
 import { ContentPreview, type PreviewSite } from './content-preview';
 import { DocumentForm } from './document-forms';
@@ -35,6 +36,12 @@ const STATUS_LABELS: Record<ContentRevisionSummary['status'], string> = {
   DRAFT: 'Brouillon',
   PUBLISHED: 'En ligne',
   SUPERSEDED: 'Remplacée',
+};
+
+const REVISION_BADGES: Record<ContentRevisionSummary['status'], string> = {
+  DRAFT: 'ops-content-badge--draft',
+  PUBLISHED: 'ops-content-badge--online',
+  SUPERSEDED: 'ops-content-badge--superseded',
 };
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
@@ -316,7 +323,7 @@ export function ContentEditor({ entryId }: { entryId: string }) {
       </div>
     );
   }
-  if (!entry) return <p role="status">Chargement du contenu…</p>;
+  if (!entry) return <OpsLoadingState title="Chargement du contenu…" />;
 
   const archived = entry.archivedAt !== null;
   const readOnly = !canManage || archived;
@@ -394,7 +401,9 @@ export function ContentEditor({ entryId }: { entryId: string }) {
   return (
     <div className="ops-content-editor" data-testid="content-editor">
       <p>
-        <Link href="/contenus">← Tous les contenus</Link>
+        <Link className="ops-content-back" href="/contenus">
+          ← Tous les contenus
+        </Link>
       </p>
       <header className="ops-content-editor__head">
         <div>
@@ -420,10 +429,20 @@ export function ContentEditor({ entryId }: { entryId: string }) {
           ) : null}
         </div>
       </header>
-      <dl className="ops-content-meta">
-        <RevisionLine label="En ligne" revision={entry.published} />
-        <RevisionLine label="Brouillon" revision={draft} />
-      </dl>
+      <div className="ops-content-states">
+        <div className="ops-content-state">
+          <p className="ops-operations-section-kicker">État publié</p>
+          <dl className="ops-content-meta">
+            <RevisionLine label="En ligne" revision={entry.published} />
+          </dl>
+        </div>
+        <div className="ops-content-state">
+          <p className="ops-operations-section-kicker">État du brouillon</p>
+          <dl className="ops-content-meta">
+            <RevisionLine label="Brouillon" revision={draft} />
+          </dl>
+        </div>
+      </div>
       {!canManage ? (
         <p className="et-hint">
           Lecture seule : modifier un contenu demande la permission content.manage.
@@ -602,7 +621,11 @@ export function ContentEditor({ entryId }: { entryId: string }) {
               {entry.history.map((revision) => (
                 <tr key={revision.id}>
                   <th scope="row">{revision.revision}</th>
-                  <td>{STATUS_LABELS[revision.status]}</td>
+                  <td>
+                    <span className={`ops-content-badge ${REVISION_BADGES[revision.status]}`}>
+                      {STATUS_LABELS[revision.status]}
+                    </span>
+                  </td>
                   <td>{formatDate(revision.publishedAt ?? revision.updatedAt)}</td>
                   <td>{(revision.publishedBy ?? revision.author)?.email ?? '—'}</td>
                   <td>{revision.note ?? '—'}</td>

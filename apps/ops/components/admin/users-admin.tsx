@@ -5,6 +5,8 @@ import { SubmitButton, TextField, useFormSubmit } from '@euroteranga/ui';
 import { useGetIdentity } from '@refinedev/core';
 import { useCallback, useEffect, useId, useState } from 'react';
 import { auth } from '../../lib/auth';
+import { OpsEmptyState, OpsLoadingState } from '../ops-data-state';
+import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 import { useAdminFeedback } from './admin-feedback';
 
@@ -13,6 +15,14 @@ const STATUS_LABELS: Record<AdminIdentity['status'], string> = {
   ACTIVE: 'Actif',
   SUSPENDED: 'Suspendu',
   DISABLED: 'Désactivé',
+};
+
+/** An active account is not a business success: never green. */
+const STATUS_TONES: Record<AdminIdentity['status'], 'info' | 'warning' | 'danger' | 'neutral'> = {
+  PENDING_VERIFICATION: 'warning',
+  ACTIVE: 'info',
+  SUSPENDED: 'danger',
+  DISABLED: 'neutral',
 };
 
 type Run = ReturnType<typeof useAdminFeedback>['run'];
@@ -42,8 +52,19 @@ function InviteStaffForm({
   });
 
   return (
-    <form className="et-form" onSubmit={submit} aria-label="Inviter un membre du personnel">
-      <h2>Inviter un membre du personnel</h2>
+    <form
+      className="et-form et-network-form ops-ground-panel"
+      onSubmit={submit}
+      aria-label="Inviter un membre du personnel"
+    >
+      <div>
+        <p className="ops-operations-section-kicker">Provisionnement STAFF</p>
+        <h2>Inviter un membre du personnel</h2>
+      </div>
+      <p className="ops-ground-form__hint">
+        Seuls les rôles du personnel sont proposés. Le compte s’active par le lien d’invitation,
+        puis configure son second facteur.
+      </p>
       <TextField
         label="Adresse e-mail professionnelle"
         name="email"
@@ -104,7 +125,7 @@ function ConfirmButton({
     <>
       <button
         type="button"
-        className="et-button"
+        className="et-button ops-sensitive-action"
         disabled={disabled}
         onClick={() => {
           setArmed(false);
@@ -155,17 +176,21 @@ function IdentityRow({
 
   return (
     <tr>
-      <td>
+      <th scope="row" className="ops-admin-identity">
         {who}
         {isSelf ? ' (vous)' : null}
-      </td>
-      <td>{STATUS_LABELS[identity.status]}</td>
+      </th>
       <td>
-        <ul className="et-actions" aria-label={`Rôles de ${who}`} style={{ padding: 0 }}>
-          {identity.roles.length === 0 ? <li>aucun</li> : null}
+        <OpsStatusBadge tone={STATUS_TONES[identity.status]}>
+          {STATUS_LABELS[identity.status]}
+        </OpsStatusBadge>
+      </td>
+      <td>
+        <ul className="ops-chip-list" aria-label={`Rôles de ${who}`}>
+          {identity.roles.length === 0 ? <li className="ops-ground-form__hint">aucun</li> : null}
           {identity.roles.map((roleKey) => (
-            <li key={roleKey} style={{ listStyle: 'none' }}>
-              <span className="et-tag">{roleKey}</span>{' '}
+            <li key={roleKey}>
+              <span className="ops-code-chip">{roleKey}</span>
               {canAssign && !isSelf ? (
                 <button
                   type="button"
@@ -187,13 +212,19 @@ function IdentityRow({
         </ul>
       </td>
       <td>
-        {identity.realm === 'STAFF' ? (identity.mfaEnabled ? 'Activée' : 'Non configurée') : '—'}
+        {identity.realm === 'STAFF' ? (
+          <OpsStatusBadge tone={identity.mfaEnabled ? 'info' : 'warning'}>
+            {identity.mfaEnabled ? 'Activée' : 'Non configurée'}
+          </OpsStatusBadge>
+        ) : (
+          '—'
+        )}
       </td>
       <td>
         {isSelf ? (
-          <span>Vos propres accès ne se modifient pas ici.</span>
+          <span className="ops-ground-form__hint">Vos propres accès ne se modifient pas ici.</span>
         ) : (
-          <div className="et-actions">
+          <div className="et-actions ops-admin-actions">
             {canAssign && grantable.length > 0 ? (
               <>
                 <label htmlFor={selectId} className="et-visually-hidden">
@@ -355,64 +386,140 @@ export function UsersAdmin() {
 
   const reload = () => void load();
 
+  const visible = items ?? [];
+  const activeCount = visible.filter((identity) => identity.status === 'ACTIVE').length;
+  const pendingCount = visible.filter(
+    (identity) => identity.status === 'PENDING_VERIFICATION',
+  ).length;
+  const blockedCount = visible.filter(
+    (identity) => identity.status === 'SUSPENDED' || identity.status === 'DISABLED',
+  ).length;
+  const population = realm === 'staff' ? 'Personnel' : 'Équipages';
+
   return (
-    <section aria-labelledby="users-title" style={{ display: 'grid', gap: '1rem' }}>
-      <h2 id="users-title">Comptes du personnel et des équipages</h2>
-      {feedback}
-      {canInvite ? <InviteStaffForm roles={roles} run={run} onDone={reload} /> : null}
-      <div className="et-actions" role="group" aria-label="Population affichée">
-        {(['staff', 'crew'] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            className={value === realm ? 'et-button' : 'et-button et-button--secondary'}
-            aria-pressed={value === realm}
-            onClick={() => setRealm(value)}
-          >
-            {value === 'staff' ? 'Personnel' : 'Équipages'}
-          </button>
-        ))}
-      </div>
-      {items === null ? (
-        <p role="status">Chargement…</p>
-      ) : (
-        <div className="et-table-wrap">
-          <table className="et-table">
-            <caption>{realm === 'staff' ? 'Personnel' : 'Équipages'}</caption>
-            <thead>
-              <tr>
-                <th scope="col">E-mail</th>
-                <th scope="col">Statut</th>
-                <th scope="col">Rôles</th>
-                <th scope="col">MFA</th>
-                <th scope="col">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((identity) => (
-                <IdentityRow
-                  key={identity.id}
-                  identity={identity}
-                  roles={roles}
-                  isSelf={identity.id === me?.id}
-                  run={run}
-                  busy={busy}
-                  onChanged={reload}
-                />
-              ))}
-            </tbody>
-          </table>
+    <section
+      className="et-network ops-operations-workspace ops-ground-workspace ops-admin-workspace"
+      aria-labelledby="users-title"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Administration des identités</p>
+          <h2 id="users-title">Comptes du personnel et des équipages</h2>
+          <p>
+            Chaque action dépend de sa propre permission : attribution de rôle, statut du compte,
+            fermeture des sessions et autorisation MFA restent distinctes. Les populations STAFF et
+            CREW ne partagent pas leurs rôles.
+          </p>
         </div>
-      )}
-      {nextCursor ? (
-        <button
-          type="button"
-          className="et-button et-button--secondary"
-          onClick={() => void load(nextCursor)}
-        >
-          Afficher plus
-        </button>
+      </div>
+      {feedback}
+      {items ? (
+        <section className="ops-operations-kpis" aria-label={`Indicateurs : ${population}`}>
+          <OpsKpiCard
+            label={`Comptes affichés · ${population}`}
+            value={visible.length}
+            helper={
+              nextCursor ? 'Éléments chargés · liste partielle' : 'Tous les comptes sont chargés'
+            }
+            icon="users"
+            tone="info"
+          />
+          <OpsKpiCard
+            label="Actifs"
+            value={activeCount}
+            helper="Parmi les comptes affichés"
+            icon="check"
+            tone="info"
+          />
+          <OpsKpiCard
+            label="En attente"
+            value={pendingCount}
+            helper="Invitation non encore activée"
+            icon="audit"
+            tone={pendingCount > 0 ? 'warning' : 'neutral'}
+          />
+          <OpsKpiCard
+            label="Suspendus ou désactivés"
+            value={blockedCount}
+            helper="Sans accès au back-office"
+            icon="shield"
+            tone={blockedCount > 0 ? 'danger' : 'neutral'}
+          />
+        </section>
       ) : null}
+      {items && nextCursor ? (
+        <p className="ops-ground-partial" role="note">
+          Données partielles — d’autres comptes sont disponibles. Les indicateurs ne portent que sur
+          les {visible.length} comptes chargés.
+        </p>
+      ) : null}
+      {canInvite ? <InviteStaffForm roles={roles} run={run} onDone={reload} /> : null}
+      <section
+        className="ops-operations-section ops-operations-section--primary"
+        aria-labelledby="users-list-title"
+      >
+        <div className="et-actions">
+          <div>
+            <p className="ops-operations-section-kicker">Registre des identités</p>
+            <h2 id="users-list-title">{population}</h2>
+          </div>
+          <div className="et-actions ops-segmented" role="group" aria-label="Population affichée">
+            {(['staff', 'crew'] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={value === realm ? 'et-button' : 'et-button et-button--secondary'}
+                aria-pressed={value === realm}
+                onClick={() => setRealm(value)}
+              >
+                {value === 'staff' ? 'Personnel' : 'Équipages'}
+              </button>
+            ))}
+          </div>
+        </div>
+        {items === null ? (
+          <OpsLoadingState title="Chargement des comptes…" />
+        ) : items.length === 0 ? (
+          <OpsEmptyState title="Aucun compte." description="Aucun compte pour cette population." />
+        ) : (
+          <div className="et-table-wrap">
+            <table className="et-table">
+              <caption>{population}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">E-mail</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col">Rôles</th>
+                  <th scope="col">MFA</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((identity) => (
+                  <IdentityRow
+                    key={identity.id}
+                    identity={identity}
+                    roles={roles}
+                    isSelf={identity.id === me?.id}
+                    run={run}
+                    busy={busy}
+                    onChanged={reload}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {nextCursor ? (
+          <button
+            type="button"
+            className="et-button et-button--secondary"
+            onClick={() => void load(nextCursor)}
+          >
+            Afficher plus
+          </button>
+        ) : null}
+      </section>
     </section>
   );
 }
