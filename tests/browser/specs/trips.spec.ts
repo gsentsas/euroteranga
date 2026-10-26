@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { appByName, appUrl } from '../apps.js';
-import { FIXTURES, tripSeed } from '../fixtures.js';
-import { directAdminApi, signInAndEnroll } from '../staff.js';
+import { FIXTURES, preauthenticatedSession, tripSeed } from '../fixtures.js';
+import { BROWSER_API_URL, directAdminApi, signInAndEnroll } from '../staff.js';
 
 const ops = appByName('ops');
 
@@ -43,8 +43,12 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
 
   const detail = page.getByRole('region', { name: `Voyage ${reference}` });
   await expect(detail.getByTestId('trip-status')).toHaveText('Brouillon');
+  // Read first: no form is open until an explicit "Modifier".
+  await expect(detail.getByRole('form')).toHaveCount(0);
 
   // Only the times are entered (UTC); the order comes from the route version.
+  await detail.getByRole('tab', { name: 'Itinéraire' }).click();
+  await detail.getByRole('button', { name: 'Modifier l’horaire' }).click();
   const timetable = detail.getByRole('form', { name: `Horaire du voyage ${reference}` });
   await timetable
     .getByLabel(`Départ de ${seed.originCode} (UTC)`, { exact: true })
@@ -54,7 +58,10 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
     .fill('2030-01-15T12:00');
   await timetable.getByRole('button', { name: 'Enregistrer l’horaire' }).click();
   await expect(notice(page, `Horaire du voyage ${reference} enregistré.`)).toBeVisible();
+  await expect(timetable).toHaveCount(0);
 
+  await detail.getByRole('tab', { name: 'Véhicules' }).click();
+  await detail.getByRole('button', { name: 'Affecter un véhicule principal' }).click();
   const vehicleForm = detail.getByRole('form', { name: `Véhicule du voyage ${reference}` });
   await vehicleForm
     .getByLabel('Véhicule à affecter', { exact: true })
@@ -65,6 +72,7 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
   ).toBeVisible();
   await expect(detail.getByTestId('trip-vehicle')).toContainText(seed.vehicleCode);
 
+  await detail.getByRole('button', { name: 'Affecter un véhicule d’appoint' }).click();
   const supportVehicleForm = detail.getByRole('form', {
     name: `Véhicule d’appoint du voyage ${reference}`,
   });
@@ -83,11 +91,18 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
   await expect(detail.getByTestId('trip-support-vehicle')).toContainText('1200 kg');
   await expect(detail.getByTestId('trip-support-vehicle')).toContainText('20 m³');
 
+  // The address keeps the open record and its tab: a reload reopens it there.
+  await expect(page).toHaveURL(/[?&]fiche=[^&]+&onglet=vehicules/u);
   await page.reload();
-  await page.getByRole('button', { name: `Consulter le voyage ${reference}` }).click();
+  await expect(detail.getByRole('tab', { name: 'Véhicules' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await expect(detail.getByTestId('trip-support-vehicle')).toContainText(seed.supportVehicleCode);
   await expect(detail.getByTestId('trip-support-vehicle')).toContainText('20 m³');
 
+  await detail.getByRole('tab', { name: 'Coûts' }).click();
+  await detail.getByRole('button', { name: 'Modifier les coûts' }).click();
   const costs = detail.getByRole('form', {
     name: `Coûts prévisionnels du voyage ${reference}`,
   });
@@ -110,7 +125,11 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
 
   // A full reload proves persistence and the second replacement proves edit + derived total.
   await page.reload();
-  await page.getByRole('button', { name: `Consulter le voyage ${reference}` }).click();
+  const costView = detail.getByRole('region', {
+    name: `Coûts prévisionnels du voyage ${reference}`,
+  });
+  await expect(costView.getByTestId('trip-cost-total')).toHaveText(/6\s?000,00 €/u);
+  await costView.getByRole('button', { name: 'Modifier les coûts' }).click();
   const persistedCosts = detail.getByRole('form', {
     name: `Coûts prévisionnels du voyage ${reference}`,
   });
@@ -126,8 +145,7 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
 
   // Reload again so 6 200 € is proven to come from the server, not just local form state.
   await page.reload();
-  await page.getByRole('button', { name: `Consulter le voyage ${reference}` }).click();
-  const reloadedCosts = detail.getByRole('form', {
+  const reloadedCosts = detail.getByRole('region', {
     name: `Coûts prévisionnels du voyage ${reference}`,
   });
   await expect(reloadedCosts.getByTestId('trip-cost-total')).toHaveText(/6\s?200,00 €/u);
@@ -136,6 +154,8 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
   await expect(notice(page, `Voyage ${reference} planifié.`)).toBeVisible();
   await expect(detail.getByTestId('trip-status')).toHaveText('Planifié');
   // The timetable is now read-only and frozen.
+  await detail.getByRole('tab', { name: 'Itinéraire' }).click();
+  await expect(detail.getByRole('button', { name: 'Modifier l’horaire' })).toHaveCount(0);
   await expect(detail.getByRole('form', { name: `Horaire du voyage ${reference}` })).toHaveCount(0);
   const frozen = detail.getByRole('table', { name: `Horaire du voyage ${reference} (UTC)` });
   await expect(frozen.getByRole('row').filter({ hasText: seed.originCode })).toContainText(
@@ -145,6 +165,10 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
     '15/01/2030 12:00 UTC',
   );
 
+  // Cancellation is out of the way: "Plus" → sensitive zone → reason → confirmation.
+  await expect(detail.getByRole('form', { name: `Annuler le voyage ${reference}` })).toHaveCount(0);
+  await detail.getByRole('button', { name: 'Plus' }).click();
+  await detail.getByRole('menuitem', { name: 'Annuler le voyage…' }).click();
   const cancel = detail.getByRole('form', { name: `Annuler le voyage ${reference}` });
   await cancel.getByLabel('Motif de l’annulation', { exact: true }).fill('Annulation synthétique');
   await cancel.getByRole('button', { name: 'Annuler le voyage' }).click();
@@ -158,6 +182,7 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
   await expect(detail.getByTestId('trip-status')).toHaveText('Annulé');
   await expect(detail.getByRole('form')).toHaveCount(0);
 
+  await detail.getByRole('tab', { name: 'Historique' }).click();
   const history = detail
     .getByRole('list', { name: `Historique du voyage ${reference}` })
     .getByRole('listitem');
@@ -166,6 +191,140 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
     'Annulation (Planifié → Annulé) — Annulation synthétique',
   );
   await expect(page.getByRole('row').filter({ hasText: reference })).toContainText('Annulé');
+  expect(errors).toEqual([]);
+});
+
+test('ops trips: the cockpit summarises a trip from real data, with keyboard tabs, deep links and explicit edits', async ({
+  page,
+}) => {
+  const errors = trackPageErrors(page);
+  const seed = tripSeed();
+  const reference = seed.seededTripReference;
+  // Pre-created session: this scenario does not consume the shared login-IP budget.
+  await page.context().addCookies([
+    {
+      name: 'et_staff_session',
+      value: preauthenticatedSession('tripCockpitAdmin'),
+      url: BROWSER_API_URL,
+      httpOnly: true,
+      secure: false,
+      sameSite: 'Strict',
+    },
+  ]);
+  await page.goto(appUrl(ops, '/'));
+  await mainNav(page).getByRole('link', { name: 'Voyages' }).click();
+  await page.getByRole('button', { name: `Consulter le voyage ${reference}` }).click();
+  const detail = page.getByRole('region', { name: `Voyage ${reference}` });
+
+  // Header: the route version's own ends; no timetable is invented for this draft.
+  await expect(
+    detail.getByRole('heading', {
+      level: 2,
+      name: `Voyage ${reference} ${seed.originCode} vers ${seed.destinationCode}`,
+    }),
+  ).toBeVisible();
+  await expect(detail.getByTestId('trip-status')).toHaveText('Brouillon');
+  await expect(detail.getByText('Horaire à définir')).toHaveCount(2);
+
+  // KPI row: each figure comes from its own source; empty sources say so.
+  const kpis = detail.getByRole('region', { name: 'Indicateurs clés' });
+  await expect(kpis).toContainText('Aucun plan de sièges affecté');
+  await expect(kpis).toContainText('Aucun chiffrage enregistré');
+  // Audited Finance reads wait for an explicit request.
+  await expect(kpis.getByRole('button', { name: 'Charger les chiffres Finance' })).toBeVisible();
+
+  // Alerts are derived from the trip's facts only.
+  const alerts = detail.getByRole('region', { name: 'Alertes & actions' });
+  await expect(alerts).toContainText('Aucun véhicule principal n’est affecté.');
+  await expect(alerts).toContainText('Horaire incomplet : 2 points sans heure prévue.');
+  await expect(alerts).toContainText('Aucun plan de sièges n’est affecté au voyage.');
+  await expect(alerts).toContainText('Aucune grille tarifaire n’est affectée.');
+
+  // Tabs: one per real feature (all permissions here), keyboard pattern, URL.
+  const tablist = detail.getByRole('tablist', { name: `Rubriques du voyage ${reference}` });
+  await expect(tablist.getByRole('tab')).toHaveText([
+    'Vue d’ensemble',
+    'Itinéraire',
+    'Passagers',
+    'Bagages',
+    'Colis & fret',
+    'Tarification',
+    'Coûts',
+    'Véhicules',
+    'Documents',
+    'Historique',
+  ]);
+  await tablist.getByRole('tab', { name: 'Vue d’ensemble' }).focus();
+  await page.keyboard.press('ArrowRight');
+  const itineraryTab = tablist.getByRole('tab', { name: 'Itinéraire' });
+  await expect(itineraryTab).toBeFocused();
+  await expect(itineraryTab).toHaveAttribute('aria-selected', 'true');
+  await expect(detail.getByRole('tabpanel', { name: 'Itinéraire' })).toBeVisible();
+  await expect(
+    detail.getByRole('table', { name: `Horaire du voyage ${reference} (UTC)` }),
+  ).toBeVisible();
+  await page.keyboard.press('End');
+  await expect(tablist.getByRole('tab', { name: 'Historique' })).toBeFocused();
+  await expect(page).toHaveURL(/[?&]onglet=historique/u);
+  // Opening the cockpit wrote nothing to the trip's audit-backed history.
+  await expect(detail.getByRole('tabpanel', { name: 'Historique' })).toContainText(
+    'Aucun événement enregistré.',
+  );
+  await page.keyboard.press('Home');
+  await expect(tablist.getByRole('tab', { name: 'Vue d’ensemble' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+
+  // Deep link straight to a tab of this trip.
+  const link = new URL(page.url());
+  link.searchParams.set('onglet', 'tarification');
+  await page.goto(link.toString());
+  await expect(detail.getByRole('tab', { name: 'Tarification' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(detail.getByTestId('trip-fare-table')).toHaveText('Aucune');
+
+  // Read first, edit second: the "Modifier" menu opens one editor; closing saves nothing.
+  await detail.getByRole('button', { name: 'Modifier', exact: true }).click();
+  const editMenu = detail.getByRole('menu', { name: 'Modifier le voyage' });
+  await expect(editMenu.getByRole('menuitem')).toHaveText([
+    'Horaire',
+    'Véhicule principal',
+    'Véhicule d’appoint',
+    'Plan de sièges',
+    'Tarification',
+    'Coûts prévisionnels',
+  ]);
+  await editMenu.getByRole('menuitem', { name: 'Horaire' }).click();
+  const timetable = detail.getByRole('form', { name: `Horaire du voyage ${reference}` });
+  await expect(timetable).toBeVisible();
+  await expect(detail.getByRole('group', { name: 'Modification de l’horaire' })).toBeFocused();
+  await detail.getByRole('button', { name: 'Fermer l’édition' }).click();
+  await expect(timetable).toHaveCount(0);
+  await expect(detail.getByRole('button', { name: 'Modifier l’horaire' })).toBeFocused();
+
+  // Menus close on Escape and give the focus back to their button.
+  const more = detail.getByRole('button', { name: 'Plus' });
+  await more.click();
+  await expect(detail.getByRole('menuitem', { name: 'Documents' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(detail.getByRole('menuitem', { name: 'Historique' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(detail.getByRole('menu')).toHaveCount(0);
+  await expect(more).toBeFocused();
+
+  // An explicit request reads the Finance projection: no flow yet, said as such.
+  await detail.getByRole('tab', { name: 'Vue d’ensemble' }).click();
+  await kpis.getByRole('button', { name: 'Charger les chiffres Finance' }).click();
+  await expect(kpis).toContainText('CA réel');
+  await expect(kpis).toContainText('Aucun flux Finance');
+
+  // Header shortcuts open the existing pages, pre-filled with the trip.
+  await detail.getByRole('link', { name: 'Manifeste' }).click();
+  await expect(page).toHaveURL(appUrl(ops, `/manifests?voyage=${reference}`));
+  await expect(page.getByLabel('Référence du voyage', { exact: true })).toHaveValue(reference);
   expect(errors).toEqual([]);
 });
 
@@ -189,13 +348,19 @@ test('ops trips: trip.read consults without any mutation control; the API refuse
   const detail = page.getByRole('region', { name: `Voyage ${seed.seededTripReference}` });
   await expect(detail.getByTestId('trip-status')).toHaveText('Brouillon');
   await expect(detail.getByRole('form')).toHaveCount(0);
+  // No finance.read for this profile: the Finance figures are absent, not invented.
+  const kpis = detail.getByRole('region', { name: 'Indicateurs clés' });
+  await expect(kpis).toContainText('Coûts prévus');
+  await expect(kpis).not.toContainText('CA réel');
+  await expect(kpis).not.toContainText('Marge réelle');
+  await detail.getByRole('tab', { name: 'Coûts' }).click();
   await expect(
     detail.getByRole('region', {
       name: `Coûts prévisionnels du voyage ${seed.seededTripReference}`,
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: /^(Créer|Enregistrer|Planifier|Annuler)/ }),
+    page.getByRole('button', { name: /^(Créer|Enregistrer|Planifier|Annuler|Modifier|Affecter)/ }),
   ).toHaveCount(0);
   await page.getByRole('button', { name: 'Retour à la liste' }).click();
   await expect(page.locator('#trip-detail-panel')).toHaveCount(0);

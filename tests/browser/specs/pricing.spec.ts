@@ -85,7 +85,9 @@ test('ops pricing: SUPER_ADMIN publishes a fare table, prices a DRAFT trip and f
   await mainNav(page).getByRole('link', { name: 'Voyages' }).click();
   await page.getByRole('button', { name: `Consulter le voyage ${seed.tripReference}` }).click();
   const trip = page.getByRole('region', { name: `Voyage ${seed.tripReference}` });
+  await trip.getByRole('tab', { name: 'Tarification' }).click();
   await expect(trip.getByTestId('trip-fare-table')).toHaveText('Aucune');
+  await trip.getByRole('button', { name: 'Modifier la tarification' }).click();
   const pricing = trip.getByRole('form', { name: `Tarification du voyage ${seed.tripReference}` });
   await pricing
     .getByLabel('Grille tarifaire du voyage', { exact: true })
@@ -113,6 +115,7 @@ test('ops pricing: SUPER_ADMIN publishes a fare table, prices a DRAFT trip and f
   await expect(
     trip.getByRole('form', { name: `Tarification du voyage ${seed.tripReference}` }),
   ).toHaveCount(0);
+  await expect(trip.getByRole('button', { name: 'Modifier la tarification' })).toHaveCount(0);
   await expect(trip.getByText('La tarification est figée')).toBeVisible();
   expect(errors).toEqual([]);
 });

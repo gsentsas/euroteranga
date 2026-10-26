@@ -50,6 +50,7 @@ const PREAUTHENTICATED_SESSIONS = {
   contentEditor: 'E2E_CONTENT_EDITOR_SESSION',
   contentDenied: 'E2E_CONTENT_DENIED_SESSION',
   mediaEditor: 'E2E_MEDIA_EDITOR_SESSION',
+  tripCockpitAdmin: 'E2E_TRIP_COCKPIT_ADMIN_SESSION',
 } as const;
 
 /**
@@ -215,6 +216,7 @@ function preauthenticatedSessionEnvironment(fixture: Fixture): string | undefine
     'contentEditor',
     'contentDenied',
     'mediaEditor',
+    'tripCockpitAdmin',
   ] as const) {
     if (fixture.email === FIXTURES[name].email) return PREAUTHENTICATED_SESSIONS[name];
   }
