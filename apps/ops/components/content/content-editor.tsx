@@ -8,6 +8,7 @@ import type {
   ContentRevisionSummary,
 } from '@euroteranga/auth-client';
 import {
+  DEFAULT_HOME_PAGE,
   documentSchemaOf,
   editorIssues,
   missingOwnerInputs,
@@ -390,6 +391,30 @@ export function ContentEditor({ entryId }: { entryId: string }) {
     });
   };
 
+  /**
+   * PUBLIC-HOME-1: the Voyageurs · Colis · Fret home page sections, loaded as
+   * a draft of `/`. Never published here; the SEO stays an seo.manage decision.
+   */
+  const applyHomeModel = (event: FormEvent) => {
+    event.preventDefault();
+    if (dirty) return;
+    const current = workingDocument(entry) as Record<string, unknown>;
+    void act(
+      () =>
+        auth.admin.content.saveDraft(entry.id, {
+          document: {
+            ...current,
+            blocks: DEFAULT_HOME_PAGE.blocks,
+            seo: canManageSeo ? DEFAULT_HOME_PAGE.seo : current.seo,
+          },
+          note: 'Modèle Voyageurs · Colis · Fret',
+          expectedDraftUpdatedAt: draft?.updatedAt ?? null,
+        }),
+      (saved) =>
+        `Modèle Voyageurs · Colis · Fret chargé dans le brouillon (révision ${saved.draft?.revision ?? '?'}). Vérifiez l’aperçu, puis publiez.`,
+    );
+  };
+
   const view = async (revision: number) => {
     const result = await auth.admin.content.revision(entry.id, revision);
     if (result.ok) setViewing(result.data);
@@ -599,6 +624,31 @@ export function ContentEditor({ entryId }: { entryId: string }) {
               Aucun brouillon : enregistrez des modifications pour pouvoir publier.
             </p>
           )}
+        </section>
+      ) : null}
+
+      {canManage && !archived && entry.kind === 'PAGE' && entry.key === '/' ? (
+        <section className="ops-content-section" aria-labelledby="content-home-model-title">
+          <h3 id="content-home-model-title">Modèle de page d’accueil</h3>
+          <p className="et-hint">
+            Charge dans le brouillon les sections Voyageurs · Colis · Fret proposées par défaut. La
+            version en ligne ne change pas tant que le brouillon n’est pas publié.{' '}
+            {canManageSeo
+              ? 'Le référencement du modèle est aussi appliqué.'
+              : 'Le référencement actuel est conservé : le modifier demande la permission seo.manage.'}
+          </p>
+          <form onSubmit={applyHomeModel} aria-label="Charger le modèle de page d’accueil">
+            <OpsConfirmSubmit
+              actionLabel="Charger le modèle Voyageurs · Colis · Fret"
+              confirmLabel="Charger dans le brouillon"
+              title="Remplacer les sections du brouillon ?"
+              description="Les sections du brouillon sont remplacées par le modèle. La version en ligne et l’historique sont conservés."
+              disabled={busy || dirty}
+            />
+          </form>
+          {dirty ? (
+            <p className="et-hint">Enregistrez d’abord vos modifications en cours.</p>
+          ) : null}
         </section>
       ) : null}
 

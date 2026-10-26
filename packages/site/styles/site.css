@@ -2424,3 +2424,289 @@ html:has(.public-section-nav) {
     transform: none;
   }
 }
+
+/* ------------------------------------------- PUBLIC-HOME-1: three services */
+
+/* Secondary hero actions next to the trip search, whose button stays gold. */
+.public-button--light {
+  border-color: #fff;
+  background: #fff;
+  color: var(--public-navy-900);
+  box-shadow: none;
+}
+
+.public-button--light:hover {
+  background: var(--public-royal-50);
+}
+
+.public-search__caption {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.15rem 0.45rem 0.1rem;
+  color: var(--public-navy-800);
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.public-search__caption svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--public-royal-600);
+}
+
+/* Headings inside the navy story card stay readable (gold on navy, AA). */
+.public-text-image--tone-navy .public-rich h2,
+.public-text-image--tone-navy .public-rich h3 {
+  color: var(--public-gold-400);
+}
+
+.public-hero__art--services {
+  opacity: 0.3;
+  filter: none;
+}
+
+/* Offers: one card per service, same weight for passengers, parcels and freight. */
+.public-offers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.public-offer-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--public-line);
+  border-radius: var(--public-radius-lg);
+  background: #fff;
+  box-shadow: var(--public-shadow-sm);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.public-offer-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--public-shadow);
+}
+
+.public-offer-card__art {
+  border-bottom: 1px solid var(--public-line);
+  background: var(--public-royal-50);
+}
+
+.public-offer-card__art .public-illustration {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+}
+
+.public-offer-card .public-figure {
+  margin: 0;
+}
+
+.public-offer-card .public-figure img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.public-offer-card__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 1.4rem 1.45rem 1.5rem;
+}
+
+.public-offer-card h3 {
+  margin: 0.15rem 0 0;
+  color: var(--public-navy-950);
+  font-size: 1.35rem;
+  font-weight: 850;
+  letter-spacing: -0.015em;
+}
+
+.public-offer-card p {
+  flex: 1;
+  margin: 0;
+  color: var(--public-muted);
+  font-size: 0.97rem;
+  line-height: 1.6;
+}
+
+.public-offer-card__cta {
+  margin-top: 0.35rem;
+}
+
+/* Parcels and freight: a dark, full-width duo that cannot be missed. */
+.public-section.public-section--duo {
+  background:
+    radial-gradient(circle at 92% 0%, rgba(245, 179, 28, 0.16), transparent 26rem),
+    linear-gradient(135deg, var(--public-navy-950) 0%, var(--public-navy-800) 100%);
+  color: #fff;
+}
+
+.public-section--duo h2 {
+  color: #fff;
+}
+
+.public-section--duo .public-kicker {
+  color: var(--public-gold-400);
+}
+
+.public-section--duo .public-section__intro {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.public-offers--duo {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.public-offers--duo .public-offer-card {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: none;
+}
+
+.public-offers--duo .public-offer-card h3 {
+  color: #fff;
+}
+
+.public-offers--duo .public-offer-card p {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.public-offers--duo .public-card-icon {
+  background: rgba(255, 200, 69, 0.16);
+  color: var(--public-gold-400);
+}
+
+.public-section--duo :focus-visible {
+  outline-color: var(--public-gold-400);
+}
+
+/* Journeys: the steps of each service as one ordered list. */
+.public-journeys {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.1rem;
+}
+
+.public-journey-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.45rem;
+  border: 1px solid var(--public-line);
+  border-radius: var(--public-radius-lg);
+  background: #fff;
+  box-shadow: var(--public-shadow-sm);
+}
+
+.public-journey-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.public-journey-card__head h3 {
+  margin: 0;
+  color: var(--public-navy-950);
+  font-size: 1.2rem;
+  font-weight: 850;
+}
+
+.public-journey-card__steps {
+  flex: 1;
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding-left: 1.35rem;
+  color: var(--public-muted);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.public-journey-card__steps li {
+  padding-left: 0.3rem;
+}
+
+.public-journey-card__steps li::marker {
+  color: var(--public-navy-700);
+  font-weight: 850;
+}
+
+.public-journey-card__link {
+  color: var(--public-royal-600);
+  font-weight: 750;
+}
+
+@media (max-width: 64rem) {
+  .public-offers {
+    grid-template-columns: 1fr;
+  }
+
+  /* A row per service: drawing beside the text, still the same weight. */
+  .public-offers:not(.public-offers--duo) .public-offer-card {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+
+  .public-offers:not(.public-offers--duo) .public-offer-card__art {
+    display: grid;
+    align-items: center;
+    border-right: 1px solid var(--public-line);
+    border-bottom: 0;
+  }
+
+  .public-offers--duo {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .public-journeys {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 40rem) {
+  /* Parcel and freight actions of the home hero: one full-width row each. */
+  .public-hero--search .public-hero__actions .public-button {
+    flex: 1 1 100%;
+  }
+
+  .public-offers:not(.public-offers--duo) .public-offer-card {
+    display: flex;
+  }
+
+  .public-offers:not(.public-offers--duo) .public-offer-card__art {
+    border-right: 0;
+    border-bottom: 1px solid var(--public-line);
+  }
+
+  .public-offers--duo {
+    grid-template-columns: 1fr;
+  }
+
+  .public-offer-card__cta {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-offer-card,
+  .public-offer-card:hover {
+    transform: none;
+    transition: none;
+  }
+}

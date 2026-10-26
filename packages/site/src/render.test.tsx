@@ -33,7 +33,7 @@ describe('public website rendering', () => {
     const html = render();
     expect(html.match(/<h1/g)).toHaveLength(1);
     expect(html).toContain(
-      'Voyagez entre l’Europe et l’Afrique <span class="public-hero__accent">en toute confiance</span>',
+      'Voyagez et expédiez <span class="public-hero__accent">entre l’Europe et l’Afrique</span>',
     );
     expect(html).toContain('action="https://booking.example/"');
     expect(html).toContain('href="https://booking.example/"');
@@ -44,6 +44,35 @@ describe('public website rendering', () => {
     expect(html).toContain('id="aide"');
     expect(html).toContain('<details>');
     expect(html).toContain('© 2030 EURO TERANGA');
+    // PUBLIC-HOME-1: no placeholder link anywhere on the home page.
+    expect(html).not.toMatch(/href="#"/);
+  });
+
+  it('presents passengers, parcels and freight from the first screen (PUBLIC-HOME-1)', () => {
+    const html = render();
+    // Hero: the trip search keeps the only gold button; parcels and freight follow.
+    expect(html).toContain('public-hero__art public-hero__art--services');
+    expect(html).toContain(
+      'class="public-button public-button--light" href="#expeditions">Envoyer un colis',
+    );
+    expect(html).toContain('href="#expeditions">Demander un devis fret');
+    // Right after the hero: three cards of the same weight, each with its action.
+    const offers = html.slice(html.indexOf('id="services"'));
+    expect(offers.indexOf('<section')).toBeGreaterThan(offers.indexOf('public-offers'));
+    expect(offers.match(/<article class="public-offer-card">/g)?.length).toBeGreaterThanOrEqual(3);
+    for (const title of ['Voyageurs', 'Colis', 'Fret']) {
+      expect(offers).toContain(`<h3>${title}</h3>`);
+    }
+    expect(html).toContain('href="#trajets">Voir les prochains départs');
+    expect(html).toContain('href="https://client.example/">Envoyer un colis');
+    expect(html).toContain('href="https://client.example/">Demander un devis');
+    // Each journey lists its steps as an ordered list, one step per line.
+    expect(html.match(/<ol class="public-journey-card__steps">/g)).toHaveLength(3);
+    expect(html).toContain('<li>Choisissez votre place sur le plan du car.</li>');
+    // Parcels and freight have their own dark section.
+    expect(html).toContain('public-section--offers public-section--duo');
+    expect(html).toContain('id="expeditions"');
+    expect(html).toContain('public-offers public-offers--duo');
   });
 
   // A page with the journey card and the routes, both priced by Pricing only.
@@ -438,15 +467,32 @@ describe('homepage blocks (UI-PUBLIC-1)', () => {
   });
 
   it('renders the strengths row, the navy story card and the mobile menu', () => {
-    const html = render(home, homeCtx);
-    expect(html).toContain('<section class="public-highlights" aria-labelledby="section-1-title">');
-    expect(html).toContain(
+    const strengths = pageDocumentSchema.parse({
+      title: 'Atouts',
+      seo: { description: 'Description.' },
+      blocks: [
+        { type: 'hero', title: 'Atouts', journeyCard: false },
+        {
+          type: 'cards',
+          variant: 'highlights',
+          title: 'Pourquoi voyager avec EURO TERANGA',
+          items: [
+            { icon: 'ticket', title: 'Réservation en ligne', text: 'Siège choisi' },
+            { icon: 'parcel', title: 'Colis', text: 'Sur devis' },
+          ],
+        },
+      ],
+    });
+    const row = render(strengths, homeCtx);
+    expect(row).toContain('<section class="public-highlights" aria-labelledby="section-1-title">');
+    expect(row).toContain(
       '<h2 id="section-1-title" class="et-visually-hidden">Pourquoi voyager avec EURO TERANGA</h2>',
     );
-    expect(html.match(/public-highlights__icon/g)).toHaveLength(6);
+    expect(row.match(/public-highlights__icon/g)).toHaveLength(2);
+    const html = render(home, homeCtx);
     expect(html).toContain('public-text-image--tone-navy');
     expect(html).toContain(
-      'class="public-button public-button--gold" href="https://booking.example/">Rechercher un voyage',
+      'class="public-button public-button--gold" href="#services">Choisir un service',
     );
     expect(html).toMatch(
       /<details class="public-menu"><summary class="public-menu__toggle">.*<span>Menu<\/span><\/summary><nav class="public-menu__panel" aria-label="Navigation principale \(mobile\)">/,

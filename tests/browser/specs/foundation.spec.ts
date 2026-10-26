@@ -49,7 +49,9 @@ test('web: the skip link is reachable by keyboard and moves focus to main', asyn
   await expect(page.getByRole('main')).toBeFocused();
 });
 
-test('web: public homepage exposes booking, account and tracking journeys', async ({ page }) => {
+test('web: public homepage exposes passenger, parcel, freight, account and tracking journeys', async ({
+  page,
+}) => {
   await page.goto(appUrl(appByName('web')));
 
   await expect(page.getByRole('link', { name: /Rechercher un voyage/i }).first()).toHaveAttribute(
@@ -64,7 +66,31 @@ test('web: public homepage exposes booking, account and tracking journeys', asyn
     'href',
     'https://tracking.euroteranga.com/',
   );
-  await expect(page.getByRole('heading', { name: 'Choisissez, réservez, voyagez.' })).toBeVisible();
+  // PUBLIC-HOME-1: the three services right after the hero, each with a real destination.
+  const services = page.locator('#services');
+  await expect(
+    services.getByRole('heading', { name: 'Voyageurs, colis ou fret : choisissez votre service' }),
+  ).toBeVisible();
+  await expect(services.getByRole('link', { name: /Voir les prochains départs/ })).toHaveAttribute(
+    'href',
+    '#trajets',
+  );
+  await expect(services.getByRole('link', { name: /Envoyer un colis/ })).toHaveAttribute(
+    'href',
+    'https://client.euroteranga.com/',
+  );
+  await expect(services.getByRole('link', { name: /Demander un devis/ })).toHaveAttribute(
+    'href',
+    'https://client.euroteranga.com/',
+  );
+  await expect(
+    page.locator('#expeditions').getByRole('heading', {
+      name: 'Vous n’avez pas besoin de voyager pour emprunter la route EURO TERANGA',
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Trois services, des étapes claires.' }),
+  ).toBeVisible();
   // Departures and prices come from Booking and Pricing only: without a bookable
   // Paris ↔ Dakar trip, the section says so and no price is shown.
   await expect(
