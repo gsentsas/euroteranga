@@ -309,6 +309,21 @@ test('ops trips: the cockpit summarises a trip from real data, with keyboard tab
   await expect(timetable).toHaveCount(0);
   await expect(detail.getByRole('button', { name: 'Modifier l’horaire' })).toBeFocused();
 
+  // One-shot cockpit edit requests must not reopen an editor after leaving and returning.
+  await detail.getByRole('button', { name: 'Modifier', exact: true }).click();
+  await detail
+    .getByRole('menu', { name: 'Modifier le voyage' })
+    .getByRole('menuitem', { name: 'Tarification' })
+    .click();
+  const pricingForm = detail.getByRole('form', { name: `Tarification du voyage ${reference}` });
+  await expect(pricingForm).toBeVisible();
+  await pricingForm.getByRole('button', { name: 'Fermer l’édition' }).click();
+  await expect(pricingForm).toHaveCount(0);
+  await detail.getByRole('tab', { name: 'Itinéraire' }).click();
+  await detail.getByRole('tab', { name: 'Tarification' }).click();
+  await expect(pricingForm).toHaveCount(0);
+  await expect(detail.getByRole('button', { name: 'Modifier la tarification' })).toBeVisible();
+
   // Menus close on Escape and give the focus back to their button.
   const more = detail.getByRole('button', { name: 'Plus' });
   await more.click();
