@@ -8,7 +8,8 @@ import type {
   TripStatus,
 } from '@euroteranga/auth-client';
 import { TextField } from '@euroteranga/ui';
-import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
 import { OpsEmptyState, OpsErrorState, OpsLoadingState } from '../ops-data-state';
@@ -17,7 +18,8 @@ import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { usePublishedSeatMapVersions } from '../seat-maps/use-published-versions';
 import { useCan } from '../staff-access';
 import { TripDetail } from './trip-detail';
-import { formatUtc, TRIP_STATUS_LABELS, vehicleIdentity } from './trip-format';
+import { formatUtc, TRIP_STATUS_LABELS, tripStatusTone, vehicleIdentity } from './trip-format';
+import { DEFAULT_TRIP_TAB, isTripTabId, type TripTabId } from './trip-tabs';
 
 type Run = ReturnType<typeof useAdminFeedback>['run'];
 
@@ -26,19 +28,17 @@ interface VersionOption {
   label: string;
 }
 
-function tripStatusTone(status: TripStatus): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
-  switch (status) {
-    case 'DRAFT':
-      return 'neutral';
-    case 'SCHEDULED':
-      return 'info';
-    case 'IN_PROGRESS':
-      return 'warning';
-    case 'COMPLETED':
-      return 'success';
-    case 'CANCELLED':
-      return 'danger';
-  }
+/**
+ * `/trips?fiche=<id>&onglet=<tab>` opens a trip on a tab. The URL is kept in
+ * sync with replaceState: the list stays one history entry.
+ */
+function syncTripUrl(tripId: string | null, tab: TripTabId) {
+  const url = new URL(window.location.href);
+  if (tripId) url.searchParams.set('fiche', tripId);
+  else url.searchParams.delete('fiche');
+  if (tripId && tab !== DEFAULT_TRIP_TAB) url.searchParams.set('onglet', tab);
+  else url.searchParams.delete('onglet');
+  window.history.replaceState(window.history.state, '', url);
 }
 
 /** Trips can only be created on a currently PUBLISHED route version. */
@@ -149,6 +149,9 @@ export function TripsAdmin() {
   const seatMapOptions = usePublishedSeatMapVersions(canAssignSeatMap);
   const canReadPricing = useCan('pricing.read');
   const canAssignPricing = useCan('trip.manage', 'pricing.read');
+  const searchParams = useSearchParams();
+  const urlTripId = searchParams.get('fiche');
+  const initialTab = searchParams.get('onglet');
   const filterId = useId();
   const { run, busy, feedback } = useAdminFeedback();
   const [status, setStatus] = useState<TripStatus | ''>('');
@@ -158,8 +161,14 @@ export function TripsAdmin() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [versions, setVersions] = useState<VersionOption[]>([]);
   const [vehicles, setVehicles] = useState<AdminVehicle[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get('fiche'));
+  const [tab, setTab] = useState<TripTabId>(() =>
+    isTripTabId(initialTab) ? initialTab : DEFAULT_TRIP_TAB,
+  );
   const [detail, setDetail] = useState<AdminTrip | null>(null);
+  const urlReady = useRef(false);
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
 
   const load = useCallback(
     async (cursor?: string) => {
@@ -189,6 +198,41 @@ export function TripsAdmin() {
     if (result.ok) setDetail(result.data);
     else setDetailError(result.error.message);
   }, []);
+
+  /** After a mutation: the open record stays mounted (tab, focus) until fresh data arrives. */
+  const refreshDetail = useCallback(async (tripId: string) => {
+    const result = await auth.admin.trips.trip(tripId);
+    if (result.ok) {
+      setDetail(result.data);
+      setDetailError(null);
+    } else setDetailError(result.error.message);
+  }, []);
+
+  const selectTrip = (tripId: string | null) => {
+    setSelectedId(tripId);
+    setTab(DEFAULT_TRIP_TAB);
+  };
+
+  useEffect(() => {
+    // The first render keeps the incoming URL untouched.
+    if (!urlReady.current) {
+      urlReady.current = true;
+      return;
+    }
+    syncTripUrl(selectedId, tab);
+  }, [selectedId, tab]);
+
+  // A navigation to /trips?fiche=… while the page is open (global search).
+  useEffect(() => {
+    const live = new URLSearchParams(window.location.search).get('fiche');
+    // Our own replaceState may not have reached useSearchParams yet.
+    if (live !== urlTripId) return;
+    if (urlTripId && urlTripId !== selectedIdRef.current) {
+      setSelectedId(urlTripId);
+      const urlTab = new URLSearchParams(window.location.search).get('onglet');
+      setTab(isTripTabId(urlTab) ? urlTab : DEFAULT_TRIP_TAB);
+    }
+  }, [urlTripId]);
 
   useEffect(() => {
     void load();
@@ -228,7 +272,7 @@ export function TripsAdmin() {
 
   const reload = async () => {
     await load();
-    if (selectedId) await loadDetail(selectedId);
+    if (selectedId) await refreshDetail(selectedId);
   };
 
   const primaryVehicles = vehicles.filter((vehicle) => vehicle.role !== 'CARGO_SUPPORT');
@@ -303,7 +347,7 @@ export function TripsAdmin() {
             run={run}
             busy={busy}
             onCreated={(tripId) => {
-              void load().then(() => setSelectedId(tripId));
+              void load().then(() => selectTrip(tripId));
             }}
           />
         </div>
@@ -380,7 +424,7 @@ export function TripsAdmin() {
                         aria-label={`Consulter le voyage ${trip.reference}`}
                         aria-controls="trip-detail-panel"
                         aria-expanded={selectedId === trip.id && Boolean(detail)}
-                        onClick={() => setSelectedId(trip.id)}
+                        onClick={() => selectTrip(trip.id)}
                       >
                         Consulter
                       </button>
@@ -429,7 +473,7 @@ export function TripsAdmin() {
         <OpsDetailRegion
           id="trip-detail-panel"
           focusKey={selectedId}
-          onClose={() => setSelectedId(null)}
+          onClose={() => selectTrip(null)}
         >
           <TripDetail
             trip={detail}
@@ -443,6 +487,8 @@ export function TripsAdmin() {
             run={run}
             busy={busy}
             onReload={reload}
+            tab={tab}
+            onTabChange={setTab}
           />
         </OpsDetailRegion>
       ) : null}

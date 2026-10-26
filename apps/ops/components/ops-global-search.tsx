@@ -145,7 +145,7 @@ export function OpsGlobalSearch() {
                   group: 'Voyages',
                   label: trip.reference,
                   description: `${trip.routeVersion.route.code} · ${trip.status}${trip.vehicle ? ` · ${trip.vehicle.code}` : ''}`,
-                  href: '/trips',
+                  href: `/trips?fiche=${encodeURIComponent(trip.id)}`,
                 })),
             );
           }),

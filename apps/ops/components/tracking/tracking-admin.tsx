@@ -15,6 +15,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
+import { useTripReferenceParam } from '../trips/trip-link';
 import { ComfortAdmin } from './comfort-admin';
 
 const VISIBILITY_LABELS: Record<TrackingVisibility, string> = {
@@ -590,6 +591,8 @@ export function TrackingAdmin() {
   const [trips, setTrips] = useState<TrackingTripSummary[] | null>(null);
   const [devices, setDevices] = useState<TrackingDevice[]>([]);
   const [selectedTripId, setSelectedTripId] = useState('');
+  // `/tracking?voyage=REF` (trip cockpit) selects that trip once the list is known.
+  const linkedTrip = useTripReferenceParam();
   const [detail, setDetail] = useState<TrackingTripDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -623,6 +626,12 @@ export function TrackingAdmin() {
   useEffect(() => {
     void loadList();
   }, [loadList]);
+
+  useEffect(() => {
+    if (!linkedTrip || !trips) return;
+    const linked = trips.find((trip) => trip.reference === linkedTrip);
+    if (linked) setSelectedTripId((current) => current || linked.id);
+  }, [linkedTrip, trips]);
 
   useEffect(() => {
     void loadDetail(selectedTripId);
