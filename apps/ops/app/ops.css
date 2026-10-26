@@ -710,6 +710,7 @@
 .ops-network-panel,
 .ops-app .et-network-panel,
 .ops-app .et-network-form {
+  min-width: 0;
   border-color: var(--ops-line);
   border-radius: var(--ops-radius-card);
   background: var(--ops-panel);
@@ -718,6 +719,8 @@
 
 .ops-app .et-table-wrap,
 .ops-data-table {
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
   overflow: auto;
   border: 1px solid var(--ops-line);
@@ -1836,6 +1839,7 @@
 
 .ops-trips-filter {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: flex-start;
   gap: 0.75rem;
@@ -2266,6 +2270,7 @@
 
 .ops-pricing-filters {
   min-width: 0;
+  flex-wrap: wrap;
   gap: 0.75rem;
   padding: 0.75rem;
   border: 1px solid var(--ops-line);
@@ -3429,4 +3434,112 @@
     align-items: flex-start;
     flex-direction: column;
   }
+}
+
+/* OPS-UI-7 SITE PUBLIC & ADMINISTRATION */
+
+.ops-operations-kpis.ops-operations-kpis--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 48rem) {
+  .ops-operations-kpis.ops-operations-kpis--three {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Technical keys (role keys, permissions, audit actions) read as code, never as a status. */
+.ops-code-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 1.5rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--ops-line);
+  border-radius: 0.35rem;
+  background: var(--ops-panel-muted);
+  color: var(--ops-navy-850);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.ops-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ops-chip-list > li {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.ops-segmented {
+  gap: 0.35rem;
+}
+
+.ops-admin-workspace .ops-admin-actions {
+  gap: 0.4rem;
+}
+
+.ops-admin-workspace .et-table tbody th.ops-admin-identity {
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.ops-admin-role__name {
+  color: var(--ops-navy-950);
+  font-weight: 800;
+}
+
+.ops-admin-workspace .et-table td .ops-chip-list {
+  min-width: 14rem;
+}
+
+/* OPS-UI-7 RESPONSIVE CONTAINMENT */
+
+/*
+ * Network forms are single-column grids.
+ * Use a shrinkable explicit track so native selects with long options
+ * cannot impose their intrinsic width on the whole OPS page.
+ */
+.ops-app .et-network-form {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ops-app .et-network-form > *,
+.ops-app .et-network-form .et-field {
+  min-width: 0;
+}
+
+.ops-app .et-network-form .et-input,
+.ops-app .et-network-form .et-select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/*
+ * Seat Maps contains wide tables and filters which are independently
+ * scrollable/wrappable. The workspace grid itself must never adopt
+ * their min-content width.
+ */
+.ops-app .ops-seatmaps {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ops-app .ops-seatmaps > *,
+.ops-app .ops-seatmaps__intro > *,
+.ops-app .ops-seatmaps__catalogue,
+.ops-app .ops-seatmap-desktop-table {
+  min-width: 0;
+  max-width: 100%;
 }

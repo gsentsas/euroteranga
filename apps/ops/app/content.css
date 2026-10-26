@@ -32,38 +32,83 @@
 .ops-content-badge {
   display: inline-flex;
   align-items: center;
+  min-height: 1.7rem;
   padding: 0.15rem 0.6rem;
-  border: 1px solid var(--et-color-border);
+  border: 1px solid var(--ops-line);
   border-radius: 999px;
-  background: var(--et-color-surface-raised);
-  color: var(--et-color-ink);
-  font-size: 0.8rem;
-  font-weight: 700;
+  background: #edf1f5;
+  color: #4b5869;
+  font-size: 0.75rem;
+  font-weight: 800;
   white-space: nowrap;
 }
 
-.ops-content-badge--live {
-  border-color: #13705b;
-  background: #e8f5ef;
-  color: #0a493a;
+/*
+ * OPS-UI-7: "online" is an information, not a business success; a draft asks
+ * for an action; unsaved edits are prominent without reading as a server error.
+ */
+.ops-content-badge--live,
+.ops-content-badge--online {
+  border-color: #b9cee9;
+  background: var(--ops-info-surface);
+  color: var(--ops-info);
 }
 
 .ops-content-badge--draft {
-  border-color: #8a5a00;
-  background: #fff4dc;
-  color: #5c3c00;
+  border-color: #f1d58a;
+  background: var(--ops-warning-surface);
+  color: var(--ops-warning);
 }
 
 .ops-content-badge--dirty {
-  border-color: #1d4ed8;
-  background: #e8efff;
-  color: #1e3a8a;
+  border-color: var(--ops-navy-900);
+  background: var(--ops-navy-900);
+  color: #fff;
+}
+
+.ops-content-badge--superseded {
+  border-style: dashed;
+  background: #fff;
+  color: var(--ops-muted);
 }
 
 .ops-content-badge--error {
-  border-color: var(--et-color-danger);
-  background: var(--et-color-danger-surface);
-  color: var(--et-color-danger);
+  border-color: #efa9b3;
+  background: var(--ops-danger-surface);
+  color: var(--ops-danger);
+}
+
+.ops-content-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--ops-navy-900);
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.ops-content-back:hover {
+  text-decoration: underline;
+}
+
+.ops-content-states {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.6rem;
+}
+
+.ops-content-state {
+  min-width: 0;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: #fff;
+}
+
+.ops-content-state .ops-operations-section-kicker {
+  margin: 0;
 }
 
 .ops-content-meta {
@@ -85,11 +130,11 @@
 .ops-content-warning {
   margin: 0;
   padding: var(--et-space-3);
-  border: 1px solid #c58a00;
-  border-left-width: 4px;
-  border-radius: var(--et-radius);
-  background: #fff8e6;
-  color: #3d2a00;
+  border: 1px solid #f1d58a;
+  border-left: 4px solid var(--ops-warning);
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-warning-surface);
+  color: #5d3a05;
 }
 
 .ops-content-warning p {
@@ -111,9 +156,10 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
+  /* Below the sticky OPS top bar (4.25rem), not underneath it. */
   .ops-content-side {
     position: sticky;
-    top: var(--et-space-3);
+    top: 5rem;
   }
 }
 
@@ -131,9 +177,10 @@
   display: grid;
   gap: var(--et-space-3);
   padding: var(--et-space-3);
-  border: 1px solid var(--et-color-border);
-  border-radius: var(--et-radius);
-  background: var(--et-color-surface-raised);
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-card);
+  background: #fff;
+  box-shadow: var(--ops-shadow-card);
 }
 
 .ops-content-section h3,
@@ -403,10 +450,11 @@
   align-items: flex-end;
   gap: var(--et-space-3);
   padding: var(--et-space-3);
-  border: 1px solid var(--et-color-border);
-  border-radius: var(--et-radius);
-  background: var(--et-color-surface-raised);
-  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--ops-line);
+  border-top: 3px solid var(--ops-gold);
+  border-radius: var(--ops-radius-card);
+  background: #fff;
+  box-shadow: 0 -6px 18px rgba(8, 21, 37, 0.08);
 }
 
 .ops-content-actions .et-field {
@@ -471,14 +519,23 @@
   align-content: start;
   justify-items: start;
   padding: var(--et-space-3);
-  border: 1px solid var(--et-color-border);
-  border-radius: var(--et-radius);
-  background: var(--et-color-surface-raised);
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius-control);
+  background: var(--ops-panel-muted);
 }
 
 .ops-content-card h3,
 .ops-content-card p {
   margin: 0;
+}
+
+.ops-content-card h3 {
+  color: var(--ops-navy-950);
+  font-size: 1rem;
+}
+
+.ops-content-catalogue .ops-content-badges {
+  gap: 0.35rem;
 }
 
 @media (max-width: 36rem) {

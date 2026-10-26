@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { useAdminFeedback } from '../admin/admin-feedback';
+import { OpsEmptyState, OpsLoadingState } from '../ops-data-state';
+import { OpsKpiCard } from '../ops-ui';
 import { useCan } from '../staff-access';
 import { KIND_LABELS } from './content-editor';
 
@@ -14,14 +16,29 @@ const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeSt
 
 export const editorHref = (id: string) => `/contenus/edition?entree=${encodeURIComponent(id)}`;
 
-function statusOf(entry: ContentEntrySummary): string {
-  if (entry.archivedAt) return 'Archivée';
-  const parts: string[] = [];
-  parts.push(
-    entry.published ? `En ligne (révision ${entry.published.revision})` : 'Jamais publiée',
+/**
+ * Published and draft states are shown side by side: a page can be online and
+ * have a more recent draft at the same time.
+ */
+function EntryState({ entry }: { entry: ContentEntrySummary }) {
+  if (entry.archivedAt)
+    return <span className="ops-content-badge ops-content-badge--error">Archivée</span>;
+  return (
+    <span className="ops-content-badges">
+      {entry.published ? (
+        <span className="ops-content-badge ops-content-badge--online">
+          En ligne · révision {entry.published.revision}
+        </span>
+      ) : (
+        <span className="ops-content-badge">Jamais publiée</span>
+      )}
+      {entry.draft ? (
+        <span className="ops-content-badge ops-content-badge--draft">
+          Brouillon · révision {entry.draft.revision}
+        </span>
+      ) : null}
+    </span>
   );
-  if (entry.draft) parts.push(`brouillon en cours (révision ${entry.draft.revision})`);
-  return parts.join(', ');
 }
 
 function CreatePageForm({ onCreated }: { onCreated: (id: string) => void }) {
@@ -82,8 +99,15 @@ function CreatePageForm({ onCreated }: { onCreated: (id: string) => void }) {
   };
 
   return (
-    <form className="et-form et-network-form" aria-label="Créer une page" onSubmit={submit}>
-      <h2>Créer une page</h2>
+    <form
+      className="et-form et-network-form ops-ground-panel"
+      aria-label="Créer une page"
+      onSubmit={submit}
+    >
+      <div>
+        <p className="ops-operations-section-kicker">Nouveau brouillon</p>
+        <h2>Créer une page</h2>
+      </div>
       {feedback}
       {createdWithoutTemplate ? (
         <button
@@ -246,24 +270,81 @@ export function ContentAdmin() {
     });
   };
 
-  if (!pages) return <p role="status">Chargement des contenus…</p>;
+  if (!pages) return <OpsLoadingState title="Chargement des contenus…" />;
 
   const home = pages.find((page) => page.key === '/');
   const settings = singletons.find((entry) => entry.kind === 'SITE_SETTINGS');
   const navigation = singletons.find((entry) => entry.kind === 'NAVIGATION');
 
+  const onlineCount = pages.filter((page) => page.published && !page.archivedAt).length;
+  const draftCount = pages.filter((page) => page.draft && !page.archivedAt).length;
+  const archivedCount = pages.filter((page) => page.archivedAt).length;
+
   return (
-    <div className="et-network" data-testid="content-workspace">
-      <p>
-        Le site public affiche les versions publiées. Une modification est d’abord un brouillon,
-        prévisualisé tel que le site l’affichera, puis publiée ; chaque version reste dans
-        l’historique et peut être restaurée. Les prix ne se saisissent jamais ici : ils viennent de
-        la tarification.
-      </p>
+    <div
+      className="et-network ops-operations-workspace ops-ground-workspace ops-content-catalogue"
+      data-testid="content-workspace"
+    >
+      <div className="ops-operations-intro">
+        <div>
+          <p className="ops-operations-eyebrow">Site public</p>
+          <h2>Pages, navigation et paramètres publics</h2>
+          <p>
+            Le site public affiche les versions publiées. Une modification est d’abord un brouillon,
+            prévisualisé tel que le site l’affichera, puis publiée ; chaque version reste dans
+            l’historique et peut être restaurée. Les prix ne se saisissent jamais ici : ils viennent
+            de la tarification.
+          </p>
+        </div>
+      </div>
       {feedback}
 
-      <section aria-labelledby="content-site-title">
-        <h2 id="content-site-title">Site</h2>
+      <section className="ops-operations-kpis" aria-label="Indicateurs des pages affichées">
+        <OpsKpiCard
+          label="Pages affichées"
+          value={pages.length}
+          helper={
+            nextCursor ? 'Éléments chargés · liste partielle' : 'Toutes les pages sont chargées'
+          }
+          icon="content"
+          tone="info"
+        />
+        <OpsKpiCard
+          label="En ligne"
+          value={onlineCount}
+          helper="Une version publiée est servie"
+          icon="network"
+          tone="info"
+        />
+        <OpsKpiCard
+          label="Avec brouillon"
+          value={draftCount}
+          helper="Modifications non publiées"
+          icon="document"
+          tone={draftCount > 0 ? 'warning' : 'neutral'}
+        />
+        <OpsKpiCard
+          label="Archivées"
+          value={archivedCount}
+          helper="Plus servies par le site (404)"
+          icon="alert"
+          tone="neutral"
+        />
+      </section>
+      {nextCursor ? (
+        <p className="ops-ground-partial" role="note">
+          Données partielles — d’autres contenus sont disponibles. Les indicateurs ne portent que
+          sur les {pages.length} pages chargées.
+        </p>
+      ) : null}
+
+      <section className="ops-operations-section" aria-labelledby="content-site-title">
+        <div className="et-actions">
+          <div>
+            <p className="ops-operations-section-kicker">Contenus uniques</p>
+            <h2 id="content-site-title">Site</h2>
+          </div>
+        </div>
         <ul className="ops-content-cards">
           {(
             [
@@ -280,11 +361,12 @@ export function ContentAdmin() {
             ] as const
           ).map(([kind, entry, description]) => (
             <li key={kind} className="ops-content-card">
+              <p className="ops-operations-section-kicker">Type · {KIND_LABELS[kind]}</p>
               <h3>{KIND_LABELS[kind]}</h3>
               <p>{description}</p>
-              <p className="et-hint">
-                {entry ? statusOf(entry) : 'Contenu par défaut (pas encore créé).'}
-              </p>
+              <div className="et-hint">
+                {entry ? <EntryState entry={entry} /> : 'Contenu par défaut (pas encore créé).'}
+              </div>
               {entry ? (
                 <Link className="et-button et-button--secondary" href={editorHref(entry.id)}>
                   {canManage ? 'Modifier' : 'Consulter'}
@@ -305,8 +387,16 @@ export function ContentAdmin() {
         </ul>
       </section>
 
-      <section aria-labelledby="content-pages-title">
-        <h2 id="content-pages-title">Pages</h2>
+      <section
+        className="ops-operations-section ops-operations-section--primary"
+        aria-labelledby="content-pages-title"
+      >
+        <div className="et-actions">
+          <div>
+            <p className="ops-operations-section-kicker">Registre · type Page</p>
+            <h2 id="content-pages-title">Pages</h2>
+          </div>
+        </div>
         {!home ? (
           <div className="ops-content-warning">
             <p>La page d’accueil affiche le contenu par défaut tant qu’elle n’est pas créée ici.</p>
@@ -317,39 +407,47 @@ export function ContentAdmin() {
             ) : null}
           </div>
         ) : null}
-        <div className="et-table-wrap">
-          <table className="et-table">
-            <caption>Pages du site public</caption>
-            <thead>
-              <tr>
-                <th scope="col">Chemin</th>
-                <th scope="col">Titre</th>
-                <th scope="col">Statut</th>
-                <th scope="col">Modifiée le</th>
-                <th scope="col">Fiche</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pages.map((page) => (
-                <tr key={page.id}>
-                  <th scope="row">
-                    <span className="et-tag">{page.key}</span>
-                  </th>
-                  <td>{page.title ?? '—'}</td>
-                  <td>{statusOf(page)}</td>
-                  <td>{dateFormat.format(new Date(page.updatedAt))}</td>
-                  <td>
-                    <Link className="et-button et-button--secondary" href={editorHref(page.id)}>
-                      {canManage && !page.archivedAt ? 'Modifier' : 'Consulter'}
-                      <span className="et-visually-hidden"> la page {page.key}</span>
-                    </Link>
-                  </td>
+        {pages.length > 0 ? (
+          <div className="et-table-wrap">
+            <table className="et-table">
+              <caption>Pages du site public</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Chemin</th>
+                  <th scope="col">Titre</th>
+                  <th scope="col">État publié · brouillon</th>
+                  <th scope="col">Modifiée le</th>
+                  <th scope="col">Fiche</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {pages.length === 0 ? <p>Aucune page créée.</p> : null}
+              </thead>
+              <tbody>
+                {pages.map((page) => (
+                  <tr key={page.id}>
+                    <th scope="row" className="et-code">
+                      {page.key}
+                    </th>
+                    <td>{page.title ?? '—'}</td>
+                    <td>
+                      <EntryState entry={page} />
+                    </td>
+                    <td>{dateFormat.format(new Date(page.updatedAt))}</td>
+                    <td>
+                      <Link className="et-button et-button--secondary" href={editorHref(page.id)}>
+                        {canManage && !page.archivedAt ? 'Modifier' : 'Consulter'}
+                        <span className="et-visually-hidden"> la page {page.key}</span>
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <OpsEmptyState
+            title="Aucune page créée."
+            description="Une nouvelle page commence toujours par un brouillon non indexé."
+          />
+        )}
         {nextCursor ? (
           <button
             type="button"
