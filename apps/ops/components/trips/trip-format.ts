@@ -1,4 +1,4 @@
-import type { AdminTripRouteWaypoint, TripStatus } from '@euroteranga/auth-client';
+import type { AdminTripRouteWaypoint, TripCostStatus, TripStatus } from '@euroteranga/auth-client';
 
 export const TRIP_STATUS_LABELS: Record<TripStatus, string> = {
   DRAFT: 'Brouillon',
@@ -6,6 +6,12 @@ export const TRIP_STATUS_LABELS: Record<TripStatus, string> = {
   IN_PROGRESS: 'En cours',
   COMPLETED: 'Terminé',
   CANCELLED: 'Annulé',
+};
+
+export const TRIP_COST_STATUS_LABELS: Record<TripCostStatus, string> = {
+  DRAFT: 'Brouillon',
+  ESTIMATED: 'Estimation',
+  LOCKED: 'Verrouillé',
 };
 
 export const TRIP_ACTION_LABELS: Record<string, string> = {

@@ -24,19 +24,13 @@ import {
   VehicleCard,
   type VehicleCardAction,
 } from './trip-cockpit-parts';
-import { formatMinor, type TripTone } from './trip-format';
+import { formatMinor, TRIP_COST_STATUS_LABELS, type TripTone } from './trip-format';
 import type { TripTabId } from './trip-tabs';
 
 export type TripEditTarget = 'timetable' | 'vehicle' | 'support' | 'seatMap' | 'pricing' | 'costs';
 
-const COST_STATUS_LABELS: Record<TripCostPlan['status'], string> = {
-  DRAFT: 'Brouillon',
-  ESTIMATED: 'Estimation',
-  LOCKED: 'Verrouillé',
-};
-
 export function costStatusLabel(status: TripCostPlan['status']): string {
-  return COST_STATUS_LABELS[status];
+  return TRIP_COST_STATUS_LABELS[status];
 }
 
 /** Seats of the bookings that hold them now: paid ones, and holds not yet expired. */

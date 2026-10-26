@@ -190,6 +190,10 @@ test('ops trips: SUPER_ADMIN creates, times, equips, schedules and cancels a syn
   await expect(history.nth(0)).toContainText(
     'Annulation (Planifié → Annulé) — Annulation synthétique',
   );
+  // Cost updates show the cost plan's own status change, never an unknown label.
+  await expect(history.filter({ hasText: 'Coûts prévisionnels enregistrés' })).toHaveCount(2);
+  await expect(history.filter({ hasText: '(Brouillon → Estimation)' })).toHaveCount(1);
+  await expect(history.filter({ hasText: 'undefined' })).toHaveCount(0);
   await expect(page.getByRole('row').filter({ hasText: reference })).toContainText('Annulé');
   expect(errors).toEqual([]);
 });

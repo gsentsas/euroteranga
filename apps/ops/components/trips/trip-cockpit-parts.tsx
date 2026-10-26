@@ -20,6 +20,7 @@ import {
   isAccessEvent,
   placeOf,
   TRIP_ACTION_LABELS,
+  TRIP_COST_STATUS_LABELS,
   TRIP_STATUS_LABELS,
   vehicleIdentity,
   type TripTone,
@@ -420,9 +421,14 @@ const HISTORY_TONES: Partial<Record<string, TripTone>> = {
 
 /** "Annulation (Planifié → Annulé) — motif": the wording of the original history list. */
 export function historySummary(entry: HistoryEntry): string {
+  // A cost update records the cost plan's status, not the trip's.
+  const statusLabels: Record<string, string> =
+    entry.action === 'TRIP_COST_UPDATED' ? TRIP_COST_STATUS_LABELS : TRIP_STATUS_LABELS;
   const transitions =
-    (entry.toStatus && entry.fromStatus
-      ? ` (${TRIP_STATUS_LABELS[entry.fromStatus]} → ${TRIP_STATUS_LABELS[entry.toStatus]})`
+    (entry.toStatus && entry.fromStatus && entry.toStatus !== entry.fromStatus
+      ? ` (${statusLabels[entry.fromStatus] ?? entry.fromStatus} → ${
+          statusLabels[entry.toStatus] ?? entry.toStatus
+        })`
       : '') +
     (entry.action === 'TRIP_VEHICLE_CHANGED'
       ? ` (${entry.fromVehicleCode ?? 'aucun'} → ${entry.toVehicleCode ?? 'aucun'})`
