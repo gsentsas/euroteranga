@@ -50,7 +50,7 @@ const NEXT_STATUSES: Record<VehicleStatus, Array<VehicleStatusTransitionInput['s
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
 const volumeFormat = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3 });
 
-function vehicleStatusTone(
+export function vehicleStatusTone(
   status: VehicleStatus,
 ): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
   switch (status) {

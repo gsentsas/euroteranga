@@ -17,14 +17,14 @@ import { OpsDetailRegion } from '../ops-detail-region';
 import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
 
-const TYPE_LABELS: Record<BaggageType, string> = {
+export const TYPE_LABELS: Record<BaggageType, string> = {
   SUITCASE: 'Valise',
   TRAVEL_BAG: 'Sac de voyage',
   BOX: 'Carton',
   OTHER: 'Autre',
 };
 
-const LIFECYCLE_LABELS: Record<BaggageLifecycleStatus, string> = {
+export const LIFECYCLE_LABELS: Record<BaggageLifecycleStatus, string> = {
   REGISTERED: 'Enregistré',
   CHECKED_IN: 'Pris en charge',
   LOADED: 'Chargé',
@@ -34,7 +34,7 @@ const LIFECYCLE_LABELS: Record<BaggageLifecycleStatus, string> = {
   REMOVED: 'Retiré',
 };
 
-const EXCEPTION_LABELS: Record<BaggageExceptionStatus, string> = {
+export const EXCEPTION_LABELS: Record<BaggageExceptionStatus, string> = {
   MISSING: 'Introuvable',
   DAMAGED: 'Endommagé',
   HELD_BY_CUSTOMS: 'Retenu en douane',
@@ -63,7 +63,7 @@ const OPERATIONAL_EVENTS: BaggageOperationalEventType[] = [
 type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
 /** Display tone only: the lifecycle itself is projected by the API from the event history. */
-const LIFECYCLE_TONES: Record<BaggageLifecycleStatus, Tone> = {
+export const LIFECYCLE_TONES: Record<BaggageLifecycleStatus, Tone> = {
   REGISTERED: 'neutral',
   CHECKED_IN: 'info',
   LOADED: 'info',
@@ -73,7 +73,7 @@ const LIFECYCLE_TONES: Record<BaggageLifecycleStatus, Tone> = {
   REMOVED: 'neutral',
 };
 
-const EXCEPTION_TONES: Record<BaggageExceptionStatus, Tone> = {
+export const EXCEPTION_TONES: Record<BaggageExceptionStatus, Tone> = {
   MISSING: 'danger',
   DAMAGED: 'danger',
   HELD_BY_CUSTOMS: 'warning',
@@ -99,7 +99,7 @@ function formatExactMoney(amountMinor: string, currencyCode: string, minorUnit: 
   return `${major.toString()},${minor} ${currencyCode}`;
 }
 
-function allowanceLabel(baggage: Baggage): string {
+export function allowanceLabel(baggage: Baggage): string {
   const allowance = baggage.allowance;
   if (!allowance.policy || allowance.status === 'NOT_CONFIGURED') return 'Non configurée';
   if (allowance.status === 'PENDING_WEIGHT') {

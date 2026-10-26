@@ -16,6 +16,7 @@ import { OpsEmptyState, OpsErrorState, OpsLoadingState } from '../ops-data-state
 import { OpsDetailRegion } from '../ops-detail-region';
 import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
+import { useTripReferenceParam } from '../trips/trip-link';
 
 const CHECK_LABELS: Record<CheckInGate, string> = {
   BOOKING: 'Réservation',
@@ -505,13 +506,15 @@ export function CheckInAdmin() {
   const canManage = useCan('checkin.manage');
   const canReadBoarding = useCan('boarding.read');
   const canScan = useCan('boarding.scan');
-  const [tripReference, setTripReference] = useState('');
+  // `/check-in?voyage=REF` (trip cockpit) opens filtered on that trip.
+  const linkedTrip = useTripReferenceParam();
+  const [tripReference, setTripReference] = useState(linkedTrip);
   const [bookingReference, setBookingReference] = useState('');
   const [passengerReference, setPassengerReference] = useState('');
   const [checkInStatus, setCheckInStatus] = useState<'' | 'CHECKED_IN' | 'NOT_CHECKED_IN'>('');
   const [boardingStatus, setBoardingStatus] = useState<'' | 'BOARDED' | 'NOT_BOARDED'>('');
   const [applied, setApplied] = useState({
-    tripReference: '',
+    tripReference: linkedTrip,
     bookingReference: '',
     passengerReference: '',
   });

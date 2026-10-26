@@ -2,12 +2,13 @@
 
 import type { PassengerManifest, PassengerManifestSummary } from '@euroteranga/auth-client';
 import { FormAlert, FormStatus, TextField } from '@euroteranga/ui';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { auth } from '../../lib/auth';
 import { OpsEmptyState } from '../ops-data-state';
 import { OpsDetailRegion } from '../ops-detail-region';
 import { OpsKpiCard, OpsStatusBadge } from '../ops-ui';
 import { useCan } from '../staff-access';
+import { useTripReferenceParam } from '../trips/trip-link';
 
 const formatAt = (value: string) =>
   new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }).format(
@@ -123,8 +124,10 @@ function Detail({
 export function ManifestsAdmin() {
   const canGenerate = useCan('manifest.generate');
   const canExport = useCan('manifest.export');
-  const [tripReference, setTripReference] = useState('');
-  const [appliedTrip, setAppliedTrip] = useState('');
+  // `/manifests?voyage=REF` (trip cockpit) opens directly on that trip.
+  const linkedTrip = useTripReferenceParam();
+  const [tripReference, setTripReference] = useState(linkedTrip);
+  const [appliedTrip, setAppliedTrip] = useState(linkedTrip);
   const [items, setItems] = useState<PassengerManifestSummary[] | null>(null);
   const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [detail, setDetail] = useState<PassengerManifest | null>(null);
@@ -147,6 +150,11 @@ export function ManifestsAdmin() {
     );
     setNextCursor(result.data.nextCursor);
   };
+
+  useEffect(() => {
+    if (linkedTrip) void load(linkedTrip);
+    // Only the trip of the incoming link is loaded automatically.
+  }, [linkedTrip]);
 
   const search = (event: FormEvent) => {
     event.preventDefault();

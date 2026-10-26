@@ -68,7 +68,10 @@ function amountInput(amountMinor: string): string {
   return `${amount / 100n},${(amount % 100n).toString().padStart(2, '0')}`;
 }
 
-/** Accessible editor and read-only view of one trip's internal cost plan. */
+/**
+ * Read-only view of one trip's internal cost plan; its editor opens only on
+ * an explicit "Modifier les coûts" (or a new `editToken` from the cockpit).
+ */
 export function TripCostPanel({
   tripId,
   tripReference,
@@ -76,6 +79,7 @@ export function TripCostPanel({
   run,
   busy,
   onSaved,
+  editToken = 0,
 }: {
   tripId: string;
   tripReference: string;
@@ -83,13 +87,21 @@ export function TripCostPanel({
   run: Run;
   busy: boolean;
   onSaved: () => Promise<void>;
+  editToken?: number;
 }) {
   const id = useId();
   const nextKey = useRef(0);
+  const formRef = useRef<HTMLFormElement>(null);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
   const [plan, setPlan] = useState<TripCostPlan | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [status, setStatus] = useState<TripCostStatus>('DRAFT');
   const [items, setItems] = useState<CostDraft[]>([]);
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    if (editToken > 0) setEditing(true);
+  }, [editToken]);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -106,11 +118,10 @@ export function TripCostPanel({
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!plan) return;
-    setStatus(plan.status);
+  const resetDraft = useCallback((source: TripCostPlan) => {
+    setStatus(source.status);
     setItems(
-      plan.items.map((item) => ({
+      source.items.map((item) => ({
         key: item.id,
         category: item.category,
         label: item.label,
@@ -118,7 +129,11 @@ export function TripCostPanel({
         notes: item.notes ?? '',
       })),
     );
-  }, [plan]);
+  }, []);
+
+  useEffect(() => {
+    if (plan) resetDraft(plan);
+  }, [plan, resetDraft]);
 
   const update = (index: number, value: Partial<CostDraft>) =>
     setItems((current) =>
@@ -134,6 +149,17 @@ export function TripCostPanel({
     });
   const valid = items.every((item) => item.label.trim() && parseEuros(item.amount) !== null);
   const readOnly = !canManage || plan?.status === 'LOCKED';
+  const showEditor = editing && !readOnly && plan !== null;
+
+  useEffect(() => {
+    if (showEditor) formRef.current?.focus();
+  }, [showEditor]);
+
+  const closeEditor = () => {
+    if (plan) resetDraft(plan);
+    setEditing(false);
+    requestAnimationFrame(() => editButtonRef.current?.focus());
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -155,6 +181,7 @@ export function TripCostPanel({
     );
     if (ok) {
       await load();
+      setEditing(false);
       await onSaved();
     }
   };
@@ -177,40 +204,59 @@ export function TripCostPanel({
   }
   if (!plan) return null;
 
-  if (readOnly) {
+  if (!showEditor) {
     return (
-      <section aria-label={`Coûts prévisionnels du voyage ${tripReference}`}>
-        <h3>Coûts prévisionnels</h3>
+      <section
+        className="ops-trip-cost-view"
+        aria-label={`Coûts prévisionnels du voyage ${tripReference}`}
+      >
+        <div className="ops-trip-section-head">
+          <h3>Coûts prévisionnels</h3>
+          {!readOnly ? (
+            <button
+              ref={editButtonRef}
+              type="button"
+              className="et-button et-button--secondary"
+              onClick={() => setEditing(true)}
+            >
+              Modifier les coûts
+            </button>
+          ) : null}
+        </div>
         <p>
           Statut : <strong>{STATUS_LABELS[plan.status]}</strong> · Devise : EUR
         </p>
-        <div className="et-table-wrap">
-          <table className="et-table">
-            <caption>Lignes de coût prévisionnel</caption>
-            <thead>
-              <tr>
-                <th scope="col">Catégorie</th>
-                <th scope="col">Libellé</th>
-                <th scope="col">Montant</th>
-              </tr>
-            </thead>
-            <tbody>
-              {plan.items.map((item) => (
-                <tr key={item.id}>
-                  <td>{CATEGORY_OPTIONS.find(([value]) => value === item.category)?.[1]}</td>
-                  <th scope="row">{item.label}</th>
-                  <td>{euros(item.amountMinor)}</td>
+        {plan.items.length > 0 ? (
+          <div className="et-table-wrap">
+            <table className="et-table">
+              <caption>Lignes de coût prévisionnel</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Catégorie</th>
+                  <th scope="col">Libellé</th>
+                  <th scope="col">Montant</th>
                 </tr>
-              ))}
-              <tr>
-                <th scope="row" colSpan={2}>
-                  TOTAL
-                </th>
-                <td data-testid="trip-cost-total">{euros(plan.totalCostMinor)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {plan.items.map((item) => (
+                  <tr key={item.id}>
+                    <td>{CATEGORY_OPTIONS.find(([value]) => value === item.category)?.[1]}</td>
+                    <th scope="row">{item.label}</th>
+                    <td>{euros(item.amountMinor)}</td>
+                  </tr>
+                ))}
+                <tr>
+                  <th scope="row" colSpan={2}>
+                    TOTAL
+                  </th>
+                  <td data-testid="trip-cost-total">{euros(plan.totalCostMinor)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="et-hint">Aucune ligne de coût prévisionnel n’est enregistrée.</p>
+        )}
         {plan.status === 'LOCKED' ? (
           <p className="et-hint">Ce snapshot opérationnel est verrouillé et définitif.</p>
         ) : null}
@@ -220,7 +266,9 @@ export function TripCostPanel({
 
   return (
     <form
-      className="et-form et-network-form"
+      ref={formRef}
+      tabIndex={-1}
+      className="et-form et-network-form ops-trip-editor"
       aria-label={`Coûts prévisionnels du voyage ${tripReference}`}
       onSubmit={submit}
     >
@@ -368,9 +416,14 @@ export function TripCostPanel({
           Attention : enregistrer avec ce statut verrouille définitivement le plan.
         </p>
       ) : null}
-      <button className="et-button" type="submit" disabled={busy || !valid}>
-        Enregistrer les coûts
-      </button>
+      <div className="et-actions">
+        <button className="et-button" type="submit" disabled={busy || !valid}>
+          Enregistrer les coûts
+        </button>
+        <button type="button" className="et-button et-button--secondary" onClick={closeEditor}>
+          Fermer l’édition
+        </button>
+      </div>
     </form>
   );
 }

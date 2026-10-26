@@ -68,6 +68,10 @@ export const FIXTURES = {
   get tripAdmin(): Fixture {
     return { realm: 'STAFF', email: runScoped('trip-admin'), roles: ['SUPER_ADMIN'] };
   },
+  /** OPS-TRIP-UI-1: every permission, its own pre-created session (trip cockpit scenario). */
+  get tripCockpitAdmin(): Fixture {
+    return { realm: 'STAFF', email: runScoped('trip-cockpit-admin'), roles: ['SUPER_ADMIN'] };
+  },
   /** trip.read only (no trip.manage, no fleet.read). */
   get tripReader(): Fixture {
     return { realm: 'STAFF', email: runScoped('trip-reader'), roles: ['BOOKING_AGENT'] };
@@ -269,7 +273,8 @@ export type PreauthenticatedFixture =
   | 'permitDenied'
   | 'contentEditor'
   | 'contentDenied'
-  | 'mediaEditor';
+  | 'mediaEditor'
+  | 'tripCockpitAdmin';
 
 const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string> = {
   crew: 'E2E_CREW_SESSION',
@@ -294,6 +299,7 @@ const preauthenticatedSessionEnvironment: Record<PreauthenticatedFixture, string
   contentEditor: 'E2E_CONTENT_EDITOR_SESSION',
   contentDenied: 'E2E_CONTENT_DENIED_SESSION',
   mediaEditor: 'E2E_MEDIA_EDITOR_SESSION',
+  tripCockpitAdmin: 'E2E_TRIP_COCKPIT_ADMIN_SESSION',
 };
 
 /**

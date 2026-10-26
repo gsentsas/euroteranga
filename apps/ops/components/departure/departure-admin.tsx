@@ -22,7 +22,7 @@ const GATE_LABELS: Record<DepartureGate, string> = {
   PERMITS: 'Permis opérationnels',
 };
 
-const BLOCKER_LABELS: Record<DepartureBlockerCode, string> = {
+export const BLOCKER_LABELS: Record<DepartureBlockerCode, string> = {
   TRIP_NOT_SCHEDULED: 'Le voyage n’est pas planifié pour un départ.',
   VEHICLE_NOT_ASSIGNED: 'Aucun véhicule n’est affecté.',
   VEHICLE_NOT_ACTIVE: 'Le véhicule affecté n’est plus en service.',

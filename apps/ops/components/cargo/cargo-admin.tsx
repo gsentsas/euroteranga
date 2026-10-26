@@ -18,12 +18,12 @@ import { useCan } from '../staff-access';
 import { CargoQuotePanel } from './cargo-quote-panel';
 import { CargoTrackingPanel } from './cargo-tracking-panel';
 
-const DIRECTION_LABELS: Record<RoadFreightDirection, string> = {
+export const DIRECTION_LABELS: Record<RoadFreightDirection, string> = {
   PAR_DKR: 'Paris → Dakar',
   DKR_PAR: 'Dakar → Paris',
 };
 
-const STATUS_LABELS: Record<RoadFreightLifecycleStatus, string> = {
+export const STATUS_LABELS: Record<RoadFreightLifecycleStatus, string> = {
   QUOTE: 'Demande / devis',
   BOOKED: 'Réservé',
   RECEIVED: 'Reçu',
@@ -39,7 +39,7 @@ const STATUS_LABELS: Record<RoadFreightLifecycleStatus, string> = {
   CANCELLED: 'Annulé',
 };
 
-const EXCEPTION_LABELS: Record<RoadFreightExceptionStatus, string> = {
+export const EXCEPTION_LABELS: Record<RoadFreightExceptionStatus, string> = {
   HELD: 'Bloqué',
   CUSTOMS_HOLD: 'Retenu en douane',
   DAMAGED: 'Endommagé',
@@ -66,7 +66,7 @@ const EVENT_LABELS: Record<RoadFreightOperationalEventType, string> = {
 type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
 /** Display tone only: the lifecycle is projected by the API from the operational events. */
-const STATUS_TONES: Record<RoadFreightLifecycleStatus, Tone> = {
+export const STATUS_TONES: Record<RoadFreightLifecycleStatus, Tone> = {
   QUOTE: 'neutral',
   BOOKED: 'info',
   RECEIVED: 'info',
@@ -82,7 +82,7 @@ const STATUS_TONES: Record<RoadFreightLifecycleStatus, Tone> = {
   CANCELLED: 'neutral',
 };
 
-const EXCEPTION_TONES: Record<RoadFreightExceptionStatus, Tone> = {
+export const EXCEPTION_TONES: Record<RoadFreightExceptionStatus, Tone> = {
   HELD: 'danger',
   CUSTOMS_HOLD: 'warning',
   DAMAGED: 'danger',

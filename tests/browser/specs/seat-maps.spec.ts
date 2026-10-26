@@ -103,6 +103,7 @@ test('ops seat maps: SUPER_ADMIN publishes a layout, configures a vehicle and fr
   await mainNav(page).getByRole('link', { name: 'Voyages' }).click();
   await page.getByRole('button', { name: `Consulter le voyage ${seed.tripReference}` }).click();
   const trip = page.getByRole('region', { name: `Voyage ${seed.tripReference}` });
+  await trip.getByRole('tab', { name: 'Véhicules' }).click();
   await expect(trip.getByTestId('trip-seat-map')).toHaveText('Aucun');
   await trip.getByRole('button', { name: 'Utiliser le plan du véhicule' }).click();
   await expect(trip.getByTestId('trip-seat-map')).toHaveText(`${code} v1 — 2 sièges`);
@@ -111,6 +112,7 @@ test('ops seat maps: SUPER_ADMIN publishes a layout, configures a vehicle and fr
   await expect(trip.getByTestId('trip-status')).toHaveText('Planifié');
   await expect(trip.getByTestId('trip-seat-map')).toHaveText(`${code} v1 — 2 sièges`);
   await expect(trip.getByRole('button', { name: 'Utiliser le plan du véhicule' })).toHaveCount(0);
+  await expect(trip.getByRole('button', { name: 'Modifier le plan de sièges' })).toHaveCount(0);
   await expect(
     trip.getByRole('form', { name: `Plan de sièges du voyage ${seed.tripReference}` }),
   ).toHaveCount(0);
