@@ -8,7 +8,7 @@ Type=oneshot
 User=root
 Group=root
 WorkingDirectory=/var/www/vhosts/euroteranga.com/current
-Environment=PATH=/opt/plesk/node/24/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/opt/plesk/node/24/bin:/usr/local/bin:/usr/sbin:/usr/bin:/bin
 ExecStart=/usr/bin/bash /var/www/vhosts/euroteranga.com/current/infrastructure/plesk/restore-check-postgres.sh
 UMask=0077
 PrivateTmp=true
