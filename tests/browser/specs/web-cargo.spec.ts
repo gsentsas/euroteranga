@@ -12,9 +12,7 @@ async function expectNoHorizontalOverflow(page: Page) {
 }
 
 test.describe('public cargo and freight page (WEB-CARGO-1)', () => {
-  test('renders /fret as a responsive editorial page without public cargo transactions', async ({
-    page,
-  }) => {
+  test('renders /fret with a fail-closed public cargo calculator', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     const { path } = cargoPageSeed();
@@ -79,14 +77,27 @@ test.describe('public cargo and freight page (WEB-CARGO-1)', () => {
       '#suivi',
     );
 
+    const calculator = page.getByRole('heading', { name: 'Calculez le prix de votre envoi' });
+    await expect(calculator).toBeVisible();
+    await page.getByLabel('Poids').fill('25');
+    await page.getByLabel('Type d’envoi').selectOption('STANDARD_PARCEL');
+    await page.getByRole('button', { name: 'Calculer mon tarif' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Devis personnalisé nécessaire' }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Aucun tarif automatique ne peut être confirmé pour cet envoi.'),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Demander un devis' }).last()).toHaveAttribute(
+      'href',
+      /^(mailto:|#questions)/,
+    );
+
     const main = await page.getByRole('main').textContent();
-    expect(main).not.toMatch(/\d+(?:[.,]\d+)?\s*(?:€|euros?|francs?|kg|m(?:³|3))\b/i);
-    expect(main).not.toMatch(/€\s*\d|\/(?:kg|m(?:³|3))/i);
     expect(main).not.toMatch(/\bETC-[A-Z0-9-]+\b/);
     expect(main).not.toMatch(
-      /senderName|senderContact|recipientName|recipientContact|customerIdentityId|bookingReference|declaredContents|declaredValue|dimensions|actorId|vehicleId|trackingCode|cargoId|publicToken|latitude|longitude/i,
+      /senderName|senderContact|recipientName|recipientContact|customerIdentityId|bookingReference|declaredContents|declaredValue|actorId|vehicleId|trackingCode|cargoId|publicToken|latitude|longitude/i,
     );
-    await expect(page.getByRole('main').locator('form, input, textarea, select')).toHaveCount(0);
     await expect(page.getByRole('main').locator('a[href*="booking"]')).toHaveCount(0);
     const structured = await page.locator('script[type="application/ld+json"]').allTextContents();
     expect(structured.join(' ')).not.toMatch(
@@ -98,6 +109,51 @@ test.describe('public cargo and freight page (WEB-CARGO-1)', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expectNoHorizontalOverflow(page);
     expect(errors).toEqual([]);
+  });
+
+  test('renders only the exact price returned by the cargo pricing API', async ({ page }) => {
+    await page.route('**/v1/cargo/estimate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          direction: 'PAR_DKR',
+          from: 'PAR',
+          to: 'DKR',
+          category: 'STANDARD_PARCEL',
+          actualWeightKg: '25.000',
+          volumeM3: null,
+          requiresQuote: false,
+          quoteReason: null,
+          currencyCode: 'EUR',
+          currencyMinorUnit: 2,
+          totalMinor: '7500',
+          pricingVersion: 'TEST_PUBLIC:v1',
+          effectiveFrom: '2026-10-24T00:00:00.000Z',
+          calculation: {
+            method: 'ACTUAL_WEIGHT',
+            actualWeightKg: '25.000',
+            volumetricWeightKg: null,
+            billableWeightKg: '25.000',
+            volumeM3: null,
+            unitPriceMinor: '300',
+            baseAmountMinor: '7500',
+            minimumApplied: false,
+            tierPosition: null,
+          },
+          lines: [{ kind: 'BASE', code: 'BASE', amountMinor: '7500' }],
+          includedOptions: [],
+        }),
+      });
+    });
+
+    const { path } = cargoPageSeed();
+    await page.goto(appUrl(web, path));
+    await page.getByLabel('Poids').fill('25');
+    await page.getByRole('button', { name: 'Calculer mon tarif' }).click();
+    await expect(page.getByRole('heading', { name: '75,00 EUR' })).toBeVisible();
+    await expect(page.getByText('Paris → Dakar · 25.000 kg')).toBeVisible();
+    await expect(page.getByText('Tarif calculé selon la grille active.')).toBeVisible();
   });
 
   test('includes only the published, indexable cargo page in the sitemap', async ({

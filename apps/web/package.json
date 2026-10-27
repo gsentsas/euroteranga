@@ -11,6 +11,7 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@euroteranga/auth-client": "workspace:*",
     "@euroteranga/config": "workspace:*",
     "@euroteranga/content": "workspace:*",
     "@euroteranga/site": "workspace:*",
